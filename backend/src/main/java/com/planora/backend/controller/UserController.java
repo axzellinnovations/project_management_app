@@ -26,7 +26,7 @@ public class UserController {
 
     @GetMapping("/try")
     public String myTry(){
-        return "Poda peya visar";
+        return "Try - Running Successfully";
     }
 
 }

@@ -2,7 +2,6 @@ package com.planora.backend.service;
 
 import com.planora.backend.model.User;
 import com.planora.backend.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -12,16 +11,17 @@ import org.springframework.stereotype.Service;
 @Service
 public class UserService {
 
-    @Autowired
-    private UserRepository repository;
+    private final UserRepository repository;
 
-    private BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
+    private final JWTService jwtService;
 
-    @Autowired
+    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
+
     private AuthenticationManager authenticationManager;
 
-    public UserService(UserRepository repository, AuthenticationManager authenticationManager){
+    public UserService(UserRepository repository, JWTService jwtService, AuthenticationManager authenticationManager){
         this.repository = repository;
+        this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
     }
 
@@ -37,7 +37,7 @@ public class UserService {
                         user.getPassword()));
 
         if(authentication.isAuthenticated()){
-            return "Sucessfully login";
+            return jwtService.generateToken(user.getEmail());
         }
 
         return "Failed to login";
