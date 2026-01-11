@@ -1,11 +1,11 @@
 package com.planora.backend.controller;
 
+import com.planora.backend.dto.VerifyRequest;
 import com.planora.backend.model.User;
 import com.planora.backend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -15,8 +15,19 @@ public class UserController {
     private UserService service;
 
     @PostMapping("/register")
-    public ResponseEntity<User> register(@RequestBody User user){
+    public ResponseEntity<String> register(@RequestBody User user){
         return new ResponseEntity<>(service.register(user), HttpStatus.OK);
+    }
+
+    @PostMapping("/reg/verify")
+    public ResponseEntity<?> verifyEmail(@RequestBody VerifyRequest request){
+        boolean isSuccess = service.verifyToken(request.getEmail(), request.getOtp());
+        if(isSuccess){
+            return new ResponseEntity<>("Verification Success!",HttpStatus.OK);
+        }
+        else {
+            return new ResponseEntity<>("Invalid or Expired OTP",HttpStatus.UNAUTHORIZED);
+        }
     }
 
     @PostMapping("/login")
