@@ -1,5 +1,7 @@
 package com.planora.backend.controller;
 
+import com.planora.backend.dto.OtpRequest;
+import com.planora.backend.dto.ResetPasswordRequest;
 import com.planora.backend.dto.VerifyRequest;
 import com.planora.backend.model.User;
 import com.planora.backend.service.UserService;
@@ -33,6 +35,27 @@ public class UserController {
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody User user){
         return new ResponseEntity<>(service.verify(user), HttpStatus.OK);
+    }
+
+    @PostMapping("/resend")
+    public ResponseEntity<String> resendOtp(@RequestBody OtpRequest otpRequest){
+        return new ResponseEntity<>(service.resendOtp(otpRequest.getEmail()), HttpStatus.OK);
+    }
+
+    @PostMapping("/forgot")
+    public ResponseEntity<String> forgotPassword(@RequestBody OtpRequest otpRequest){
+        return new ResponseEntity<>(service.forgotPassword(otpRequest.getEmail()), HttpStatus.OK);
+    }
+
+    @PostMapping("/reset")
+    public ResponseEntity<String> resetPassword(@RequestBody ResetPasswordRequest request){
+        boolean isSuccess = service.resetPassword(request.getEmail(),request.getOtp(),request.getNewPassword());
+        if(isSuccess){
+            return new ResponseEntity<>("Password Reset Successfull", HttpStatus.OK);
+        }
+        else {
+            return new ResponseEntity<>("Invalid Access/ OTP Expired", HttpStatus.UNAUTHORIZED);
+        }
     }
 
     @GetMapping("/try")

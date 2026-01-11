@@ -11,6 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Random;
 
@@ -112,4 +113,65 @@ public class UserService {
 
     }
 
+    @Transactional
+    public String resendOtp(String email) {
+        User user = userRepository.findByEmail(email);
+
+        if(user == null){
+            return "User is not found";
+        }
+
+        if(user.isVerified()){
+            return "User already verified.";
+        }
+
+        tokenRepository.deleteByUser(user);
+        tokenRepository.flush();
+
+        String otp = String.valueOf(new Random().nextInt(900000) + 100000);
+        VerificationToken verificationToken = new VerificationToken();
+        verificationToken.setUser(user);
+        verificationToken.setToken(otp);
+        verificationToken.setExpiry(Instant.now().plus(java.time.Duration.ofMinutes(10)));
+        tokenRepository.save(verificationToken);
+
+        emailService.sendPasswordResetRequest(email, otp);
+        return "New OTP send to your email.";
+    }
+
+    @Transactional
+    public String forgotPassword(String email) {
+        User user = userRepository.findByEmail(email);
+
+        if(user == null)
+            return "If that email exists, an OTP has been sent.";
+
+        tokenRepository.deleteByUser(user);
+        tokenRepository.flush();
+
+        String otp = String.valueOf(new Random().nextInt(900000) + 100000);
+        VerificationToken verificationToken = new VerificationToken();
+        verificationToken.setUser(user);
+        verificationToken.setToken(otp);
+        verificationToken.setExpiry(Instant.now().plus(java.time.Duration.ofMinutes(10)));
+        tokenRepository.save(verificationToken);
+
+        emailService.sendPasswordResetRequest(email, otp);
+        return "Password Reset OTP sent.";
+    }
+
+    @Transactional
+    public boolean resetPassword(String email, String otp, String newPassword) {
+        User user = userRepository.findByEmail(email);
+        VerificationToken verificationToken = tokenRepository.findByUser(user);
+
+        if(verificationToken != null && verificationToken.getToken().equals(otp) && !verificationToken.isExpired()){
+            user.setPassword(encoder.encode(newPassword));
+            userRepository.save(user);
+            tokenRepository.delete(verificationToken);
+            return true;
+        }
+
+        return false;
+    }
 }

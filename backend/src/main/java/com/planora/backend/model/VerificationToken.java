@@ -40,5 +40,4 @@ public class VerificationToken {
     public boolean isExpired(){
         return Instant.now().isAfter(this.expiry);
     }
-
 }
