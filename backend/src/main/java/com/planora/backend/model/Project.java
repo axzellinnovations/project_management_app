@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.antlr.v4.runtime.misc.NotNull;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -31,8 +32,15 @@ public class Project {
     @Column(nullable = false)
     private ProjectType type;
 
-    private LocalDateTime updatedAt = LocalDateTime.now();
     private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime updatedAt;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "team_id", nullable = false)
+    private Team team;
+
+    @PreUpdate
+    public void setLastUpdate() {
+        this.updatedAt = LocalDateTime.now(); }
 
 }
