@@ -18,7 +18,9 @@ public class User {
     private String username;
     private String fullName;
 
-    @Column(unique = true)
+    @Column(unique = true, nullable = false)
     private String email;
     private String password;
+
+    private boolean verified = false;
 }
