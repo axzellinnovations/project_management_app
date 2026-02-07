@@ -1,21 +1,18 @@
 package com.planora.backend.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Entity
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@ToString(exclude = {"project", "sprint", "kanbanColumn", "assignee", "reporter", "parentTask", "subTasks", "labels", "comments", "dependencies", "dependents"}) // Prevent infinite loops in logs
 @Table(name = "tasks")
 public class Task {
     @Id
@@ -92,6 +89,19 @@ public class Task {
 
     @ManyToMany(mappedBy = "dependencies", fetch = FetchType.LAZY)
     private Set<Task> dependents = new HashSet<>();
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Task task = (Task) o;
+        return Objects.equals(id, task.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 
     @PreUpdate
     public void setLastUpdate() {
