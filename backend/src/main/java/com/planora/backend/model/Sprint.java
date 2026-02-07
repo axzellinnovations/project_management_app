@@ -32,5 +32,7 @@ public class Sprint {
     private LocalDate endDate;
 
     @Column(nullable = false)
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private SprintStatus status;
+
 }

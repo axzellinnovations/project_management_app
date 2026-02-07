@@ -1,5 +1,6 @@
 package com.planora.backend.controller;
 
+import com.planora.backend.dto.StartSprintRequest;
 import com.planora.backend.model.Sprint;
 import com.planora.backend.service.SprintService;
 import org.springframework.http.HttpStatus;
@@ -53,5 +54,13 @@ public class SprintController {
     public ResponseEntity<Void> deleteSprint(@PathVariable Long id) {
         sprintService.deleteSprint(id);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    // START Sprint
+    @PutMapping("/{id}/start")
+    public ResponseEntity<Sprint> startSprint(@PathVariable Long id,
+                                              @RequestBody StartSprintRequest request) {
+        Sprint started = sprintService.startSprint(id, request.startDate(), request.endDate());
+        return new ResponseEntity<>(started, HttpStatus.OK);
     }
 }
