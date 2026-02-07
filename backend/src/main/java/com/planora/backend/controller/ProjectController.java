@@ -1,10 +1,13 @@
 package com.planora.backend.controller;
 
-import com.planora.backend.model.Project;
+import com.planora.backend.dto.ProjectDTO;
+import com.planora.backend.dto.ProjectResponseDTO; // Import the new DTO
+import com.planora.backend.dto.UpdateProjectDTO;
 import com.planora.backend.service.ProjectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,49 +19,53 @@ public class ProjectController {
 
     private final ProjectService projectService;
 
-    // CREATE Project
+    // ---------------- CREATE PROJECT ----------------
     @PostMapping
-    public ResponseEntity<Project> createProject(@RequestBody Project project) {
+    public ResponseEntity<ProjectResponseDTO> createProject(@RequestBody ProjectDTO projectDto) {
         return new ResponseEntity<>(
-                projectService.createProject(project),
+                projectService.createProject(projectDto),
                 HttpStatus.CREATED
         );
     }
 
-    // READ All Projects
+    // ---------------- READ ALL PROJECTS ----------------
     @GetMapping
-    public ResponseEntity<List<Project>> getAllProjects() {
+    public ResponseEntity<List<ProjectResponseDTO>> getAllProjects() {
         return new ResponseEntity<>(
                 projectService.getAllProjects(),
                 HttpStatus.OK
         );
     }
 
-    // READ Project by ID
-    @GetMapping("/{id}")
-    public ResponseEntity<Project> getProjectById(@PathVariable Long id) {
+    // ---------------- READ PROJECT BY ID ----------------
+    @GetMapping("/{projectId}")
+    public ResponseEntity<ProjectResponseDTO> getProjectById(@PathVariable Long projectId) {
         return new ResponseEntity<>(
-                projectService.getProjectById(id),
+                projectService.getProjectById(projectId),
                 HttpStatus.OK
         );
     }
 
-    // UPDATE Project
-    @PutMapping("/{id}")
-    public ResponseEntity<Project> updateProject(
-            @PathVariable Long id,
-            @RequestBody Project project
+    // ---------------- UPDATE PROJECT ----------------
+    @PutMapping("/{projectId}")
+    public ResponseEntity<ProjectResponseDTO> updateProject(
+            @PathVariable Long projectId,
+            @RequestBody UpdateProjectDTO dto
     ) {
         return new ResponseEntity<>(
-                projectService.updateProject(id, project),
+                projectService.updateProject(projectId, dto),
                 HttpStatus.OK
         );
     }
 
-    // DELETE Project
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteProject(@PathVariable Long id) {
-        projectService.deleteProject(id);
+    // ---------------- DELETE PROJECT (OWNER ONLY) ----------------
+    @DeleteMapping("/{projectId}/team/{teamId}")
+    public ResponseEntity<Void> deleteProject(
+            @PathVariable Long projectId,
+            @PathVariable Long teamId,
+            @AuthenticationPrincipal(expression = "userId") Long userId
+    ) {
+        projectService.deleteProject(projectId, teamId, userId);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 }
