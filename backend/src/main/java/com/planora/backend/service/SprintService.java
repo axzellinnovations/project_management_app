@@ -1,10 +1,13 @@
 package com.planora.backend.service;
 
+import com.planora.backend.model.Project;
 import com.planora.backend.model.Sprint;
+import com.planora.backend.model.TeamMember;
+import com.planora.backend.model.TeamRole;
+import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.SprintRepository;
+import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.security.CurrentUserService;
-import com.planora.backend.security.ProjectPermission;
-import com.planora.backend.security.ProjectPermissionService;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -14,21 +17,53 @@ import java.util.List;
 public class SprintService {
 
     private final SprintRepository sprintRepository;
-    private final ProjectPermissionService permissionService;
+    private final ProjectRepository projectRepository;
+    private final TeamMemberRepository teamMemberRepository;
     private final CurrentUserService currentUserService;
 
     public SprintService(SprintRepository sprintRepository,
-                         ProjectPermissionService permissionService,
+                         ProjectRepository projectRepository,
+                         TeamMemberRepository teamMemberRepository,
                          CurrentUserService currentUserService) {
         this.sprintRepository = sprintRepository;
-        this.permissionService = permissionService;
+        this.projectRepository = projectRepository;
+        this.teamMemberRepository = teamMemberRepository;
         this.currentUserService = currentUserService;
     }
 
-    // CREATE Sprint (Configure Board: OWNER/ADMIN)
-    public Sprint createSprint(Sprint sprint) {
+    // ---------- Permission helpers (based on your image) ----------
+
+    private TeamRole getRoleForProject(Long projectId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Project not found"));
+
+        Long teamId = project.getTeam().getId();
         Long userId = currentUserService.getUserId();
-        permissionService.require(sprint.getProId(), userId, ProjectPermission.CONFIGURE_BOARD);
+
+        TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId, userId)
+                .orElseThrow(() -> new RuntimeException("Access denied: Not a team member"));
+
+        return member.getRole();
+    }
+
+    // View Board: OWNER/ADMIN/MEMBER/VIEWER (any team member)
+    private void requireViewBoard(Long projectId) {
+        getRoleForProject(projectId); // if not member -> exception
+    }
+
+    // Configure Board (Columns/Sprints): OWNER + ADMIN only
+    private void requireConfigureBoard(Long projectId) {
+        TeamRole role = getRoleForProject(projectId);
+        if (!(role == TeamRole.OWNER || role == TeamRole.ADMIN)) {
+            throw new RuntimeException("Access denied: OWNER/ADMIN required (CONFIGURE_BOARD)");
+        }
+    }
+
+    // ---------- Sprint APIs ----------
+
+    // CREATE Sprint -> Configure Board (OWNER/ADMIN)
+    public Sprint createSprint(Sprint sprint) {
+        requireConfigureBoard(sprint.getProId());
 
         if (sprint.getStartDate() == null || sprint.getEndDate() == null) {
             throw new RuntimeException("Start date and end date are required");
@@ -44,76 +79,58 @@ public class SprintService {
         return sprintRepository.save(sprint);
     }
 
-    // READ all sprints by project (View Board: OWNER/ADMIN/MEMBER/VIEWER)
+    // READ Sprints -> View Board (all roles)
     public List<Sprint> getSprintsByProject(Long proId) {
-        Long userId = currentUserService.getUserId();
-        permissionService.require(proId, userId, ProjectPermission.VIEW_BOARD);
-
+        requireViewBoard(proId);
         return sprintRepository.findByProId(proId);
     }
 
-    // READ sprint by ID (View Board)
+    // READ Sprint by ID -> View Board
     public Sprint getSprintById(Long id) {
         Sprint sprint = sprintRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Sprint not found"));
 
-        Long userId = currentUserService.getUserId();
-        permissionService.require(sprint.getProId(), userId, ProjectPermission.VIEW_BOARD);
-
+        requireViewBoard(sprint.getProId());
         return sprint;
     }
 
-    // UPDATE sprint (Configure Board: OWNER/ADMIN)
+    // UPDATE Sprint -> Configure Board (OWNER/ADMIN)
     public Sprint updateSprint(Long id, Sprint updatedSprint) {
-        Sprint existingSprint = sprintRepository.findById(id)
+        Sprint existing = sprintRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Sprint not found"));
 
-        Long userId = currentUserService.getUserId();
-        permissionService.require(existingSprint.getProId(), userId, ProjectPermission.CONFIGURE_BOARD);
+        requireConfigureBoard(existing.getProId());
 
-        // Optional: prevent editing ACTIVE/COMPLETED sprints (you can remove if not needed)
-        // if ("COMPLETED".equalsIgnoreCase(existingSprint.getStatus())) {
-        //     throw new RuntimeException("Cannot update a COMPLETED sprint");
-        // }
+        existing.setName(updatedSprint.getName());
+        existing.setStartDate(updatedSprint.getStartDate());
+        existing.setEndDate(updatedSprint.getEndDate());
+        existing.setStatus(updatedSprint.getStatus());
 
-        if (updatedSprint.getName() != null) existingSprint.setName(updatedSprint.getName());
-        if (updatedSprint.getStartDate() != null) existingSprint.setStartDate(updatedSprint.getStartDate());
-        if (updatedSprint.getEndDate() != null) existingSprint.setEndDate(updatedSprint.getEndDate());
-        if (updatedSprint.getStatus() != null) existingSprint.setStatus(updatedSprint.getStatus());
-
-        if (existingSprint.getStartDate() == null || existingSprint.getEndDate() == null) {
+        if (existing.getStartDate() == null || existing.getEndDate() == null) {
             throw new RuntimeException("Start date and end date are required");
         }
-        if (existingSprint.getStartDate().isAfter(existingSprint.getEndDate())) {
+        if (existing.getStartDate().isAfter(existing.getEndDate())) {
             throw new RuntimeException("Start date cannot be after end date");
         }
 
-        return sprintRepository.save(existingSprint);
+        return sprintRepository.save(existing);
     }
 
-    // DELETE sprint (Configure Board: OWNER/ADMIN)
+    // DELETE Sprint -> Configure Board (OWNER/ADMIN)
     public void deleteSprint(Long id) {
         Sprint existing = sprintRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Sprint not found"));
 
-        Long userId = currentUserService.getUserId();
-        permissionService.require(existing.getProId(), userId, ProjectPermission.CONFIGURE_BOARD);
-
-        // Optional business rule: don’t delete ACTIVE sprint
-        // if ("ACTIVE".equalsIgnoreCase(existing.getStatus())) {
-        //     throw new RuntimeException("Cannot delete an ACTIVE sprint");
-        // }
-
+        requireConfigureBoard(existing.getProId());
         sprintRepository.deleteById(id);
     }
 
-    // START sprint (Configure Board: OWNER/ADMIN)
+    // START Sprint -> Configure Board (OWNER/ADMIN)
     public Sprint startSprint(Long sprintId, LocalDate startDate, LocalDate endDate) {
         Sprint sprint = sprintRepository.findById(sprintId)
                 .orElseThrow(() -> new RuntimeException("Sprint not found"));
 
-        Long userId = currentUserService.getUserId();
-        permissionService.require(sprint.getProId(), userId, ProjectPermission.CONFIGURE_BOARD);
+        requireConfigureBoard(sprint.getProId());
 
         if ("ACTIVE".equalsIgnoreCase(sprint.getStatus())) {
             throw new RuntimeException("Sprint is already ACTIVE");
