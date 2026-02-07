@@ -1,11 +1,15 @@
 package com.planora.backend.dto;
 
-import lombok.Data;
+import lombok.*;
 
 import java.time.LocalDate;
 import java.util.List;
 
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Setter
+@Getter
 public class TaskRequestDTO {
     private String title;
     private String description;

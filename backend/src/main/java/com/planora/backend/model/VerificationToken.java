@@ -9,6 +9,7 @@ import java.time.Instant;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
+@Table(name = "verification_Tokens")
 public class VerificationToken {
 
     @Id

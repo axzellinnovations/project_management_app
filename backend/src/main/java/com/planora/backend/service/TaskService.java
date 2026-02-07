@@ -38,7 +38,7 @@ public class TaskService {
     private SprintRepository sprintRepository;
 
 
-    // CREATE TASK
+    // 1. CREATE TASK
     @Transactional
     public TaskResponseDTO createTask(TaskRequestDTO request, Long currentUserId) {
         // Validate Project
@@ -52,6 +52,8 @@ public class TaskService {
         Task task = new Task();
         task.setTitle(request.getTitle());
         task.setDescription(request.getDescription());
+        task.setProject(project);
+
         task.setStoryPoint(request.getStoryPoint());
         task.setDueDate(request.getDueDate());
         task.setStartDate(request.getStartDate());
@@ -60,8 +62,16 @@ public class TaskService {
         if(request.getPriority() != null) task.setPriority(Priority.valueOf(request.getPriority()));
         if(request.getStatus() != null) task.setStatus(Status.valueOf(request.getStatus()));
 
+        //handle sprint-if provided
+        if(request.getSprintId() != null){
+            Sprint sprint = sprintRepository.findById(request.getSprintId())
+                    .orElseThrow(()-> new EntityNotFoundException("Entity not found"));
+            task.setSprint(sprint);
+        }
         //validate and assign users
         Long teamId = project.getTeam().getId();
+
+        //handle assignee
         if(request.getAssigneeId() != null){
             task.setAssignee(validateTeamMember(teamId, request.getAssigneeId()));
         }
@@ -73,34 +83,52 @@ public class TaskService {
 
     }
 
-    //Get Task By ID
+    //2. GET TASK BY ID
     public TaskResponseDTO getTaskById(Long taskId) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(()-> new EntityNotFoundException("Task not found"));
         return mapToDTO(task);
     }
 
-    //Update Task
+    //3. UPDATE TASK
     @Transactional
     public TaskResponseDTO updateTask(Long taskId, TaskRequestDTO request, Long currentUserId) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(()-> new EntityNotFoundException("Task not found"));
 
+        Long teamId = task.getProject().getTeam().getId();
+
         //validate permission
-        validatePermission(task.getProject().getTeam().getId(), currentUserId, TeamRole.VIEWER);
+        validatePermission(teamId, currentUserId, TeamRole.VIEWER);
 
-        //update fields
-
+        //update fields-basic
         if(request.getTitle() != null) task.setTitle(request.getTitle());
         if(request.getDescription() != null) task.setDescription(request.getDescription());
-        if(request.getStoryPoint() != 0) task.setStoryPoint(request.getStoryPoint());
         if(request.getPriority() != null) task.setPriority(Priority.valueOf(request.getPriority()));
         if(request.getStatus() != null) task.setStatus(Status.valueOf(request.getStatus()));
 
+        //update fields-other attributes
+        if(request.getStoryPoint() != 0) task.setStoryPoint(request.getStoryPoint());
+        if(request.getStartDate() != null) task.setStartDate(request.getStartDate());
+        if(request.getDueDate() != null) task.setDueDate(request.getDueDate());
+
+
+        //update sprint(moving to different sprints)
+        if(request.getSprintId() != null){
+            Sprint sprint = sprintRepository.findById(request.getSprintId())
+                    .orElseThrow(()->new EntityNotFoundException("Sprint not found"));
+            task.setSprint(sprint);
+        }
+
+        //update reporter
+        if(request.getReporterId() != null){
+            TeamMember newReporter= validateTeamMember(teamId, request.getReporterId());
+            task.setReporter(newReporter);
+        }
         return mapToDTO(taskRepository.save(task));
     }
 
-    //Delete Task
+    //4. DELETE TASK
     public void deleteTask(Long taskId, Long currentUserId) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(()-> new EntityNotFoundException("Task not found"));
@@ -119,15 +147,16 @@ public class TaskService {
         taskRepository.delete(task);
     }
 
-    //Get Project Using ID
+    //5. GET PROJECT BY ID
     public List<TaskResponseDTO> getTasksByProject(Long projectId) {
         return taskRepository.findByProjectId(projectId).stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }
 
-    //SubTask
+    //----SUB TASKS--
 
+    //6. CREATE SUB TASK
     @Transactional
     public TaskResponseDTO createSubTask(Long parentId, TaskRequestDTO subTaskRequest, Long currentUserId) {
         Task parent = taskRepository.findById(parentId)
@@ -146,50 +175,57 @@ public class TaskService {
         return mapToDTO(taskRepository.save(child));
     }
 
-    //Dependency
+    //DEPENDENCY
 
-    //Add Dependency
+    //7. ADD DEPENDENCY
     @Transactional
-    public void addDependency(Long taskId, Long blockerId) {
+    public void addDependency(Long taskId, Long blockerId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        Task blocker = taskRepository.findById(blockerId).orElseThrow();
+        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
 
+        Task blocker = taskRepository.findById(blockerId).orElseThrow();
         task.getDependencies().add(blocker);
         taskRepository.save(task);
     }
 
-    //Remove Dependency
+    //8. REMOVE DEPENDENCY
     @Transactional
-    public void removeDependency(Long taskId, Long blockerId) {
+    public void removeDependency(Long taskId, Long blockerId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        Task blocker = taskRepository.findById(blockerId).orElseThrow();
+        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
 
+        Task blocker = taskRepository.findById(blockerId).orElseThrow();
         task.getDependencies().remove(blocker);
         taskRepository.save(task);
     }
 
-    // Label
+    // LABEL
 
-    //Add Label
+    //9. ADD LABEL
     @Transactional
-    public void addLabel(Long taskId, Long labelId) {
+    public void addLabel(Long taskId, Long labelId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
+        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+
         Label label = labelRepository.findById(labelId).orElseThrow();
         task.getLabels().add(label);
         taskRepository.save(task);
     }
 
-    //Remove Label
+    //10. REMOVE LABEL
     @Transactional
-    public void removeLabel(Long taskId, Long labelId) {
+    public void removeLabel(Long taskId, Long labelId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
+        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+
         Label label = labelRepository.findById(labelId).orElseThrow();
         task.getLabels().remove(label);
         taskRepository.save(task);
     }
 
-    //Comments
+    //COMMENTS
 
+    //11. ADD COMMENT
     @Transactional
     public void addComment(Long taskId, CommentRequestDTO request, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
@@ -203,7 +239,7 @@ public class TaskService {
         commentRepository.save(comment);
     }
 
-    //Assign User
+    //12. ASSIGN MEMBER
     @Transactional
     public void assignUser(Long taskID, Long userId, Long currentUserId) {
         Task task = taskRepository.findById(taskID).orElseThrow();
@@ -217,6 +253,7 @@ public class TaskService {
 
     }
 
+    //---HELPER-01--- : For Permission Checking ---
     private void validatePermission(Long teamId, Long userId, TeamRole forbiddenRole){
         TeamMember member = teamMemberRepository.findByTeamIdAndUserId(teamId,userId)
                 .orElseThrow(()-> new RuntimeException("User is not a member of this Team"));
@@ -227,13 +264,13 @@ public class TaskService {
         }
     }
 
+    //---HELPER-02--- : For Validate User is in Team---
     private TeamMember validateTeamMember(Long teamId, Long userId){
-        TeamMember member = teamMemberRepository.findByTeamIdAndUserId(teamId, userId)
+        return teamMemberRepository.findByTeamIdAndUserId(teamId, userId)
                 .orElseThrow(()-> new RuntimeException("Cannot assign task: user is not in the team"));
-
-        return member;
     }
 
+    //MAPPING DTO
     private TaskResponseDTO mapToDTO(Task task){
         TaskResponseDTO dto = new TaskResponseDTO();
         dto.setId(task.getId());
@@ -242,10 +279,23 @@ public class TaskService {
         dto.setProjectId(task.getProject().getId());
         dto.setPriority(task.getPriority() != null ? task.getPriority().name(): null);
         dto.setStatus(task.getStatus() !=null ? task.getStatus().name(): null);
+        dto.setStoryPoint(task.getStoryPoint());
+        dto.setDueDate(task.getDueDate());
+        dto.setStartDate(task.getStartDate());
+
+        if(task.getSprint() != null){
+            dto.setSprintId(task.getSprint().getId());
+            dto.setSprintName(task.getSprint().getName());
+        }
 
         if(task.getAssignee() != null){
             dto.setAssigneeId(task.getAssignee().getId());
             dto.setAssigneeName(task.getAssignee().getUser().getUsername());
+        }
+
+        if(task.getReporter() != null){
+            dto.setReporterId(task.getReporter().getId());
+            dto.setReporterName(task.getReporter().getUser().getUsername());
         }
         return dto;
     }

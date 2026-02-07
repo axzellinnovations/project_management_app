@@ -13,6 +13,7 @@ public class TaskResponseDTO {
     private String priority;
     private String status;
     private int storyPoint;
+    private LocalDate startDate;
     private LocalDate dueDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -25,4 +26,7 @@ public class TaskResponseDTO {
 
     private Long sprintId;
     private String sprintName;
+
+    private Long reporterId;
+    private String reporterName;
 }

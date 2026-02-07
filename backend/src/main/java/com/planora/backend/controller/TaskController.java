@@ -12,7 +12,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@RestController("/api/tasks")
+@RestController
+@RequestMapping("/api/tasks")
 @CrossOrigin(origins = "*")
 public class TaskController {
 
@@ -69,18 +70,20 @@ public class TaskController {
     @PostMapping("/{taskId}/dependencies/{blockerId}")
     public ResponseEntity<Void> addDependency(
             @PathVariable Long taskId,
-            @PathVariable Long blockerId
+            @PathVariable Long blockerId,
+            @RequestParam Long currentUserId
     ){
-        service.addDependency(taskId,blockerId);
+        service.addDependency(taskId,blockerId,currentUserId);
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
     @DeleteMapping("/{taskId}/dependencies/{blockerId}")
     public ResponseEntity<Void> removeDependency(
             @PathVariable Long taskId,
-            @PathVariable Long blockerId
+            @PathVariable Long blockerId,
+            @RequestParam Long currentUserId
     ){
-        service.removeDependency(taskId, blockerId);
+        service.removeDependency(taskId, blockerId, currentUserId);
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
@@ -89,18 +92,20 @@ public class TaskController {
     @PostMapping("/{taskId}/label/{labelId}")
     public ResponseEntity<Void> addLabel(
             @PathVariable Long taskId,
-            @PathVariable Long labelId
+            @PathVariable Long labelId,
+            @RequestParam Long currentUserId
     ){
-        service.addLabel(taskId, labelId);
+        service.addLabel(taskId, labelId, currentUserId);
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
     @DeleteMapping("/{taskId}/label/{labelId}")
     public ResponseEntity<Void> removeLabel(
             @PathVariable Long taskId,
-            @PathVariable Long labelId
+            @PathVariable Long labelId,
+            @RequestParam Long currentUserId
     ){
-        service.removeLabel(taskId, labelId);
+        service.removeLabel(taskId, labelId, currentUserId);
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
