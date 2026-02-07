@@ -4,11 +4,14 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Data
@@ -31,8 +34,12 @@ public class Team {
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @OneToMany(mappedBy = "team" , cascade = CascadeType.ALL , orphanRemoval = true)
+    @ToString.Exclude
     private List<Project> projects = new ArrayList<>();
 
     @OneToMany(mappedBy = "team", cascade = CascadeType.ALL , orphanRemoval = true)
+    @ToString.Exclude
     private List<TeamMember> members = new ArrayList<>();
+
+
 }
