@@ -6,11 +6,17 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 @Entity
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@Table(name = "tasks")
 public class Task {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -30,6 +36,10 @@ public class Task {
     @JoinColumn(name = "sprint_id")
     private Sprint sprint;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "kanban_column_id")
+    private KanbanColumn kanbanColumn;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "assignee_id")
     private TeamMember assignee;
@@ -41,21 +51,51 @@ public class Task {
     private Status status;
 
     @Column(nullable = false)
-    private LocalDate createdAt = LocalDate.now();
+    private LocalDateTime createdAt = LocalDateTime.now();
 
     private LocalDate startDate;
     private LocalDate dueDate;
-    private LocalDate updatedAt;
+    private LocalDateTime updatedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reporter_id")
-    private TeamMember reporterId;
+    private TeamMember reporter;
 
     private int storyPoint;
 
+    //The "Parent" (If this is null, It's th main taks. If ser, it's a subtask)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    private Task parentTask;
+
+    @OneToMany(mappedBy = "parentTask" , cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Task> subTasks = new ArrayList<>();
+
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "task_labels",
+            joinColumns = @JoinColumn(name = "task_id"),
+            inverseJoinColumns = @JoinColumn(name = "label_id")
+    )
+    private Set<Label> labels = new HashSet<>();
+
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Comment> comments = new ArrayList<>();
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "task_dependencies",
+            joinColumns = @JoinColumn(name = "blocked_task_id"),
+            inverseJoinColumns = @JoinColumn(name = "blocker_task_id")
+    )
+    private Set<Task> dependencies = new HashSet<>();
+
+    @ManyToMany(mappedBy = "dependencies", fetch = FetchType.LAZY)
+    private Set<Task> dependents = new HashSet<>();
+
     @PreUpdate
     public void setLastUpdate() {
-        this.updatedAt = LocalDate.now(); }
+        this.updatedAt = LocalDateTime.now(); }
 
 
 

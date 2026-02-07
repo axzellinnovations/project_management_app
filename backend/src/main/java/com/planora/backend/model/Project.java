@@ -29,6 +29,7 @@ public class Project {
     @JoinColumn(name = "userId", nullable = false)
     private User owner;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ProjectType type;
 
