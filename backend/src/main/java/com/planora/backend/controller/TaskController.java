@@ -60,9 +60,10 @@ public class TaskController {
     @PostMapping("/{parentId}/subtasks")
     public ResponseEntity<TaskResponseDTO> createSubTask(
             @PathVariable Long parentId,
-            @RequestBody TaskRequestDTO subTaskRequest
+            @RequestBody TaskRequestDTO subTaskRequest,
+            @RequestParam Long currentUserId
     ){
-        return new ResponseEntity<>(service.createSubTask(parentId, subTaskRequest), HttpStatus.OK);
+        return new ResponseEntity<>(service.createSubTask(parentId, subTaskRequest, currentUserId), HttpStatus.OK);
     }
 
     @PostMapping("/{taskId}/dependencies/{blockerId}")

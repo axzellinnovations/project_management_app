@@ -81,6 +81,17 @@ public class Task {
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Comment> comments = new ArrayList<>();
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "task_dependencies",
+            joinColumns = @JoinColumn(name = "blocked_task_id"),
+            inverseJoinColumns = @JoinColumn(name = "blocker_task_id")
+    )
+    private Set<Task> dependencies = new HashSet<>();
+
+    @ManyToMany(mappedBy = "dependencies", fetch = FetchType.LAZY)
+    private Set<Task> dependents = new HashSet<>();
+
     @PreUpdate
     public void setLastUpdate() {
         this.updatedAt = LocalDateTime.now(); }

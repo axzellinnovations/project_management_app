@@ -73,6 +73,7 @@ public class TaskService {
 
     }
 
+    //Get Task By ID
     public TaskResponseDTO getTaskById(Long taskId) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(()-> new EntityNotFoundException("Task not found"));
@@ -99,6 +100,7 @@ public class TaskService {
         return mapToDTO(taskRepository.save(task));
     }
 
+    //Delete Task
     public void deleteTask(Long taskId, Long currentUserId) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(()-> new EntityNotFoundException("Task not found"));
@@ -117,20 +119,56 @@ public class TaskService {
         taskRepository.delete(task);
     }
 
+    //Get Project Using ID
     public List<TaskResponseDTO> getTasksByProject(Long projectId) {
         return taskRepository.findByProjectId(projectId).stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }
 
-    public TaskResponseDTO createSubTask(Long parentId, TaskRequestDTO subTaskRequest) {
+    //SubTask
+
+    @Transactional
+    public TaskResponseDTO createSubTask(Long parentId, TaskRequestDTO subTaskRequest, Long currentUserId) {
+        Task parent = taskRepository.findById(parentId)
+                .orElseThrow(()-> new EntityNotFoundException("Parent task is not found"));
+
+        //permission check
+        validatePermission(parent.getProject().getId(), currentUserId, TeamRole.VIEWER);
+
+        //reuse create logic but set parent
+        TaskResponseDTO childDTO = createTask(subTaskRequest, currentUserId);
+
+        //link parent-child manually
+        Task child = taskRepository.findById(childDTO.getId()).orElseThrow();
+        child.setParentTask(parent);
+
+        return mapToDTO(taskRepository.save(child));
     }
 
+    //Dependency
+
+    //Add Dependency
+    @Transactional
     public void addDependency(Long taskId, Long blockerId) {
+        Task task = taskRepository.findById(taskId).orElseThrow();
+        Task blocker = taskRepository.findById(blockerId).orElseThrow();
+
+        task.getDependencies().add(blocker);
+        taskRepository.save(task);
     }
 
+    //Remove Dependency
+    @Transactional
     public void removeDependency(Long taskId, Long blockerId) {
+        Task task = taskRepository.findById(taskId).orElseThrow();
+        Task blocker = taskRepository.findById(blockerId).orElseThrow();
+
+        task.getDependencies().remove(blocker);
+        taskRepository.save(task);
     }
+
+    // Label
 
     public void addLabel(Long taskId, Long labelId) {
     }
