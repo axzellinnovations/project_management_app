@@ -203,7 +203,18 @@ public class TaskService {
         commentRepository.save(comment);
     }
 
-    public void assignUser(Long taskID, Long userId) {
+    //Assign User
+    @Transactional
+    public void assignUser(Long taskID, Long userId, Long currentUserId) {
+        Task task = taskRepository.findById(taskID).orElseThrow();
+
+        //permission check
+        validatePermission(task.getProject().getTeam().getId(), currentUserId, TeamRole.VIEWER);
+
+        TeamMember assignee = validateTeamMember(task.getProject().getTeam().getId(), userId);
+        task.setAssignee(assignee);
+        taskRepository.save(task);
+
     }
 
     private void validatePermission(Long teamId, Long userId, TeamRole forbiddenRole){
