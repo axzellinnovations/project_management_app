@@ -170,10 +170,22 @@ public class TaskService {
 
     // Label
 
+    //Add Label
+    @Transactional
     public void addLabel(Long taskId, Long labelId) {
+        Task task = taskRepository.findById(taskId).orElseThrow();
+        Label label = labelRepository.findById(labelId).orElseThrow();
+        task.getLabels().add(label);
+        taskRepository.save(task);
     }
 
+    //Remove Label
+    @Transactional
     public void removeLabel(Long taskId, Long labelId) {
+        Task task = taskRepository.findById(taskId).orElseThrow();
+        Label label = labelRepository.findById(labelId).orElseThrow();
+        task.getLabels().remove(label);
+        taskRepository.save(task);
     }
 
     public void addComment(Long taskId, CommentRequestDTO request) {
