@@ -109,9 +109,10 @@ public class TaskController {
     @PostMapping("/{taskId}/comments")
     public ResponseEntity<Void> addComment(
             @PathVariable Long taskId,
-            @RequestBody CommentRequestDTO request
+            @RequestBody CommentRequestDTO request,
+            @RequestParam Long currentUserId
             ){
-        service.addComment(taskId,request);
+        service.addComment(taskId,request,currentUserId);
         return new ResponseEntity<>(HttpStatus.OK);
     }
 

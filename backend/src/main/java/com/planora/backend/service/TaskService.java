@@ -188,7 +188,19 @@ public class TaskService {
         taskRepository.save(task);
     }
 
-    public void addComment(Long taskId, CommentRequestDTO request) {
+    //Comments
+
+    @Transactional
+    public void addComment(Long taskId, CommentRequestDTO request, Long currentUserId) {
+        Task task = taskRepository.findById(taskId).orElseThrow();
+        User author = userRepository.findById(currentUserId).orElseThrow();
+
+        Comment comment = new Comment();
+        comment.setContent(request.getContent());
+        comment.setTask(task);
+        comment.setAuthor(author);
+
+        commentRepository.save(comment);
     }
 
     public void assignUser(Long taskID, Long userId) {
