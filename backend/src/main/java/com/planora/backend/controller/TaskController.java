@@ -33,15 +33,18 @@ public class TaskController {
     }
 
     @PutMapping("/{taskId}")
-    public ResponseEntity<List<TaskResponseDTO>> updateTask(
+    public ResponseEntity<TaskResponseDTO> updateTask(
             @PathVariable Long taskId,
-            @RequestBody TaskRequestDTO request){
-        return new ResponseEntity<>(service.updateTask(taskId, request), HttpStatus.OK);
+            @RequestBody TaskRequestDTO request,
+            @RequestParam Long currentUserId){
+        return new ResponseEntity<>(service.updateTask(taskId, request, currentUserId), HttpStatus.OK);
     }
 
     @DeleteMapping("/{taskId}")
-    public ResponseEntity<Void> deleteTask(@PathVariable Long taskId){
-        service.deleteTask(taskId);
+    public ResponseEntity<Void> deleteTask(
+            @PathVariable Long taskId,
+            @RequestParam Long currentUserId){
+        service.deleteTask(taskId, currentUserId);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
