@@ -8,4 +8,7 @@ import java.util.List;
 public interface SprintRepository extends JpaRepository<Sprint, Long> {
 
     List<Sprint> findByProId(Long proId);
+
+    // ✅ ADD THIS METHOD
+    boolean existsByProIdAndStatus(Long proId, String status);
 }

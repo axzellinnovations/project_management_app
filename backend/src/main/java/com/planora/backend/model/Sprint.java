@@ -33,4 +33,5 @@ public class Sprint {
 
     @Column(nullable = false)
     private String status;
+
 }
