@@ -69,7 +69,7 @@ public class TaskService {
         //deafult reporter is the creator
         task.setReporter(validateTeamMember(teamId, currentUserId));
 
-        return mapToDTO(taskRepository.save(task))
+        return mapToDTO(taskRepository.save(task));
 
     }
 
