@@ -31,7 +31,7 @@ public class UserPrincipal implements UserDetails {
         return user.getEmail();
     }
 
-    public Long getUserId(){
+    public Long getUserId() {
         return user.getUserId();
     }
 
