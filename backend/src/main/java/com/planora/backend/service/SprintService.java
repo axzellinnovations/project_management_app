@@ -2,6 +2,7 @@ package com.planora.backend.service;
 
 import com.planora.backend.model.Project;
 import com.planora.backend.model.Sprint;
+import com.planora.backend.model.SprintStatus;
 import com.planora.backend.model.TeamMember;
 import com.planora.backend.model.TeamRole;
 import com.planora.backend.repository.ProjectRepository;
@@ -46,12 +47,10 @@ public class SprintService {
         return member.getRole();
     }
 
-    // View Board: OWNER/ADMIN/MEMBER/VIEWER (any team member)
     private void requireViewBoard(Long projectId) {
-        getRoleForProject(projectId); // if not member -> exception
+        getRoleForProject(projectId);
     }
 
-    // Configure Board (Columns/Sprints): OWNER + ADMIN only
     private void requireConfigureBoard(Long projectId) {
         TeamRole role = getRoleForProject(projectId);
         if (!(role == TeamRole.OWNER || role == TeamRole.ADMIN)) {
@@ -72,8 +71,9 @@ public class SprintService {
             throw new RuntimeException("Start date cannot be after end date");
         }
 
-        if (sprint.getStatus() == null || sprint.getStatus().isBlank()) {
-            sprint.setStatus("PLANNED");
+        // default status (enum)
+        if (sprint.getStatus() == null) {
+            sprint.setStatus(SprintStatus.NOT_STARTED);
         }
 
         return sprintRepository.save(sprint);
@@ -104,13 +104,14 @@ public class SprintService {
         existing.setName(updatedSprint.getName());
         existing.setStartDate(updatedSprint.getStartDate());
         existing.setEndDate(updatedSprint.getEndDate());
-        existing.setStatus(updatedSprint.getStatus());
+        existing.setStatus(updatedSprint.getStatus()); // enum
 
-        if (existing.getStartDate() == null || existing.getEndDate() == null) {
-            throw new RuntimeException("Start date and end date are required");
-        }
         if (existing.getStartDate().isAfter(existing.getEndDate())) {
             throw new RuntimeException("Start date cannot be after end date");
+        }
+
+        if (existing.getStatus() == null) {
+            existing.setStatus(SprintStatus.NOT_STARTED);
         }
 
         return sprintRepository.save(existing);
@@ -132,10 +133,10 @@ public class SprintService {
 
         requireConfigureBoard(sprint.getProId());
 
-        if ("ACTIVE".equalsIgnoreCase(sprint.getStatus())) {
+        if (sprint.getStatus() == SprintStatus.ACTIVE) {
             throw new RuntimeException("Sprint is already ACTIVE");
         }
-        if ("COMPLETED".equalsIgnoreCase(sprint.getStatus())) {
+        if (sprint.getStatus() == SprintStatus.COMPLETED) {
             throw new RuntimeException("Cannot start a COMPLETED sprint");
         }
 
@@ -146,14 +147,14 @@ public class SprintService {
             throw new RuntimeException("Start date cannot be after end date");
         }
 
-        boolean activeExists = sprintRepository.existsByProIdAndStatus(sprint.getProId(), "ACTIVE");
+        boolean activeExists = sprintRepository.existsByProIdAndStatus(sprint.getProId(), SprintStatus.ACTIVE);
         if (activeExists) {
             throw new RuntimeException("Another sprint is already ACTIVE for this project");
         }
 
         sprint.setStartDate(startDate);
         sprint.setEndDate(endDate);
-        sprint.setStatus("ACTIVE");
+        sprint.setStatus(SprintStatus.ACTIVE);
 
         return sprintRepository.save(sprint);
     }
