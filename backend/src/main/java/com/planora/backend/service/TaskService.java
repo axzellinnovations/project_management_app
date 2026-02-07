@@ -137,7 +137,7 @@ public class TaskService {
         Long teamId = task.getProject().getId();
 
         //fetch user role
-        TeamMember member = teamMemberRepository.findByTeamIdAndUserId(teamId,currentUserId)
+        TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId,currentUserId)
                 .orElseThrow(()-> new RuntimeException("User is not a member"));
 
         if(member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN){
@@ -255,7 +255,7 @@ public class TaskService {
 
     //---HELPER-01--- : For Permission Checking ---
     private void validatePermission(Long teamId, Long userId, TeamRole forbiddenRole){
-        TeamMember member = teamMemberRepository.findByTeamIdAndUserId(teamId,userId)
+        TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId,userId)
                 .orElseThrow(()-> new RuntimeException("User is not a member of this Team"));
 
         //forbidden == viewer, owner, admin, member are allowed
@@ -266,7 +266,7 @@ public class TaskService {
 
     //---HELPER-02--- : For Validate User is in Team---
     private TeamMember validateTeamMember(Long teamId, Long userId){
-        return teamMemberRepository.findByTeamIdAndUserId(teamId, userId)
+        return teamMemberRepository.findByTeamIdAndUserUserId(teamId, userId)
                 .orElseThrow(()-> new RuntimeException("Cannot assign task: user is not in the team"));
     }
 
