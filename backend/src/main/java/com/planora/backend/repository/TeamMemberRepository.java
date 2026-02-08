@@ -13,6 +13,7 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
     // Find a specific user in a team (used for permission checks)
     Optional<TeamMember> findByTeamIdAndUserUserId(Long teamId, Long userId);
 
+    List<TeamMember> findByUserUserId(Long currentUserId);
     // Get all members of a team
     List<TeamMember> findByTeamId(Long teamId);
 }

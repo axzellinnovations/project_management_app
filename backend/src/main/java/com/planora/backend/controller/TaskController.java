@@ -4,10 +4,12 @@ import com.planora.backend.dto.CommentRequestDTO;
 import com.planora.backend.dto.TaskRequestDTO;
 import com.planora.backend.dto.TaskResponseDTO;
 import com.planora.backend.model.Task;
+import com.planora.backend.model.UserPrincipal;
 import com.planora.backend.service.TaskService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,7 +25,8 @@ public class TaskController {
     @PostMapping
     public ResponseEntity<TaskResponseDTO> createTask(
             @RequestBody TaskRequestDTO request,
-            @RequestParam Long currentUserId){
+            @AuthenticationPrincipal UserPrincipal currentUser){
+        Long currentUserId = currentUser.getUserId();
         return new ResponseEntity<>(service.createTask(request, currentUserId), HttpStatus.CREATED);
     }
 
@@ -37,14 +40,16 @@ public class TaskController {
     public ResponseEntity<TaskResponseDTO> updateTask(
             @PathVariable Long taskId,
             @RequestBody TaskRequestDTO request,
-            @RequestParam Long currentUserId){
+            @AuthenticationPrincipal UserPrincipal currentUser){
+        Long currentUserId = currentUser.getUserId();
         return new ResponseEntity<>(service.updateTask(taskId, request, currentUserId), HttpStatus.OK);
     }
 
     @DeleteMapping("/{taskId}")
     public ResponseEntity<Void> deleteTask(
             @PathVariable Long taskId,
-            @RequestParam Long currentUserId){
+            @AuthenticationPrincipal UserPrincipal currentUser){
+        Long currentUserId = currentUser.getUserId();
         service.deleteTask(taskId, currentUserId);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
@@ -62,8 +67,9 @@ public class TaskController {
     public ResponseEntity<TaskResponseDTO> createSubTask(
             @PathVariable Long parentId,
             @RequestBody TaskRequestDTO subTaskRequest,
-            @RequestParam Long currentUserId
+            @AuthenticationPrincipal UserPrincipal currentUser
     ){
+        Long currentUserId = currentUser.getUserId();
         return new ResponseEntity<>(service.createSubTask(parentId, subTaskRequest, currentUserId), HttpStatus.OK);
     }
 
@@ -71,8 +77,9 @@ public class TaskController {
     public ResponseEntity<Void> addDependency(
             @PathVariable Long taskId,
             @PathVariable Long blockerId,
-            @RequestParam Long currentUserId
+            @AuthenticationPrincipal UserPrincipal currentUser
     ){
+        Long currentUserId = currentUser.getUserId();
         service.addDependency(taskId,blockerId,currentUserId);
         return new ResponseEntity<>(HttpStatus.OK);
     }
@@ -81,8 +88,9 @@ public class TaskController {
     public ResponseEntity<Void> removeDependency(
             @PathVariable Long taskId,
             @PathVariable Long blockerId,
-            @RequestParam Long currentUserId
+            @AuthenticationPrincipal UserPrincipal currentUser
     ){
+        Long currentUserId = currentUser.getUserId();
         service.removeDependency(taskId, blockerId, currentUserId);
         return new ResponseEntity<>(HttpStatus.OK);
     }
@@ -93,8 +101,9 @@ public class TaskController {
     public ResponseEntity<Void> addLabel(
             @PathVariable Long taskId,
             @PathVariable Long labelId,
-            @RequestParam Long currentUserId
+            @AuthenticationPrincipal UserPrincipal currentUser
     ){
+        Long currentUserId = currentUser.getUserId();
         service.addLabel(taskId, labelId, currentUserId);
         return new ResponseEntity<>(HttpStatus.OK);
     }
@@ -103,8 +112,9 @@ public class TaskController {
     public ResponseEntity<Void> removeLabel(
             @PathVariable Long taskId,
             @PathVariable Long labelId,
-            @RequestParam Long currentUserId
+            @AuthenticationPrincipal UserPrincipal currentUser
     ){
+        Long currentUserId = currentUser.getUserId();
         service.removeLabel(taskId, labelId, currentUserId);
         return new ResponseEntity<>(HttpStatus.OK);
     }
@@ -115,8 +125,9 @@ public class TaskController {
     public ResponseEntity<Void> addComment(
             @PathVariable Long taskId,
             @RequestBody CommentRequestDTO request,
-            @RequestParam Long currentUserId
+            @AuthenticationPrincipal UserPrincipal currentUser
             ){
+        Long currentUserId = currentUser.getUserId();
         service.addComment(taskId,request,currentUserId);
         return new ResponseEntity<>(HttpStatus.OK);
     }
@@ -127,8 +138,9 @@ public class TaskController {
     public ResponseEntity<Void> assignUser(
             @PathVariable Long taskID,
             @PathVariable Long userId,
-            @RequestParam Long currentUserId
+            @AuthenticationPrincipal UserPrincipal currentUser
     ){
+        Long currentUserId = currentUser.getUserId();
         service.assignUser(taskID,userId,currentUserId);
         return new ResponseEntity<>(HttpStatus.OK);
     }
