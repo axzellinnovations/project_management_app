@@ -38,9 +38,17 @@ public class Team {
     @ToString.Exclude
     private List<Project> projects = new ArrayList<>();
 
+
+    // INVITATION ACCEPTED MEMBERS
     @OneToMany(mappedBy = "team", cascade = CascadeType.ALL , orphanRemoval = true)
     @ToString.Exclude
     private List<TeamMember> members = new ArrayList<>();
+
+    //PENDING INVITATION
+    @OneToMany(mappedBy = "team", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    private List<TeamInvitation> invitations = new ArrayList<>();
+
 
 
 }
