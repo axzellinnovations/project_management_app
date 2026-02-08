@@ -115,6 +115,10 @@ public class TeamService {
             throw new RuntimeException("Permission Denied");
         }
 
+        team.getProjects().clear();
+        teamRepository.save(team);
+        teamRepository.flush();
+
         teamRepository.delete(team);
     }
 

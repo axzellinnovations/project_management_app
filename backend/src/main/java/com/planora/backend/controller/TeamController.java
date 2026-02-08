@@ -23,13 +23,20 @@ public class TeamController {
 
     //1. CREATE TEAM
     @PostMapping
-    public ResponseEntity<Team> createTeam(
+    public ResponseEntity<TeamSummaryDTO> createTeam(
             @RequestBody TeamCreationDTO creationDTO,
             @AuthenticationPrincipal UserPrincipal currentUser){
 
         Long currentUserId = currentUser.getUserId();
         Team createdTeam = service.createTeam(creationDTO, currentUserId);
-        return new ResponseEntity<>(createdTeam, HttpStatus.CREATED);
+
+        TeamSummaryDTO response = new TeamSummaryDTO(
+                createdTeam.getId(),
+                createdTeam.getName(),
+                createdTeam.getOwner().getFullName()
+        );
+
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
     //2. GET MY TEAMS
@@ -46,17 +53,25 @@ public class TeamController {
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal currentUser){
         Long currentUserId= currentUser.getUserId();
-        return new ResponseEntity<>(service.getTeam(id, currentUserId), HttpStatus.FOUND);
+        return new ResponseEntity<>(service.getTeam(id, currentUserId), HttpStatus.OK);
     }
 
     //4. UPDATE TEAM
     @PutMapping("/{id}")
-    public ResponseEntity<Team> updateTeam(
-            TeamCreationDTO teamCreationDTO,
+    public ResponseEntity<TeamSummaryDTO> updateTeam(
+            @RequestBody TeamCreationDTO teamCreationDTO,
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal currentUser){
         Long currentUserId = currentUser.getUserId();
-        return new ResponseEntity<>(service.updateTeam(id,teamCreationDTO, currentUserId), HttpStatus.OK);
+
+        Team updatedTeam = service.updateTeam(id,teamCreationDTO, currentUserId);
+
+        TeamSummaryDTO response= new TeamSummaryDTO(
+                updatedTeam.getId(),
+                updatedTeam.getName(),
+                updatedTeam.getOwner().getFullName()
+        );
+        return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
     //5. DELETE TEAM
