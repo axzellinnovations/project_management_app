@@ -1,0 +1,31 @@
+package com.planora.backend.dto;
+
+import com.planora.backend.model.ProjectType;
+import jakarta.persistence.Entity;
+import jakarta.validation.constraints.NotBlank;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.antlr.v4.runtime.misc.NotNull;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ProjectDTO {
+
+    @NotBlank(message = "Project name is required")
+    private String name;
+
+    private String description;
+
+    @NotNull
+    private ProjectType type;
+
+    @NotNull
+    private Long ownerId;
+
+    @NotNull
+    private Long teamId;
+}
