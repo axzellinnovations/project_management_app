@@ -8,3 +8,10 @@
 /dataSources.local.xml
 # Editor-based HTTP Client requests
 /httpRequests/
+
+
+compiler.xml
+encoding.xml
+misc.xml
+
+.env
