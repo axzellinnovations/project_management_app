@@ -1,0 +1,62 @@
+services:
+  # The Spring Boot Backend
+  backend:
+    build: ./backend
+    container_name: planora-backend
+    ports:
+      - "8080:8080"
+    environment:
+      # NETWORK CONFIG: Connect to the 'db' service container
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/planora_db
+      - SPRING_DATASOURCE_USERNAME=titan
+      - SPRING_DATASOURCE_PASSWORD=2024
+
+      # SECRETS: Pass these from your local .env file
+      - JWT_SECRET=${JWT_SECRET}
+      - MAIL_HOST=${MAIL_HOST}
+      - MAIL_PORT=${MAIL_PORT}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+    depends_on:
+      - db
+    networks:
+      - planora-network
+
+  # The PostgreSQL Database
+  db:
+    # Updated to use Postgres 18
+    image: postgres:18-alpine
+    container_name: planora-db
+    environment:
+      - POSTGRES_DB=planora_db
+      - POSTGRES_USER=titan
+      - POSTGRES_PASSWORD=2024
+    ports:
+      # Maps container port 5432 to host port 5433 (avoids conflict with local Postgres)
+      - "5433:5432"
+    volumes:
+      # Standard data mount point for official Postgres images
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - planora-network
+
+  # --- NEW: pgAdmin 4 Service ---
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: planora-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@planora.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    ports:
+      - "5050:80"  # Access pgAdmin at http://localhost:5050
+    depends_on:
+      - db
+    networks:
+      - planora-network
+
+volumes:
+  postgres_data:
+
+networks:
+  planora-network:
+    driver: bridge
