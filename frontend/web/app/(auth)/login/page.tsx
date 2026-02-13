@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
+    const router = useRouter();
     
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -19,7 +20,11 @@ export default function LoginPage() {
         {/* show data */}
         console.log("Logging in");
         setIsLoading(false);
-    }
+
+        {/* Redirect to dashboard */}
+        router.push('/dashboard');
+
+        }
 
     return(
         
@@ -72,6 +77,7 @@ export default function LoginPage() {
                             type="email"
                             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
                             placeholder="Enter your email"
+                            value={email}
                             onChange={(e)=> setEmail(e.target.value)}
                         />
                     </div>
@@ -83,6 +89,7 @@ export default function LoginPage() {
                             type="password"
                             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
                             placeholder="Enter your password"
+                            value={password}
                             onChange={(e)=> setPassword(e.target.value)}
                         />
                     </div>
