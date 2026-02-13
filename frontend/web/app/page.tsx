@@ -38,14 +38,89 @@ function IconTeam() {
   );
 }
 
+// --- REUSABLE COMPONENTS ---
+
+type ButtonVariant = 'primary' | 'ghost' | 'outlined';
+type ArrowType = 'arrow-right' | 'arrow-down';
+
+interface ArrowIconProps {
+  type: ArrowType;
+  variant: ButtonVariant;
+}
+
+function ArrowIcon({ type, variant }: ArrowIconProps) {
+  const color = variant === 'primary' ? 'text-[#1d56d5]' : 'text-white';
+  const hoverTransform = type === 'arrow-right' ? 'group-hover:translate-x-1' : '';
+  
+  const paths = {
+    'arrow-right': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3" />,
+    'arrow-down': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+  };
+  
+  return (
+    <svg className={`w-3.5 h-3.5 ${color} ${hoverTransform} transition-transform`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      {paths[type]}
+    </svg>
+  );
+}
+
+interface ButtonProps {
+  variant?: ButtonVariant;
+  href?: string;
+  icon?: ArrowType;
+  children: ReactNode;
+  fullWidth?: boolean;
+}
+
+function Button({ variant = 'primary', href, icon, children, fullWidth = false }: ButtonProps) {
+  const baseClasses = "h-11 sm:h-10 rounded-lg px-6 cursor-pointer transition-all flex items-center justify-center gap-2";
+  
+  const variantClasses = {
+    primary: "bg-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 group",
+    ghost: "hover:bg-white/10 transition-colors",
+    outlined: "bg-white/10 border border-white/30 hover:bg-white/20 backdrop-blur-sm"
+  };
+
+  const textClasses = {
+    primary: "font-semibold text-[#1d56d5] text-sm",
+    ghost: "font-medium text-sm text-white whitespace-nowrap",
+    outlined: "font-medium text-white text-sm"
+  };
+
+  const widthClass = fullWidth ? 'w-full sm:w-auto' : '';
+  const heightClass = variant === 'ghost' ? 'h-9' : 'h-11 sm:h-10';
+  
+  const content = (
+    <div className={`${baseClasses} ${heightClass} ${variantClasses[variant]} ${widthClass}`}>
+      <p className={textClasses[variant]}>{children}</p>
+      {icon && <ArrowIcon type={icon} variant={variant} />}
+    </div>
+  );
+
+  return href ? <Link href={href} className={widthClass}>{content}</Link> : content;
+}
+
+interface IconContainerProps {
+  children: ReactNode;
+  variant?: 'solid' | 'glass';
+}
+
+function IconContainer({ children, variant = 'glass' }: IconContainerProps) {
+  const classes = variant === 'solid'
+    ? "bg-white relative rounded-lg shrink-0 w-9 h-9 flex items-center justify-center p-2 text-blue-600"
+    : "bg-white/20 rounded-xl w-11 h-11 flex items-center justify-center mb-3";
+    
+  return <div className={classes}>{children}</div>;
+}
+
 // --- COMPONENTS ---
 
 function LogoContainer() {
   return (
     <div className="flex gap-2.5 items-center">
-        <div className="bg-white relative rounded-lg shrink-0 w-9 h-9 flex items-center justify-center p-2 text-blue-600">
+        <IconContainer variant="solid">
            <IconLogo />
-        </div>
+        </IconContainer>
         <p className="font-sans font-bold text-lg md:text-xl text-white">Planora</p>
     </div>
   );
@@ -54,16 +129,8 @@ function LogoContainer() {
 function NavButtons() {
   return (
     <div className="flex gap-2 sm:gap-3 items-center">
-        <Link href="/login">
-            <div className="h-9 rounded-lg px-3 sm:px-4 cursor-pointer flex items-center justify-center hover:bg-white/10 transition-colors">
-                <p className="font-medium text-sm text-white whitespace-nowrap">Sign In</p>
-            </div>
-        </Link>
-        <Link href="/register">
-            <div className="bg-white h-9 rounded-lg shadow-md cursor-pointer hover:shadow-lg transition-shadow flex items-center justify-center px-3 sm:px-5">
-                <p className="font-medium text-[#1d56d5] text-sm whitespace-nowrap">Get Started</p>
-            </div>
-        </Link>
+        <Button variant="ghost" href="/login">Sign In</Button>
+        <Button variant="primary" href="/register">Get Started</Button>
     </div>
   );
 }
@@ -96,27 +163,13 @@ function HeroSection() {
       </p>
 
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-center mb-12 sm:mb-16 w-full sm:w-auto px-4 sm:px-0">
-    
-    {/* Primary: Get Started */}
-    <Link href="/register" className="w-full sm:w-auto">
-        <div className="bg-white h-11 sm:h-10 rounded-lg shadow-lg px-6 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 group w-full sm:w-auto">
-            <p className="font-semibold text-[#1d56d5] text-sm">Get Started</p>
-            <svg className="w-3.5 h-3.5 text-[#1d56d5] group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-            </svg>
-        </div>
-    </Link>
-
-    {/* Secondary: Learn More */}
-    <a href="#features" className="w-full sm:w-auto">
-        <div className="bg-white/10 h-11 sm:h-10 rounded-lg border border-white/30 px-6 cursor-pointer hover:bg-white/20 transition-colors flex items-center justify-center backdrop-blur-sm gap-2 w-full sm:w-auto">
-            <p className="font-medium text-white text-sm">Learn More</p>
-            <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-            </svg>
-        </div>
-    </a>
-</div>
+        <Button variant="primary" href="/register" icon="arrow-right" fullWidth>
+          Get Started
+        </Button>
+        <Button variant="outlined" href="#features" icon="arrow-down" fullWidth>
+          Learn More
+        </Button>
+      </div>
     </div>
   );
 }
@@ -124,9 +177,9 @@ function HeroSection() {
 function FeatureCard({ icon, title, desc }: { icon: ReactNode, title: string, desc: string }) {
   return (
     <div className={styles.glassCard}>
-      <div className="bg-white/20 rounded-xl w-11 h-11 flex items-center justify-center mb-3">
+      <IconContainer variant="glass">
         {icon}
-      </div>
+      </IconContainer>
       <h3 className="font-semibold text-base sm:text-[17px] text-white mb-2">{title}</h3>
       <p className="text-xs sm:text-[13px] leading-relaxed text-white/80">{desc}</p>
     </div>
