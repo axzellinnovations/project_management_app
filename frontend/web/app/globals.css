@@ -10,11 +10,26 @@
   
   html {
     font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  @media (min-width: 640px) {
+    html {
+      font-size: 14.5px;
+    }
   }
   
   @media (min-width: 768px) {
     html {
       font-size: 15px;
+    }
+  }
+  
+  /* Ensure proper touch targets on mobile */
+  @media (max-width: 639px) {
+    button, a {
+      min-height: 44px;
     }
   }
 }
