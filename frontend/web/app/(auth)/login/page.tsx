@@ -31,12 +31,14 @@ export default function LoginPage() {
         <div className='min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] p-4'>
 
             {/* 1. Back to Home Link */}
-            <Link href={"/"} className='mb-8 flex items-center text-sm text-gray-500 hover:text-gray-900 transition-colors'>
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                </svg>
-                Back to home
-            </Link>
+            <div className="w-full max-w-[420px] mb-4">
+                <Link href={"/"} className='inline-flex items-center text-sm text-gray-500 hover:text-gray-900 transition-colors'>
+                    <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back to home
+                </Link>
+            </div>
 
             {/* 2. Header Section */}
             <div className='mb-8 text-center'>
@@ -114,7 +116,7 @@ export default function LoginPage() {
 
                 {/* Footer Copyright */}
                 <p className="mt-8 text-center text-xs text-gray-400">
-                    © 2024 Planora. All rights reserved.
+                    © 2026 Planora. All rights reserved.
                 </p>
             </div>
        </div>
