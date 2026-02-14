@@ -3,6 +3,8 @@
 import { useState } from 'react';   
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import api from '@/lib/axios';
+
 
 export default function LoginPage() {
     const router = useRouter();
@@ -15,16 +17,27 @@ export default function LoginPage() {
         e.preventDefault();
         setIsLoading(true);
 
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate network delay
+        try{
 
-        {/* show data */}
-        console.log("Logging in");
-        setIsLoading(false);
+            // 1. Sign in using backend API
+            const response = await api.post('/api/auth/login', {
+                email: email,
+                password: password
+            });
 
-        {/* Redirect to dashboard */}
-        router.push('/dashboard');
+            // 2. Store token
+            console.log("Login successful:", response.data);
+            localStorage.setItem('token', response.data);
 
+            // 3. Redirect to dashboard
+            router.push('/dashboard');
+        } catch (error:any) {
+            console.error("Login failed:", error);
+            alert(error.response?.data || "Login failed. Please try again.");
+        } finally {
+            setIsLoading(false);
         }
+    };
 
     return(
         
@@ -80,7 +93,7 @@ export default function LoginPage() {
                             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
                             placeholder="Enter your email"
                             value={email}
-                            onChange={(e)=> setEmail(e.target.value)}
+                            onChange={(e)=> setEmail(e.target.value.toLowerCase())}
                         />
                     </div>
 
