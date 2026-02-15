@@ -80,6 +80,10 @@ public class JWTService {
         return (email.equals(userDetails.getUsername()) && !isTokenExpired(token));
     }
 
+    public String extractUserName(String token){
+        return extractAllClaims(token).getSubject();
+    }
+
     private boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());
     }

@@ -1,0 +1,21 @@
+.mainContainer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+  
+  background-image: linear-gradient(
+    146.997deg, 
+    rgb(21, 93, 252) 0%, 
+    rgb(152, 16, 250) 50%, 
+    rgb(246, 51, 154) 100%
+  );
+}
+
+.glassCard {
+  @apply bg-white/10 border border-white/20 rounded-2xl p-8 flex flex-col items-center text-center backdrop-blur-md transition-colors hover:bg-white/15;
+}
+
+.heroBadge {
+  @apply bg-white/20 px-4 py-2 rounded-full mb-6 backdrop-blur-sm;
+}
