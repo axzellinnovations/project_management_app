@@ -41,7 +41,7 @@ public class UserService {
     @Transactional
     public String register(User user) {
 
-        User existingUser = userRepository.findByEmail(user.getEmail());
+        User existingUser = userRepository.findByEmail(user.getEmail().toLowerCase());
 
         if(existingUser!=null){
             if(!existingUser.isVerified()){
@@ -55,6 +55,7 @@ public class UserService {
         }
         else {
             //save unverified user
+            user.setEmail(user.getEmail().toLowerCase());
             user.setPassword(encoder.encode(user.getPassword()));
             user.setVerified(false);
             repository.save(user);
@@ -74,7 +75,7 @@ public class UserService {
 
     @Transactional
     public boolean verifyToken(String email, String otp){
-        User user = userRepository.findByEmail(email);
+        User user = userRepository.findByEmail(email.toLowerCase());
         VerificationToken verificationToken = tokenRepository.findByUser(user);
 
         if(verificationToken == null || verificationToken.isUsed() || verificationToken.getExpiry().isBefore(Instant.now())){
@@ -102,7 +103,7 @@ public class UserService {
     public String verify(User user) {
         Authentication authentication =
                 authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(
-                        user.getEmail(),
+                        user.getEmail().toLowerCase(),
                         user.getPassword()));
 
         if(authentication.isAuthenticated()){
@@ -115,7 +116,7 @@ public class UserService {
 
     @Transactional
     public String resendOtp(String email) {
-        User user = userRepository.findByEmail(email);
+        User user = userRepository.findByEmail(email.toLowerCase());
 
         if(user == null){
             return "User is not found";
@@ -135,13 +136,13 @@ public class UserService {
         verificationToken.setExpiry(Instant.now().plus(java.time.Duration.ofMinutes(10)));
         tokenRepository.save(verificationToken);
 
-        emailService.sendPasswordResetRequest(email, otp);
+        emailService.sendPasswordResetRequest(email.toLowerCase(), otp);
         return "New OTP send to your email.";
     }
 
     @Transactional
     public String forgotPassword(String email) {
-        User user = userRepository.findByEmail(email);
+        User user = userRepository.findByEmail(email.toLowerCase());
 
         if(user == null)
             return "If that email exists, an OTP has been sent.";
@@ -156,13 +157,13 @@ public class UserService {
         verificationToken.setExpiry(Instant.now().plus(java.time.Duration.ofMinutes(10)));
         tokenRepository.save(verificationToken);
 
-        emailService.sendPasswordResetRequest(email, otp);
+        emailService.sendPasswordResetRequest(email.toLowerCase(), otp);
         return "Password Reset OTP sent.";
     }
 
     @Transactional
     public boolean resetPassword(String email, String otp, String newPassword) {
-        User user = userRepository.findByEmail(email);
+        User user = userRepository.findByEmail(email.toLowerCase());
         VerificationToken verificationToken = tokenRepository.findByUser(user);
 
         if(verificationToken != null && verificationToken.getToken().equals(otp) && !verificationToken.isExpired()){
