@@ -1,6 +1,7 @@
 package com.planora.backend.configuration;
 
 
+import com.planora.backend.service.JWTService;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -15,30 +16,26 @@ import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
 @Configuration
-@EnableWebSocketMessageBroker // Enables WebSocket message handling, backed by a message broker.
+@EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
+    private final JWTService jwtService;
+
+    public WebSocketConfig(JWTService jwtService) {
+        this.jwtService = jwtService;
+    }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Register the "/ws" endpoint, enabling the SockJS protocol.
-        // SockJS is used (both client and server side) to allow alternative
-        // messaging options if WebSocket is not available.
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*") // Allow all origins for simplicity (development only)
+                .setAllowedOriginPatterns("*")
                 .withSockJS();
     }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // Enable a simple memory-based message broker to carry the messages
-        // back to the client on destinations prefixed with "/topic" and "/queue".
         registry.enableSimpleBroker("/topic", "/queue");
-
-        // Designate the "/app" prefix for messages that are bound for
-        // methods annotated with @MessageMapping.
         registry.setApplicationDestinationPrefixes("/app");
-
-        // Enable user destination prefix (default is /user, but explicit is good)
         registry.setUserDestinationPrefix("/user");
     }
 
@@ -47,18 +44,38 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registration.interceptors(new ChannelInterceptor() {
             @Override
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
-                StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+                StompHeaderAccessor accessor =
+                        MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+
+                if (accessor == null) return message;
 
                 if (StompCommand.CONNECT.equals(accessor.getCommand())) {
-                    String user = accessor.getFirstNativeHeader("user");
-                    System.out.println("STOMP CONNECT: user header = " + user);
-                    if (user != null) {
-                        accessor.setUser(new StompPrincipal(user));
+                    // Read JWT token from Authorization header (Bearer token)
+                    String auth = accessor.getFirstNativeHeader("Authorization");
+
+                    if (auth == null || auth.trim().isEmpty()) {
+                        throw new IllegalArgumentException("Missing Authorization header");
                     }
+
+                    // Remove "Bearer " prefix if present
+                    String token = auth.startsWith("Bearer ") ?
+                            auth.substring("Bearer ".length()).trim() :
+                            auth.trim();
+
+                    // Extract username from token and set as principal
+                    String username = jwtService.extractUsername(token);
+                    if (username == null || username.trim().isEmpty()) {
+                        throw new IllegalArgumentException("Invalid username in token");
+                    }
+
+                    accessor.setUser(new StompPrincipal(username));
+
+                    // Store username in session for disconnect event
+                    accessor.getSessionAttributes().put("username", username);
                 }
+
                 return message;
             }
         });
     }
 }
-
