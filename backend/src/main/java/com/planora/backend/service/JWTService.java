@@ -1,18 +1,20 @@
 package com.planora.backend.service;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.io.Decoders;
-import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.stereotype.Service;
-
-import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
+
+import javax.crypto.SecretKey;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.stereotype.Service;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
 
 @Service
 public class JWTService {
@@ -31,7 +33,14 @@ public class JWTService {
 //    }
 
     public String generateToken(String email) {
+        return generateToken(email, null);
+    }
+
+    public String generateToken(String email, String username) {
         Map<String, Object> claims = new HashMap<>();
+        if (username != null) {
+            claims.put("username", username);
+        }
 
         return Jwts.builder()
                 .claims()
@@ -78,6 +87,10 @@ public class JWTService {
     public boolean validateToken(String token, UserDetails userDetails){
         final String email = extractEmail(token);
         return (email.equals(userDetails.getUsername()) && !isTokenExpired(token));
+    }
+
+    public String extractUserName(String token){
+        return extractAllClaims(token).getSubject();
     }
 
     private boolean isTokenExpired(String token) {

@@ -5,10 +5,13 @@ import com.planora.backend.model.Sprint;
 import com.planora.backend.model.SprintStatus;
 import com.planora.backend.model.TeamMember;
 import com.planora.backend.model.TeamRole;
+import com.planora.backend.model.User;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.SprintRepository;
 import com.planora.backend.repository.TeamMemberRepository;
-import com.planora.backend.security.CurrentUserService;
+import com.planora.backend.repository.UserRepository;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -20,16 +23,40 @@ public class SprintService {
     private final SprintRepository sprintRepository;
     private final ProjectRepository projectRepository;
     private final TeamMemberRepository teamMemberRepository;
-    private final CurrentUserService currentUserService;
+    private final UserRepository userRepository;
 
     public SprintService(SprintRepository sprintRepository,
                          ProjectRepository projectRepository,
                          TeamMemberRepository teamMemberRepository,
-                         CurrentUserService currentUserService) {
+                         UserRepository userRepository) {
         this.sprintRepository = sprintRepository;
         this.projectRepository = projectRepository;
         this.teamMemberRepository = teamMemberRepository;
-        this.currentUserService = currentUserService;
+        this.userRepository = userRepository;
+    }
+
+    // ---------- Get Current User from SecurityContext ----------
+
+    private Long getCurrentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if (auth == null || !auth.isAuthenticated() || auth.getName() == null) {
+            throw new RuntimeException("Unauthorized");
+        }
+
+        // In your JwtFilter, auth.getName() will be the email/username
+        String email = auth.getName();
+
+        // Adjust this depending on your repository return type
+        // If findByEmail returns Optional<User>
+        User user = userRepository.findByEmail(email);
+
+        if (user == null) {
+            throw new RuntimeException("User not found for email: " + email);
+        }
+
+        return user.getUserId();
+
     }
 
     // ---------- Permission helpers (based on your image) ----------
@@ -39,7 +66,7 @@ public class SprintService {
                 .orElseThrow(() -> new RuntimeException("Project not found"));
 
         Long teamId = project.getTeam().getId();
-        Long userId = currentUserService.getUserId();
+        Long userId = getCurrentUserId();
 
         TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId, userId)
                 .orElseThrow(() -> new RuntimeException("Access denied: Not a team member"));
@@ -71,7 +98,6 @@ public class SprintService {
             throw new RuntimeException("Start date cannot be after end date");
         }
 
-        // default status (enum)
         if (sprint.getStatus() == null) {
             sprint.setStatus(SprintStatus.NOT_STARTED);
         }
@@ -104,9 +130,10 @@ public class SprintService {
         existing.setName(updatedSprint.getName());
         existing.setStartDate(updatedSprint.getStartDate());
         existing.setEndDate(updatedSprint.getEndDate());
-        existing.setStatus(updatedSprint.getStatus()); // enum
+        existing.setStatus(updatedSprint.getStatus());
 
-        if (existing.getStartDate().isAfter(existing.getEndDate())) {
+        if (existing.getStartDate() != null && existing.getEndDate() != null
+                && existing.getStartDate().isAfter(existing.getEndDate())) {
             throw new RuntimeException("Start date cannot be after end date");
         }
 
