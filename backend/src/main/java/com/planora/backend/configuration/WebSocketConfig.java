@@ -1,7 +1,6 @@
 package com.planora.backend.configuration;
 
 
-import com.planora.backend.service.JWTService;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -15,14 +14,20 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import com.planora.backend.model.User;
+import com.planora.backend.repository.UserRepository;
+import com.planora.backend.service.JWTService;
+
 @Configuration
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JWTService jwtService;
+    private final UserRepository userRepository;
 
-    public WebSocketConfig(JWTService jwtService) {
+    public WebSocketConfig(JWTService jwtService, UserRepository userRepository) {
         this.jwtService = jwtService;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -63,11 +68,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                             auth.trim();
 
                     // Extract username from token and set as principal
-                    String username = jwtService.extractUsername(token);
-                    if (username == null || username.trim().isEmpty()) {
+                    User user = userRepository.findByEmail(jwtService.extractUserName(token));
+
+                    if (user == null || user.getUsername() == null || user.getUsername().trim().isEmpty()) {
                         throw new IllegalArgumentException("Invalid username in token");
                     }
 
+                    String username = user.getUsername();
                     accessor.setUser(new StompPrincipal(username));
 
                     // Store username in session for disconnect event

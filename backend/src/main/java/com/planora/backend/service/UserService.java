@@ -1,19 +1,20 @@
 package com.planora.backend.service;
 
-import com.planora.backend.model.User;
-import com.planora.backend.model.VerificationToken;
-import com.planora.backend.repository.TokenRepository;
-import com.planora.backend.repository.UserRepository;
-import jakarta.transaction.Transactional;
+import java.time.Instant;
+import java.util.Random;
+
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Random;
+import com.planora.backend.model.User;
+import com.planora.backend.model.VerificationToken;
+import com.planora.backend.repository.TokenRepository;
+import com.planora.backend.repository.UserRepository;
+
+import jakarta.transaction.Transactional;
 
 @Service
 public class UserService {
@@ -107,7 +108,8 @@ public class UserService {
                         user.getPassword()));
 
         if(authentication.isAuthenticated()){
-            return jwtService.generateToken(user.getEmail());
+            User authenticatedUser = userRepository.findByEmail(user.getEmail().toLowerCase());
+            return jwtService.generateToken(user.getEmail(), authenticatedUser.getUsername());
         }
 
         return "Failed to login";
