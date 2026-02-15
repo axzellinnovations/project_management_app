@@ -3,18 +3,17 @@ package com.planora.backend.controller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import com.planora.backend.dto.OtpRequest;
 import com.planora.backend.dto.ResetPasswordRequest;
 import com.planora.backend.dto.VerifyRequest;
 import com.planora.backend.model.User;
 import com.planora.backend.service.UserService;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -63,6 +62,32 @@ public class UserController {
         }
         else {
             return new ResponseEntity<>("Invalid Access/ OTP Expired", HttpStatus.UNAUTHORIZED);
+        }
+    }
+
+    @GetMapping("/users")
+    public ResponseEntity<?> getAllUsers(@RequestParam(required = false) String excludeEmail) {
+        try {
+            List<User> allUsers = service.getAllUsers();
+
+            // Filter out the current user if excludeEmail is provided
+            if (excludeEmail != null && !excludeEmail.isEmpty()) {
+                allUsers = allUsers.stream()
+                        .filter(user -> !user.getEmail().equals(excludeEmail))
+                        .collect(Collectors.toList());
+            }
+
+            // Return only username and email (no password)
+            List<Map<String, String>> userList = allUsers.stream()
+                    .map(user -> Map.of(
+                            "username", user.getUsername() != null ? user.getUsername() : user.getEmail(),
+                            "email", user.getEmail()
+                    ))
+                    .collect(Collectors.toList());
+
+            return new ResponseEntity<>(userList, HttpStatus.OK);
+        } catch (Exception e) {
+            return new ResponseEntity<>("Error fetching users: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
