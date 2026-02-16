@@ -39,7 +39,7 @@ export default function Sidebar() {
             {/* Main Navigation */}
             <div className="px-4 py-6 flex flex-col gap-1 overflow-y-auto flex-1">
                 <NavItem label="For you" href="#" icon={<InboxIcon />} />
-                <NavItem label="Summary" href="/summary" icon={<DashboardIcon />} />
+                <NavItem label="Dashboard" href="/dashboard" icon={<DashboardIcon />} />
 
                 <div className="mt-6 mb-2">
                     <div className="flex items-center justify-between px-2 mb-2 group cursor-pointer">

@@ -30,7 +30,7 @@ export default function LoginPage() {
             localStorage.setItem('token', response.data);
 
             // 3. Redirect to dashboard
-            router.push('/summary');
+            router.push('/dashboard');
         } catch (error: any) {
             console.error("Login failed:", error);
             alert(error.response?.data || "Login failed. Please try again.");
