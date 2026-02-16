@@ -1,7 +1,6 @@
 package com.planora.backend.configuration;
 
 
-import com.planora.backend.service.JWTService;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -15,14 +14,20 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import com.planora.backend.model.User;
+import com.planora.backend.repository.UserRepository;
+import com.planora.backend.service.JWTService;
+
 @Configuration
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JWTService jwtService;
+    private final UserRepository userRepository;
 
-    public WebSocketConfig(JWTService jwtService) {
+    public WebSocketConfig(JWTService jwtService, UserRepository userRepository) {
         this.jwtService = jwtService;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -47,31 +52,59 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 StompHeaderAccessor accessor =
                         MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
 
-                if (accessor == null) return message;
+                if (accessor == null) {
+                    System.err.println("[WebSocket] No StompHeaderAccessor found");
+                    return message;
+                }
 
                 if (StompCommand.CONNECT.equals(accessor.getCommand())) {
-                    // Read JWT token from Authorization header (Bearer token)
-                    String auth = accessor.getFirstNativeHeader("Authorization");
+                    try {
+                        // Read JWT token from Authorization header (Bearer token)
+                        String auth = accessor.getFirstNativeHeader("Authorization");
+                        
+                        System.out.println("[WebSocket] CONNECT received with Authorization header: " + (auth != null ? "Present" : "Missing"));
 
-                    if (auth == null || auth.trim().isEmpty()) {
-                        throw new IllegalArgumentException("Missing Authorization header");
+                        if (auth == null || auth.trim().isEmpty()) {
+                            System.err.println("[WebSocket] Missing Authorization header");
+                            throw new IllegalArgumentException("Missing Authorization header");
+                        }
+
+                        // Remove "Bearer " prefix if present
+                        String token = auth.startsWith("Bearer ") ?
+                                auth.substring("Bearer ".length()).trim() :
+                                auth.trim();
+
+                        System.out.println("[WebSocket] Token received, extracting username...");
+                        
+                        // Extract username from token
+                        String email = jwtService.extractUserName(token);
+                        System.out.println("[WebSocket] Extracted email from token: " + email);
+
+                        // Find user by email
+                        User user = userRepository.findByEmail(email);
+                        
+                        if (user == null) {
+                            System.err.println("[WebSocket] User not found in database for email: " + email);
+                            throw new IllegalArgumentException("User not found in database");
+                        }
+
+                        String username = user.getUsername();
+                        
+                        if (username == null || username.trim().isEmpty()) {
+                            System.err.println("[WebSocket] Invalid username in token for user: " + email);
+                            throw new IllegalArgumentException("Invalid username in token");
+                        }
+
+                        System.out.println("[WebSocket] Setting user principal: " + username);
+                        accessor.setUser(new StompPrincipal(username));
+                        accessor.getSessionAttributes().put("username", username);
+                        
+                        System.out.println("[WebSocket] Authentication successful for user: " + username);
+                    } catch (Exception e) {
+                        System.err.println("[WebSocket] Authentication error: " + e.getMessage());
+                        e.printStackTrace();
+                        throw new IllegalArgumentException("WebSocket authentication failed: " + e.getMessage());
                     }
-
-                    // Remove "Bearer " prefix if present
-                    String token = auth.startsWith("Bearer ") ?
-                            auth.substring("Bearer ".length()).trim() :
-                            auth.trim();
-
-                    // Extract username from token and set as principal
-                    String username = jwtService.extractUsername(token);
-                    if (username == null || username.trim().isEmpty()) {
-                        throw new IllegalArgumentException("Invalid username in token");
-                    }
-
-                    accessor.setUser(new StompPrincipal(username));
-
-                    // Store username in session for disconnect event
-                    accessor.getSessionAttributes().put("username", username);
                 }
 
                 return message;
