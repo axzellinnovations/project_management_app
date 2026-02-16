@@ -177,4 +177,8 @@ public class UserService {
 
         return false;
     }
+
+    public java.util.List<User> getAllUsers() {
+        return userRepository.findAll();
+    }
 }
