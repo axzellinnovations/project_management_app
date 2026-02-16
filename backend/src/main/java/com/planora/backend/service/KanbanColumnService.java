@@ -8,7 +8,9 @@ import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-@Data
+import java.util.List;
+
+
 @Service
 public class KanbanColumnService {
 
@@ -31,4 +33,16 @@ public class KanbanColumnService {
     public void deleteColumn(Long id){
         repository.deleteById(id);
     }
-}
+
+    public void reorderColumns(List<Long> columnIds) {
+        for (int i = 0; i < columnIds.size(); i++) {
+            int newPosition = i;
+            repository.findById(columnIds.get(i)).ifPresent(col -> {
+                col.setPosition(newPosition);
+                repository.save(col);
+            });
+        }
+    }
+        }
+
+

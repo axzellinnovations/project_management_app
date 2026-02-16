@@ -2,6 +2,8 @@ package com.planora.backend.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.util.List;
+
 
 @Entity
 @Data
@@ -21,4 +23,7 @@ public class KanbanColumn {
 
     @Column(nullable = false)
     private String name;
+
+    @OneToMany(mappedBy = "column", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Task> tasks;
 }

@@ -7,11 +7,14 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class KanbanService {
+    @Autowired KanbanRepository repository;
 
-    @Autowired
-    KanbanRepository repository;
+    public Kanban getBoard(Long id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Board not found"));
+    }
 
-    public Kanban createBoard(Kanban kanban){
+    public Kanban createBoard(Kanban kanban) {
         return repository.save(kanban);
     }
 }
