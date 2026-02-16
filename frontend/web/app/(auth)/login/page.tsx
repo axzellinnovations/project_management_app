@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';   
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/axios';
@@ -8,7 +8,7 @@ import api from '@/lib/axios';
 
 export default function LoginPage() {
     const router = useRouter();
-    
+
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -17,7 +17,7 @@ export default function LoginPage() {
         e.preventDefault();
         setIsLoading(true);
 
-        try{
+        try {
 
             // 1. Sign in using backend API
             const response = await api.post('/api/auth/login', {
@@ -30,8 +30,8 @@ export default function LoginPage() {
             localStorage.setItem('token', response.data);
 
             // 3. Redirect to dashboard
-            router.push('/dashboard');
-        } catch (error:any) {
+            router.push('/summary');
+        } catch (error: any) {
             console.error("Login failed:", error);
             alert(error.response?.data || "Login failed. Please try again.");
         } finally {
@@ -39,8 +39,8 @@ export default function LoginPage() {
         }
     };
 
-    return(
-        
+    return (
+
         <div className='min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] p-4'>
 
             {/* 1. Back to Home Link */}
@@ -93,7 +93,7 @@ export default function LoginPage() {
                             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
                             placeholder="Enter your email"
                             value={email}
-                            onChange={(e)=> setEmail(e.target.value.toLowerCase())}
+                            onChange={(e) => setEmail(e.target.value.toLowerCase())}
                         />
                     </div>
 
@@ -105,7 +105,7 @@ export default function LoginPage() {
                             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
                             placeholder="Enter your password"
                             value={password}
-                            onChange={(e)=> setPassword(e.target.value)}
+                            onChange={(e) => setPassword(e.target.value)}
                         />
                     </div>
 
@@ -116,7 +116,7 @@ export default function LoginPage() {
                             <span className="ml-2 text-gray-500 text-xs">Remember me</span>
                         </label>
                         <Link href="/forgot-password" className="text-blue-600 hover:text-blue-700 font-semibold text-xs">
-                        Forgot password?
+                            Forgot password?
                         </Link>
                     </div>
 
@@ -132,6 +132,6 @@ export default function LoginPage() {
                     © 2026 Planora. All rights reserved.
                 </p>
             </div>
-       </div>
+        </div>
     );
 }

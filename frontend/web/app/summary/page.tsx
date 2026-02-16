@@ -4,7 +4,7 @@ import { ProjectTimeline, CurrentSprint } from "./components/ProjectTimeline";
 import RecentActivity from "./components/RecentActivity";
 import ProjectTeam from "./components/ProjectTeam";
 
-export default function DashboardPage() {
+export default function SummaryPage() {
     return (
         <div className="max-w-[1200px] mx-auto">
             {/* Metrics Section */}

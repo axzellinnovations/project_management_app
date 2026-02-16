@@ -27,21 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} ${outfit.variable} ${arimo.variable} antialiased bg-[#F4F5F7]`}>
-        <div className="flex h-screen overflow-hidden">
-          {/* Global Sidebar (Fixed) */}
-          <Sidebar />
-
-          {/* Main Content Area */}
-          <div className="flex-1 flex flex-col min-w-0">
-            {/* Global TopBar (Fixed at top of this column) */}
-            <TopBar />
-
-            {/* Scrollable Page Content */}
-            <main className="flex-1 overflow-y-auto">
-              {children}
-            </main>
-          </div>
-        </div>
+        {children}
       </body>
     </html>
   );
