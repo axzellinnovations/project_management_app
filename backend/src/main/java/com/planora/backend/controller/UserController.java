@@ -1,14 +1,15 @@
 package com.planora.backend.controller;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
 import com.planora.backend.dto.OtpRequest;
 import com.planora.backend.dto.ResetPasswordRequest;
 import com.planora.backend.dto.VerifyRequest;
 import com.planora.backend.model.User;
 import com.planora.backend.service.UserService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
