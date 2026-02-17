@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
@@ -18,6 +18,14 @@ const tabs = [
 
 export default function TopBar() {
     const [activeTab, setActiveTab] = useState('summary');
+    const [projectName, setProjectName] = useState('Project Name');
+
+    useEffect(() => {
+        const storedName = localStorage.getItem('currentProjectName');
+        if (storedName) {
+            setProjectName(storedName);
+        }
+    }, []);
 
     return (
         <div className="w-full h-[119px] relative flex flex-col">
@@ -34,7 +42,7 @@ export default function TopBar() {
                     <div className="flex flex-col">
                         <span className="font-arimo text-[12px] uppercase tracking-[0.3px] text-[#6A7282] mb-0.5">Projects</span>
                         <div className="flex items-center gap-2">
-                            <span className="font-arimo text-[19px] text-[#1D293D] whitespace-nowrap">Project Name</span>
+                            <span className="font-arimo text-[19px] text-[#1D293D] whitespace-nowrap">{projectName}</span>
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M4 6L8 10L12 6" stroke="#1D293D" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
