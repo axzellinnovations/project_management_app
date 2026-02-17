@@ -5,7 +5,7 @@ import SubtaskList from './SubtaskList';
 import CommentSection from './CommentSection';
 
 interface Dependency {
-  id: string;
+  id: number;
   title: string;
   relation: string;
 }
@@ -15,9 +15,10 @@ interface TaskMainContentProps {
   description: string;
   subtasks: any[];
   dependencies: Dependency[];
+  taskId?: number;
 }
 
-const TaskMainContent: React.FC<TaskMainContentProps> = ({ title, description, subtasks, dependencies }) => {
+const TaskMainContent: React.FC<TaskMainContentProps> = ({ title, description, subtasks, dependencies, taskId }) => {
   return (
     <div className="flex-1 overflow-y-auto p-8 border-r border-gray-100 scrollbar-thin scrollbar-thumb-gray-200">
       
@@ -39,7 +40,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({ title, description, s
       <div className="mb-8 group">
         <h3 className="text-sm font-bold text-gray-800 mb-2">Description</h3>
         <div className="p-4 rounded-md hover:bg-gray-50 border border-transparent hover:border-gray-200 cursor-text transition-all min-h-[100px] text-gray-600 text-sm leading-relaxed relative">
-          {description}
+          {description || <span className="text-gray-400 italic">No description provided</span>}
           <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
             <Edit2 size={14} className="text-gray-400" />
           </div>
@@ -50,7 +51,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({ title, description, s
       <SubtaskList subtasks={subtasks} />
 
       {/* Linked Issues (Dependencies) */}
-      {dependencies.length > 0 && (
+      {dependencies && dependencies.length > 0 && (
         <div className="mb-8">
           <h3 className="text-sm font-bold text-gray-800 mb-3">Linked Issues</h3>
           {dependencies.map((dep) => (
@@ -60,7 +61,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({ title, description, s
               </span>
               <div className="flex items-center gap-2 flex-1">
                 <AlertCircle size={16} className="text-red-500" />
-                <span className="text-sm text-gray-400 font-medium line-through decoration-gray-400">{dep.id}</span>
+                <span className="text-sm text-gray-400 font-medium line-through decoration-gray-400">TASK-{dep.id}</span>
                 <span className="text-sm text-gray-600 hover:text-blue-600 cursor-pointer">{dep.title}</span>
               </div>
             </div>
@@ -69,7 +70,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({ title, description, s
       )}
 
       {/* Comments Component */}
-      <CommentSection />
+      <CommentSection taskId={taskId} />
     </div>
   );
 };

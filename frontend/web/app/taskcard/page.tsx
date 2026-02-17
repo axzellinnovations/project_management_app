@@ -1,53 +1,115 @@
 "use client";
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import TaskHeader from './TaskHeader';
 import TaskMainContent from './TaskMainContent';
 import TaskSidebar from './TaskSidebar';
+import api from '@/lib/axios';
 
-export default function TaskPage() {
+interface TaskData {
+  id: number;
+  title: string;
+  description: string;
+  projectName: string;
+  status: string;
+  priority: string;
+  storyPoint: number;
+  reporterName: string;
+  assigneeName: string;
+  sprintName: string;
+  labels: Array<{ id: number; name: string }>;
+  createdAt: string;
+  updatedAt: string;
+  dueDate: string;
+  subtasks: Array<{ id: number; title: string; status: string }>;
+  dependencies: Array<{ id: number; title: string; relation: string }>;
+}
+
+// Wrapper component that uses searchParams
+function TaskPageContent() {
+  const searchParams = useSearchParams();
+  const taskId = searchParams.get('taskId');
   
-  // MOCK DATA: Simulating the response from your Java Backend
-  const taskData = {
-    id: "TASK-124",
-    title: "Implement Secure Fund Transfer API",
-    description: "Create the backend logic for transferring funds between accounts. Ensure transactional integrity and ACID compliance. Need to handle edge cases where user balance is insufficient.",
-    project: "Suthankan Cafe Website",
-    status: "In Progress",
-    priority: "High",
-    storyPoint: 5,
-    reporter: "Sarah Smith",
-    assignee: "John Doe",
-    sprint: "BANK Sprint 1",
-    labels: ["Backend", "API", "Security", "Java"],
-    created: "Dec 26, 2025 10:30 AM",
-    updated: "Dec 28, 2025 02:15 PM",
-    dueDate: "Jan 10, 2026",
-    subtasks: [
-      { id: "TASK-125", title: "Validate User Balance", status: "Done" },
-      { id: "TASK-126", title: "Create Transaction Record", status: "To Do" },
-      { id: "TASK-127", title: "Notify User via Email", status: "To Do" }
-    ],
-    dependencies: [
-      { id: "TASK-101", title: "Database Schema Design", relation: "is blocked by" }
-    ]
-  };
+  const [taskData, setTaskData] = useState<TaskData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    
+    if (!taskId) {
+      setError('Task ID is required');
+      setLoading(false);
+      return;
+    }
+
+    const fetchTaskData = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get(`/api/tasks/${taskId}`);
+        setTaskData(response.data);
+        setError(null);
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Failed to fetch task data');
+        setTaskData(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTaskData();
+  }, [taskId, mounted]);
 
   const handleClose = () => {
-    console.log("Modal closed");
-    // In a real app, you'd use router.back() or toggle a state
+    window.history.back();
   };
+
+  // Only render after mounting to avoid hydration issues
+  if (!mounted) {
+    return null;
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border border-gray-300 border-t-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading task...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !taskData) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
+          <h2 className="text-red-600 font-semibold mb-2">Error Loading Task</h2>
+          <p className="text-gray-600 mb-4">{error || 'Task not found'}</p>
+          <button
+            onClick={handleClose}
+            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition-colors"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      {/* Container Wrapper:
-        In your actual app, this might be a Modal Overlay (fixed inset-0 bg-black/50)
-      */}
       <div className="w-full max-w-6xl bg-white border border-gray-200 h-[90vh] shadow-2xl flex flex-col font-sans rounded-lg overflow-hidden">
         
         {/* 1. Header Component */}
         <TaskHeader 
-          project={taskData.project} 
-          taskId={taskData.id} 
+          project={taskData.projectName} 
+          taskId={`TASK-${taskData.id}`} 
           onClose={handleClose} 
         />
 
@@ -57,22 +119,23 @@ export default function TaskPage() {
           <TaskMainContent 
               title={taskData.title}
               description={taskData.description}
-              subtasks={taskData.subtasks}
-              dependencies={taskData.dependencies}
+              subtasks={taskData.subtasks || []}
+              dependencies={taskData.dependencies || []}
+              taskId={taskData.id}
           />
 
           {/* 3. Sidebar Component (Right Side) */}
           <TaskSidebar 
               status={taskData.status}
-              assignee={taskData.assignee}
-              reporter={taskData.reporter}
-              labels={taskData.labels}
+              assignee={taskData.assigneeName}
+              reporter={taskData.reporterName}
+              labels={taskData.labels?.map(l => l.name) || []}
               priority={taskData.priority}
-              sprint={taskData.sprint}
+              sprint={taskData.sprintName}
               storyPoint={taskData.storyPoint}
               dates={{
-                  created: taskData.created,
-                  updated: taskData.updated,
+                  created: taskData.createdAt,
+                  updated: taskData.updatedAt,
                   dueDate: taskData.dueDate
               }}
           />
@@ -81,4 +144,9 @@ export default function TaskPage() {
       </div>
     </div>
   );
+}
+
+// Server component that renders the wrapper
+export default function TaskPage() {
+  return <TaskPageContent />;
 }
