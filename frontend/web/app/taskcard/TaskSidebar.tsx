@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown, ArrowRight } from 'lucide-react';
 
 interface TaskSidebarProps {
@@ -15,14 +15,57 @@ interface TaskSidebarProps {
     updated: string;
     dueDate: string;
   };
+  onUpdateStatus?: (status: string) => void;
+  onUpdatePriority?: (priority: string) => void;
+  onUpdateStoryPoint?: (storyPoint: number) => void;
 }
 
 const TaskSidebar: React.FC<TaskSidebarProps> = ({ 
-  status, assignee, reporter, labels, priority, sprint, storyPoint, dates 
+  status, assignee, reporter, labels, priority, sprint, storyPoint, dates,
+  onUpdateStatus, onUpdatePriority, onUpdateStoryPoint
 }) => {
   const [isStatusOpen, setIsStatusOpen] = useState(false);
+  const [isPriorityOpen, setIsPriorityOpen] = useState(false);
+  const [isEditingStoryPoint, setIsEditingStoryPoint] = useState(false);
+  const [editedStoryPoint, setEditedStoryPoint] = useState(storyPoint);
 
-  const statusOptions = ['TO_DO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
+  // Update local state when props change
+  useEffect(() => {
+    setEditedStoryPoint(storyPoint);
+  }, [storyPoint]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setIsStatusOpen(false);
+      setIsPriorityOpen(false);
+    };
+
+    if (isStatusOpen || isPriorityOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [isStatusOpen, isPriorityOpen]);
+
+  const statusOptions = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
+  const priorityOptions = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+
+  const handleStatusChange = (newStatus: string) => {
+    onUpdateStatus?.(newStatus);
+    setIsStatusOpen(false);
+  };
+
+  const handlePriorityChange = (newPriority: string) => {
+    onUpdatePriority?.(newPriority);
+    setIsPriorityOpen(false);
+  };
+
+  const handleStoryPointSave = () => {
+    if (editedStoryPoint !== storyPoint && editedStoryPoint >= 0) {
+      onUpdateStoryPoint?.(editedStoryPoint);
+    }
+    setIsEditingStoryPoint(false);
+  };
 
   return (
     <div className="w-80 bg-gray-50/50 p-6 overflow-y-auto border-l border-gray-100 flex-shrink-0 scrollbar-thin">
@@ -32,10 +75,13 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
         <label className="text-xs font-semibold text-gray-500 uppercase mb-2 block tracking-wide">Status</label>
         <div className="relative">
           <button 
-            onClick={() => setIsStatusOpen(!isStatusOpen)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsStatusOpen(!isStatusOpen);
+            }}
             className="w-full flex items-center justify-between px-3 py-2 bg-white border border-gray-300 text-gray-800 font-semibold text-sm rounded hover:bg-gray-50 transition-colors shadow-sm uppercase"
           >
-            <span>{status}</span>
+            <span>{status.replace('_', ' ')}</span>
             <ChevronDown size={16} className="text-gray-500" />
           </button>
           {isStatusOpen && (
@@ -43,9 +89,13 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
               {statusOptions.map((option) => (
                 <button
                   key={option}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStatusChange(option);
+                  }}
                   className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm text-gray-700 border-b border-gray-100 last:border-b-0 uppercase hover:text-blue-600 transition-colors"
                 >
-                  {option}
+                  {option.replace('_', ' ')}
                 </button>
               ))}
             </div>
@@ -104,17 +154,66 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
 
           {storyPoint > 0 && (
             <SidebarField label="Story Points">
-              <span className="bg-gray-100 text-gray-700 text-xs font-bold px-2 py-1 rounded-full inline-block">
+              {isEditingStoryPoint ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={editedStoryPoint}
+                    onChange={(e) => setEditedStoryPoint(parseInt(e.target.value) || 0)}
+                    onBlur={handleStoryPointSave}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleStoryPointSave();
+                      if (e.key === 'Escape') {
+                        setEditedStoryPoint(storyPoint);
+                        setIsEditingStoryPoint(false);
+                      }
+                    }}
+                    autoFocus
+                    className="w-20 bg-gray-100 text-gray-700 text-xs font-bold px-2 py-1 rounded-full border-2 border-blue-500 focus:outline-none"
+                  />
+                </div>
+              ) : (
+                <span 
+                  onClick={() => setIsEditingStoryPoint(true)}
+                  className="bg-gray-100 text-gray-700 text-xs font-bold px-2 py-1 rounded-full inline-block cursor-pointer hover:bg-gray-200 transition-colors"
+                >
                   {storyPoint}
-              </span>
+                </span>
+              )}
             </SidebarField>
           )}
 
           {priority && (
             <SidebarField label="Priority">
-              <div className="flex items-center gap-2 text-red-600 text-sm font-medium bg-red-50 px-2 py-1 rounded w-fit">
-                 <ArrowRight size={14} className="-rotate-45" />
-                 {priority}
+              <div className="relative">
+                <div 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsPriorityOpen(!isPriorityOpen);
+                  }}
+                  className="flex items-center gap-2 text-red-600 text-sm font-medium bg-red-50 px-2 py-1 rounded w-fit cursor-pointer hover:bg-red-100 transition-colors"
+                >
+                  <ArrowRight size={14} className="-rotate-45" />
+                  {priority}
+                </div>
+                {isPriorityOpen && (
+                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-10 min-w-[120px]">
+                    {priorityOptions.map((option) => (
+                      <button
+                        key={option}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePriorityChange(option);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm text-gray-700 border-b border-gray-100 last:border-b-0 hover:text-blue-600 transition-colors"
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </SidebarField>
           )}

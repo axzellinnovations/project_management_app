@@ -39,6 +39,21 @@ function TaskPageContent() {
     setMounted(true);
   }, []);
 
+  const fetchTaskData = async () => {
+    if (!taskId) return;
+    try {
+      setLoading(true);
+      const response = await api.get(`/api/tasks/${taskId}`);
+      setTaskData(response.data);
+      setError(null);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to fetch task data');
+      setTaskData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!mounted) return;
     
@@ -48,22 +63,28 @@ function TaskPageContent() {
       return;
     }
 
-    const fetchTaskData = async () => {
-      try {
-        setLoading(true);
-        const response = await api.get(`/api/tasks/${taskId}`);
-        setTaskData(response.data);
-        setError(null);
-      } catch (err: any) {
-        setError(err.response?.data?.message || 'Failed to fetch task data');
-        setTaskData(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchTaskData();
   }, [taskId, mounted]);
+
+  const updateTask = async (updates: Partial<{
+    title: string;
+    description: string;
+    status: string;
+    priority: string;
+    storyPoint: number;
+    dueDate: string;
+  }>) => {
+    if (!taskId || !taskData) return;
+    
+    try {
+      await api.put(`/api/tasks/${taskId}`, updates);
+      // Refresh task data after update
+      await fetchTaskData();
+    } catch (err: any) {
+      console.error('Failed to update task:', err);
+      alert('Failed to update task: ' + (err.response?.data?.message || err.message));
+    }
+  };
 
   const handleClose = () => {
     window.history.back();
@@ -122,6 +143,8 @@ function TaskPageContent() {
               subtasks={taskData.subtasks || []}
               dependencies={taskData.dependencies || []}
               taskId={taskData.id}
+              onUpdateTitle={(title) => updateTask({ title })}
+              onUpdateDescription={(description) => updateTask({ description })}
           />
 
           {/* 3. Sidebar Component (Right Side) */}
@@ -138,6 +161,9 @@ function TaskPageContent() {
                   updated: taskData.updatedAt,
                   dueDate: taskData.dueDate
               }}
+              onUpdateStatus={(status) => updateTask({ status })}
+              onUpdatePriority={(priority) => updateTask({ priority })}
+              onUpdateStoryPoint={(storyPoint) => updateTask({ storyPoint })}
           />
 
         </div>
