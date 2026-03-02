@@ -12,28 +12,56 @@ export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
 
     const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setIsLoading(true);
+        setError('');
 
         try {
 
             // 1. Sign in using backend API
             const response = await api.post('/api/auth/login', {
-                email: email,
+                email: email.toLowerCase(),
                 password: password
             });
 
-            // 2. Store token
-            console.log("Login successful:", response.data);
-            localStorage.setItem('token', response.data);
+            // 2. Check if login was successful
+            if (response.data.success) {
+                // Store token
+                console.log("Login successful:", response.data);
+                localStorage.setItem('token', response.data.token);
 
-            // 3. Redirect to dashboard
-            router.push('/dashboard');
+                // 3. Redirect to dashboard
+                router.push('/dashboard');
+            } else {
+                // Show error message from backend
+                setError(response.data.message || 'Login failed. Please try again.');
+            }
         } catch (error: any) {
             console.error("Login failed:", error);
-            alert(error.response?.data || "Login failed. Please try again.");
+            
+            // Extract error message from backend response
+            let errorMessage = "Login failed. Please try again.";
+            const errorData = error.response?.data;
+            
+            if (typeof errorData === 'string') {
+                errorMessage = errorData;
+            } else if (errorData?.message) {
+                errorMessage = errorData.message;
+            }
+            
+            // Handle different error scenarios
+            if (error.response?.status === 403) {
+                // Unverified email
+                setError(errorMessage || "Email is not verified. Please check your email.");
+            } else if (error.response?.status === 401) {
+                // Invalid credentials
+                setError(errorMessage || "Incorrect username or password");
+            } else {
+                setError(errorMessage);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -81,6 +109,13 @@ export default function LoginPage() {
                     </Link>
                 </div>
 
+                {/* Error Message Display */}
+                {error && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-700">{error}</p>
+                    </div>
+                )}
+
                 {/* The Form */}
                 <form className='space-y-5' onSubmit={handleLogin}>
                     {/* Email Input */}
@@ -122,7 +157,7 @@ export default function LoginPage() {
 
                     {/* The Big Blue Button */}
                     <button className={`w-full font-bold py-2 rounded-lg transition-colors text-white ${isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                        Sign In
+                        {isLoading ? 'Signing in...' : 'Sign In'}
                     </button>
                 </form>
                 {/* End of Card */}

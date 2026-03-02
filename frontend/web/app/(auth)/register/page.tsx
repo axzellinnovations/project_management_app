@@ -19,26 +19,38 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
 
     if (password !== confirmPassword) {
-      alert("Passwords do not match!");
+      setError("Passwords do not match!");
       setIsLoading(false);
       return;
     }
 
     try {
         const response = await api.post('/api/auth/register', {
-            username, fullName, email, password
+            username, fullName, email: email.toLowerCase(), password
         });
         console.log("Registration successful:", response.data);
         router.push(`/verify-email?email=${encodeURIComponent(email.toLowerCase())}`);
     } catch (error: any) {
         console.error("Registration failed:", error);
-        alert(error.response?.data || "Registration failed.");
+        
+        let errorMessage = 'Registration failed. Please try again.';
+        const errorData = error.response?.data;
+        
+        if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else if (errorData?.message) {
+          errorMessage = errorData.message;
+        }
+        
+        setError(errorMessage);
     } finally {
         setIsLoading(false);
     }
@@ -71,6 +83,13 @@ export default function RegisterPage() {
         </div>
 
         <form onSubmit={handleRegister} className="space-y-4">
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
           <InputField 
             label="Username" type="text" value={username} required
             onChange={(e) => setUsername(e.target.value)} placeholder="Pick a username"

@@ -9,7 +9,9 @@ import java.time.Instant;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Table(name = "verification_Tokens")
+@Table(name = "verification_tokens", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"user_id", "token_type"}, name = "uk_user_token_type")
+})
 public class VerificationToken {
 
     @Id
@@ -22,7 +24,7 @@ public class VerificationToken {
 
     @Getter
     @Setter
-    @OneToOne
+    @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
@@ -38,7 +40,18 @@ public class VerificationToken {
     @Getter
     private int attempts = 0;
 
+    @Getter
+    @Setter
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private TokenType tokenType = TokenType.VERIFICATION;
+
     public boolean isExpired(){
         return Instant.now().isAfter(this.expiry);
+    }
+
+    public enum TokenType {
+        VERIFICATION,
+        PASSWORD_RESET
     }
 }

@@ -1,6 +1,5 @@
 package com.planora.backend.service;
 
-import org.apache.logging.log4j.message.SimpleMessage;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.stereotype.Service;
@@ -31,7 +30,8 @@ public class EmailService {
         message.setFrom("no-reply@planora.com");
         message.setTo(toEmail);
         message.setSubject("Planora - Password Reset Code");
-        message.setText("Your code to reset your password is: " + otp);
+        message.setText("Your code to reset your password is: " + otp +
+                "\n\nThis code will expire in 10 minutes. If you did not request this, please ignore this email.");
         mailSender.send(message);
     }
 }

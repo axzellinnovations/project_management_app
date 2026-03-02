@@ -8,4 +8,8 @@ public interface TokenRepository extends JpaRepository<VerificationToken, Long> 
     VerificationToken findByUser(User user);
 
     void deleteByUser(User existingUser);
+
+    VerificationToken findByToken(String token);
+
+    VerificationToken findByUserAndTokenType(User user, VerificationToken.TokenType tokenType);
 }

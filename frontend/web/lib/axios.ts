@@ -1,17 +1,20 @@
 import axios from "axios";
 
 const api = axios.create({
-    baseURL: 'http://localhost:8080',
+    baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080',
     headers: {
         'Content-Type': 'application/json'
     },
 });
 
-// Add request interceptor to include auth token
+// Add request interceptor to include auth token (exclude auth endpoints)
 api.interceptors.request.use(
     (config) => {
-        // Get token from localStorage
-        if (typeof window !== 'undefined') {
+        // Don't add token to auth endpoints
+        const authEndpoints = ['/api/auth/login', '/api/auth/register', '/api/auth/forgot', '/api/auth/reset', '/api/auth/reg/verify', '/api/auth/resend'];
+        const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint));
+        
+        if (!isAuthEndpoint && typeof window !== 'undefined') {
             const token = localStorage.getItem('token');
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
@@ -29,10 +32,16 @@ api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            // Token expired or invalid - redirect to login
-            if (typeof window !== 'undefined') {
-                localStorage.removeItem('token');
-                window.location.href = '/login';
+            // Don't redirect if this is a login or auth endpoint
+            const authEndpoints = ['/api/auth/login', '/api/auth/forgot', '/api/auth/reset', '/api/auth/register', '/api/auth/reg/verify'];
+            const isAuthEndpoint = authEndpoints.some(endpoint => error.config?.url?.includes(endpoint));
+            
+            if (!isAuthEndpoint) {
+                // Token expired or invalid - redirect to login
+                if (typeof window !== 'undefined') {
+                    localStorage.removeItem('token');
+                    window.location.href = '/login';
+                }
             }
         }
         return Promise.reject(error);
@@ -40,3 +49,4 @@ api.interceptors.response.use(
 );
 
 export default api;
+
