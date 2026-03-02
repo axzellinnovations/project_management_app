@@ -30,6 +30,7 @@ export const useChat = () => {
       
       fetchAllUsers(token, payload.email || payload.sub);
       connectToChat(token, username);
+      loadHistory(token, username);
     } catch (err) {
       setError('Invalid authentication token.');
       router.push('/login');
@@ -41,9 +42,9 @@ export const useChat = () => {
   }, [router]);
 
   // 2. Fetch Users
-  const fetchAllUsers = async (token: string, currentEmail: string) => {
+  const fetchAllUsers = useCallback(async (token: string, currentEmail: string) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/auth/users?excludeEmail=${encodeURIComponent(currentEmail)}`, {
+      const res = await fetch(`/api/auth/users?excludeEmail=${encodeURIComponent(currentEmail)}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -53,10 +54,28 @@ export const useChat = () => {
     } catch (err) {
       console.error('Error fetching users:', err);
     }
-  };
+  }, []);
+
+  // utility to fetch history
+  const loadHistory = useCallback(async (token: string, username: string) => {
+    try {
+      // use relative path; Next.js rewrite will proxy to backend
+      const res = await fetch('/api/chat/messages', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(data);
+      } else {
+        console.warn('History fetch returned', res.status);
+      }
+    } catch (err) {
+      console.error('Failed to load message history', err);
+    }
+  }, []);
 
   // 3. WebSocket Connection
-  const connectToChat = (token: string, username: string) => {
+  const connectToChat = useCallback((token: string, username: string) => {
     try {
       const socket = new SockJS('http://localhost:8080/ws');
       const client = Stomp.over(socket);
@@ -94,7 +113,28 @@ export const useChat = () => {
     } catch (err) {
       setError('Socket initialization failed.');
     }
-  };
+  }, []);
+
+  // 4. fetch private conversation when needed
+  const loadPrivateHistory = useCallback(async (recipient: string) => {
+    if (!recipient || !currentUser) return;
+    try {
+      const params = new URLSearchParams();
+      params.append('recipient', currentUser);
+      params.append('with', recipient);
+      const res = await fetch(`/api/chat/messages?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPrivateMessages(prev => ({ ...prev, [recipient]: data }));
+      } else {
+        console.warn('Private history fetch returned', res.status);
+      }
+    } catch (err) {
+      console.error('Failed to load private history', err);
+    }
+  }, [currentUser]);
 
   // 4. Send Message Action
   const sendMessage = useCallback((content: string, recipient?: string | null) => {
@@ -123,6 +163,7 @@ export const useChat = () => {
     messages,
     privateMessages,
     sendMessage,
+    loadPrivateHistory,
     isLoading,
     error,
     retryConnection: () => window.location.reload() // Simple retry strategy

@@ -22,7 +22,7 @@ function VerifyEmailContent() {
     setError('');
 
     try {
-      await api.post('/api/auth/reg/verify', {
+      await api.post('/auth/reg/verify', {
         email: email,
         otp: otp
       });

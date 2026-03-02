@@ -20,7 +20,7 @@ export default function LoginPage() {
         try{
 
             // 1. Sign in using backend API
-            const response = await api.post('/api/auth/login', {
+            const response = await api.post('/auth/login', {
                 email: email,
                 password: password
             });

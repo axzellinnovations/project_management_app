@@ -29,7 +29,7 @@ export default function RegisterPage() {
 
     try {
         // MATCHING YOUR BACKEND USER.JAVA EXACTLY
-        const response = await api.post('/api/auth/register', {
+        const response = await api.post('/auth/register', {
             username: username, 
             fullName: fullName,
             email: email,

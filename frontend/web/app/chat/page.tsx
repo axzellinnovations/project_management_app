@@ -8,9 +8,16 @@ import { ChatInput } from './components/chatInput';
 
 export default function ChatInterface() {
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
-  const { currentUser, users, messages, privateMessages, sendMessage, isLoading, error, retryConnection } = useChat();
+  const { currentUser, users, messages, privateMessages, sendMessage, loadPrivateHistory, isLoading, error, retryConnection } = useChat();
 
   const displayMessages = selectedUser ? privateMessages[selectedUser] || [] : messages;
+
+  // when user switches to a private chat, load history if we haven't
+  React.useEffect(() => {
+    if (selectedUser) {
+      loadPrivateHistory(selectedUser);
+    }
+  }, [selectedUser, loadPrivateHistory]);
 
   if (isLoading) {
     return (
