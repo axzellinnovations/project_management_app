@@ -27,7 +27,51 @@ export default function VerifyEmailForm() {
       alert("Email verified successfully! Please login.");
       router.push('/login');
     } catch (err: any) {
-      setError(err.response?.data?.message || "Invalid OTP. Please try again.");
+      console.error("Verification error:", err);
+      
+      let errorMessage = 'Invalid OTP. Please try again.';
+      const errorData = err.response?.data;
+      
+      // Handle different error response formats
+      if (typeof errorData === 'string') {
+        errorMessage = errorData;
+      } else if (errorData?.message) {
+        errorMessage = errorData.message;
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!email) return;
+    
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await api.post('/api/auth/resend', { email });
+      setError('');
+      
+      let successMsg = 'New OTP sent to your email.';
+      if (typeof response.data === 'string') {
+        successMsg = response.data;
+      }
+    } catch (err: any) {
+      console.error("Resend error:", err);
+      
+      let errorMessage = 'Failed to resend OTP. Please try again.';
+      const errorData = err.response?.data;
+      
+      if (typeof errorData === 'string') {
+        errorMessage = errorData;
+      } else if (errorData?.message) {
+        errorMessage = errorData.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -73,7 +117,11 @@ export default function VerifyEmailForm() {
       <div className="mt-6 text-center">
         <p className="text-xs text-gray-400">
           Didn't receive the code?{' '}
-          <button className="text-blue-600 font-semibold hover:underline">
+          <button 
+            onClick={handleResend}
+            disabled={isLoading}
+            className="text-blue-600 font-semibold hover:underline disabled:opacity-50"
+          >
             Resend
           </button>
         </p>
