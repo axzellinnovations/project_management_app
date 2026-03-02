@@ -1,14 +1,20 @@
 package com.planora.backend.service;
 
+import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Random;
 
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.planora.backend.dto.LoginResponse;
 import com.planora.backend.model.User;
 import com.planora.backend.model.VerificationToken;
 import com.planora.backend.repository.TokenRepository;
@@ -67,6 +73,7 @@ public class UserService {
         VerificationToken verificationToken = new VerificationToken();
         verificationToken.setUser(user);
         verificationToken.setToken(otp);
+        verificationToken.setTokenType(VerificationToken.TokenType.VERIFICATION);
         verificationToken.setExpiry(Instant.now().plus(java.time.Duration.ofMinutes(10)));
         tokenRepository.save(verificationToken);
 
@@ -113,7 +120,50 @@ public class UserService {
         }
 
         return "Failed to login";
+    }
 
+    @Transactional
+    public LoginResponse loginUser(User user) {
+        try {
+            Authentication authentication =
+                    authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(
+                            user.getEmail().toLowerCase(),
+                            user.getPassword()));
+
+            if(authentication.isAuthenticated()){
+                User authenticatedUser = userRepository.findByEmail(user.getEmail().toLowerCase());
+                String token = jwtService.generateToken(user.getEmail(), authenticatedUser.getUsername());
+                LoginResponse response = new LoginResponse();
+                response.setSuccess(true);
+                response.setMessage("Login successful");
+                response.setToken(token);
+                return response;
+            }
+
+            LoginResponse response = new LoginResponse();
+            response.setSuccess(false);
+            response.setMessage("Incorrect username or password");
+            response.setErrorCode("INVALID_CREDENTIALS");
+            return response;
+        } catch (DisabledException e) {
+            LoginResponse response = new LoginResponse();
+            response.setSuccess(false);
+            response.setMessage("Email is not verified. Please check your email.");
+            response.setErrorCode("UNVERIFIED_EMAIL");
+            return response;
+        } catch (BadCredentialsException e) {
+            LoginResponse response = new LoginResponse();
+            response.setSuccess(false);
+            response.setMessage("Incorrect username or password");
+            response.setErrorCode("INVALID_CREDENTIALS");
+            return response;
+        } catch (AuthenticationException e) {
+            LoginResponse response = new LoginResponse();
+            response.setSuccess(false);
+            response.setMessage("Incorrect username or password");
+            response.setErrorCode("INVALID_CREDENTIALS");
+            return response;
+        }
     }
 
     @Transactional
@@ -135,11 +185,19 @@ public class UserService {
         VerificationToken verificationToken = new VerificationToken();
         verificationToken.setUser(user);
         verificationToken.setToken(otp);
+        verificationToken.setTokenType(VerificationToken.TokenType.VERIFICATION);
         verificationToken.setExpiry(Instant.now().plus(java.time.Duration.ofMinutes(10)));
         tokenRepository.save(verificationToken);
 
-        emailService.sendPasswordResetRequest(email.toLowerCase(), otp);
+        emailService.sendVerificationEmail(email.toLowerCase(), otp);
         return "New OTP send to your email.";
+    }
+
+    private String generateSecureToken() {
+        SecureRandom random = new SecureRandom();
+        byte[] bytes = new byte[32];
+        random.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     @Transactional
@@ -149,29 +207,55 @@ public class UserService {
         if(user == null)
             return "If that email exists, an OTP has been sent.";
 
-        tokenRepository.deleteByUser(user);
+        // Delete existing password reset tokens for this user
+        VerificationToken existingToken = tokenRepository.findByUserAndTokenType(user, VerificationToken.TokenType.PASSWORD_RESET);
+        if (existingToken != null) {
+            tokenRepository.delete(existingToken);
+        }
         tokenRepository.flush();
 
         String otp = String.valueOf(new Random().nextInt(900000) + 100000);
         VerificationToken verificationToken = new VerificationToken();
         verificationToken.setUser(user);
         verificationToken.setToken(otp);
+        verificationToken.setTokenType(VerificationToken.TokenType.PASSWORD_RESET);
         verificationToken.setExpiry(Instant.now().plus(java.time.Duration.ofMinutes(10)));
         tokenRepository.save(verificationToken);
 
         emailService.sendPasswordResetRequest(email.toLowerCase(), otp);
-        return "Password Reset OTP sent.";
+        return "Password reset OTP sent successfully.";
     }
 
     @Transactional
+    public boolean resetPassword(String token, String newPassword) {
+        VerificationToken verificationToken = tokenRepository.findByToken(token);
+
+        if(verificationToken == null || verificationToken.isUsed() || verificationToken.isExpired() 
+            || verificationToken.getTokenType() != VerificationToken.TokenType.PASSWORD_RESET){
+            return false;
+        }
+
+        User user = verificationToken.getUser();
+        user.setPassword(encoder.encode(newPassword));
+        verificationToken.setUsed(true);
+        userRepository.save(user);
+        tokenRepository.save(verificationToken);
+        return true;
+    }
+
+    // Deprecated: Use resetPassword(token, newPassword) instead
+    @Transactional
+    @Deprecated
     public boolean resetPassword(String email, String otp, String newPassword) {
         User user = userRepository.findByEmail(email.toLowerCase());
         VerificationToken verificationToken = tokenRepository.findByUser(user);
 
-        if(verificationToken != null && verificationToken.getToken().equals(otp) && !verificationToken.isExpired()){
+        if(verificationToken != null && verificationToken.getToken().equals(otp) && !verificationToken.isExpired() 
+            && verificationToken.getTokenType() == VerificationToken.TokenType.PASSWORD_RESET){
             user.setPassword(encoder.encode(newPassword));
+            verificationToken.setUsed(true);
             userRepository.save(user);
-            tokenRepository.delete(verificationToken);
+            tokenRepository.save(verificationToken);
             return true;
         }
 
@@ -182,3 +266,4 @@ public class UserService {
         return userRepository.findAll();
     }
 }
+
