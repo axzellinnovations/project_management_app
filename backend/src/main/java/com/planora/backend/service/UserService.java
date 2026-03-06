@@ -1,9 +1,15 @@
 package com.planora.backend.service;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Random;
+import java.util.UUID;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -21,6 +27,7 @@ import com.planora.backend.repository.TokenRepository;
 import com.planora.backend.repository.UserRepository;
 
 import jakarta.transaction.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class UserService {
@@ -264,6 +271,61 @@ public class UserService {
 
     public java.util.List<User> getAllUsers() {
         return userRepository.findAll();
+    }
+
+    @Transactional
+    public User updateUserDetails(String newFullName, String email) {
+        User user = userRepository.findByEmail(email.toLowerCase());
+        if (user == null){
+            throw new RuntimeException("User not found");
+        }
+
+        if(newFullName != null && !newFullName.isEmpty()){
+            user.setFullName(newFullName);
+        }
+
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public String uploadProfilePicture(String email, MultipartFile file) {
+        User user = userRepository.findByEmail(email);
+        if(user == null){
+            throw new RuntimeException("User not found");
+        }
+
+        try{
+            // Define the folder where images will be saved
+            String uploadDirectory = "uploads/profile_picture";
+            Path uploadPath = Paths.get(uploadDirectory);
+
+            // Create the directory if it doesn't exist
+            if(!Files.exists(uploadPath)){
+                Files.createDirectories(uploadPath);
+            }
+
+            // Generate a unique file name to prevent overwriting
+            String originalFilename = file.getOriginalFilename();
+            String fileExtension = originalFilename != null ? originalFilename.substring(originalFilename.lastIndexOf(".")) : ".jpg";
+            String uniqueFileName = UUID.randomUUID().toString() + fileExtension;
+
+            // Save the file
+            Path filePath = uploadPath.resolve(uniqueFileName);
+            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
+            // Save the URL/path to the database
+            String fileUrl = "/images" + uniqueFileName;
+            user.setProfilePicUrl(fileUrl);
+            userRepository.save(user);
+
+            return fileUrl;
+
+
+        } catch (IOException e) {
+            throw new RuntimeException("Could not store the file. Error: " + e.getMessage());
+        }
+
+
     }
 }
 
