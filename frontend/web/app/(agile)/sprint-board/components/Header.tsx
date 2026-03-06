@@ -7,13 +7,6 @@ export default function Header() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-6">
           <div className="text-[16px] font-normal text-slate-800">Sprint Board</div>
-          <div className="flex items-center relative w-[128px] h-8">
-            <div className="w-8 h-8 rounded-full bg-gray-200 border border-white" />
-            <div className="w-8 h-8 rounded-full bg-gray-200 border border-white -ml-2" />
-            <div className="w-8 h-8 rounded-full bg-gray-200 border border-white -ml-2" />
-            <div className="w-8 h-8 rounded-full bg-gray-200 border border-white -ml-2" />
-            <div className="w-8 h-8 rounded-full bg-gray-300 border border-white -ml-2 flex items-center justify-center text-xs text-gray-600">+3</div>
-          </div>
         </div>
 
         <div className="flex items-center gap-4">
