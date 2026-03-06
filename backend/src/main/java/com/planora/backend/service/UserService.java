@@ -294,14 +294,32 @@ public class UserService {
             throw new RuntimeException("User not found");
         }
 
+        // Validate file size (5MB max)
+        long maxFileSize = 5 * 1024 * 1024; // 5MB in bytes
+        if(file.getSize() > maxFileSize) {
+            throw new IllegalArgumentException("File size exceeds maximum limit of 5MB");
+        }
+
+        // Validate file type
+        String contentType = file.getContentType();
+        if(contentType == null || !isValidImageType(contentType)) {
+            throw new IllegalArgumentException("Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed");
+        }
+
         try{
             // Define the folder where images will be saved
-            String uploadDirectory = "uploads/profile_picture";
+            String uploadDirectory = "uploads/profile_pictures";
             Path uploadPath = Paths.get(uploadDirectory);
 
             // Create the directory if it doesn't exist
             if(!Files.exists(uploadPath)){
                 Files.createDirectories(uploadPath);
+            }
+
+            // Delete old profile picture if exists
+            String oldProfilePicUrl = user.getProfilePicUrl();
+            if(oldProfilePicUrl != null && !oldProfilePicUrl.isEmpty()) {
+                deleteProfilePictureFile(oldProfilePicUrl);
             }
 
             // Generate a unique file name to prevent overwriting
@@ -314,7 +332,7 @@ public class UserService {
             Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
             // Save the URL/path to the database
-            String fileUrl = "/images" + uniqueFileName;
+            String fileUrl = "/images/" + uniqueFileName;
             user.setProfilePicUrl(fileUrl);
             userRepository.save(user);
 
@@ -324,8 +342,29 @@ public class UserService {
         } catch (IOException e) {
             throw new RuntimeException("Could not store the file. Error: " + e.getMessage());
         }
+    }
 
+    private boolean isValidImageType(String contentType) {
+        return contentType.equals("image/jpeg") || 
+               contentType.equals("image/png") || 
+               contentType.equals("image/gif") || 
+               contentType.equals("image/webp");
+    }
+
+    private void deleteProfilePictureFile(String fileUrl) {
+        try {
+            // Extract filename from URL (e.g., "/images/uuid.jpg" -> "uuid.jpg")
+            String filename = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
+            Path filePath = Paths.get("uploads/profile_pictures", filename);
+            
+            if(Files.exists(filePath)) {
+                Files.delete(filePath);
+            }
+        } catch (IOException e) {
+            // Log the error but don't fail the upload if old file cleanup fails
+            System.err.println("Failed to delete old profile picture: " + e.getMessage());
+        }
+    }
 
     }
-}
 
