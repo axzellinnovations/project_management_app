@@ -3,12 +3,21 @@ package com.planora.backend.service;
 import com.planora.backend.dto.PageDetailResponseDto;
 import com.planora.backend.dto.PageRequestDto;
 import com.planora.backend.dto.PageSummaryResponseDto;
+import com.planora.backend.model.Project;
 import com.planora.backend.model.ProjectPage;
+import com.planora.backend.model.TeamMember;
+import com.planora.backend.model.TeamRole;
 import com.planora.backend.repository.ProjectPageRepository;
+import com.planora.backend.repository.ProjectRepository;
+import com.planora.backend.repository.TeamMemberRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -16,8 +25,17 @@ import java.util.stream.Collectors;
 public class ProjectPageService {
 
     private final ProjectPageRepository repository;
+    private final ProjectRepository projectRepository;
+    private final TeamMemberRepository teamMemberRepository;
 
-    public ProjectPage createPage(Long projectId, PageRequestDto request) {
+    @Transactional
+    public ProjectPage createPage(Long projectId, PageRequestDto request, Long userId) {
+        Objects.requireNonNull(projectId, "projectId cannot be null");
+        Objects.requireNonNull(userId, "userId cannot be null");
+
+        Project project = findProject(projectId);
+        validateProjectMembership(project.getTeam().getId(), userId, false);
+
         ProjectPage page = ProjectPage.builder()
                 .projectId(projectId)
                 .title(request.getTitle())
@@ -27,18 +45,27 @@ public class ProjectPageService {
         return repository.save(page);
     }
 
-    public List<PageSummaryResponseDto> getProjectPages(Long projectId) {
-        return repository.findByProjectId(projectId).stream().map(page ->{
-            PageSummaryResponseDto dto = new PageSummaryResponseDto();
-            dto.setId(page.getId());
-            dto.setTitle(page.getTitle());
-            return dto;
-        }).collect(Collectors.toList());
+    @Transactional(readOnly = true)
+    public List<PageSummaryResponseDto> getProjectPages(Long projectId, Long userId) {
+        Objects.requireNonNull(projectId, "projectId cannot be null");
+        Objects.requireNonNull(userId, "userId cannot be null");
+
+        Project project = findProject(projectId);
+        validateProjectMembership(project.getTeam().getId(), userId, false);
+
+        return repository.findByProjectId(projectId).stream()
+                .map(this::toSummaryDto)
+                .collect(Collectors.toList());
     }
 
-    public PageDetailResponseDto getPageById(Long pageId) {
-        ProjectPage page = repository.findById(pageId)
-                .orElseThrow(() -> new RuntimeException("Page not found"));
+    @Transactional(readOnly = true)
+    public PageDetailResponseDto getPageById(Long pageId, Long userId) {
+        Objects.requireNonNull(pageId, "pageId cannot be null");
+        Objects.requireNonNull(userId, "userId cannot be null");
+
+        ProjectPage page = findPage(pageId);
+        Project project = findProject(page.getProjectId());
+        validateProjectMembership(project.getTeam().getId(), userId, false);
 
         PageDetailResponseDto dto = new PageDetailResponseDto();
         dto.setId(page.getId());
@@ -49,9 +76,14 @@ public class ProjectPageService {
         return dto;
     }
 
-    public PageDetailResponseDto updatePage(Long pageId, PageRequestDto request) {
-        ProjectPage existingPage = repository.findById(pageId)
-                .orElseThrow(() -> new RuntimeException("Page not found with ID: " + pageId));
+    @Transactional
+    public PageDetailResponseDto updatePage(Long pageId, PageRequestDto request, Long userId) {
+        Objects.requireNonNull(pageId, "pageId cannot be null");
+        Objects.requireNonNull(userId, "userId cannot be null");
+
+        ProjectPage existingPage = findPage(pageId);
+        Project project = findProject(existingPage.getProjectId());
+        validateProjectMembership(project.getTeam().getId(), userId, true);
 
         existingPage.setTitle(request.getTitle());
         existingPage.setContent(request.getContent());
@@ -70,10 +102,43 @@ public class ProjectPageService {
         return dto;
     }
 
-    public void deletePage(Long pageId) {
-        ProjectPage existingPage = repository.findById(pageId)
-                .orElseThrow(() -> new RuntimeException("Page not found with ID: " + pageId));
+    @Transactional
+    public void deletePage(Long pageId, Long userId) {
+        Objects.requireNonNull(pageId, "pageId cannot be null");
+        Objects.requireNonNull(userId, "userId cannot be null");
+
+        ProjectPage existingPage = findPage(pageId);
+        Project project = findProject(existingPage.getProjectId());
+        validateProjectMembership(project.getTeam().getId(), userId, true);
 
         repository.delete(existingPage);
+    }
+
+    private ProjectPage findPage(Long pageId) {
+        Objects.requireNonNull(pageId, "pageId cannot be null");
+        return repository.findById(pageId)
+                .orElseThrow(() -> new EntityNotFoundException("Page not found with ID: " + pageId));
+    }
+
+    private Project findProject(Long projectId) {
+        Objects.requireNonNull(projectId, "projectId cannot be null");
+        return projectRepository.findById(projectId)
+                .orElseThrow(() -> new EntityNotFoundException("Project not found with ID: " + projectId));
+    }
+
+    private void validateProjectMembership(Long teamId, Long userId, boolean denyViewer) {
+        TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId, userId)
+                .orElseThrow(() -> new AccessDeniedException("User is not a member of this team"));
+
+        if (denyViewer && member.getRole() == TeamRole.VIEWER) {
+            throw new AccessDeniedException("Insufficient permission for this action");
+        }
+    }
+
+    private PageSummaryResponseDto toSummaryDto(ProjectPage page) {
+        PageSummaryResponseDto dto = new PageSummaryResponseDto();
+        dto.setId(page.getId());
+        dto.setTitle(page.getTitle());
+        return dto;
     }
 }
