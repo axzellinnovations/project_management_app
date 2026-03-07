@@ -1,10 +1,18 @@
 package com.planora.backend.service;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Random;
+import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
@@ -21,52 +29,49 @@ import com.planora.backend.repository.TokenRepository;
 import com.planora.backend.repository.UserRepository;
 
 import jakarta.transaction.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class UserService {
 
-    private final UserRepository repository;
-
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
+    private final UserRepository userRepository;
     private final JWTService jwtService;
 
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
     private final TokenRepository tokenRepository;
     private final EmailService emailService;
-    private final UserRepository userRepository;
 
     private AuthenticationManager authenticationManager;
 
-    public UserService(UserRepository repository, JWTService jwtService, AuthenticationManager authenticationManager, TokenRepository tokenRepository, EmailService emailService, UserRepository userRepository){
-        this.repository = repository;
+    public UserService(UserRepository userRepository, JWTService jwtService, AuthenticationManager authenticationManager, TokenRepository tokenRepository, EmailService emailService) {
+        this.userRepository = userRepository;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
         this.tokenRepository = tokenRepository;
         this.emailService = emailService;
-        this.userRepository = userRepository;
     }
 
     @Transactional
     public String register(User user) {
 
-        User existingUser = userRepository.findByEmail(user.getEmail().toLowerCase());
+        User existingUser = userRepository.findByEmailIgnoreCase(user.getEmail().toLowerCase()).orElse(null);
 
-        if(existingUser!=null){
-            if(!existingUser.isVerified()){
+        if (existingUser != null) {
+            if (!existingUser.isVerified()) {
                 tokenRepository.deleteByUser(existingUser);
                 tokenRepository.flush();
-                user=existingUser;
-            }
-            else {
+                user = existingUser;
+            } else {
                 return "User already verified. Please login.";
             }
-        }
-        else {
+        } else {
             //save unverified user
             user.setEmail(user.getEmail().toLowerCase());
             user.setPassword(encoder.encode(user.getPassword()));
             user.setVerified(false);
-            repository.save(user);
-            repository.flush();
+            userRepository.save(user);
+            userRepository.flush();
         }
 
         String otp = String.valueOf(new Random().nextInt(900000) + 100000);
@@ -82,26 +87,25 @@ public class UserService {
     }
 
     @Transactional
-    public boolean verifyToken(String email, String otp){
-        User user = userRepository.findByEmail(email.toLowerCase());
+    public boolean verifyToken(String email, String otp) {
+        User user = userRepository.findByEmailIgnoreCase(email.toLowerCase()).orElse(null);
         VerificationToken verificationToken = tokenRepository.findByUser(user);
 
-        if(verificationToken == null || verificationToken.isUsed() || verificationToken.getExpiry().isBefore(Instant.now())){
+        if (verificationToken == null || verificationToken.isUsed() || verificationToken.getExpiry().isBefore(Instant.now())) {
             return false;
         }
 
-        if(verificationToken.getAttempts() >= 5){
+        if (verificationToken.getAttempts() >= 5) {
             return false;
         }
 
-        if(verificationToken.getToken().equals(otp)){
+        if (verificationToken.getToken().equals(otp)) {
             user.setVerified(true);
             verificationToken.setUsed(true);
             userRepository.save(user);
             tokenRepository.save(verificationToken);
             return true;
-        }
-        else {
+        } else {
             verificationToken.setAttempts(verificationToken.getAttempts() + 1);
             tokenRepository.save(verificationToken);
             return false;
@@ -114,8 +118,8 @@ public class UserService {
                         user.getEmail().toLowerCase(),
                         user.getPassword()));
 
-        if(authentication.isAuthenticated()){
-            User authenticatedUser = userRepository.findByEmail(user.getEmail().toLowerCase());
+        if (authentication.isAuthenticated()) {
+            User authenticatedUser = userRepository.findByEmailIgnoreCase(user.getEmail().toLowerCase()).orElse(null);
             return jwtService.generateToken(user.getEmail(), authenticatedUser.getUsername());
         }
 
@@ -130,8 +134,8 @@ public class UserService {
                             user.getEmail().toLowerCase(),
                             user.getPassword()));
 
-            if(authentication.isAuthenticated()){
-                User authenticatedUser = userRepository.findByEmail(user.getEmail().toLowerCase());
+            if (authentication.isAuthenticated()) {
+                User authenticatedUser = userRepository.findByEmailIgnoreCase(user.getEmail().toLowerCase()).orElse(null);
                 String token = jwtService.generateToken(user.getEmail(), authenticatedUser.getUsername());
                 LoginResponse response = new LoginResponse();
                 response.setSuccess(true);
@@ -170,11 +174,11 @@ public class UserService {
     public String resendOtp(String email) {
         User user = userRepository.findByEmail(email.toLowerCase());
 
-        if(user == null){
+        if (user == null) {
             return "User is not found";
         }
 
-        if(user.isVerified()){
+        if (user.isVerified()) {
             return "User already verified.";
         }
 
@@ -204,7 +208,7 @@ public class UserService {
     public String forgotPassword(String email) {
         User user = userRepository.findByEmail(email.toLowerCase());
 
-        if(user == null)
+        if (user == null)
             return "If that email exists, an OTP has been sent.";
 
         // Delete existing password reset tokens for this user
@@ -230,8 +234,8 @@ public class UserService {
     public boolean resetPassword(String token, String newPassword) {
         VerificationToken verificationToken = tokenRepository.findByToken(token);
 
-        if(verificationToken == null || verificationToken.isUsed() || verificationToken.isExpired() 
-            || verificationToken.getTokenType() != VerificationToken.TokenType.PASSWORD_RESET){
+        if (verificationToken == null || verificationToken.isUsed() || verificationToken.isExpired()
+                || verificationToken.getTokenType() != VerificationToken.TokenType.PASSWORD_RESET) {
             return false;
         }
 
@@ -250,8 +254,8 @@ public class UserService {
         User user = userRepository.findByEmail(email.toLowerCase());
         VerificationToken verificationToken = tokenRepository.findByUser(user);
 
-        if(verificationToken != null && verificationToken.getToken().equals(otp) && !verificationToken.isExpired() 
-            && verificationToken.getTokenType() == VerificationToken.TokenType.PASSWORD_RESET){
+        if (verificationToken != null && verificationToken.getToken().equals(otp) && !verificationToken.isExpired()
+                && verificationToken.getTokenType() == VerificationToken.TokenType.PASSWORD_RESET) {
             user.setPassword(encoder.encode(newPassword));
             verificationToken.setUsed(true);
             userRepository.save(user);
@@ -264,6 +268,106 @@ public class UserService {
 
     public java.util.List<User> getAllUsers() {
         return userRepository.findAll();
+    }
+
+    @Transactional
+    public User updateUserDetails(String email, String newFullName) {
+        User user = userRepository.findByEmailIgnoreCase(email.toLowerCase()).orElse(null);
+        if (user == null) {
+            throw new RuntimeException("User not found");
+        }
+
+        // Only fullName can be updated. Username and email are immutable.
+        if (newFullName != null && !newFullName.isEmpty()) {
+            user.setFullName(newFullName);
+        } else {
+            throw new IllegalArgumentException("Full name cannot be empty");
+        }
+
+        // Ensure email and username are not modified
+        user.setEmail(user.getEmail()); // Defensive: prevent accidental modification
+        user.setUsername(user.getUsername()); // Defensive: prevent accidental modification
+
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public String uploadProfilePicture(String email, MultipartFile file) {
+        User user = userRepository.findByEmailIgnoreCase(email.toLowerCase()).orElse(null);
+        if (user == null) {
+            throw new RuntimeException("User not found");
+        }
+
+        // Validate file size (5MB max)
+        long maxFileSize = 5 * 1024 * 1024; // 5MB in bytes
+        if (file.getSize() > maxFileSize) {
+            throw new IllegalArgumentException("File size exceeds maximum limit of 5MB");
+        }
+
+        // Validate file type
+        String contentType = file.getContentType();
+        if (contentType == null || !isValidImageType(contentType)) {
+            throw new IllegalArgumentException("Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed");
+        }
+
+        try {
+            // Define the folder where images will be saved
+            String uploadDirectory = "uploads/profile_pictures";
+            Path uploadPath = Paths.get(uploadDirectory);
+
+            // Create the directory if it doesn't exist
+            if (!Files.exists(uploadPath)) {
+                Files.createDirectories(uploadPath);
+            }
+
+            // Delete old profile picture if exists
+            String oldProfilePicUrl = user.getProfilePicUrl();
+            if (oldProfilePicUrl != null && !oldProfilePicUrl.isEmpty()) {
+                deleteProfilePictureFile(oldProfilePicUrl);
+            }
+
+            // Generate a unique file name to prevent overwriting
+            String originalFilename = file.getOriginalFilename();
+            String fileExtension = originalFilename != null ? originalFilename.substring(originalFilename.lastIndexOf(".")) : ".jpg";
+            String uniqueFileName = UUID.randomUUID().toString() + fileExtension;
+
+            // Save the file
+            Path filePath = uploadPath.resolve(uniqueFileName);
+            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
+            // Save the URL/path to the database
+            String fileUrl = "/images/" + uniqueFileName;
+            user.setProfilePicUrl(fileUrl);
+            userRepository.save(user);
+
+            return fileUrl;
+
+
+        } catch (IOException e) {
+            throw new RuntimeException("Could not store the file. Error: " + e.getMessage());
+        }
+    }
+
+    public boolean isValidImageType(String contentType) {
+        return contentType.equals("image/jpeg") ||
+                contentType.equals("image/png") ||
+                contentType.equals("image/gif") ||
+                contentType.equals("image/webp");
+    }
+
+    private void deleteProfilePictureFile(String fileUrl) {
+        try {
+            // Extract filename from URL (e.g., "/images/uuid.jpg" -> "uuid.jpg")
+            String filename = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
+            Path filePath = Paths.get("uploads/profile_pictures", filename);
+
+            if (Files.exists(filePath)) {
+                Files.delete(filePath);
+            }
+        } catch (IOException e) {
+            // Log the error but don't fail the upload if old file cleanup fails
+            logger.warn("Failed to delete old profile picture: {}", e.getMessage());
+        }
     }
 }
 
