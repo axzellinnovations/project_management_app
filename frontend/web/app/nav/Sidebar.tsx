@@ -1,18 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { getUserFromToken, User } from '@/lib/auth';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 export default function Sidebar() {
     const router = useRouter();
-    const [user, setUser] = useState<User | null>(null);
-
-    useEffect(() => {
-        const userData = getUserFromToken();
-        setUser(userData);
-    }, []);
+    const pathname = usePathname();
+    const [user] = useState<User | null>(() => getUserFromToken());
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -39,7 +35,8 @@ export default function Sidebar() {
             {/* Main Navigation */}
             <div className="px-4 py-6 flex flex-col gap-1 overflow-y-auto flex-1">
                 <NavItem label="For you" href="#" icon={<InboxIcon />} />
-                <NavItem label="Dashboard" href="/dashboard" icon={<DashboardIcon />} />
+                <NavItem label="Dashboard" href="/dashboard" icon={<DashboardIcon />} active={pathname.startsWith('/dashboard')} />
+                <NavItem label="Profile" href="/profile" icon={<ProfileIcon />} active={pathname.startsWith('/profile')} />
 
                 <div className="mt-6 mb-2">
                     <div className="flex items-center justify-between px-2 mb-2 group cursor-pointer">
@@ -98,7 +95,15 @@ export default function Sidebar() {
     );
 }
 
-function NavItem({ label, href, icon, active, badge }: any) {
+type NavItemProps = {
+    label: string;
+    href: string;
+    icon: ReactNode;
+    active?: boolean;
+    badge?: string;
+};
+
+function NavItem({ label, href, icon, active = false, badge }: NavItemProps) {
     return (
         <Link href={href} className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-200 ${active ? 'bg-[#EFF6FF] text-[#0052CC]' : 'text-[#4A5565] hover:bg-[#F9FAFB] hover:text-[#101828]'}`}>
             {icon}
@@ -110,26 +115,7 @@ function NavItem({ label, href, icon, active, badge }: any) {
     )
 }
 
-function ProjectItem({ label, color, active }: any) {
-    return (
-        <div className={`flex items-center gap-3 px-3 py-2 cursor-pointer rounded-md transition-colors ${active ? 'bg-[#F2F4F7]' : 'hover:bg-[#F9FAFB]'}`}>
-            <div className={`w-2 h-2 rounded-full ${color}`} />
-            <span className={`font-arimo text-[14px] truncate ${active ? 'text-[#101828] font-medium' : 'text-[#4A5565]'}`}>{label}</span>
-        </div>
-    )
-}
-
-function FavoriteItem({ label }: any) {
-    return (
-        <div className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-[#F9FAFB] rounded-md transition-colors text-[#4A5565] hover:text-[#101828]">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8 1.33334L10.06 5.50667L14.6667 6.17334L11.3333 9.42001L12.12 14.0067L8 11.84L3.88 14.0067L4.66667 9.42001L1.33333 6.17334L5.94 5.50667L8 1.33334Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="font-arimo text-[14px]">{label}</span>
-        </div>
-    )
-}
-
 // Icons
 const DashboardIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="6" height="6" rx="1" /><rect x="11" y="3" width="6" height="6" rx="1" /><rect x="3" y="11" width="6" height="6" rx="1" /><rect x="11" y="11" width="6" height="6" rx="1" /></svg>;
 const InboxIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h12v12H4z" /><path d="M4 8l8 5 8-5" /></svg>;
+const ProfileIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6" r="3" /><path d="M4 16c1.2-2.7 3.5-4 6-4s4.8 1.3 6 4" /></svg>;
