@@ -1,18 +1,49 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import Image from 'next/image';
+import { useEffect, useState, useMemo } from 'react';
 import { getUserFromToken, User } from '@/lib/auth';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+import api from '@/lib/axios';
 
 export default function Sidebar() {
     const router = useRouter();
+    const pathname = usePathname();
     const [user, setUser] = useState<User | null>(null);
+    const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+
+    const resolvedProfilePicUrl = useMemo(() => {
+        if (!profilePicUrl) return '';
+        if (profilePicUrl.startsWith('http://') || profilePicUrl.startsWith('https://')) {
+            return profilePicUrl;
+        }
+        return `${API_BASE_URL}${profilePicUrl}`;
+    }, [profilePicUrl, API_BASE_URL]);
 
     useEffect(() => {
         const userData = getUserFromToken();
         setUser(userData);
-    }, []);
+
+        if (userData?.email) {
+            const loadProfilePic = async () => {
+                try {
+                    const response = await api.get('/api/auth/users');
+                    const currentUser = response.data.find(
+                        (u: any) => u.email.toLowerCase() === userData.email.toLowerCase()
+                    );
+                    if (currentUser?.profilePicUrl) {
+                        setProfilePicUrl(currentUser.profilePicUrl);
+                    }
+                } catch (error) {
+                    // Silently fail - just show initials
+                }
+            };
+            void loadProfilePic();
+        }
+    }, [pathname]);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -40,6 +71,7 @@ export default function Sidebar() {
             <div className="px-4 py-6 flex flex-col gap-1 overflow-y-auto flex-1">
                 <NavItem label="For you" href="#" icon={<InboxIcon />} />
                 <NavItem label="Dashboard" href="/dashboard" icon={<DashboardIcon />} />
+                <NavItem label="Profile" href="/profile" icon={<ProfileIcon />} />
 
                 <div className="mt-6 mb-2">
                     <div className="flex items-center justify-between px-2 mb-2 group cursor-pointer">
@@ -78,8 +110,19 @@ export default function Sidebar() {
             {/* Bottom User Section */}
             <div className="mt-auto p-4 border-t border-[#F2F4F7]">
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-[#F2F4F7] flex items-center justify-center text-[#4A5565] font-semibold text-sm">
-                        {user?.username?.charAt(0).toUpperCase() || 'U'}
+                    <div className="w-9 h-9 rounded-full bg-[#F2F4F7] flex items-center justify-center text-[#4A5565] font-semibold text-sm overflow-hidden border border-[#E3E8EF]">
+                        {resolvedProfilePicUrl ? (
+                            <Image
+                                src={resolvedProfilePicUrl}
+                                alt="Profile"
+                                width={36}
+                                height={36}
+                                className="w-full h-full object-cover"
+                                unoptimized
+                            />
+                        ) : (
+                            <span>{user?.username?.charAt(0).toUpperCase() || 'U'}</span>
+                        )}
                     </div>
                     <div className="flex flex-col overflow-hidden">
                         <span className="text-[14px] font-medium text-[#101828] truncate">{user?.username || 'Guest'}</span>
@@ -133,3 +176,4 @@ function FavoriteItem({ label }: any) {
 // Icons
 const DashboardIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="6" height="6" rx="1" /><rect x="11" y="3" width="6" height="6" rx="1" /><rect x="3" y="11" width="6" height="6" rx="1" /><rect x="11" y="11" width="6" height="6" rx="1" /></svg>;
 const InboxIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h12v12H4z" /><path d="M4 8l8 5 8-5" /></svg>;
+const ProfileIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6" r="3" /><path d="M4 16c1.2-2.7 3.5-4 6-4s4.8 1.3 6 4" /></svg>;
