@@ -1,8 +1,15 @@
 package com.planora.backend.service;
 
-import org.springframework.mail.SimpleMailMessage;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StreamUtils;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 @Service
 public class EmailService {
@@ -13,25 +20,50 @@ public class EmailService {
         this.mailSender = mailSender;
     }
 
-    public void sendVerificationEmail(String toEmail, String otp){
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("no-reply@planora.com");
-        message.setTo(toEmail);
-        message.setSubject("Planora - Your Verification Code");
-        message.setText("Your verification code is: "
-                + otp +
-                "\n\nThis code will expire in 10 minutes. If you did not request this, please ignore this email.");
-        mailSender.send(message);
+    private String getOtpEmailTemplate(String otp) {
+        try {
+            ClassPathResource resource = new ClassPathResource("templates/otp-template.html");
+            String template = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+            return template.replace("{{OTP_CODE}}", otp);
+        } catch (IOException e) {
+            // Fallback plaintext if template fails
+            return "Your verification code is: " + otp + "\n\nThis code will expire in 10 minutes.";
+        }
+    }
 
+    public void sendVerificationEmail(String toEmail, String otp){
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            
+            helper.setFrom("no-reply@planora.com");
+            helper.setTo(toEmail);
+            helper.setSubject("Planora - Your Verification Code");
+            
+            String htmlContent = getOtpEmailTemplate(otp);
+            helper.setText(htmlContent, true); // true indicates HTML content
+            
+            mailSender.send(message);
+        } catch (MessagingException e) {
+            e.printStackTrace();
+        }
     }
 
     public void sendPasswordResetRequest(String toEmail, String otp){
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("no-reply@planora.com");
-        message.setTo(toEmail);
-        message.setSubject("Planora - Password Reset Code");
-        message.setText("Your code to reset your password is: " + otp +
-                "\n\nThis code will expire in 10 minutes. If you did not request this, please ignore this email.");
-        mailSender.send(message);
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            
+            helper.setFrom("no-reply@planora.com");
+            helper.setTo(toEmail);
+            helper.setSubject("Planora - Password Reset Code");
+            
+            String htmlContent = getOtpEmailTemplate(otp);
+            helper.setText(htmlContent, true); // true indicates HTML content
+            
+            mailSender.send(message);
+        } catch (MessagingException e) {
+            e.printStackTrace();
+        }
     }
 }
