@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Random;
@@ -34,7 +35,10 @@ import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 @Service
 public class UserService {
@@ -50,6 +54,7 @@ public class UserService {
     private AuthenticationManager authenticationManager;
 
     private final S3Client s3Client;
+    private final S3Presigner s3Presigner;
 
     @Value("${aws.s3.profile-bucket}")
     private String profileBucket;
@@ -57,13 +62,14 @@ public class UserService {
     @Value("${aws.region}")
     private String region;
 
-    public UserService(UserRepository userRepository, JWTService jwtService, AuthenticationManager authenticationManager, TokenRepository tokenRepository, EmailService emailService, S3Client s3Client) {
+    public UserService(UserRepository userRepository, JWTService jwtService, AuthenticationManager authenticationManager, TokenRepository tokenRepository, EmailService emailService, S3Client s3Client, S3Presigner s3Presigner) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
         this.tokenRepository = tokenRepository;
         this.emailService = emailService;
         this.s3Client = s3Client;
+        this.s3Presigner = s3Presigner;
     }
 
     @Transactional
@@ -381,6 +387,33 @@ public class UserService {
         } catch (Exception e) {
             // Log the error but don't fail the upload if old file cleanup fails
             logger.warn("Failed to delete old profile picture from S3: {}", e.getMessage());
+        }
+    }
+
+    public String generatePresignedUrl(String fileUrl) {
+        if (fileUrl == null || fileUrl.isEmpty() || !fileUrl.contains("amazonaws.com")) {
+            return fileUrl; // Return as-is if it's empty or a local default image
+        }
+
+        try {
+            // Extract the key (e.g., uuid.jpg) from the full database URL
+            String key = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
+
+            GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                    .bucket(profileBucket)
+                    .key(key)
+                    .build();
+
+            // Create a temporary URL valid for 60 minutes
+            GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                    .signatureDuration(Duration.ofMinutes(60))
+                    .getObjectRequest(getObjectRequest)
+                    .build();
+
+            return s3Presigner.presignGetObject(presignRequest).url().toString();
+        } catch (Exception e) {
+            logger.error("Failed to generate presigned URL", e);
+            return null;
         }
     }
 }

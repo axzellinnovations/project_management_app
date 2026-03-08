@@ -42,7 +42,11 @@ export default function ProfilePage() {
     const [successMessage, setSuccessMessage] = useState('');
 
     const resolvedProfilePicUrl = useMemo(() => {
-        return profilePicUrl || '';
+        if (!profilePicUrl) return '';
+        if (profilePicUrl.startsWith('http://') || profilePicUrl.startsWith('https://')) {
+            return profilePicUrl;
+        }
+        return `${API_BASE_URL}${profilePicUrl}`;
     }, [profilePicUrl]);
 
     const getApiErrorMessage = (error: unknown, fallback: string) => {

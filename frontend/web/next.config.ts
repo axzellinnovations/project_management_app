@@ -7,11 +7,11 @@ const nextConfig: NextConfig = {
         protocol: 'http',
         hostname: 'localhost',
         port: '8080',
-        pathname: '/images/**',
+        pathname: '/**',
       },
       {
         protocol: 'https',
-        hostname: 'planaro-profile-photos.s3.eu-north-1.amazonaws.com', 
+        hostname: '*.amazonaws.com', 
         port: '',
         pathname: '/**', 
       },
