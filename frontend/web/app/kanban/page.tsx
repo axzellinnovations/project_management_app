@@ -6,9 +6,10 @@ import { useSearchParams } from 'next/navigation';
 import DragDropProvider from './components/DragDropProvider';
 import KanbanColumn from './components/KanbanColumn';
 import DateRangeFilter from './components/DateRangeFilter';
+import CreateTaskModal from './components/CreateTaskModal';
 import { Task, KanbanColumn as KanbanColumnType, DateFilter, TaskStatus } from './types';
-import { fetchTasksByProject, updateTaskStatus, deleteTask } from './api';
-import { AlertCircle, Loader } from 'lucide-react';
+import { fetchTasksByProject, updateTaskStatus, deleteTask, createTask } from './api';
+import { AlertCircle, Loader, CheckCircle2 } from 'lucide-react';
 
 const COLUMN_CONFIGS: Array<{
   status: string;
@@ -32,6 +33,10 @@ export default function KanbanPage() {
     endDate: null,
   });
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedColumnStatus, setSelectedColumnStatus] = useState<string>('TODO');
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [completeSuccess, setCompleteSuccess] = useState(false);
 
   // Fetch tasks from backend
   const loadTasks = useCallback(async () => {
@@ -159,6 +164,37 @@ export default function KanbanPage() {
     setDateFilter(filter);
   };
 
+  // Handle create task button click
+  const handleCreateTaskClick = (columnStatus: string) => {
+    setSelectedColumnStatus(columnStatus);
+    setIsCreateModalOpen(true);
+  };
+
+  // Handle create task submission
+  const handleCreateTask = async (taskData: Partial<Task>) => {
+    if (!projectId) return;
+
+    setIsCreatingTask(true);
+    try {
+      const newTask = await createTask(taskData);
+      setTasks((prevTasks) => [...prevTasks, newTask]);
+      setIsCreateModalOpen(false);
+    } catch (err) {
+      console.error('Failed to create task:', err);
+      throw err;
+    } finally {
+      setIsCreatingTask(false);
+    }
+  };
+
+  // Handle complete board
+  const handleCompleteBoard = async () => {
+    if (confirm('Are you sure you want to mark this board as complete? This action cannot be undone.')) {
+      setCompleteSuccess(true);
+      setTimeout(() => setCompleteSuccess(false), 3000);
+    }
+  };
+
   if (!projectId) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -176,33 +212,43 @@ export default function KanbanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-100 p-6">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-3xl font-bold text-gray-800">Kanban Board</h1>
-          <DateRangeFilter onFilterChange={handleDateFilterChange} />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Kanban Board</h1>
+            <p className="text-sm text-gray-600 mt-1">Organize and track your project tasks</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <DateRangeFilter onFilterChange={handleDateFilterChange} />
+            <button
+              onClick={handleCompleteBoard}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <CheckCircle2 size={18} />
+              Complete Board
+            </button>
+          </div>
         </div>
+
+        {/* Success Message */}
+        {completeSuccess && (
+          <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 mb-4">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            <p className="text-sm">Board marked as complete!</p>
+          </div>
+        )}
 
         {/* Error Message */}
         {error && (
           <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold">Error</p>
-              <p className="text-sm">{error}</p>
+              <p className="font-semibold text-sm">Error</p>
+              <p className="text-xs">{error}</p>
             </div>
           </div>
-        )}
-
-        {/* Task Count */}
-        {!loading && (
-          <p className="text-sm text-gray-600 mt-4">
-            Total Tasks: {filteredTasks().length}
-            {dateFilter.startDate || dateFilter.endDate
-              ? ` (filtered from ${tasks.length})`
-              : ''}
-          </p>
         )}
       </div>
 
@@ -225,11 +271,12 @@ export default function KanbanPage() {
               <div
                 key={column.status}
                 className="flex-shrink-0"
-                style={{ width: '380px' }}
+                style={{ width: '350px' }}
               >
                 <KanbanColumn
                   column={column}
                   onDeleteTask={handleDeleteTask}
+                  onCreateTask={handleCreateTaskClick}
                 />
               </div>
             ))}
@@ -243,6 +290,18 @@ export default function KanbanPage() {
             </div>
           )}
         </DragDropProvider>
+      )}
+
+      {/* Create Task Modal */}
+      {projectId && (
+        <CreateTaskModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onCreateTask={handleCreateTask}
+          columnStatus={selectedColumnStatus}
+          projectId={parseInt(projectId as string)}
+          loading={isCreatingTask}
+        />
       )}
     </div>
   );

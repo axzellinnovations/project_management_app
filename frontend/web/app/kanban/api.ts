@@ -69,3 +69,33 @@ export async function deleteTask(taskId: number): Promise<void> {
     throw error;
   }
 }
+
+/**
+ * Create a new task
+ * @param taskData - Object with task details (title, description, status, etc.)
+ * @returns Promise with newly created task
+ */
+export async function createTask(taskData: any): Promise<Task> {
+  try {
+    // Format the request to match backend expectations
+    const requestData = {
+      title: taskData.title,
+      description: taskData.description || '',
+      status: taskData.status,
+      priority: taskData.priority || 'MEDIUM',
+      storyPoint: taskData.storyPoint || 0,
+      projectId: taskData.projectId,
+      dueDate: taskData.dueDate || null,
+      startDate: taskData.startDate || null,
+    };
+
+    const response = await axios.post(`/api/tasks`, requestData);
+    return response.data;
+  } catch (error) {
+    console.error('Error creating task:', error);
+    const axiosError = error as any;
+    throw new Error(
+      axiosError.response?.data?.message ||
+      (axiosError.response?.status === 400
+        ? 'Invalid task data. Please check your inputs.'
+        : 'Failed to create task')
