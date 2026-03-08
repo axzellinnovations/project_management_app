@@ -70,7 +70,7 @@ export default function DateRangeFilter({
               </label>
               <DatePicker
                 selected={startDate}
-                onChange={(date) => setStartDate(date)}
+                onChange={(date: Date | null) => setStartDate(date)}
                 dateFormat="MMM d, yyyy"
                 minDate={new Date(2020, 0, 1)}
                 maxDate={endDate || new Date()}
@@ -87,7 +87,7 @@ export default function DateRangeFilter({
               </label>
               <DatePicker
                 selected={endDate}
-                onChange={(date) => setEndDate(date)}
+                onChange={(date: Date | null) => setEndDate(date)}
                 dateFormat="MMM d, yyyy"
                 minDate={startDate || new Date(2020, 0, 1)}
                 maxDate={new Date()}

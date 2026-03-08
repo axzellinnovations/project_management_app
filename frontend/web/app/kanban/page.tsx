@@ -45,6 +45,9 @@ export default function KanbanPage() {
 
     try {
       const projectIdNum = parseInt(projectId as string);
+      if (isNaN(projectIdNum)) {
+        throw new Error('Invalid project ID');
+      }
       const fetchedTasks = await fetchTasksByProject(projectIdNum);
       setTasks(fetchedTasks);
     } catch (err) {
