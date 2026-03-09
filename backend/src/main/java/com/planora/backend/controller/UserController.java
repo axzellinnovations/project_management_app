@@ -1,10 +1,12 @@
 package com.planora.backend.controller;
 
+import com.planora.backend.dto.UserResponseDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.planora.backend.dto.LoginResponse;
 import com.planora.backend.dto.OtpRequest;
 import com.planora.backend.dto.ResetPasswordRequest;
 import com.planora.backend.dto.VerifyRequest;
@@ -12,7 +14,6 @@ import com.planora.backend.model.User;
 import com.planora.backend.service.UserService;
 
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -40,8 +41,15 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody User user){
-        return new ResponseEntity<>(service.verify(user), HttpStatus.OK);
+    public ResponseEntity<?> login(@RequestBody User user){
+        LoginResponse response = service.loginUser(user);
+        if(response.isSuccess()){
+            return new ResponseEntity<>(response, HttpStatus.OK);
+        } else if("UNVERIFIED_EMAIL".equals(response.getErrorCode())) {
+            return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+        } else {
+            return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
+        }
     }
 
     @PostMapping("/resend")
@@ -55,13 +63,13 @@ public class UserController {
     }
 
     @PostMapping("/reset")
-    public ResponseEntity<String> resetPassword(@RequestBody ResetPasswordRequest request){
-        boolean isSuccess = service.resetPassword(request.getEmail(),request.getOtp(),request.getNewPassword());
+    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request){
+        boolean isSuccess = service.resetPassword(request.getEmail(), request.getOtp(), request.getNewPassword());
         if(isSuccess){
-            return new ResponseEntity<>("Password Reset Successfull", HttpStatus.OK);
+            return new ResponseEntity<>("Password reset successfully", HttpStatus.OK);
         }
         else {
-            return new ResponseEntity<>("Invalid Access/ OTP Expired", HttpStatus.UNAUTHORIZED);
+            return new ResponseEntity<>("Invalid or expired OTP", HttpStatus.UNAUTHORIZED);
         }
     }
 
@@ -73,15 +81,19 @@ public class UserController {
             // Filter out the current user if excludeEmail is provided
             if (excludeEmail != null && !excludeEmail.isEmpty()) {
                 allUsers = allUsers.stream()
-                        .filter(user -> !user.getEmail().equals(excludeEmail))
+                        .filter(user -> !user.getEmail().equalsIgnoreCase(excludeEmail))
                         .collect(Collectors.toList());
             }
 
-            // Return only username and email (no password)
-            List<Map<String, String>> userList = allUsers.stream()
-                    .map(user -> Map.of(
-                            "username", user.getUsername() != null ? user.getUsername() : user.getEmail(),
-                            "email", user.getEmail()
+            // Return UserResponseDTO with complete user information
+            List<UserResponseDTO> userList = allUsers.stream()
+                    .map(user -> new UserResponseDTO(
+                            user.getUserId(),
+                            user.getUsername(),
+                            user.getFullName(),
+                            user.getEmail(),
+                            user.isVerified(),
+                            service.generatePresignedUrl(user.getProfilePicUrl())
                     ))
                     .collect(Collectors.toList());
 
