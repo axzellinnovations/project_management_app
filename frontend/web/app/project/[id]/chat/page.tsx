@@ -1,14 +1,17 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useParams } from 'next/navigation';
 import { useChat } from './components/useChat';
 import { ChatSidebar } from './components/chatSidebar';
 import { ChatMessages } from './components/chatMessage';
 import { ChatInput } from './components/chatInput';
 
 export default function ChatInterface() {
+  const params = useParams();
+  const projectId = params.id as string;
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
-  const { currentUser, users, messages, privateMessages, sendMessage, loadPrivateHistory, isLoading, error, retryConnection } = useChat();
+  const { currentUser, users, messages, privateMessages, sendMessage, loadPrivateHistory, isLoading, error, retryConnection } = useChat(projectId);
 
   const displayMessages = selectedUser ? privateMessages[selectedUser] || [] : messages;
 

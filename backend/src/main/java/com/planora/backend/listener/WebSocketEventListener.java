@@ -1,6 +1,5 @@
 package com.planora.backend.listener;
 
-import com.planora.backend.model.ChatMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +9,8 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
+import com.planora.backend.service.ChatService;
+
 @Component
 public class WebSocketEventListener {
 
@@ -18,6 +19,9 @@ public class WebSocketEventListener {
     // This template is used to send messages to WebSocket destinations
     @Autowired
     private SimpMessageSendingOperations messagingTemplate;
+
+    @Autowired
+    private ChatService chatService;
 
     // This method is called whenever a WebSocket connection is disconnected
     @EventListener
@@ -32,13 +36,8 @@ public class WebSocketEventListener {
         if (username != null) {
             logger.info("User Disconnected : " + username);
 
-            // Create a LEAVE message
-            ChatMessage chatMessage = new ChatMessage();
-            chatMessage.setType(ChatMessage.MessageType.LEAVE);
-            chatMessage.setSender(username);
-
-            // Broadcast the LEAVE message to all subscribers of /topic/public
-            messagingTemplate.convertAndSend("/topic/public", chatMessage);
+            // Note: LEAVE messages are now project-specific, so no global broadcast on disconnect
+            // If needed, handle in client-side or per-project subscriptions
         }
     }
 }
