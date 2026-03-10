@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChatMessage } from './chat';
+import styles from '../chat.module.css';
 
 interface ChatSidebarProps {
   currentUser: string;
@@ -7,17 +8,39 @@ interface ChatSidebarProps {
   selectedUser: string | null;
   onSelectUser: (user: string | null) => void;
   lastPrivateMessages: Record<string, ChatMessage[]>;
+  onAddTeam: (teamName: string) => void;
+  searchTerm: string;
+  onSearchChange: (value: string) => void;
 }
 
-export const ChatSidebar = ({ users, selectedUser, onSelectUser, currentUser, lastPrivateMessages }: ChatSidebarProps) => {
+export const ChatSidebar = ({ users, selectedUser, onSelectUser, currentUser, lastPrivateMessages, onAddTeam, searchTerm, onSearchChange }: ChatSidebarProps) => {
   return (
-    <aside className="w-72 bg-white border-r border-slate-200 flex flex-col h-full">
-      <div className="p-4 border-b border-slate-200">
+    <aside className={styles.sidebar}>
+      <div className={styles.sidebarHeader}>
         <h2 className="text-lg font-semibold text-slate-900">Chats</h2>
-        <p className="text-xs text-slate-500 mt-1">Logged in as {currentUser}</p>
+        <button
+          onClick={() => {
+            const teamName = prompt('Enter new team name');
+            if (teamName) onAddTeam(teamName.trim());
+          }}
+          className="h-8 w-8 rounded-full bg-blue-600 text-white text-sm font-bold leading-[1.9] hover:bg-blue-700 transition-colors"
+          aria-label="Add new team"
+        >
+          +
+        </button>
       </div>
 
-      <div className="p-3 space-y-1 overflow-y-auto flex-1">
+      <div className="px-3 py-2">
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search users or messages"
+          className="w-full px-3 py-2 rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <div className={styles.userList}>
         {/* Team Chat Button */}
         <button
           onClick={() => onSelectUser(null)}

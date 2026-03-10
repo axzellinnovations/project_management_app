@@ -14,6 +14,13 @@ export const useChat = (projectId: string) => {
   const [error, setError] = useState('');
   const stompClientRef = useRef<CompatClient | null>(null);
 
+  const addTeam = useCallback((teamName: string) => {
+    setUsers(prev => {
+      if (!teamName.trim() || prev.includes(teamName)) return prev;
+      return [...prev, teamName];
+    });
+  }, []);
+
   // 1. Initial Auth & Setup
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -90,7 +97,10 @@ export const useChat = (projectId: string) => {
           if (msg.type === 'JOIN' && msg.sender !== username) {
             setUsers(prev => prev.includes(msg.sender) ? prev : [...prev, msg.sender]);
           }
-          setMessages(prev => [...prev, msg]);
+
+          if (msg.type !== 'JOIN') {
+            setMessages(prev => [...prev, msg]);
+          }
         });
 
         // Subscribe to Private
@@ -164,6 +174,7 @@ export const useChat = (projectId: string) => {
     privateMessages,
     sendMessage,
     loadPrivateHistory,
+    addTeam,
     isLoading,
     error,
     retryConnection: () => window.location.reload() // Simple retry strategy
