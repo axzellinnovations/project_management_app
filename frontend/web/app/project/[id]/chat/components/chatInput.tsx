@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import styles from '../chat.module.css';
 
 interface ChatInputProps {
   onSendMessage: (msg: string) => void;
@@ -16,8 +17,8 @@ export const ChatInput = ({ onSendMessage, disabled }: ChatInputProps) => {
   };
 
   return (
-    <div className="p-4 bg-white border-t border-slate-200">
-      <div className="flex gap-2">
+    <div className={styles.inputArea}>
+      <div className="flex gap-2 w-full">
         <input
           type="text"
           value={input}
@@ -25,7 +26,7 @@ export const ChatInput = ({ onSendMessage, disabled }: ChatInputProps) => {
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder="Type a message..."
           disabled={disabled}
-          className="flex-1 px-4 py-2 border border-slate-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          className={styles.input}
         />
         <button
           onClick={handleSend}
