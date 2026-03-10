@@ -19,151 +19,162 @@ import java.util.stream.Collectors;
 @Service
 public class TeamService {
 
-    @Autowired
-    private TeamRepository teamRepository;
+        @Autowired
+        private TeamRepository teamRepository;
 
-    @Autowired
-    private UserRepository userRepository;
+        @Autowired
+        private UserRepository userRepository;
 
-    @Autowired
-    private TeamMemberRepository teamMemberRepository;
+        @Autowired
+        private TeamMemberRepository teamMemberRepository;
 
-    @Transactional
-    public Team createTeam(TeamCreationDTO dto, Long currentUserId) {
-        User owner = userRepository.findById(currentUserId)
-                .orElseThrow(()->new RuntimeException("User not found"));
-
-        //1. CREATE TEAM
-        Team team = new Team();
-        team.setName(dto.getName());
-        team.setOwner(owner);
-        team.setCreatedAt(LocalDateTime.now());
-
-        //2. Add Owner as Member
-        TeamMember member = new TeamMember();
-        member.setUser(owner);
-        member.setTeam(team);
-        member.setRole(TeamRole.OWNER);
-        member.setJoinedAt(LocalDateTime.now());
-        team.getMembers().add(member);
-
-        //Handle Invites via Email
-
-        return teamRepository.save(team);
-    }
-
-    //2. GET MY TEAMS
-    public List<TeamSummaryDTO> getAllTeams(Long currentUserId) {
-        List<TeamMember> memberships = teamMemberRepository.findByUserUserId(currentUserId);
-
-        //Covert To DTOs
-        return memberships.stream()
-                .map(membership -> new TeamSummaryDTO(
-                        membership.getTeam().getId(),
-                        membership.getTeam().getName(),
-                        membership.getTeam().getOwner().getFullName()
-                ))
-                .collect(Collectors.toList());
-    }
-
-    //3. GET SINGLE TEAM DASHBOARD
-    public TeamDetailDTO getTeam(Long id, Long currentUserId) {
-        Team team = teamRepository.findById(id)
-                .orElseThrow(()-> new RuntimeException("Team not found"));
-
-        //Check the user is a member
-        boolean isMember = team.getMembers().stream()
-                .anyMatch(m -> m.getUser().getUserId().equals(currentUserId));
-
-        if(!isMember){
-            throw new RuntimeException("Access Denied: You are not a member of this team");
+        public java.util.Map<String, Boolean> checkTeamName(String name, Long currentUserId) {
+                java.util.Map<String, Boolean> result = new java.util.HashMap<>();
+                java.util.Optional<Team> teamOpt = teamRepository.findByName(name.trim());
+                if (teamOpt.isPresent()) {
+                        result.put("exists", true);
+                        boolean isMember = teamOpt.get().getMembers().stream()
+                                        .anyMatch(m -> m.getUser().getUserId().equals(currentUserId));
+                        result.put("isMember", isMember);
+                } else {
+                        result.put("exists", false);
+                        result.put("isMember", false);
+                }
+                return result;
         }
 
-        return mapToDetailDTO(team);
+        @Transactional
+        public Team createTeam(TeamCreationDTO dto, Long currentUserId) {
+                User owner = userRepository.findById(currentUserId)
+                                .orElseThrow(() -> new RuntimeException("User not found"));
 
-    }
+                // 1. CREATE TEAM
+                Team team = new Team();
+                team.setName(dto.getName());
+                team.setOwner(owner);
+                team.setCreatedAt(LocalDateTime.now());
 
-    //4. UPDATE TEAM
-    @Transactional
-    public Team updateTeam(Long teamId,TeamCreationDTO dto, Long currentUserId) {
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(()-> new RuntimeException("Team not found"));
+                // 2. Add Owner as Member
+                TeamMember member = new TeamMember();
+                member.setUser(owner);
+                member.setTeam(team);
+                member.setRole(TeamRole.OWNER);
+                member.setJoinedAt(LocalDateTime.now());
+                team.getMembers().add(member);
 
-        //Security Check
-        TeamMember member = team.getMembers().stream()
-                .filter(m -> m.getUser().getUserId().equals(currentUserId))
-                .findFirst()
-                .orElseThrow(()-> new RuntimeException("Access Denied"));
+                // Handle Invites via Email
 
-        if (member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN){
-            throw new RuntimeException("Permission Denied");
+                return teamRepository.save(team);
         }
 
-        team.setName(dto.getName());
+        // 2. GET MY TEAMS
+        public List<TeamSummaryDTO> getAllTeams(Long currentUserId) {
+                List<TeamMember> memberships = teamMemberRepository.findByUserUserId(currentUserId);
 
-        return teamRepository.save(team);
-    }
-
-    //5. DELETE TEAM
-    @Transactional
-    public void deleteTeam(Long id, Long currentUserId) {
-        Team team = teamRepository.findById(id)
-                .orElseThrow(()-> new RuntimeException("Team not found"));
-
-        //Security Check
-        if (!team.getOwner().getUserId().equals(currentUserId)){
-            throw new RuntimeException("Permission Denied");
+                // Covert To DTOs
+                return memberships.stream()
+                                .map(membership -> new TeamSummaryDTO(
+                                                membership.getTeam().getId(),
+                                                membership.getTeam().getName(),
+                                                membership.getTeam().getOwner().getFullName()))
+                                .collect(Collectors.toList());
         }
 
-        team.getProjects().clear();
-        teamRepository.save(team);
-        teamRepository.flush();
+        // 3. GET SINGLE TEAM DASHBOARD
+        public TeamDetailDTO getTeam(Long id, Long currentUserId) {
+                Team team = teamRepository.findById(id)
+                                .orElseThrow(() -> new RuntimeException("Team not found"));
 
-        teamRepository.delete(team);
-    }
+                // Check the user is a member
+                boolean isMember = team.getMembers().stream()
+                                .anyMatch(m -> m.getUser().getUserId().equals(currentUserId));
 
-    private TeamDetailDTO mapToDetailDTO(Team team){
+                if (!isMember) {
+                        throw new RuntimeException("Access Denied: You are not a member of this team");
+                }
 
-        TeamDetailDTO dto = new TeamDetailDTO();
+                return mapToDetailDTO(team);
 
-        //basic
-        dto.setId(team.getId());
-        dto.setName(team.getName());
-        dto.setCreatedAt(team.getCreatedAt());
+        }
 
-        List<MemberDTO> memberDTOs = team.getMembers().stream()
-                .map(member -> new MemberDTO(        // <--- CHANGED HERE
-                        member.getUser().getUserId(),
-                        member.getUser().getFullName(),
-                        member.getUser().getEmail(),
-                        member.getRole(),
-                        member.getJoinedAt()
-                ))
-                .collect(Collectors.toList());
-        dto.setMembers(memberDTOs);
+        // 4. UPDATE TEAM
+        @Transactional
+        public Team updateTeam(Long teamId, TeamCreationDTO dto, Long currentUserId) {
+                Team team = teamRepository.findById(teamId)
+                                .orElseThrow(() -> new RuntimeException("Team not found"));
 
-        List<PendingInviteDTO> inviteDTOs = team.getInvitations().stream()
-                .map(invite -> new PendingInviteDTO(
-                        invite.getId(),
-                        invite.getEmail(),
-                        invite.getInvitedAt()
-                ))
-                .collect(Collectors.toList());
-        dto.setPendingInvites(inviteDTOs);
+                // Security Check
+                TeamMember member = team.getMembers().stream()
+                                .filter(m -> m.getUser().getUserId().equals(currentUserId))
+                                .findFirst()
+                                .orElseThrow(() -> new RuntimeException("Access Denied"));
 
-        // 4. Map Projects
-        // (Assuming ProjectDTO is also separate, or adjust as needed)
-        List<ProjectSummaryDTO> projectDTOs = team.getProjects().stream()
-                .map(project -> new ProjectSummaryDTO(
-                        project.getId(),
-                        project.getName(),
-                        project.getDescription(),
-                        project.getCreatedAt()
-                ))
-                .collect(Collectors.toList());
-        dto.setProjects(projectDTOs);
+                if (member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN) {
+                        throw new RuntimeException("Permission Denied");
+                }
 
-        return dto;
-    }
+                team.setName(dto.getName());
+
+                return teamRepository.save(team);
+        }
+
+        // 5. DELETE TEAM
+        @Transactional
+        public void deleteTeam(Long id, Long currentUserId) {
+                Team team = teamRepository.findById(id)
+                                .orElseThrow(() -> new RuntimeException("Team not found"));
+
+                // Security Check
+                if (!team.getOwner().getUserId().equals(currentUserId)) {
+                        throw new RuntimeException("Permission Denied");
+                }
+
+                team.getProjects().clear();
+                teamRepository.save(team);
+                teamRepository.flush();
+
+                teamRepository.delete(team);
+        }
+
+        private TeamDetailDTO mapToDetailDTO(Team team) {
+
+                TeamDetailDTO dto = new TeamDetailDTO();
+
+                // basic
+                dto.setId(team.getId());
+                dto.setName(team.getName());
+                dto.setCreatedAt(team.getCreatedAt());
+
+                List<MemberDTO> memberDTOs = team.getMembers().stream()
+                                .map(member -> new MemberDTO( // <--- CHANGED HERE
+                                                member.getUser().getUserId(),
+                                                member.getUser().getFullName(),
+                                                member.getUser().getEmail(),
+                                                member.getRole(),
+                                                member.getJoinedAt()))
+                                .collect(Collectors.toList());
+                dto.setMembers(memberDTOs);
+
+                List<PendingInviteDTO> inviteDTOs = team.getInvitations().stream()
+                                .map(invite -> new PendingInviteDTO(
+                                                invite.getId(),
+                                                invite.getEmail(),
+                                                invite.getInvitedAt()))
+                                .collect(Collectors.toList());
+                dto.setPendingInvites(inviteDTOs);
+
+                // 4. Map Projects
+                // (Assuming ProjectDTO is also separate, or adjust as needed)
+                List<ProjectSummaryDTO> projectDTOs = team.getProjects().stream()
+                                .map(project -> new ProjectSummaryDTO(
+                                                project.getId(),
+                                                project.getName(),
+                                                project.getDescription(),
+                                                project.getCreatedAt()))
+                                .collect(Collectors.toList());
+                dto.setProjects(projectDTOs);
+
+                return dto;
+        }
 
 }

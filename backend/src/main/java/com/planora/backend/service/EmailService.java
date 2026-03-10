@@ -35,43 +35,43 @@ public class EmailService {
         }
     }
 
-    public void sendVerificationEmail(String toEmail, String otp){
+    public void sendVerificationEmail(String toEmail, String otp) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            
+
             helper.setFrom("no-reply@planora.com");
             helper.setTo(toEmail);
             helper.setSubject("Planora - Your Verification Code");
-            
+
             String htmlContent = getOtpEmailTemplate(otp);
             helper.setText(htmlContent, true); // true indicates HTML content
-            
+
             mailSender.send(message);
         } catch (MessagingException e) {
             e.printStackTrace();
         }
     }
 
-    public void sendPasswordResetRequest(String toEmail, String otp){
+    public void sendPasswordResetRequest(String toEmail, String otp) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            
+
             helper.setFrom("no-reply@planora.com");
             helper.setTo(toEmail);
             helper.setSubject("Planora - Password Reset Code");
-            
+
             String htmlContent = getOtpEmailTemplate(otp);
             helper.setText(htmlContent, true); // true indicates HTML content
-            
+
             mailSender.send(message);
         } catch (MessagingException e) {
             e.printStackTrace();
         }
     }
 
-    public void sendProjectInvitationEmail(String toEmail, String inviterName, String projectName){
+    public void sendProjectInvitationEmail(String toEmail, String inviterName, String projectName) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom("no-reply@planora.com");
         message.setTo(toEmail);
@@ -80,20 +80,20 @@ public class EmailService {
                 "Hi,\n\n" +
                         "You have been invited to the project \"" + projectName + "\" by " + inviterName + ".\n\n" +
                         "If you did not expect this invitation, you can ignore this email.\n\n" +
-                        "Planora Team"
-        );
+                        "Planora Team");
         mailSender.send(message);
     }
 
     // ✅ Redesigned HTML Email Method
-    public void sendProjectInvitationHtmlEmail(String toEmail, String inviterName, String projectName) {
+    public void sendProjectInvitationHtmlEmail(String toEmail, String inviterName, String projectName, String token) {
         try {
             String html = loadTemplate("templates/invite_email.html");
 
             // 1. Generate dynamic external images
             // Creates a professional avatar with the user's initials
             String formattedName = safe(inviterName).replace(" ", "+");
-            String avatarUrl = "https://ui-avatars.com/api/?name=" + formattedName + "&background=F3F4F6&color=374151&size=128";
+            String avatarUrl = "https://ui-avatars.com/api/?name=" + formattedName
+                    + "&background=F3F4F6&color=374151&size=128";
 
             // Clean placeholder logo for Planora
             String logoUrl = "https://placehold.co/120x32/ffffff/2563eb?text=Planora&font=Montserrat";
@@ -109,7 +109,7 @@ public class EmailService {
                     .replace("{{AVATAR_URL}}", avatarUrl)
                     .replace("{{PERSONAL_MESSAGE}}", personalMessage)
                     .replace("{{CTA_TEXT}}", "Accept Invitation")
-                    .replace("{{CTA_URL}}", "https://yourfrontend.com/join-project") // Replace with actual URL
+                    .replace("{{CTA_URL}}", "http://localhost:3000/accept-invite?token=" + token) // Updated actual URL
                     .replace("{{PRIVACY_URL}}", "https://yourfrontend.com/privacy")
                     .replace("{{CONTACT_URL}}", "https://yourfrontend.com/contact");
 
