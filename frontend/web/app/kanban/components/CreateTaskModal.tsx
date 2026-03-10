@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { X, Calendar } from 'lucide-react';
 import { Task } from '../types';
+import { fetchProject, fetchTeamMembers } from '../api';
 
 interface CreateTaskModalProps {
   isOpen: boolean;
@@ -25,6 +26,9 @@ export default function CreateTaskModal({
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState('');
   const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [assignee, setAssignee] = useState<number | ''>('');
+  const [teamMembers, setTeamMembers] = useState<{ id: number; name: string }[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -43,6 +47,7 @@ export default function CreateTaskModal({
       status: columnStatus,
       projectId,
       dueDate: dueDate ? dueDate.toISOString().split('T')[0] : undefined,
+      assigneeId: assignee || undefined,
     };
 
     try {
@@ -57,6 +62,29 @@ export default function CreateTaskModal({
       console.error('Task creation error:', err);
     }
   };
+
+  // fetch team members when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!projectId) return;
+
+    const loadMembers = async () => {
+      setLoadingMembers(true);
+      try {
+        const project = await fetchProject(projectId);
+        if (project.teamId) {
+          const members = await fetchTeamMembers(project.teamId);
+          setTeamMembers(members || []);
+        }
+      } catch (err) {
+        console.error('Failed to load team members:', err);
+      } finally {
+        setLoadingMembers(false);
+      }
+    };
+
+    loadMembers();
+  }, [isOpen, projectId]);
 
   if (!isOpen) return null;
 
@@ -104,6 +132,26 @@ export default function CreateTaskModal({
               className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
               disabled={loading}
             />
+          </div>
+
+          {/* Assignee */}
+          <div>
+            <select
+              value={assignee}
+              onChange={(e) => setAssignee(e.target.value ? parseInt(e.target.value, 10) : '')}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
+              disabled={loading || loadingMembers}
+            >
+              <option value="">Unassigned</option>
+              {teamMembers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+            {loadingMembers && (
+              <p className="text-gray-500 text-xs mt-1">Loading members...</p>
+            )}
           </div>
 
           {/* Error Message */}

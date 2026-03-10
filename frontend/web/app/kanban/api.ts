@@ -87,6 +87,7 @@ export async function createTask(taskData: any): Promise<Task> {
       projectId: taskData.projectId,
       dueDate: taskData.dueDate || null,
       startDate: taskData.startDate || null,
+      assigneeId: taskData.assigneeId || null,
     };
 
     const response = await axios.post(`/api/tasks`, requestData);
@@ -99,3 +100,32 @@ export async function createTask(taskData: any): Promise<Task> {
       (axiosError.response?.status === 400
         ? 'Invalid task data. Please check your inputs.'
         : 'Failed to create task')
+    );
+  }
+}
+
+/**
+ * Fetch project details by ID
+ */
+export async function fetchProject(projectId: number): Promise<any> {
+  try {
+    const response = await axios.get(`/api/projects/${projectId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching project:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch members of a team
+ */
+export async function fetchTeamMembers(teamId: number): Promise<any[]> {
+  try {
+    const response = await axios.get(`/api/teams/${teamId}/members`);
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching team members:', error);
+    throw error;
+  }
+}
