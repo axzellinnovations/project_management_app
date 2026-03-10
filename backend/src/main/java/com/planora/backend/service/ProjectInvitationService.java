@@ -11,6 +11,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.planora.backend.model.TeamMember;
+import com.planora.backend.model.TeamRole;
+import com.planora.backend.repository.TeamMemberRepository;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -22,6 +26,7 @@ public class ProjectInvitationService {
     private final UserRepository userRepository;
     private final TeamInvitationRepository teamInvitationRepository;
     private final TeamMemberService teamMemberService;
+    private final TeamMemberRepository teamMemberRepository;
     private final EmailService emailService;
 
     @Transactional
@@ -64,9 +69,49 @@ public class ProjectInvitationService {
         String inviterName = (inviter.getFullName() != null && !inviter.getFullName().isBlank())
                 ? inviter.getFullName()
                 : (inviter.getUsername() != null && !inviter.getUsername().isBlank())
-                ? inviter.getUsername()
-                : inviter.getEmail();
+                        ? inviter.getUsername()
+                        : inviter.getEmail();
 
-        emailService.sendProjectInvitationHtmlEmail(inviteeEmail, inviterName, project.getName());
+        emailService.sendProjectInvitationHtmlEmail(inviteeEmail, inviterName, project.getName(),
+                invitation.getToken());
+    }
+
+    @Transactional
+    public void acceptInvitation(String token, Long userId) {
+        if (token == null || token.isBlank()) {
+            throw new RuntimeException("Invalid invitation token");
+        }
+
+        TeamInvitation invitation = teamInvitationRepository.findByToken(token)
+                .orElseThrow(() -> new RuntimeException("Invitation not found or invalid"));
+
+        if (invitation.getExpiresAt() != null && invitation.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Invitation has expired");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Only allow if email matches (optional safety check, but user could have
+        // signed up with this email)
+        if (!user.getEmail().equalsIgnoreCase(invitation.getEmail())) {
+            throw new RuntimeException("This invitation was sent to a different email address");
+        }
+
+        // Prevent duplicate membership
+        teamMemberRepository.findByTeamIdAndUserUserId(invitation.getTeam().getId(), userId)
+                .ifPresent(m -> {
+                    throw new RuntimeException("You are already a member of this team");
+                });
+
+        TeamMember member = new TeamMember();
+        member.setTeam(invitation.getTeam());
+        member.setUser(user);
+        member.setRole(TeamRole.MEMBER); // Assign default role
+
+        teamMemberRepository.save(member);
+
+        invitation.setStatus("ACCEPTED");
+        teamInvitationRepository.save(invitation);
     }
 }

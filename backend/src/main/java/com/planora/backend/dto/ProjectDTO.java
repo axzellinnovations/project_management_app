@@ -23,9 +23,14 @@ public class ProjectDTO {
     @NotNull
     private ProjectType type;
 
-    @NotNull
+    @NotBlank(message = "Project key is required")
+    private String projectKey;
+
     private Long ownerId;
 
-    @NotNull
+    private String teamOption; // "EXISTING" or "NEW"
+
+    private String teamName; // Required if teamOption is "NEW"
+
     private Long teamId;
 }

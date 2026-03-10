@@ -18,9 +18,17 @@ public class ProjectInvitationController {
     public ResponseEntity<?> inviteToProject(
             @PathVariable Long projectId,
             @RequestBody ProjectInviteRequest request,
-            @AuthenticationPrincipal(expression = "userId") Long userId
-    ) {
+            @AuthenticationPrincipal(expression = "userId") Long userId) {
         projectInvitationService.inviteToProject(projectId, request, userId);
         return ResponseEntity.ok("Invitation email sent");
+    }
+
+    @PostMapping("/invitations/accept")
+    public ResponseEntity<?> acceptInvitation(
+            @RequestBody java.util.Map<String, String> request,
+            @AuthenticationPrincipal(expression = "userId") Long userId) {
+        String token = request.get("token");
+        projectInvitationService.acceptInvitation(token, userId);
+        return ResponseEntity.ok("Invitation accepted successfully");
     }
 }

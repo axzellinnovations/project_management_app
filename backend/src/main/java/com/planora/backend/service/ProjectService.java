@@ -24,18 +24,71 @@ public class ProjectService {
     private final UserRepository userRepository;
     private final TeamRepository teamRepository;
 
+    public boolean checkKeyExists(String key) {
+        return projectRepository.existsByProjectKey(key);
+    }
+
     // ---------------- CREATE ----------------
     @Transactional
     public ProjectResponseDTO createProject(ProjectDTO dto) {
+        if (projectRepository.existsByProjectKey(dto.getProjectKey())) {
+            throw new RuntimeException("Project key already in use");
+        }
+
         Project project = new Project();
         project.setName(dto.getName());
+        project.setProjectKey(dto.getProjectKey());
         project.setDescription(dto.getDescription());
         project.setType(dto.getType());
 
         User owner = userRepository.findById(dto.getOwnerId())
                 .orElseThrow(() -> new RuntimeException("Owner not found"));
-        Team team = teamRepository.findById(dto.getTeamId())
-                .orElseThrow(() -> new RuntimeException("Team not found"));
+
+        Team team;
+        if ("EXISTING".equalsIgnoreCase(dto.getTeamOption())) {
+            if (dto.getTeamName() == null || dto.getTeamName().trim().isEmpty()) {
+                throw new RuntimeException("Team name is required for existing team");
+            }
+            team = teamRepository.findByName(dto.getTeamName().trim())
+                    .orElseThrow(() -> new RuntimeException("Team not found"));
+
+            // Verify user is in the team
+            java.util.Optional<TeamMember> optMember = teamMemberRepository.findByTeamIdAndUserUserId(team.getId(),
+                    owner.getUserId());
+            if (optMember.isEmpty()) {
+                throw new RuntimeException("You are not a member of this team");
+            }
+            // Ensure creator has OWNER role for the project context or upgrade them if
+            // missing, but typically we just verify membership.
+            // Let's upgrade them to OWNER or leave as is based on existing logic
+            // constraint:
+            TeamMember member = optMember.get();
+            if (member.getRole() != TeamRole.OWNER) {
+                member.setRole(TeamRole.OWNER);
+                teamMemberRepository.save(member);
+            }
+
+        } else if ("NEW".equalsIgnoreCase(dto.getTeamOption())) {
+            if (dto.getTeamName() == null || dto.getTeamName().trim().isEmpty()) {
+                throw new RuntimeException("Team name is required for new team");
+            }
+            if (teamRepository.findByName(dto.getTeamName().trim()).isPresent()) {
+                throw new RuntimeException("Team name already in use");
+            }
+            team = new Team();
+            team.setName(dto.getTeamName().trim());
+            team.setOwner(owner);
+            team = teamRepository.save(team);
+
+            // Add owner as TeamMember
+            TeamMember newMember = new TeamMember();
+            newMember.setTeam(team);
+            newMember.setUser(owner);
+            newMember.setRole(TeamRole.OWNER);
+            teamMemberRepository.save(newMember);
+        } else {
+            throw new RuntimeException("Invalid team option");
+        }
 
         project.setOwner(owner);
         project.setTeam(team);
@@ -63,9 +116,12 @@ public class ProjectService {
     public ProjectResponseDTO updateProject(Long id, UpdateProjectDTO dto) {
         Project project = findProjectById(id);
 
-        if (dto.getName() != null) project.setName(dto.getName());
-        if (dto.getDescription() != null) project.setDescription(dto.getDescription());
-        if (dto.getType() != null) project.setType(ProjectType.valueOf(dto.getType()));
+        if (dto.getName() != null)
+            project.setName(dto.getName());
+        if (dto.getDescription() != null)
+            project.setDescription(dto.getDescription());
+        if (dto.getType() != null)
+            project.setType(ProjectType.valueOf(dto.getType()));
 
         Project updatedProject = projectRepository.save(project);
         return convertToResponseDTO(updatedProject);
@@ -94,6 +150,7 @@ public class ProjectService {
         return ProjectResponseDTO.builder()
                 .id(project.getId())
                 .name(project.getName())
+                .projectKey(project.getProjectKey())
                 .description(project.getDescription())
                 .type(project.getType())
                 .createdAt(project.getCreatedAt())

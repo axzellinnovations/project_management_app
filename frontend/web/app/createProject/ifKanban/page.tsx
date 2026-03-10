@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
 
-export default function AgileProjectPage() {
+export default function KanbanProjectPage() {
     const [projectName, setProjectName] = useState('');
     const [projectKey, setProjectKey] = useState('');
     const [description, setDescription] = useState('');
@@ -59,10 +59,8 @@ export default function AgileProjectPage() {
                 const res = await api.get(`/api/teams/check-name?name=${teamName.trim()}`);
                 const { exists, isMember } = res.data;
                 if (teamOption === 'NEW') {
-                    // Valid if it DOES NOT exist
                     setIsTeamValid(!exists);
                 } else {
-                    // Valid if it DOES exist AND user is a member
                     setIsTeamValid(exists && isMember);
                 }
             } catch (err) {
@@ -99,7 +97,7 @@ export default function AgileProjectPage() {
                 description: description,
                 teamOption: teamOption,
                 teamName: teamName,
-                type: 'AGILE'
+                type: 'KANBAN'
             });
 
             if (typeof window !== 'undefined') {
@@ -164,7 +162,7 @@ export default function AgileProjectPage() {
                                 </label>
                                 <input
                                     type="text"
-                                    placeholder="e.g., E-Commerce Platform"
+                                    placeholder="e.g., Support Kanban"
                                     value={projectName}
                                     onChange={(e) => {
                                         handleProjectNameChange(e);
@@ -181,7 +179,7 @@ export default function AgileProjectPage() {
                                 </label>
                                 <input
                                     type="text"
-                                    placeholder="e.g., ECOM"
+                                    placeholder="e.g., SUP"
                                     value={projectKey}
                                     onChange={(e) => {
                                         setProjectKey(e.target.value.toUpperCase().replace(/\s/g, '_'));
@@ -279,13 +277,14 @@ export default function AgileProjectPage() {
                             <div className="bg-white/40 border border-white/40 rounded-[14px] p-4 flex items-center gap-4 mt-2 shadow-sm backdrop-blur-md">
                                 <div className="w-10 h-10 bg-gradient-to-br from-[#1D56D5] to-[#4F46E5] rounded-[10px] flex items-center justify-center shrink-0 shadow-md">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M12 2v20M2 12h20" />
-                                        <circle cx="12" cy="12" r="10" />
+                                        <path d="M4 22h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2Z" />
+                                        <path d="M14 2v20" />
+                                        <path d="M8 2v20" />
                                     </svg>
                                 </div>
                                 <div className="flex-grow">
                                     <p className="font-inter text-[12px] text-[#86868B] font-medium mb-0.5 uppercase tracking-wider">Methodology</p>
-                                    <p className="font-outfit font-semibold text-[16px] text-[#1D1D1F]">Agile Scrum</p>
+                                    <p className="font-outfit font-semibold text-[16px] text-[#1D1D1F]">Kanban Board</p>
                                 </div>
                                 <Link href="/createProject" className="font-inter text-[13px] font-medium text-[#1D56D5] px-3 py-1.5 bg-white/50 rounded-full hover:bg-white hover:shadow-sm transition-all">
                                     Change
