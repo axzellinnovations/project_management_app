@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
+import { getUserFromToken, User } from '@/lib/auth';
+import api from '@/lib/axios';
 
 const tabs = [
     { id: 'summary', label: 'Summary' },
@@ -19,11 +22,43 @@ const tabs = [
 export default function TopBar() {
     const [activeTab, setActiveTab] = useState('summary');
     const [projectName, setProjectName] = useState('Project Name');
+    const [user, setUser] = useState<User | null>(null);
+    const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+
+    const resolvedProfilePicUrl = useMemo(() => {
+        if (!profilePicUrl) return '';
+        if (profilePicUrl.startsWith('http://') || profilePicUrl.startsWith('https://')) {
+            return profilePicUrl;
+        }
+        return `${API_BASE_URL}${profilePicUrl}`;
+    }, [profilePicUrl]);
 
     useEffect(() => {
         const storedName = localStorage.getItem('currentProjectName');
         if (storedName) {
             setProjectName(storedName);
+        }
+        
+        const userData = getUserFromToken();
+        setUser(userData);
+
+        if (userData?.email) {
+            const loadProfilePic = async () => {
+                try {
+                    const response = await api.get('/api/auth/users');
+                    const currentUser = response.data.find(
+                        (u: any) => u.email.toLowerCase() === userData.email.toLowerCase()
+                    );
+                    if (currentUser?.profilePicUrl) {
+                        setProfilePicUrl(currentUser.profilePicUrl);
+                    }
+                } catch (error) {
+                    // Silently fail
+                }
+            };
+            void loadProfilePic();
         }
     }, []);
 
@@ -50,11 +85,25 @@ export default function TopBar() {
                     </div>
                 </div>
 
-                {/* Right Side Actions (Placeholder) */}
+                {/* Right Side Actions */}
                 <div className="flex items-center gap-3">
                     <div className="flex -space-x-2">
-                        <div className="w-8 h-8 rounded-full bg-blue-500 border-2 border-white"></div>
-                        <div className="w-8 h-8 rounded-full bg-purple-500 border-2 border-white"></div>
+                        {resolvedProfilePicUrl ? (
+                            <div className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-white">
+                                <Image
+                                    src={resolvedProfilePicUrl}
+                                    alt="Profile"
+                                    width={32}
+                                    height={32}
+                                    className="w-full h-full object-cover"
+                                    unoptimized
+                                />
+                            </div>
+                        ) : (
+                            <div className="w-8 h-8 rounded-full bg-blue-500 border-2 border-white flex items-center justify-center text-white text-[12px] font-bold">
+                                {user?.username?.charAt(0).toUpperCase() || 'U'}
+                            </div>
+                        )}
                         <div className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[10px] text-gray-600 font-bold">+2</div>
                     </div>
                     <button className="bg-[#0052CC] text-white px-3 py-1.5 rounded-md font-arimo text-[13px] font-semibold">Share</button>

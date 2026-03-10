@@ -4,7 +4,7 @@ import SockJS from 'sockjs-client';
 import { Stomp, CompatClient } from '@stomp/stompjs';
 import { ChatMessage } from '../components/chat';
 
-export const useChat = () => {
+export const useChat = (projectId: string) => {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<string>('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -28,8 +28,9 @@ export const useChat = () => {
       setCurrentUser(username);
       setIsLoading(false);
       
-      fetchAllUsers(token, payload.email || payload.sub);
+      fetchAllUsers(token);
       connectToChat(token, username);
+      loadHistory(token, username);
     } catch (err) {
       setError('Invalid authentication token.');
       router.push('/login');
@@ -41,22 +42,40 @@ export const useChat = () => {
   }, [router]);
 
   // 2. Fetch Users
-  const fetchAllUsers = async (token: string, currentEmail: string) => {
+  const fetchAllUsers = useCallback(async (token: string) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/auth/users?excludeEmail=${encodeURIComponent(currentEmail)}`, {
+      const res = await fetch(`/api/projects/${projectId}/chat/members`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
-        setUsers(data.map((u: any) => (u.username || u.email).toLowerCase()));
+        setUsers(data.map((u: string) => u.toLowerCase()));
       }
     } catch (err) {
       console.error('Error fetching users:', err);
     }
-  };
+  }, [projectId]);
+
+  // utility to fetch history
+  const loadHistory = useCallback(async (token: string, username: string) => {
+    try {
+      // use relative path; Next.js rewrite will proxy to backend
+      const res = await fetch(`/api/projects/${projectId}/chat/messages`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(data);
+      } else {
+        console.warn('History fetch returned', res.status);
+      }
+    } catch (err) {
+      console.error('Failed to load message history', err);
+    }
+  }, [projectId]);
 
   // 3. WebSocket Connection
-  const connectToChat = (token: string, username: string) => {
+  const connectToChat = useCallback((token: string, username: string) => {
     try {
       const socket = new SockJS('http://localhost:8080/ws');
       const client = Stomp.over(socket);
@@ -66,7 +85,7 @@ export const useChat = () => {
         stompClientRef.current = client;
         
         // Subscribe to Public
-        client.subscribe('/topic/public', (payload) => {
+        client.subscribe(`/topic/project/${projectId}/public`, (payload) => {
           const msg: ChatMessage = JSON.parse(payload.body);
           if (msg.type === 'JOIN' && msg.sender !== username) {
             setUsers(prev => prev.includes(msg.sender) ? prev : [...prev, msg.sender]);
@@ -75,7 +94,7 @@ export const useChat = () => {
         });
 
         // Subscribe to Private
-        client.subscribe('/user/queue/messages', (payload) => {
+        client.subscribe(`/user/queue/project/${projectId}/messages`, (payload) => {
           const msg: ChatMessage = JSON.parse(payload.body);
           const sender = msg.sender.toLowerCase();
           setPrivateMessages(prev => ({
@@ -86,7 +105,7 @@ export const useChat = () => {
         });
 
         // Notify Join
-        client.send('/app/chat.addUser', {}, JSON.stringify({ sender: username, type: 'JOIN' }));
+        client.send(`/app/project/${projectId}/chat.addUser`, {}, JSON.stringify({ sender: username, type: 'JOIN' }));
       }, (err: any) => {
         setError('Connection failed. Is the backend running?');
         console.error(err);
@@ -94,7 +113,28 @@ export const useChat = () => {
     } catch (err) {
       setError('Socket initialization failed.');
     }
-  };
+  }, [projectId]);
+
+  // 4. fetch private conversation when needed
+  const loadPrivateHistory = useCallback(async (recipient: string) => {
+    if (!recipient || !currentUser) return;
+    try {
+      const params = new URLSearchParams();
+      params.append('recipient', currentUser);
+      params.append('with', recipient);
+      const res = await fetch(`/api/projects/${projectId}/chat/messages?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPrivateMessages(prev => ({ ...prev, [recipient]: data }));
+      } else {
+        console.warn('Private history fetch returned', res.status);
+      }
+    } catch (err) {
+      console.error('Failed to load private history', err);
+    }
+  }, [currentUser, projectId]);
 
   // 4. Send Message Action
   const sendMessage = useCallback((content: string, recipient?: string | null) => {
@@ -103,7 +143,7 @@ export const useChat = () => {
     if (recipient) {
       // Private
       const msg = { sender: currentUser, content, recipient };
-      stompClientRef.current.send('/app/chat.sendPrivateMessage', {}, JSON.stringify(msg));
+      stompClientRef.current.send(`/app/project/${projectId}/chat.sendPrivateMessage`, {}, JSON.stringify(msg));
       
       // Optimistic update for sender
       setPrivateMessages(prev => ({
@@ -113,9 +153,9 @@ export const useChat = () => {
     } else {
       // Public
       const msg = { sender: currentUser, content };
-      stompClientRef.current.send('/app/chat.sendMessage', {}, JSON.stringify(msg));
+      stompClientRef.current.send(`/app/project/${projectId}/chat.sendMessage`, {}, JSON.stringify(msg));
     }
-  }, [currentUser]);
+  }, [currentUser, projectId]);
 
   return {
     currentUser,
@@ -123,6 +163,7 @@ export const useChat = () => {
     messages,
     privateMessages,
     sendMessage,
+    loadPrivateHistory,
     isLoading,
     error,
     retryConnection: () => window.location.reload() // Simple retry strategy

@@ -45,6 +45,11 @@ export const ChatMessages = ({ messages, currentUser }: ChatMessagesProps) => {
                 }`}>
                     {msg.content}
                 </div>
+                {msg.timestamp && (
+                  <span className="text-[10px] text-slate-400 mt-0.5 self-end">
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </span>
+                )}
             </div>
           </div>
         );
