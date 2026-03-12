@@ -57,7 +57,14 @@ export default function DashboardPage() {
         }
     };
 
+    const [recentSpacesSearch, setRecentSpacesSearch] = useState('');
+
     const firstName = user?.username ? user.username.split(' ')[0] : 'User';
+
+    const filteredRecentProjects = projects.filter(project => 
+        project.name.toLowerCase().includes(recentSpacesSearch.toLowerCase()) ||
+        (project.projectKey && project.projectKey.toLowerCase().includes(recentSpacesSearch.toLowerCase()))
+    );
 
     return (
         <div className="flex flex-col gap-8 w-full max-w-[1200px] mx-auto pb-12">
@@ -73,9 +80,20 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-center w-full">
                     <h2 className="font-arimo text-[16px] leading-[24px] text-[#101828]">Recent spaces</h2>
                     <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
+                            <div className="relative w-[240px]">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#99A1AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Search recent spaces"
+                                    value={recentSpacesSearch}
+                                    onChange={(e) => setRecentSpacesSearch(e.target.value)}
+                                    className="block w-full pl-9 pr-3 py-1.5 border border-[#D1D5DC] rounded-[4px] leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-[14px] font-arimo"
+                                />
+                            </div>
                             <button className="px-3 py-1.5 rounded bg-blue-50 text-[#0052CC] font-arimo text-[14px] font-medium border border-[#0052CC]/10">Recent</button>
-                            <button className="px-3 py-1.5 rounded text-[#4A5565] font-arimo text-[14px] hover:bg-gray-50">Recommended</button>
                         </div>
                         <Link href="/spaces" className="font-arimo text-[16px] text-[#0052CC] hover:underline">View all spaces</Link>
                     </div>
@@ -119,20 +137,23 @@ export default function DashboardPage() {
                             <div className="flex-1 py-8 text-center animate-pulse">
                                 <p className="font-arimo text-[14px] text-[#6A7282]">Loading your spaces...</p>
                             </div>
-                        ) : projects.length > 0 ? (
-                            projects.map((project) => (
+                        ) : filteredRecentProjects.length > 0 ? (
+                            filteredRecentProjects.map((project) => (
                                 <RecentProjectCard
                                     key={project.id}
                                     id={project.id.toString()}
                                     name={project.name}
+                                    projectKey={project.projectKey}
                                     type={project.type === 'AGILE' ? 'Agile Scrum' : 'Kanban'}
                                     boardCount={1}
                                 />
                             ))
                         ) : (
-                            <div className="flex-1 py-8 text-center bg-gray-50 rounded border border-dashed border-gray-300">
-                                <p className="font-arimo text-[14px] text-[#6A7282]">No recent spaces found</p>
-                            </div>
+                                <div className="flex-1 py-8 text-center bg-gray-50 rounded border border-dashed border-gray-300">
+                                    <p className="font-arimo text-[14px] text-[#6A7282]">
+                                        {recentSpacesSearch ? `No results for "${recentSpacesSearch}"` : 'No recent spaces found'}
+                                    </p>
+                                </div>
                         )}
                     </div>
                 </div>

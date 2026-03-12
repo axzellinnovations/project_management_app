@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { useState } from 'react';
+import api from '@/lib/axios';
 
 interface RecentProjectCardProps {
     id: string;
@@ -13,6 +14,7 @@ interface RecentProjectCardProps {
     iconText?: string;
     type?: string;
     boardCount?: number;
+    width?: string;
 }
 
 const COLOR_THEMES = [
@@ -33,7 +35,8 @@ export default function RecentProjectCard({
     description = "Team-managed software",
     iconText,
     type = "Team-managed software",
-    boardCount = 1
+    boardCount = 1,
+    width
 }: RecentProjectCardProps) {
     const router = useRouter();
     const [isHovered, setIsHovered] = useState(false);
@@ -76,7 +79,12 @@ export default function RecentProjectCard({
     const themeIndex = Math.abs(id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % COLOR_THEMES.length;
     const theme = COLOR_THEMES[themeIndex];
 
-    const handleCardClick = () => {
+    const handleCardClick = async () => {
+        try {
+            await api.post(`/api/projects/${id}/access`);
+        } catch (error) {
+            console.error("Failed to record project access:", error);
+        }
         localStorage.setItem('currentProjectName', name);
         localStorage.setItem('currentProjectId', id);
         router.push(`/summary`);
@@ -93,7 +101,7 @@ export default function RecentProjectCard({
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={handleMouseLeave}
             onClick={handleCardClick}
-            className={`group relative w-[500px] h-[221.6px] shrink-0 ${theme.bg} backdrop-blur-md border ${theme.border} rounded-[12px] p-[24px] flex flex-col cursor-pointer transition-all duration-300 hover:shadow-lg overflow-hidden`}
+            className={`group relative ${width || 'w-[500px]'} h-[221.6px] shrink-0 ${theme.bg} backdrop-blur-md border ${theme.border} rounded-[12px] p-[24px] flex flex-col cursor-pointer transition-all duration-300 hover:shadow-lg overflow-hidden`}
         >
             {/* Dynamic Spotlight Glow */}
             <motion.div
@@ -131,8 +139,13 @@ export default function RecentProjectCard({
                 <div className="flex items-center gap-6 mt-6">
                     <Link
                         href={`/summary`}
-                        onClick={(e) => {
+                        onClick={async (e) => {
                             e.stopPropagation();
+                            try {
+                                await api.post(`/api/projects/${id}/access`);
+                            } catch (err) {
+                                console.error("Failed to record project access:", err);
+                            }
                             localStorage.setItem('currentProjectName', name);
                             localStorage.setItem('currentProjectId', id);
                         }}
@@ -157,8 +170,10 @@ export default function RecentProjectCard({
                         <span className="font-arimo text-[13px] font-medium text-[#364153]">
                             {boardCount} {boardCount === 1 ? 'board' : 'boards'}
                         </span>
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 opacity-60">
-                            <rect x="3" y="3" width="10" height="10" stroke="currentColor" strokeWidth="1.5" />
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                            <path d="M7 7h3v10H7z" />
+                            <path d="M14 7h3v7h-3z" />
                         </svg>
                     </div>
 
