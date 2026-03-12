@@ -1,36 +1,88 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
   ChevronDown,
   ChevronRight,
-  
   UserCircle2,
 } from 'lucide-react';
 import type { TaskItem } from '../page';
+import api from '@/lib/axios';
+
+interface TeamMemberInfo {
+  id: number;
+  user: { userId: number; fullName: string; username: string };
+}
 
 interface ProductBacklogSectionProps {
   tasks: TaskItem[];
+  projectId: string;
   onToggleTask: (id: number) => void;
   onStoryPointsChange: (id: number, points: number) => void;
   onCreateTask: (title: string) => void;
   onCreateSprint: (name: string) => void;
+  onAssignTask: (taskId: number, assigneeName: string) => void;
 }
 
 export default function ProductBacklogSection({
   tasks,
+  projectId,
   onToggleTask,
   onStoryPointsChange,
   onCreateTask,
   onCreateSprint,
+  onAssignTask,
 }: ProductBacklogSectionProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [showCreateTaskBox, setShowCreateTaskBox] = useState(false);
   const [showCreateSprintBox, setShowCreateSprintBox] = useState(false);
   const [newTaskName, setNewTaskName] = useState('');
   const [newSprintName, setNewSprintName] = useState('');
+  const [assignMenuTaskId, setAssignMenuTaskId] = useState<number | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMemberInfo[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
 
+  const assignMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (assignMenuRef.current && !assignMenuRef.current.contains(event.target as Node)) {
+        setAssignMenuTaskId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const fetchTeamMembers = async () => {
+    try {
+      setLoadingMembers(true);
+      const projectRes = await api.get(`/api/projects/${projectId}`);
+      const teamId = projectRes.data.teamId;
+      const membersRes = await api.get(`/api/teams/${teamId}/members`);
+      const data = membersRes.data;
+      setTeamMembers(Array.isArray(data) ? data : []);
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
+
+  const handleAssignTask = async (taskId: number, userId: number) => {
+    try {
+      await api.patch(`/api/tasks/${taskId}/assign/${userId}`);
+      const member = teamMembers.find((m) => m.user.userId === userId);
+      if (member) {
+        onAssignTask(taskId, member.user.fullName || member.user.username);
+      }
+    } catch {
+      alert('Failed to assign task.');
+    } finally {
+      setAssignMenuTaskId(null);
+    }
+  };
   const totals = useMemo(() => {
     const total = tasks.reduce((sum, task) => sum + task.storyPoints, 0);
     return {
@@ -79,21 +131,21 @@ export default function ProductBacklogSection({
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
-            <div className="rounded bg-[#D0D5DD] px-3 py-[3px] text-[12px] font-medium text-[#344054]">
+          <div className="flex items-center gap-1.5">
+            <div className="rounded-full bg-[#F2F4F7] px-2.5 py-[2px] text-[11px] font-semibold text-[#344054]" title="Total">
               {totals.total}
             </div>
-            <div className="rounded bg-[#D9EAF7] px-3 py-[3px] text-[12px] font-medium text-[#344054]">
+            <div className="rounded-full bg-[#EFF8FF] px-2.5 py-[2px] text-[11px] font-semibold text-[#175CD3]" title="In Progress">
               {totals.middle}
             </div>
-            <div className="rounded bg-[#B7E4C7] px-3 py-[3px] text-[12px] font-medium text-[#344054]">
+            <div className="rounded-full bg-[#ECFDF3] px-2.5 py-[2px] text-[11px] font-semibold text-[#027A48]" title="Done">
               {totals.done}
             </div>
           </div>
 
           <button
             onClick={() => setShowCreateSprintBox(true)}
-            className="rounded-md border border-[#98A2B3] bg-white px-4 py-2 text-[14px] font-semibold text-[#101828] hover:bg-[#F9FAFB]"
+            className="rounded-lg border border-[#175CD3] bg-[#175CD3] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#1849A9] transition-colors duration-150"
           >
             Create Sprint
           </button>
@@ -104,34 +156,38 @@ export default function ProductBacklogSection({
 
       {isOpen && (
         <div>
-          <div className="space-y-4">
+          <div className="space-y-2">
             {tasks.map((task) => (
               <div
                 key={task.id}
                 draggable
                 onDragStart={(e) => e.dataTransfer.setData('text/plain', String(task.id))}
-                className="grid cursor-grab grid-cols-[auto_auto_1fr_auto_auto] items-center gap-5 rounded-md border border-[#D0D5DD] bg-[#E6EEF4] px-4 py-5"
+                className="group relative flex items-center gap-4 rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 cursor-grab hover:border-[#175CD3]/30 hover:shadow-md transition-all duration-200 ease-in-out"
               >
+                {/* Selection checkbox */}
                 <button
                   type="button"
                   onClick={() => onToggleTask(task.id)}
-                  className={`flex h-7 w-7 items-center justify-center rounded-[6px] border-2 ${
+                  className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border-2 transition-colors duration-150 ${
                     task.selected
                       ? 'border-[#175CD3] bg-[#175CD3]'
-                      : 'border-[#175CD3] bg-white'
+                      : 'border-[#175CD3] bg-[#EFF8FF]'
                   }`}
                 >
-                  {task.selected && <Check size={16} className="text-white" />}
+                  {task.selected && <Check size={14} className="text-white" />}
                 </button>
 
-                <span className="text-[16px] font-medium text-[#475467]">
+                {/* Task number */}
+                <span className="text-[13px] font-semibold text-[#667085] tabular-nums min-w-[24px]">
                   {task.taskNo}
                 </span>
 
-                <span className="text-[18px] font-medium text-[#101828]">
+                {/* Task title */}
+                <span className="flex-1 min-w-0 truncate text-[14px] font-medium text-[#101828]">
                   {task.title}
                 </span>
 
+                {/* Story points */}
                 <input
                   type="number"
                   min="0"
@@ -139,11 +195,53 @@ export default function ProductBacklogSection({
                   onChange={(e) =>
                     onStoryPointsChange(task.id, Number(e.target.value))
                   }
-                  className="w-12 border-none bg-transparent text-center text-[18px] font-semibold text-[#101828] outline-none"
+                  className="w-12 flex-shrink-0 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-1 py-1.5 text-center text-[13px] font-bold text-[#101828] outline-none focus:border-[#175CD3] focus:ring-2 focus:ring-[#175CD3]/20 transition-all duration-150"
                 />
 
-                <div className="text-[#98A2B3]">
-                  <UserCircle2 size={34} strokeWidth={1.5} />
+                {/* Assignee */}
+                <div className="relative flex-shrink-0">
+                  <button
+                    type="button"
+                    title={task.assigneeName || 'Assign To'}
+                    onClick={() => {
+                      if (assignMenuTaskId === task.id) {
+                        setAssignMenuTaskId(null);
+                      } else {
+                        setAssignMenuTaskId(task.id);
+                        fetchTeamMembers();
+                      }
+                    }}
+                    className="flex items-center gap-1.5 rounded-full bg-[#F2F4F7] px-2 py-1 text-[11px] font-medium text-[#475467] hover:bg-[#E4E7EC] transition-colors duration-150"
+                  >
+                    <UserCircle2 size={16} strokeWidth={1.5} className="text-[#98A2B3]" />
+                    <span className="max-w-[80px] truncate">{task.assigneeName || 'Unassigned'}</span>
+                  </button>
+
+                  {assignMenuTaskId === task.id && (
+                    <div ref={assignMenuRef} className="absolute right-0 top-9 z-50 w-52 overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-lg">
+                      <div className="px-3 py-2 text-[11px] font-semibold text-[#667085] uppercase tracking-wider border-b border-[#F2F4F7]">
+                        Assign To
+                      </div>
+                      {loadingMembers ? (
+                        <div className="px-3 py-3 text-[13px] text-[#667085]">Loading...</div>
+                      ) : teamMembers.length > 0 ? (
+                        <div className="max-h-48 overflow-y-auto">
+                          {teamMembers.map((member) => (
+                            <button
+                              key={member.user.userId}
+                              onClick={() => handleAssignTask(task.id, member.user.userId)}
+                              className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-[#344054] hover:bg-[#F9FAFB] transition-colors duration-100"
+                            >
+                              <UserCircle2 size={16} className="text-[#98A2B3] flex-shrink-0" />
+                              <span className="truncate">{member.user.fullName || member.user.username}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="px-3 py-3 text-[13px] text-[#667085]">No members found</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
