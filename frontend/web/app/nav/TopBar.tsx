@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
 import { getUserFromToken, User } from '@/lib/auth';
+import { useParams, usePathname } from 'next/navigation';
 import api from '@/lib/axios';
 
 const tabs = [

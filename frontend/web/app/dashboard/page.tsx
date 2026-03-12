@@ -3,14 +3,31 @@
 import { useEffect, useState } from 'react';
 import { getUserFromToken, User } from '@/lib/auth';
 import Link from 'next/link';
+import api from '@/lib/axios';
+import RecentProjectCard from './components/RecentProjectCard';
 
 export default function DashboardPage() {
     const [user, setUser] = useState<User | null>(null);
     const [activeTab, setActiveTab] = useState('worked-on');
+    const [projects, setProjects] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const userData = getUserFromToken();
         setUser(userData);
+
+        const fetchProjects = async () => {
+            try {
+                const response = await api.get('/api/projects');
+                setProjects(response.data);
+            } catch (error) {
+                console.error("Failed to fetch projects:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProjects();
     }, []);
 
     const firstName = user?.username ? user.username.split(' ')[0] : 'User';
@@ -40,10 +57,26 @@ export default function DashboardPage() {
 
                 {/* Spaces Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
-                    {/* Empty State for Spaces */}
-                    <div className="col-span-1 md:col-span-2 py-8 text-center bg-gray-50 rounded border border-dashed border-gray-300">
-                        <p className="font-arimo text-[14px] text-[#6A7282]">No recent spaces found</p>
-                    </div>
+                    {loading ? (
+                        <div className="col-span-1 md:col-span-2 py-8 text-center animate-pulse">
+                            <p className="font-arimo text-[14px] text-[#6A7282]">Loading your spaces...</p>
+                        </div>
+                    ) : projects.length > 0 ? (
+                        projects.map((project) => (
+                            <RecentProjectCard
+                                key={project.id}
+                                id={project.id.toString()}
+                                name={project.name}
+                                type={project.type === 'AGILE' ? 'Agile Scrum' : 'Kanban'}
+                                boardCount={1} // Defaulting to 1 for now
+                            />
+                        ))
+                    ) : (
+                        /* Empty State for Spaces */
+                        <div className="col-span-1 md:col-span-2 py-8 text-center bg-gray-50 rounded border border-dashed border-gray-300">
+                            <p className="font-arimo text-[14px] text-[#6A7282]">No recent spaces found</p>
+                        </div>
+                    )}
                 </div>
             </div>
 
