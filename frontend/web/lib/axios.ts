@@ -31,7 +31,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401 || error.response?.status === 403) {
+        if (error.response?.status === 401) {
             // Don't redirect if this is a login or auth endpoint
             const authEndpoints = ['/api/auth/login', '/api/auth/forgot', '/api/auth/reset', '/api/auth/register', '/api/auth/reg/verify'];
             const isAuthEndpoint = authEndpoints.some(endpoint => error.config?.url?.includes(endpoint));
