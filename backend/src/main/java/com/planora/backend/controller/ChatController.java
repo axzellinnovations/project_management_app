@@ -11,6 +11,8 @@ import org.springframework.stereotype.Controller;
 
 import com.planora.backend.model.ChatMessage;
 import com.planora.backend.model.ChatMessage.ChatType;
+import com.planora.backend.repository.ChatRoomMemberRepository;
+import com.planora.backend.repository.ChatRoomRepository;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
@@ -33,6 +35,12 @@ public class ChatController {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private ChatRoomRepository chatRoomRepository;
+
+    @Autowired
+    private ChatRoomMemberRepository chatRoomMemberRepository;
 
     // This method handles messages sent to "/app/project/{projectId}/chat.sendMessage".
     // The return value is broadcast to all subscribers of "/topic/project/{projectId}/public".
@@ -83,6 +91,49 @@ public class ChatController {
                 saved);
     }
 
+    @MessageMapping("/project/{projectId}/room/{roomId}/send")
+    @SendTo("/topic/project/{projectId}/room/{roomId}")
+    public ChatMessage sendRoomMessage(@DestinationVariable Long projectId,
+                                       @DestinationVariable Long roomId,
+                                       @Payload ChatMessage chatMessage,
+                                       SimpMessageHeaderAccessor headerAccessor) {
+        String username = headerAccessor.getUser().getName();
+        validateProjectMembership(projectId, username);
+        validateRoomMembership(roomId, username);
+
+        if (chatMessage.getSender() != null) {
+            chatMessage.setSender(chatMessage.getSender().toLowerCase());
+        }
+
+        chatMessage.setProjectId(projectId);
+        chatMessage.setRoomId(roomId);
+        chatMessage.setChatType(ChatType.GROUP);
+
+        ChatMessage saved = chatService.saveMessage(chatMessage);
+        return saved;
+    }
+
+    private void validateRoomMembership(Long roomId, String usernameOrEmail) {
+        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        if (user == null) {
+            throw new RuntimeException("User is not found");
+        }
+        if (chatRoomMemberRepository.findByChatRoomIdAndUserUserId(roomId, user.getUserId()).isPresent()) {
+            return;
+        }
+
+        var room = chatRoomRepository.findById(roomId).orElseThrow(() -> new RuntimeException("Chat room not found"));
+        if (isRoomCreator(room, user, usernameOrEmail)) {
+            var roomMember = new com.planora.backend.model.ChatRoomMember();
+            roomMember.setChatRoom(room);
+            roomMember.setUser(user);
+            chatRoomMemberRepository.save(roomMember);
+            return;
+        }
+
+        throw new RuntimeException("User is not a member of this room");
+    }
+
     // This method handles messages sent to "/app/project/{projectId}/chat.addUser".
     // It adds the username to the WebSocket session and broadcasts the join
     // message.
@@ -131,5 +182,26 @@ public class ChatController {
         if (!isMember) {
             throw new RuntimeException("User is not a member of the project");
         }
+    }
+
+    private com.planora.backend.model.User resolveUserByEmailOrUsername(String usernameOrEmail) {
+        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
+            return null;
+        }
+        var normalized = usernameOrEmail.toLowerCase();
+        var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
+        if (byEmail != null) {
+            return byEmail;
+        }
+        return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
+    }
+
+    private boolean isRoomCreator(com.planora.backend.model.ChatRoom room, com.planora.backend.model.User user, String usernameOrEmail) {
+        if (room.getCreatedBy() == null) {
+            return false;
+        }
+        return room.getCreatedBy().equalsIgnoreCase(usernameOrEmail)
+                || (user.getEmail() != null && room.getCreatedBy().equalsIgnoreCase(user.getEmail()))
+                || (user.getUsername() != null && room.getCreatedBy().equalsIgnoreCase(user.getUsername()));
     }
 }
