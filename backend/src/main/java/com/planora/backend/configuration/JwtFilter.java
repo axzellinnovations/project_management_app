@@ -16,9 +16,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.List;
 
 @Component
 public class JwtFilter extends OncePerRequestFilter {
@@ -26,10 +28,30 @@ public class JwtFilter extends OncePerRequestFilter {
     private final JWTService jwtService;
     private final UserDetailsService userDetailsService;
     private static final Logger logger = LoggerFactory.getLogger(JwtFilter.class);
+        private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
+        private static final List<String> PUBLIC_ENDPOINTS = List.of(
+            "/api/auth/register",
+            "/api/auth/reg/verify",
+            "/api/auth/login",
+            "/api/auth/resend",
+            "/api/auth/forgot",
+            "/api/auth/reset",
+            "/ws/**"
+        );
 
     public JwtFilter(JWTService jwtService,UserDetailsService userDetailsService) {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+
+        String path = request.getServletPath();
+        return PUBLIC_ENDPOINTS.stream().anyMatch(pattern -> PATH_MATCHER.match(pattern, path));
     }
 
 
