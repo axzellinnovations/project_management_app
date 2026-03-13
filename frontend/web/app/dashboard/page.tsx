@@ -5,11 +5,20 @@ import { getUserFromToken, User } from '@/lib/auth';
 import Link from 'next/link';
 import api from '@/lib/axios';
 import RecentProjectCard from './components/RecentProjectCard';
+import { useRouter } from 'next/navigation';
+
+interface ProjectSummary {
+    id: number;
+    name: string;
+    projectKey?: string;
+    type: 'AGILE' | 'KANBAN' | string;
+}
 
 export default function DashboardPage() {
+    const router = useRouter();
     const [user, setUser] = useState<User | null>(null);
     const [activeTab, setActiveTab] = useState('worked-on');
-    const [projects, setProjects] = useState<any[]>([]);
+    const [projects, setProjects] = useState<ProjectSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -19,19 +28,28 @@ export default function DashboardPage() {
         const userData = getUserFromToken();
         setUser(userData);
 
+        if (!userData) {
+            setLoading(false);
+            router.replace('/login');
+            return;
+        }
+
         const fetchProjects = async () => {
             try {
                 const response = await api.get('/api/projects');
                 setProjects(response.data);
-            } catch (error) {
-                console.error("Failed to fetch projects:", error);
+            } catch (error: unknown) {
+                const status = (error as { response?: { status?: number } })?.response?.status;
+                if (status !== 401 && status !== 403) {
+                    console.error("Failed to fetch projects:", error);
+                }
             } finally {
                 setLoading(false);
             }
         };
 
         fetchProjects();
-    }, []);
+    }, [router]);
 
     const checkScroll = () => {
         if (scrollContainerRef.current) {
@@ -58,8 +76,6 @@ export default function DashboardPage() {
     };
 
     const [recentSpacesSearch, setRecentSpacesSearch] = useState('');
-
-    const firstName = user?.username ? user.username.split(' ')[0] : 'User';
 
     const filteredRecentProjects = projects.filter(project => 
         project.name.toLowerCase().includes(recentSpacesSearch.toLowerCase()) ||
