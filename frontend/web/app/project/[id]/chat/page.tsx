@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useChat } from './components/useChat';
 import { ChatSidebar } from './components/chatSidebar';
@@ -12,10 +12,35 @@ export default function ChatInterface() {
   const params = useParams();
   const projectId = params.id as string;
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const { currentUser, users, messages, privateMessages, sendMessage, loadPrivateHistory, addTeam, isLoading, error, retryConnection } = useChat(projectId);
+  const {
+    currentUser,
+    users,
+    rooms,
+    roomMessages,
+    messages,
+    privateMessages,
+    sendMessage,
+    sendRoomMessage,
+    loadPrivateHistory,
+    loadRoomHistory,
+    createRoom,
+    deleteRoom,
+    addTeam,
+    isLoading,
+    error,
+    retryConnection
+  } = useChat(projectId);
 
-  const displayMessages = selectedUser ? privateMessages[selectedUser] || [] : messages;
+  const hasSelectedRoom = selectedRoomId !== null && Number.isFinite(selectedRoomId);
+
+  const displayMessages = hasSelectedRoom
+    ? roomMessages[selectedRoomId as number] || []
+    : selectedUser
+    ? privateMessages[selectedUser] || []
+    : messages;
+
   const filteredUsers = users.filter((u) => u.toLowerCase().includes(searchTerm.trim().toLowerCase()));
   const filteredMessages = displayMessages.filter((msg) => {
     if (!searchTerm.trim()) return true;
@@ -26,11 +51,17 @@ export default function ChatInterface() {
     );
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (selectedUser) {
       loadPrivateHistory(selectedUser);
     }
   }, [selectedUser, loadPrivateHistory]);
+
+  useEffect(() => {
+    if (hasSelectedRoom) {
+      loadRoomHistory(selectedRoomId as number);
+    }
+  }, [selectedRoomId, hasSelectedRoom, loadRoomHistory]);
 
   if (isLoading) {
     return (
@@ -43,7 +74,22 @@ export default function ChatInterface() {
   }
 
   const handleSendMessage = (content: string) => {
-    sendMessage(content, selectedUser);
+    if (hasSelectedRoom) {
+      sendRoomMessage(content, selectedRoomId as number);
+    } else {
+      sendMessage(content, selectedUser);
+    }
+  };
+
+  const handleCreateRoom = async () => {
+    const createdRoom = await createRoom();
+    if (!createdRoom) {
+      return;
+    }
+
+    setSelectedUser(null);
+    setSelectedRoomId(createdRoom.id);
+    await loadRoomHistory(createdRoom.id);
   };
 
   return (
@@ -52,9 +98,27 @@ export default function ChatInterface() {
         <ChatSidebar
           currentUser={currentUser}
           users={filteredUsers}
+          rooms={rooms}
           selectedUser={selectedUser}
-          onSelectUser={setSelectedUser}
+          selectedRoomId={selectedRoomId}
+          onSelectUser={(u) => {
+            if (u !== null) {
+              setSelectedRoomId(null);
+            }
+            setSelectedUser(u);
+          }}
+          onSelectRoom={(roomId) => {
+            setSelectedUser(null);
+            if (roomId === null) {
+              setSelectedRoomId(null);
+              return;
+            }
+            const normalizedRoomId = Number(roomId);
+            setSelectedRoomId(Number.isFinite(normalizedRoomId) ? normalizedRoomId : null);
+          }}
           lastPrivateMessages={privateMessages}
+          onCreateRoom={handleCreateRoom}
+          onDeleteRoom={deleteRoom}
           onAddTeam={addTeam}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
@@ -64,10 +128,16 @@ export default function ChatInterface() {
           <div className={styles.chatHeader}>
             <div>
               <h3 className="text-lg font-semibold text-slate-900">
-                {selectedUser ? `Chat with ${selectedUser}` : 'Team Chat'}
+                {hasSelectedRoom
+                  ? `Group: ${rooms.find(r => r.id === selectedRoomId)?.name ?? 'Group Chat'}`
+                  : selectedUser
+                  ? `Chat with ${selectedUser}`
+                  : 'Team Chat'}
               </h3>
               <p className="text-sm text-slate-500 mt-1">
-                {selectedUser
+                {hasSelectedRoom
+                  ? 'Group message'
+                  : selectedUser
                   ? 'Private message'
                   : users.length > 0
                   ? `Members online: ${users.join(', ')}`

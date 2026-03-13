@@ -22,10 +22,17 @@ public class ChatService {
     }
 
     /**
-     * Retrieve all group messages for a project (no recipient).
+     * Retrieve all group messages for a project (no recipient, no room).
      */
     public List<ChatMessage> getGroupMessages(Long projectId) {
-        return chatMessageRepository.findByProjectIdAndRecipientIsNullOrderByIdAsc(projectId);
+        return chatMessageRepository.findByProjectIdAndRecipientIsNullAndRoomIdIsNullOrderByIdAsc(projectId);
+    }
+
+    /**
+     * Retrieve room messages for a given room.
+     */
+    public List<ChatMessage> getRoomMessages(Long projectId, Long roomId) {
+        return chatMessageRepository.findByProjectIdAndRoomIdOrderByIdAsc(projectId, roomId);
     }
 
     /**
