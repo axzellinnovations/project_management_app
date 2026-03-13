@@ -19,6 +19,8 @@ import io.jsonwebtoken.security.Keys;
 @Service
 public class JWTService {
 
+    private static final long ONE_DAY_IN_MS = 1000L * 60 * 60 * 24;
+
     @Value("${jwt.secret}")
     private String secretKey;
 
@@ -47,7 +49,7 @@ public class JWTService {
                 .subject(email)
                 .add(claims)
                 .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + 1000 * 60 * 30))
+            .expiration(new Date(System.currentTimeMillis() + ONE_DAY_IN_MS))
                 .and()
                 .signWith(getSigningKey())
                 .compact();
