@@ -32,6 +32,7 @@ export default function CreateTaskModal({
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const safeTeamMembers = Array.isArray(teamMembers) ? teamMembers : [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,7 +175,7 @@ export default function CreateTaskModal({
               disabled={loading || loadingMembers}
             >
               <option value="">Unassigned</option>
-              {teamMembers.map((member) => (
+              {safeTeamMembers.map((member) => (
                 <option key={member.id} value={member.id}>
                   {member.name}
                 </option>

@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname, useSearchParams } from 'next/navigation';
 import { getUserFromToken, User } from '@/lib/auth';
 import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import api from '@/lib/axios';
@@ -216,7 +215,7 @@ export default function TopBar() {
 
             {/* Bottom Nav Section (45px) */}
             <div className="h-[45px] bg-white border-b border-[#E3E8EF] px-8 flex items-end gap-8">
-                {tabs.map((tab) => (
+                {baseTabs.map((tab) => (
                     <Link
                         key={tab.id}
                         href={getTabHref(tab.id)}

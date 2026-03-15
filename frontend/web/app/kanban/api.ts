@@ -1,6 +1,11 @@
 import axios from '@/lib/axios';
 import { Task } from './types';
 
+export interface TeamMemberOption {
+  id: number;
+  name: string;
+}
+
 /**
  * Fetch all tasks for a specific project
  * @param projectId - The project ID to fetch tasks for
@@ -133,10 +138,41 @@ export async function fetchProject(projectId: number): Promise<any> {
 /**
  * Fetch members of a team
  */
-export async function fetchTeamMembers(teamId: number): Promise<any[]> {
+export async function fetchTeamMembers(teamId: number): Promise<TeamMemberOption[]> {
   try {
     const response = await axios.get(`/api/teams/${teamId}/members`);
-    return response.data || [];
+    const payload = response.data;
+
+    // Accept common API shapes: [], { members: [] }, { data: [] }, { content: [] }
+    const rawMembers = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.members)
+        ? payload.members
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload?.content)
+            ? payload.content
+            : [];
+
+    return rawMembers
+      .map((member: any) => {
+        const id = Number(member?.id);
+        const name =
+          member?.name ??
+          member?.username ??
+          member?.fullName ??
+          member?.user?.username ??
+          member?.user?.fullName ??
+          member?.user?.email ??
+          '';
+
+        if (!Number.isFinite(id) || !name) {
+          return null;
+        }
+
+        return { id, name };
+      })
+      .filter((member: TeamMemberOption | null): member is TeamMemberOption => member !== null);
   } catch (error) {
     console.error('Error fetching team members:', error);
     throw error;
