@@ -4,10 +4,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { getUserFromToken, User } from '@/lib/auth';
 import api from '@/lib/axios';
 
-const tabs = [
+const baseTabs = [
     { id: 'summary', label: 'Summary' },
     { id: 'timeline', label: 'Timeline' },
     { id: 'backlog', label: 'Backlog' },
@@ -20,7 +21,15 @@ const tabs = [
 ];
 
 export default function TopBar() {
-    const [activeTab, setActiveTab] = useState('summary');
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const pathSegment = pathname.split('/')[1] || 'summary';
+    const activeTab = pathSegment === 'kanban' ? 'board' : pathSegment;
+    
+    // Show timeline and backlog tabs only for kanban-related pages
+    const showKanbanFeatures = pathSegment === 'kanban' || pathSegment === 'timeline' || pathSegment === 'backlog';
+    const tabs = showKanbanFeatures ? baseTabs : baseTabs.filter(tab => !['timeline', 'backlog'].includes(tab.id));
+    
     const [projectName, setProjectName] = useState('Project Name');
     const [user, setUser] = useState<User | null>(null);
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
@@ -112,29 +121,33 @@ export default function TopBar() {
 
             {/* Bottom Nav Section (45px) */}
             <div className="h-[45px] bg-white border-b border-[#E3E8EF] px-8 flex items-end gap-8">
-                {tabs.map((tab) => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className="relative pb-3 px-1"
-                    >
-                        <span
-                            className={`font-inter text-[14px] leading-[20px] transition-colors duration-200 ${activeTab === tab.id
-                                ? 'text-[#101828] font-semibold'
-                                : 'text-[#667085] font-medium hover:text-[#101828]'
-                                }`}
+                {tabs.map((tab) => {
+                    const baseHref = tab.id === 'board' ? '/kanban' : `/${tab.id}`;
+                    const href = searchParams.toString() ? `${baseHref}?${searchParams.toString()}` : baseHref;
+                    return (
+                        <Link
+                            key={tab.id}
+                            href={href}
+                            className="relative pb-3 px-1"
                         >
-                            {tab.label}
-                        </span>
-                        {activeTab === tab.id && (
-                            <motion.div
-                                layoutId="activeTab"
-                                className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#155DFC] rounded-t-[2px]"
-                                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                            />
-                        )}
-                    </button>
-                ))}
+                            <span
+                                className={`font-inter text-[14px] leading-[20px] transition-colors duration-200 ${activeTab === tab.id
+                                    ? 'text-[#101828] font-semibold'
+                                    : 'text-[#667085] font-medium hover:text-[#101828]'
+                                    }`}
+                            >
+                                {tab.label}
+                            </span>
+                            {activeTab === tab.id && (
+                                <motion.div
+                                    layoutId="activeTab"
+                                    className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#155DFC] rounded-t-[2px]"
+                                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                />
+                            )}
+                        </Link>
+                    );
+                })}
             </div>
         </div>
     );
