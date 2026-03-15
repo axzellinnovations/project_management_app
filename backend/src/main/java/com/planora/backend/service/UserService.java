@@ -151,7 +151,7 @@ public class UserService {
 
             if (authentication.isAuthenticated()) {
                 User authenticatedUser = userRepository.findByEmailIgnoreCase(user.getEmail().toLowerCase()).orElse(null);
-                String token = jwtService.generateToken(user.getEmail(), authenticatedUser.getUsername());
+                String token = jwtService.generateToken(user.getEmail().toLowerCase(), authenticatedUser.getUsername());
                 LoginResponse response = new LoginResponse();
                 response.setSuccess(true);
                 response.setMessage("Login successful");

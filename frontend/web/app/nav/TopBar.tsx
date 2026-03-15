@@ -4,11 +4,12 @@ import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { getUserFromToken, User } from '@/lib/auth';
 import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import api from '@/lib/axios';
 
-const tabs = [
+const baseTabs = [
     { id: 'summary', label: 'Summary' },
     { id: 'timeline', label: 'Timeline' },
     { id: 'backlog', label: 'Backlog' },

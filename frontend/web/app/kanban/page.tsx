@@ -6,6 +6,8 @@ import { useSearchParams } from 'next/navigation';
 import DragDropProvider from './components/DragDropProvider';
 import KanbanColumn from './components/KanbanColumn';
 import CreateTaskModal from './components/CreateTaskModal';
+import Sidebar from '../nav/Sidebar';
+import TopBar from '../nav/TopBar';
 // removed DateRangeFilter import per requirements
 import { Task, KanbanColumn as KanbanColumnType, TaskStatus } from './types';
 import { fetchTasksByProject, updateTaskStatus, deleteTask, createTask } from './api';
@@ -47,6 +49,7 @@ function SortableColumn({ column, children, width = '350px' }: { column: any; ch
       {...attributes}
       {...listeners}
       className="flex-shrink-0"
+      suppressHydrationWarning={true}
     >
       {children}
     </div>
@@ -258,116 +261,127 @@ export default function KanbanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">Kanban Board</h1>
-            <p className="text-sm text-gray-600 mt-1">Organize and track your project tasks</p>
-            {createSuccess && (
-              <div className="mt-2 text-green-600 text-sm">
-                {createSuccess}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-4">
-            <input
-              type="text"
-              placeholder="Search board..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              className="px-4 py-2 border border-gray-200 rounded-lg text-sm w-64"
-            />
-            <button
-              onClick={handleCompleteBoard}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <CheckCircle2 size={18} />
-              Complete Board
-            </button>
-          </div>
-        </div>
-
-        {/* Success Message */}
-        {completeSuccess && (
-          <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 mb-4">
-            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-            <p className="text-sm">Board marked as complete!</p>
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+    <div className="flex h-screen bg-gray-100">
+      {/* Sidebar */}
+      <Sidebar />
+      
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* TopBar */}
+        <TopBar />
+        
+        {/* Content Area */}
+        <div className="flex-1 overflow-auto p-6">
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="font-semibold text-sm">Error</p>
-              <p className="text-xs">{error}</p>
+              <h1 className="text-2xl font-bold text-gray-800">Kanban Board</h1>
+              <p className="text-sm text-gray-600 mt-1">Organize and track your project tasks</p>
+              {createSuccess && (
+                <div className="mt-2 text-green-600 text-sm">
+                  {createSuccess}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              <input
+                type="text"
+                placeholder="Search board..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="px-4 py-2 border border-gray-200 rounded-lg text-sm w-64"
+              />
+              <button
+                onClick={handleCompleteBoard}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <CheckCircle2 size={18} />
+                Complete Board
+              </button>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* Loading State */}
-      {loading ? (
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center">
-            <Loader className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-2" />
-            <p className="text-gray-600">Loading tasks...</p>
-          </div>
-        </div>
-      ) : (
-        /* Kanban Board */
-        <DragDropProvider
-          tasks={tasks}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext items={columnConfigs.map((c) => c.status)} strategy={horizontalListSortingStrategy}>
-            <div className="flex gap-6 overflow-x-auto pb-6 min-h-96">
-              {columns.map((column) => (
-                <SortableColumn key={column.status} column={column} width="350px">
-                  <KanbanColumn
-                    column={column}
-                    onDeleteTask={handleDeleteTask}
-                    onCreateTask={handleCreateTaskClick}
-                  />
-                </SortableColumn>
-              ))}
-
-              {/* add-column icon */}
-              <div className="flex-shrink-0 w-24 flex items-center justify-center">
-                <button
-                  onClick={handleAddColumn}
-                  className="px-3 py-3 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300"
-                >
-                  <Plus className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-          </SortableContext>
-
-          {/* Update Status Indicator */}
-          {updatingTaskId && (
-            <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
-              <Loader className="w-4 h-4 animate-spin" />
-              <span className="text-sm">Updating task...</span>
+          {/* Success Message */}
+          {completeSuccess && (
+            <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 mb-4">
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+              <p className="text-sm">Board marked as complete!</p>
             </div>
           )}
-        </DragDropProvider>
-      )}
 
-      {/* Create Task Modal */}
-      {projectId && (
-        <CreateTaskModal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          onCreateTask={handleCreateTask}
-          columnStatus={selectedColumnStatus}
-          projectId={parseInt(projectId as string)}
-          loading={isCreatingTask}
-        />
-      )}
+          {/* Error Message */}
+          {error && (
+            <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-sm">Error</p>
+                <p className="text-xs">{error}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Loading State */}
+        {loading ? (
+          <div className="flex items-center justify-center h-96">
+            <div className="text-center">
+              <Loader className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-2" />
+              <p className="text-gray-600">Loading tasks...</p>
+            </div>
+          </div>
+        ) : (
+          /* Kanban Board */
+          <DragDropProvider
+            tasks={tasks}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={columnConfigs.map((c) => c.status)} strategy={horizontalListSortingStrategy}>
+              <div className="flex gap-6 overflow-x-auto pb-6 h-[calc(50vh+94px)]">
+                {columns.map((column) => (
+                  <SortableColumn key={column.status} column={column} width="350px">
+                    <KanbanColumn
+                      column={column}
+                      onDeleteTask={handleDeleteTask}
+                      onCreateTask={handleCreateTaskClick}
+                    />
+                  </SortableColumn>
+                ))}
+
+                {/* add-column icon */}
+                <div className="flex-shrink-0 w-24 flex items-center justify-center">
+                  <button
+                    onClick={handleAddColumn}
+                    className="px-3 py-3 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300"
+                  >
+                    <Plus className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+            </SortableContext>
+
+            {/* Update Status Indicator */}
+            {updatingTaskId && (
+              <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+                <Loader className="w-4 h-4 animate-spin" />
+                <span className="text-sm">Updating task...</span>
+              </div>
+            )}
+          </DragDropProvider>
+        )}
+
+          {/* Create Task Modal */}
+          {projectId && (
+            <CreateTaskModal
+              isOpen={isCreateModalOpen}
+              onClose={() => setIsCreateModalOpen(false)}
+              onCreateTask={handleCreateTask}
+              columnStatus={selectedColumnStatus}
+              projectId={parseInt(projectId as string)}
+              loading={isCreatingTask}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

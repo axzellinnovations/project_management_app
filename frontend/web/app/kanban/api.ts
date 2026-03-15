@@ -87,20 +87,33 @@ export async function createTask(taskData: any): Promise<Task> {
       projectId: taskData.projectId,
       dueDate: taskData.dueDate || null,
       startDate: taskData.startDate || null,
-      assigneeId: taskData.assigneeId || null,
+      assigneeId: taskData.assigneeId ? Number(taskData.assigneeId) : null,
     };
 
+    console.log('Creating task with data:', requestData);
     const response = await axios.post(`/api/tasks`, requestData);
     return response.data;
   } catch (error) {
     console.error('Error creating task:', error);
     const axiosError = error as any;
-    throw new Error(
-      axiosError.response?.data?.message ||
-      (axiosError.response?.status === 400
-        ? 'Invalid task data. Please check your inputs.'
-        : 'Failed to create task')
-    );
+    
+    // Provide more detailed error messages
+    let errorMessage = 'Failed to create task';
+    if (axiosError.response?.data?.message) {
+      errorMessage = axiosError.response.data.message;
+    } else if (axiosError.response?.status === 400) {
+      errorMessage = 'Invalid task data. Please check your inputs.';
+    } else if (axiosError.response?.status === 401) {
+      errorMessage = 'You are not authorized to create tasks. Please log in again.';
+    } else if (axiosError.response?.status === 403) {
+      errorMessage = 'You do not have permission to create tasks in this project.';
+    } else if (axiosError.response?.status === 404) {
+      errorMessage = 'Project or team not found.';
+    } else if (axiosError.message === 'Network Error') {
+      errorMessage = 'Network error. Please check your connection.';
+    }
+    
+    throw new Error(errorMessage);
   }
 }
 
