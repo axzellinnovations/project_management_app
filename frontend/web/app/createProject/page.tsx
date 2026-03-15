@@ -1,205 +1,75 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import api from '@/lib/axios';
 
-export default function InviteMembersPage() {
-  const searchParams = useSearchParams();
+export default function CreateProjectSelectionPage() {
+    return (
+        <div className="min-h-screen relative flex flex-col items-center justify-center p-4 overflow-hidden bg-[#F5F5F7] selection:bg-[#1D56D5] selection:text-white">
+            {/* Ambient Background Orbs */}
+            <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#3B82F6]/30 rounded-full blur-[120px] pointer-events-none" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-[#8B5CF6]/20 rounded-full blur-[120px] pointer-events-none" />
+            <div className="absolute top-[20%] right-[10%] w-[400px] h-[400px] bg-[#10B981]/20 rounded-full blur-[100px] pointer-events-none" />
 
-  const [email, setEmail] = useState('');
-  const [projectId, setProjectId] = useState<string | null>(null);
+            <div className="relative z-10 w-full flex flex-col items-center">
+                {/* Header */}
+                <div className="text-center mb-6">
+                    <h1 className="font-outfit font-bold text-[32px] leading-[40px] text-[#1D1D1F] mb-2 tracking-tight">
+                        Select Project Type
+                    </h1>
+                    <p className="font-inter text-[16px] leading-[24px] text-[#86868B] max-w-[482px] mx-auto">
+                        Choose the methodology that best fits your team's workflow.
+                    </p>
+                </div>
 
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+                {/* Selection Cards */}
+                <div className="flex flex-col md:flex-row gap-6 w-full max-w-[800px]">
+                    {/* Agile Card */}
+                    <Link href="/createProject/ifAgile" className="flex-1 bg-white/60 backdrop-blur-2xl rounded-[24px] shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] border border-white/50 hover:bg-white/80 hover:shadow-[0_12px_40px_0_rgba(31,38,135,0.1)] transition-all p-6 flex flex-col items-center text-center cursor-pointer group">
+                        <div className="w-16 h-16 bg-white/70 backdrop-blur-md rounded-full shadow-sm flex items-center justify-center mb-4 transition-all group-hover:bg-[#1D56D5] group-hover:shadow-[0_4px_16px_0_rgba(29,86,213,0.3)]">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" className="stroke-[#1D56D5] group-hover:stroke-white transition-colors duration-300" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                            </svg>
+                        </div>
+                        <h2 className="font-outfit font-bold text-[22px] text-[#1D1D1F] mb-2">Agile</h2>
+                        <p className="font-inter text-[14px] leading-[22px] text-[#86868B] mb-6 flex-grow">
+                            Best for teams using Scrum or Sprints. Plan, track, and manage iterative work efficiently.
+                        </p>
+                        <div className="text-[#1D56D5] font-medium font-inter group-hover:text-[#1642B5] transition-colors relative text-[14px]">
+                            Create Agile Project
+                            <span className="block h-0.5 bg-[#1D56D5] absolute -bottom-1 left-0 w-0 group-hover:w-full transition-all duration-300"></span>
+                        </div>
+                    </Link>
 
-  // projectId source priority:
-  // 1) URL: /createProject/inviteMembers?projectId=123
-  // 2) localStorage: currentProjectId
-  useEffect(() => {
-    const fromUrl = searchParams.get('projectId');
-    if (fromUrl) {
-      setProjectId(fromUrl);
-      if (typeof window !== 'undefined') localStorage.setItem('currentProjectId', fromUrl);
-      return;
-    }
-    if (typeof window !== 'undefined') {
-      const fromLs = localStorage.getItem('currentProjectId');
-      if (fromLs) setProjectId(fromLs);
-    }
-  }, [searchParams]);
+                    {/* Kanban Card */}
+                    <Link href="/createProject/ifKanban" className="flex-1 bg-white/60 backdrop-blur-2xl rounded-[24px] shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] border border-white/50 hover:bg-white/80 hover:shadow-[0_12px_40px_0_rgba(31,38,135,0.1)] transition-all p-6 flex flex-col items-center text-center cursor-pointer group">
+                        <div className="w-16 h-16 bg-white/70 backdrop-blur-md rounded-full shadow-sm flex items-center justify-center mb-4 transition-all group-hover:bg-[#1D56D5] group-hover:shadow-[0_4px_16px_0_rgba(29,86,213,0.3)]">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" className="stroke-[#1D56D5] group-hover:stroke-white transition-colors duration-300" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                <line x1="9" y1="3" x2="9" y2="21" />
+                                <line x1="15" y1="3" x2="15" y2="21" />
+                            </svg>
+                        </div>
+                        <h2 className="font-outfit font-bold text-[22px] text-[#1D1D1F] mb-2">Kanban</h2>
+                        <p className="font-inter text-[14px] leading-[22px] text-[#86868B] mb-6 flex-grow">
+                            Best for continuous flow. Visualize your work, limit work in progress, and maximize efficiency.
+                        </p>
+                        <div className="text-[#1D56D5] font-medium font-inter group-hover:text-[#1642B5] transition-colors relative text-[14px]">
+                            Create Kanban Project
+                            <span className="block h-0.5 bg-[#1D56D5] absolute -bottom-1 left-0 w-0 group-hover:w-full transition-all duration-300"></span>
+                        </div>
+                    </Link>
+                </div>
 
-  const canInvite = useMemo(() => {
-    return Boolean(projectId && email.trim());
-  }, [projectId, email]);
-
-  const handleInvite = async () => {
-    setMsg(null);
-
-    const trimmed = email.trim().toLowerCase();
-    if (!projectId) {
-      setMsg({ type: 'error', text: 'Project ID not found. Please open this page with ?projectId=... in URL.' });
-      return;
-    }
-    if (!trimmed) {
-      setMsg({ type: 'error', text: 'Please enter an email address.' });
-      return;
-    }
-    // basic email check
-    if (!/^\S+@\S+\.\S+$/.test(trimmed)) {
-      setMsg({ type: 'error', text: 'Please enter a valid email address.' });
-      return;
-    }
-
-    try {
-      setLoading(true);
-      await api.post(`/api/projects/${projectId}/invitations`, {
-        email: trimmed,
-      });
-
-      setMsg({ type: 'success', text: 'Invitation email sent successfully.' });
-      setEmail('');
-    } catch (err: any) {
-      const serverMsg =
-        err?.response?.data?.message ||
-        err?.response?.data ||
-        'Failed to send invitation. Please try again.';
-      setMsg({ type: 'error', text: String(serverMsg) });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#EFF6FF] via-[#FFFFFF] to-[#FAF5FF] flex flex-col items-center py-20 px-4">
-      {/* Header */}
-      <div className="text-center mb-10">
-        <div className="w-16 h-16 bg-[#1D56D5] rounded-[14px] flex items-center justify-center mx-auto mb-6 relative">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="8.5" cy="7" r="4" />
-            <line x1="20" y1="8" x2="20" y2="14" />
-            <line x1="23" y1="11" x2="17" y2="11" />
-          </svg>
-        </div>
-        <h1 className="font-outfit font-bold text-[36px] leading-[40px] text-[#101828] mb-3">
-          Invite Your Team
-        </h1>
-        <p className="font-inter text-[18px] leading-[28px] text-[#4A5565] max-w-[482px] mx-auto">
-          Collaborate better by inviting team members to your project
-        </p>
-        {projectId && (
-          <p className="mt-2 font-inter text-[13px] text-[#6A7282]">
-            Project ID: <span className="font-medium text-[#101828]">{projectId}</span>
-          </p>
-        )}
-      </div>
-
-      {/* Main Content Container */}
-      <div className="w-full max-w-[768px] bg-white rounded-[16px] shadow-[0px_20px_25px_-5px_rgba(0,0,0,0.1),0px_8px_10px_-6px_rgba(0,0,0,0.1)] border border-[#E5E7EB] p-8">
-
-        {/* Status message */}
-        {msg && (
-          <div
-            className={`mb-5 rounded-[10px] p-4 border font-inter text-[14px] ${
-              msg.type === 'success'
-                ? 'bg-[#ECFDF3] border-[#ABEFC6] text-[#067647]'
-                : 'bg-[#FEF3F2] border-[#FECDCA] text-[#B42318]'
-            }`}
-          >
-            {msg.text}
-          </div>
-        )}
-
-        {/* Email Invite Section */}
-        <div className="flex gap-3 mb-6">
-          <div className="flex-grow relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6A7282" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                <polyline points="22,6 12,13 2,6" />
-              </svg>
+                <div className="mt-8">
+                    <Link href="/dashboard" className="text-[#86868B] hover:text-[#1D1D1F] font-inter font-medium transition-colors text-[14px]">
+                        ← Back to Dashboard
+                    </Link>
+                </div>
             </div>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter email address"
-              className="w-full h-[50px] border border-[#D1D5DC] rounded-[10px] pl-10 pr-4 font-inter text-[16px] text-[#0A0A0A] placeholder:text-[#6A7282] focus:outline-none focus:ring-2 focus:ring-[#1D56D5]/20 focus:border-[#1D56D5]"
-            />
-          </div>
 
-          <button
-            type="button"
-            onClick={handleInvite}
-            disabled={!canInvite || loading}
-            className={`h-[50px] rounded-[10px] px-6 text-white font-inter font-medium text-[16px] transition-colors ${
-              !canInvite || loading ? 'bg-[#1D56D5]/60 cursor-not-allowed' : 'bg-[#1D56D5] hover:bg-blue-700'
-            }`}
-          >
-            {loading ? 'Sending...' : 'Invite'}
-          </button>
-        </div>
-
-        {/* Role Permissions Section (info only) */}
-        <div className="bg-[#F9FAFB] rounded-[10px] p-4 mb-6">
-          <h3 className="font-inter font-medium text-[14px] text-[#101828] mb-3">Role Permissions</h3>
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2 text-[14px]">
-              <span className="font-inter font-medium text-[#101828] w-16">Admin:</span>
-              <span className="font-inter text-[#4A5565]">Full access to project settings and team management</span>
+            <div className="absolute bottom-6 left-0 right-0 text-center text-[#86868B] font-inter text-[12px] z-10">
+                © 2025 Planora. All rights reserved.
             </div>
-            <div className="flex gap-2 text-[14px]">
-              <span className="font-inter font-medium text-[#101828] w-16">Member:</span>
-              <span className="font-inter text-[#4A5565]">Can create, edit, and manage tasks and sprints</span>
-            </div>
-            <div className="flex gap-2 text-[14px]">
-              <span className="font-inter font-medium text-[#101828] w-16">Viewer:</span>
-              <span className="font-inter text-[#4A5565]">Read-only access to view project progress</span>
-            </div>
-          </div>
-
-          <p className="mt-3 font-inter text-[12px] text-[#6A7282]">
-            Default role for invited members: <span className="font-medium text-[#101828]">Member</span>
-          </p>
         </div>
-
-        {/* Footer Info */}
-        <div className="bg-[#EFF6FF] border border-[#DBEAFE] rounded-[10px] p-4 mb-6 flex items-start gap-4">
-          <div className="w-10 h-10 bg-[#1D56D5] rounded-[10px] flex items-center justify-center shrink-0">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </div>
-          <div>
-            <h4 className="font-inter font-medium text-[16px] text-[#101828] mb-1">
-              You can always invite team members later
-            </h4>
-            <p className="font-inter text-[14px] text-[#4A5565]">
-              Skip this step and add team members from your project settings if you prefer.
-            </p>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-4">
-          <Link href="/createProject/ifAgile" className="flex-1 h-[50px] border border-[#D1D5DC] rounded-[10px] flex items-center justify-center font-inter font-medium text-[16px] text-[#364153] hover:bg-gray-50 transition-colors">
-            Back
-          </Link>
-          <Link href="/summary" className="flex-1 h-[50px] bg-[#1D56D5] rounded-[10px] flex items-center justify-center font-inter font-medium text-[16px] text-white hover:bg-blue-700 transition-colors">
-            Skip & Start Project
-          </Link>
-        </div>
-
-      </div>
-
-      <div className="mt-8 text-center text-[#4A5565] font-inter text-[14px]">
-        © 2025 Planora. All rights reserved.
-      </div>
-    </div>
-  );
+    );
 }

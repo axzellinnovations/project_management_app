@@ -18,6 +18,7 @@ export default function PageDetailPage() {
   const [selectedPage, setSelectedPage] = useState<PageItem | null>(null);
   const [loadingPage, setLoadingPage] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState<'create' | 'edit'>('edit');
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -43,6 +44,7 @@ export default function PageDetailPage() {
     setActiveTab,
     searchQuery,
     setSearchQuery,
+    createPage,
     updatePage,
     deletePage,
     toggleStar,
@@ -72,6 +74,19 @@ export default function PageDetailPage() {
 
     fetchPageDetail();
   }, [pageId]);
+
+  const handleCreatePage = async (title: string, content: string) => {
+    setIsSaving(true);
+    try {
+      const newPage = await createPage(title, content);
+      router.push(projectId ? `/pages/${newPage.id}?projectId=${projectId}` : `/pages/${newPage.id}`);
+      setIsEditorOpen(false);
+    } catch (err) {
+      console.error('Error creating page:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleEditPage = async (title: string, content: string) => {
     if (!selectedPage) return;
@@ -110,6 +125,15 @@ export default function PageDetailPage() {
     }
   };
 
+  const handleSavePage = async (title: string, content: string) => {
+    if (editorMode === 'create') {
+      await handleCreatePage(title, content);
+      return;
+    }
+
+    await handleEditPage(title, content);
+  };
+
   if (!projectId) {
     return (
       <div className="flex h-full w-full items-center justify-center">
@@ -132,15 +156,24 @@ export default function PageDetailPage() {
           onSearchChange={setSearchQuery}
           selectedPageId={pageId}
           projectId={projectId}
-          onCreateClick={() => setIsEditorOpen(true)}
+          onCreateClick={() => {
+            setEditorMode('create');
+            setIsEditorOpen(true);
+          }}
         />
 
         {/* Main Content Area */}
         <PagesContent
           selectedPage={selectedPage}
           loading={loadingPage}
-          onCreateClick={() => setIsEditorOpen(true)}
-          onEditClick={() => setIsEditorOpen(true)}
+          onCreateClick={() => {
+            setEditorMode('create');
+            setIsEditorOpen(true);
+          }}
+          onEditClick={() => {
+            setEditorMode('edit');
+            setIsEditorOpen(true);
+          }}
           onDeleteClick={() => setShowDeleteConfirm(true)}
           onStarClick={handleToggleStar}
         />
@@ -149,9 +182,9 @@ export default function PageDetailPage() {
       {/* Page Editor Modal */}
       <PageEditor
         isOpen={isEditorOpen}
-        page={selectedPage}
+        page={editorMode === 'edit' ? selectedPage : null}
         onClose={() => setIsEditorOpen(false)}
-        onSave={handleEditPage}
+        onSave={handleSavePage}
         isLoading={isSaving}
       />
 
@@ -161,7 +194,7 @@ export default function PageDetailPage() {
           <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Page?</h3>
             <p className="text-gray-600 mb-6">
-              Are you sure you want to delete "{selectedPage?.title}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{selectedPage?.title}&quot;? This action cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
               <button
