@@ -69,6 +69,27 @@ export default function KanbanPage() {
   // column config state for ordering and dynamic additions
   const [columnConfigs, setColumnConfigs] = useState(DEFAULT_COLUMN_CONFIGS);
 
+  // Load column configs from localStorage on mount
+  useEffect(() => {
+    if (projectId) {
+      const saved = localStorage.getItem(`kanban-columns-${projectId}`);
+      if (saved) {
+        try {
+          setColumnConfigs(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to parse saved columns', e);
+        }
+      }
+    }
+  }, [projectId]);
+
+  // Save column configs to localStorage when they change
+  useEffect(() => {
+    if (projectId) {
+      localStorage.setItem(`kanban-columns-${projectId}`, JSON.stringify(columnConfigs));
+    }
+  }, [columnConfigs, projectId]);
+
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedColumnStatus, setSelectedColumnStatus] = useState<string>('TODO');
