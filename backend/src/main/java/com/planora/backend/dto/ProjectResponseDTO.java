@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 public class ProjectResponseDTO {
     private Long id;
     private String name;
+    private String projectKey;
     private String description;
     private ProjectType type;
     private LocalDateTime createdAt;

@@ -5,14 +5,14 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  UserCircle2,
 } from 'lucide-react';
 import type { TaskItem } from '../page';
 import api from '@/lib/axios';
+import AssigneeAvatar from './AssigneeAvatar';
 
 interface TeamMemberInfo {
   id: number;
-  user: { userId: number; fullName: string; username: string };
+  user: { userId: number; fullName: string; username: string; profilePicUrl?: string | null };
 }
 
 interface ProductBacklogSectionProps {
@@ -45,6 +45,28 @@ export default function ProductBacklogSection({
 
   const assignMenuRef = useRef<HTMLDivElement | null>(null);
 
+  const assigneeAvatarMap = useMemo(() => {
+    const avatarMap = new Map<string, string | null>();
+
+    teamMembers.forEach((member) => {
+      const keys = [member.user.fullName, member.user.username]
+        .map((value) => value?.trim().toLowerCase())
+        .filter((value): value is string => Boolean(value));
+
+      keys.forEach((key) => avatarMap.set(key, member.user.profilePicUrl ?? null));
+    });
+
+    return avatarMap;
+  }, [teamMembers]);
+
+  const getAssigneeProfilePic = (assigneeName?: string) => {
+    const normalizedName = assigneeName?.trim().toLowerCase();
+    if (!normalizedName || normalizedName === 'unassigned') return null;
+    return assigneeAvatarMap.get(normalizedName) ?? null;
+  };
+
+  const getMemberDisplayName = (member: TeamMemberInfo) => member.user.fullName || member.user.username;
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (assignMenuRef.current && !assignMenuRef.current.contains(event.target as Node)) {
@@ -55,7 +77,14 @@ export default function ProductBacklogSection({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchTeamMembers = async () => {
+  useEffect(() => {
+    void fetchTeamMembers(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  const fetchTeamMembers = async (showError = true) => {
+    if (loadingMembers) return;
+
     try {
       setLoadingMembers(true);
       const projectRes = await api.get(`/api/projects/${projectId}`);
@@ -64,7 +93,9 @@ export default function ProductBacklogSection({
       const data = membersRes.data;
       setTeamMembers(Array.isArray(data) ? data : []);
     } catch {
-      // silently fail
+      if (showError) {
+        alert('Failed to load team members.');
+      }
     } finally {
       setLoadingMembers(false);
     }
@@ -75,7 +106,7 @@ export default function ProductBacklogSection({
       await api.patch(`/api/tasks/${taskId}/assign/${userId}`);
       const member = teamMembers.find((m) => m.user.userId === userId);
       if (member) {
-        onAssignTask(taskId, member.user.fullName || member.user.username);
+        onAssignTask(taskId, getMemberDisplayName(member));
       }
     } catch {
       alert('Failed to assign task.');
@@ -208,12 +239,19 @@ export default function ProductBacklogSection({
                         setAssignMenuTaskId(null);
                       } else {
                         setAssignMenuTaskId(task.id);
-                        fetchTeamMembers();
+                        if (teamMembers.length === 0) {
+                          void fetchTeamMembers();
+                        }
                       }
                     }}
                     className="flex items-center gap-1.5 rounded-full bg-[#F2F4F7] px-2 py-1 text-[11px] font-medium text-[#475467] hover:bg-[#E4E7EC] transition-colors duration-150"
                   >
-                    <UserCircle2 size={16} strokeWidth={1.5} className="text-[#98A2B3]" />
+                    <AssigneeAvatar
+                      name={task.assigneeName}
+                      profilePicUrl={getAssigneeProfilePic(task.assigneeName)}
+                      size={16}
+                      fallbackClassName="bg-transparent"
+                    />
                     <span className="max-w-[80px] truncate">{task.assigneeName || 'Unassigned'}</span>
                   </button>
 
@@ -232,8 +270,12 @@ export default function ProductBacklogSection({
                               onClick={() => handleAssignTask(task.id, member.user.userId)}
                               className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-[#344054] hover:bg-[#F9FAFB] transition-colors duration-100"
                             >
-                              <UserCircle2 size={16} className="text-[#98A2B3] flex-shrink-0" />
-                              <span className="truncate">{member.user.fullName || member.user.username}</span>
+                              <AssigneeAvatar
+                                name={getMemberDisplayName(member)}
+                                profilePicUrl={member.user.profilePicUrl}
+                                size={18}
+                              />
+                              <span className="truncate">{getMemberDisplayName(member)}</span>
                             </button>
                           ))}
                         </div>

@@ -14,10 +14,11 @@ import {
 import type { SprintItem } from '../page';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
 import api from '@/lib/axios';
+import AssigneeAvatar from './AssigneeAvatar';
 
 interface TeamMemberInfo {
   id: number;
-  user: { userId: number; fullName: string; username: string };
+  user: { userId: number; fullName: string; username: string; profilePicUrl?: string | null };
 }
 
 interface BacklogCardProps {
@@ -78,6 +79,28 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
 
   const [localTasks, setLocalTasks] = useState<LocalSprintTask[]>([]);
 
+  const assigneeAvatarMap = useMemo(() => {
+    const avatarMap = new Map<string, string | null>();
+
+    teamMembers.forEach((member) => {
+      const keys = [member.user.fullName, member.user.username]
+        .map((value) => value?.trim().toLowerCase())
+        .filter((value): value is string => Boolean(value));
+
+      keys.forEach((key) => avatarMap.set(key, member.user.profilePicUrl ?? null));
+    });
+
+    return avatarMap;
+  }, [teamMembers]);
+
+  const getAssigneeProfilePic = (assigneeName?: string) => {
+    const normalizedName = assigneeName?.trim().toLowerCase();
+    if (!normalizedName || normalizedName === 'unassigned') return null;
+    return assigneeAvatarMap.get(normalizedName) ?? null;
+  };
+
+  const getMemberDisplayName = (member: TeamMemberInfo) => member.user.fullName || member.user.username;
+
   useEffect(() => {
     setLocalTasks((prev) => {
       const prevMap = new Map(prev.map((task) => [task.id, task]));
@@ -90,17 +113,22 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
           taskNo: task.taskNo,
           title: task.title,
           storyPoints: existing?.storyPoints ?? task.storyPoints,
-          selected: task.selected,
+          selected: task.selected, 
           assigneeName: existing?.assigneeName ?? task.assigneeName ?? 'Unassigned',
-          status: existing?.status ?? (task.status as SprintStatus) ?? 'TODO',
-          startDate: existing?.startDate ?? task.startDate ?? '',
-          endDate: existing?.endDate ?? task.dueDate ?? '',
-          priority: existing?.priority ?? 'Medium',
-          subtasks: existing?.subtasks ?? '',
+          status: existing?.status ?? (task.status as SprintStatus) ?? 'TODO',       
+          startDate: existing?.startDate ?? task.startDate ?? '',  
+          endDate: existing?.endDate ?? task.dueDate ?? '',   
+          priority: existing?.priority ?? 'Medium',   
+          subtasks: existing?.subtasks ?? '', 
         };
       });
     });
   }, [sprint.tasks]);
+
+  useEffect(() => {
+    void fetchTeamMembers(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -233,7 +261,9 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
     }
   };
 
-  const fetchTeamMembers = async () => {
+  const fetchTeamMembers = async (showError = true) => {
+    if (loadingMembers) return;
+
     try {
       setLoadingMembers(true);
       const projectRes = await api.get(`/api/projects/${projectId}`);
@@ -242,7 +272,9 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
       const data = membersRes.data;
       setTeamMembers(Array.isArray(data) ? data : []);
     } catch {
-      alert('Failed to load team members.');
+      if (showError) {
+        alert('Failed to load team members.');
+      }
     } finally {
       setLoadingMembers(false);
     }
@@ -256,7 +288,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
         setLocalTasks((prev) =>
           prev.map((t) =>
             t.id === taskId
-              ? { ...t, assigneeName: member.user.fullName || member.user.username }
+              ? { ...t, assigneeName: getMemberDisplayName(member) }
               : t
           )
         );
@@ -472,12 +504,19 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
                             setAssignMenuTaskId(null);
                           } else {
                             setAssignMenuTaskId(task.id);
-                            fetchTeamMembers();
+                            if (teamMembers.length === 0) {
+                              void fetchTeamMembers();
+                            }
                           }
                         }}
-                        className="rounded-md p-1 text-[#98A2B3] hover:text-[#175CD3] hover:bg-[#EFF8FF] transition-all duration-150"
+                        className="rounded-md p-1 hover:bg-[#EFF8FF] transition-all duration-150"
                       >
-                        <UserCircle2 size={22} strokeWidth={1.5} />
+                        <AssigneeAvatar
+                          name={task.assigneeName}
+                          profilePicUrl={getAssigneeProfilePic(task.assigneeName)}
+                          size={22}
+                          fallbackClassName="bg-[#F2F4F7]"
+                        />
                       </button>
 
                       {assignMenuTaskId === task.id && (
@@ -498,8 +537,12 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
                                   }}
                                   className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-[#344054] hover:bg-[#F9FAFB] transition-colors duration-100"
                                 >
-                                  <UserCircle2 size={16} className="text-[#98A2B3] flex-shrink-0" />
-                                  <span className="truncate">{member.user.fullName || member.user.username}</span>
+                                  <AssigneeAvatar
+                                    name={getMemberDisplayName(member)}
+                                    profilePicUrl={member.user.profilePicUrl}
+                                    size={18}
+                                  />
+                                  <span className="truncate">{getMemberDisplayName(member)}</span>
                                 </button>
                               ))}
                             </div>
@@ -526,7 +569,12 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
 
                   {/* Assignee badge - always visible */}
                   <div className="flex-shrink-0 flex items-center gap-1.5 rounded-full bg-[#F2F4F7] px-2 py-1 text-[11px] font-medium text-[#475467]">
-                    <UserCircle2 size={16} strokeWidth={1.5} className="text-[#98A2B3]" />
+                    <AssigneeAvatar
+                      name={task.assigneeName}
+                      profilePicUrl={getAssigneeProfilePic(task.assigneeName)}
+                      size={16}
+                      fallbackClassName="bg-transparent"
+                    />
                     <span className="max-w-[80px] truncate">{task.assigneeName || 'Unassigned'}</span>
                   </div>
                 </div>

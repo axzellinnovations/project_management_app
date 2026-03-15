@@ -31,13 +31,17 @@ public class UserProfileController {
         try {
             String email = getAuthenticatedUserEmail(authentication);
             User updatedUser = service.updateUserDetails(email, request.getFullName());
+
+            // Generate the secure, temporary URL before sending back to the frontend
+            String presignedUrl = service.generatePresignedUrl(updatedUser.getProfilePicUrl());
+
             UserResponseDTO response = new UserResponseDTO(
                     updatedUser.getUserId(),
                     updatedUser.getUsername(),
                     updatedUser.getFullName(),
                     updatedUser.getEmail(),
                     updatedUser.isVerified(),
-                    updatedUser.getProfilePicUrl()
+                    presignedUrl // Use the temporary URL here!
             );
             return new ResponseEntity<>(response, HttpStatus.OK);
         } catch (Exception e){
@@ -63,10 +67,17 @@ public class UserProfileController {
             }
 
             String email = getAuthenticatedUserEmail(authentication);
-            String fileUrl = service.uploadProfilePicture(email, file);
 
-            PhotoUploadResponse response = new PhotoUploadResponse(true, "File uploaded successfully", fileUrl, null);
+            // This saves the file to S3, updates the DB, and returns the permanent locked URL
+            String rawFileUrl = service.uploadProfilePicture(email, file);
+
+            // Generate the secure, temporary URL so the frontend can display it immediately
+            String presignedUrl = service.generatePresignedUrl(rawFileUrl);
+
+            // Send the presigned URL back to the frontend
+            PhotoUploadResponse response = new PhotoUploadResponse(true, "File uploaded successfully", presignedUrl, null);
             return new ResponseEntity<>(response, HttpStatus.OK);
+
         } catch (IllegalArgumentException e){
             PhotoUploadResponse response = new PhotoUploadResponse(false, e.getMessage(), null, "INVALID_FILE");
             return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);

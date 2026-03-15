@@ -1,6 +1,10 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, ArrowRight } from 'lucide-react';
+import Image from 'next/image';
+import api from '@/lib/axios';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
 interface TaskSidebarProps {
   status: string;
@@ -28,6 +32,30 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
   const [isPriorityOpen, setIsPriorityOpen] = useState(false);
   const [isEditingStoryPoint, setIsEditingStoryPoint] = useState(false);
   const [editedStoryPoint, setEditedStoryPoint] = useState(storyPoint);
+  const [usersMap, setUsersMap] = useState<Record<string, string | null>>({});
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await api.get('/api/auth/users');
+        const uidMap: Record<string, string | null> = {};
+        response.data.forEach((u: any) => {
+           if (u.username) uidMap[u.username] = u.profilePicUrl || null;
+           if (u.fullName) uidMap[u.fullName] = u.profilePicUrl || null; // Map full name too in case assignee is full name
+        });
+        setUsersMap(uidMap);
+      } catch (error) {
+        console.error('Failed to fetch users:', error);
+      }
+    };
+    void fetchUsers();
+  }, []);
+
+  const resolveProfilePic = (url?: string | null) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return `${API_BASE_URL}${url}`;
+  };
 
   // Update local state when props change
   useEffect(() => {
@@ -114,8 +142,19 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
           {assignee && (
             <SidebarField label="Assignee">
                <div className="flex items-center gap-2 hover:bg-gray-50 p-1 -ml-1 rounded cursor-pointer group">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
-                      {assignee.charAt(0).toUpperCase()}
+                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold overflow-hidden">
+                      {usersMap[assignee] ? (
+                         <Image 
+                           src={resolveProfilePic(usersMap[assignee])} 
+                           alt={assignee} 
+                           width={24} 
+                           height={24} 
+                           className="w-full h-full object-cover" 
+                           unoptimized 
+                         />
+                      ) : (
+                         assignee.charAt(0).toUpperCase()
+                      )}
                   </div>
                   <span className="text-sm text-blue-600 group-hover:underline">{assignee}</span>
                </div>
@@ -124,9 +163,20 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
 
           {reporter && (
             <SidebarField label="Reporter">
-              <div className="flex items-center gap-2 hover:bg-gray-50 p-1 -ml-1 rounded cursor-pointer group">
-                  <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold">
-                      {reporter.charAt(0).toUpperCase()}
+               <div className="flex items-center gap-2 hover:bg-gray-50 p-1 -ml-1 rounded cursor-pointer group">
+                  <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold overflow-hidden">
+                      {usersMap[reporter] ? (
+                         <Image 
+                           src={resolveProfilePic(usersMap[reporter])} 
+                           alt={reporter} 
+                           width={24} 
+                           height={24} 
+                           className="w-full h-full object-cover" 
+                           unoptimized 
+                         />
+                      ) : (
+                         reporter.charAt(0).toUpperCase()
+                      )}
                   </div>
                   <span className="text-sm text-blue-600 group-hover:underline">{reporter}</span>
                </div>

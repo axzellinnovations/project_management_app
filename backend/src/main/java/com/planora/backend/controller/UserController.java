@@ -93,7 +93,7 @@ public class UserController {
                             user.getFullName(),
                             user.getEmail(),
                             user.isVerified(),
-                            user.getProfilePicUrl()
+                            service.generatePresignedUrl(user.getProfilePicUrl())
                     ))
                     .collect(Collectors.toList());
 

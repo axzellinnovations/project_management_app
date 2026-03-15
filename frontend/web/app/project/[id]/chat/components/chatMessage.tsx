@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { ChatMessage } from './chat';
+import styles from '../chat.module.css';
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
@@ -18,15 +19,15 @@ export const ChatMessages = ({ messages, currentUser }: ChatMessagesProps) => {
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-slate-400">
-        No messages yet. Start the conversation!
+      <div className={styles.chatBox}>
+        <div className="flex h-full items-center justify-center text-slate-400">No messages yet. Start the conversation!</div>
       </div>
     );
   }
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50">
-      {messages.map((msg, idx) => {
+    <div ref={scrollRef} className={styles.chatBox}>
+      {messages.filter(msg => msg.type !== 'JOIN').map((msg, idx) => {
         const isMe = msg.sender === currentUser;
         return (
           <div key={idx} className={`flex gap-3 ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -45,6 +46,11 @@ export const ChatMessages = ({ messages, currentUser }: ChatMessagesProps) => {
                 }`}>
                     {msg.content}
                 </div>
+                {msg.timestamp && (
+                  <span className="text-[10px] text-slate-400 mt-0.5 self-end">
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </span>
+                )}
             </div>
           </div>
         );

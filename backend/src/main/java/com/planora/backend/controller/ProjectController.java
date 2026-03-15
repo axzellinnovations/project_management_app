@@ -21,11 +21,21 @@ public class ProjectController {
 
     // ---------------- CREATE PROJECT ----------------
     @PostMapping
-    public ResponseEntity<ProjectResponseDTO> createProject(@RequestBody ProjectDTO projectDto) {
+    public ResponseEntity<ProjectResponseDTO> createProject(
+            @RequestBody ProjectDTO projectDto,
+            @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
+        projectDto.setOwnerId(principal.getUserId());
         return new ResponseEntity<>(
                 projectService.createProject(projectDto),
-                HttpStatus.CREATED
-        );
+                HttpStatus.CREATED);
+    }
+
+    // ---------------- CHECK PROJECT KEY ----------------
+    @GetMapping("/check-key")
+    public ResponseEntity<Boolean> checkProjectKey(@RequestParam String key) {
+        // Return true if available, false if in use
+        boolean exists = projectService.checkKeyExists(key);
+        return ResponseEntity.ok(!exists);
     }
 
     // ---------------- READ ALL PROJECTS ----------------
@@ -33,8 +43,7 @@ public class ProjectController {
     public ResponseEntity<List<ProjectResponseDTO>> getAllProjects() {
         return new ResponseEntity<>(
                 projectService.getAllProjects(),
-                HttpStatus.OK
-        );
+                HttpStatus.OK);
     }
 
     // ---------------- READ PROJECT BY ID ----------------
@@ -42,20 +51,17 @@ public class ProjectController {
     public ResponseEntity<ProjectResponseDTO> getProjectById(@PathVariable Long projectId) {
         return new ResponseEntity<>(
                 projectService.getProjectById(projectId),
-                HttpStatus.OK
-        );
+                HttpStatus.OK);
     }
 
     // ---------------- UPDATE PROJECT ----------------
     @PutMapping("/{projectId}")
     public ResponseEntity<ProjectResponseDTO> updateProject(
             @PathVariable Long projectId,
-            @RequestBody UpdateProjectDTO dto
-    ) {
+            @RequestBody UpdateProjectDTO dto) {
         return new ResponseEntity<>(
                 projectService.updateProject(projectId, dto),
-                HttpStatus.OK
-        );
+                HttpStatus.OK);
     }
 
     // ---------------- DELETE PROJECT (OWNER ONLY) ----------------
@@ -63,8 +69,7 @@ public class ProjectController {
     public ResponseEntity<Void> deleteProject(
             @PathVariable Long projectId,
             @PathVariable Long teamId,
-            @AuthenticationPrincipal(expression = "userId") Long userId
-    ) {
+            @AuthenticationPrincipal(expression = "userId") Long userId) {
         projectService.deleteProject(projectId, teamId, userId);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }

@@ -1,11 +1,7 @@
 package com.planora.backend.service;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Random;
@@ -13,6 +9,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
@@ -30,6 +27,13 @@ import com.planora.backend.repository.UserRepository;
 
 import jakarta.transaction.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 @Service
 public class UserService {
@@ -44,12 +48,23 @@ public class UserService {
 
     private AuthenticationManager authenticationManager;
 
-    public UserService(UserRepository userRepository, JWTService jwtService, AuthenticationManager authenticationManager, TokenRepository tokenRepository, EmailService emailService) {
+    private final S3Client s3Client;
+    private final S3Presigner s3Presigner;
+
+    @Value("${aws.s3.profile-bucket}")
+    private String profileBucket;
+
+    @Value("${aws.region}")
+    private String region;
+
+    public UserService(UserRepository userRepository, JWTService jwtService, AuthenticationManager authenticationManager, TokenRepository tokenRepository, EmailService emailService, S3Client s3Client, S3Presigner s3Presigner) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
         this.tokenRepository = tokenRepository;
         this.emailService = emailService;
+        this.s3Client = s3Client;
+        this.s3Presigner = s3Presigner;
     }
 
     @Transactional
@@ -299,7 +314,7 @@ public class UserService {
         }
 
         // Validate file size (5MB max)
-        long maxFileSize = 5 * 1024 * 1024; // 5MB in bytes
+        long maxFileSize = 5 * 1024 * 1024;
         if (file.getSize() > maxFileSize) {
             throw new IllegalArgumentException("File size exceeds maximum limit of 5MB");
         }
@@ -311,40 +326,37 @@ public class UserService {
         }
 
         try {
-            // Define the folder where images will be saved
-            String uploadDirectory = "uploads/profile_pictures";
-            Path uploadPath = Paths.get(uploadDirectory);
-
-            // Create the directory if it doesn't exist
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
-            }
-
-            // Delete old profile picture if exists
+            // Delete old profile picture if it exists
             String oldProfilePicUrl = user.getProfilePicUrl();
             if (oldProfilePicUrl != null && !oldProfilePicUrl.isEmpty()) {
                 deleteProfilePictureFile(oldProfilePicUrl);
             }
 
-            // Generate a unique file name to prevent overwriting
+            // Generate a unique file name
             String originalFilename = file.getOriginalFilename();
             String fileExtension = originalFilename != null ? originalFilename.substring(originalFilename.lastIndexOf(".")) : ".jpg";
             String uniqueFileName = UUID.randomUUID().toString() + fileExtension;
 
-            // Save the file
-            Path filePath = uploadPath.resolve(uniqueFileName);
-            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+            // Upload to S3
+            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                    .bucket(profileBucket)
+                    .key(uniqueFileName)
+                    .contentType(contentType)
+                    .build();
 
-            // Save the URL/path to the database
-            String fileUrl = "/images/" + uniqueFileName;
+            s3Client.putObject(putObjectRequest,
+                    RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+
+            // Construct the public S3 URL
+            String fileUrl = String.format("https://%s.s3.%s.amazonaws.com/%s", profileBucket, region, uniqueFileName);
+
             user.setProfilePicUrl(fileUrl);
             userRepository.save(user);
 
             return fileUrl;
 
-
-        } catch (IOException e) {
-            throw new RuntimeException("Could not store the file. Error: " + e.getMessage());
+        } catch (Exception e) {
+            throw new RuntimeException("Could not store the file in S3. Error: " + e.getMessage());
         }
     }
 
@@ -357,16 +369,46 @@ public class UserService {
 
     private void deleteProfilePictureFile(String fileUrl) {
         try {
-            // Extract filename from URL (e.g., "/images/uuid.jpg" -> "uuid.jpg")
-            String filename = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
-            Path filePath = Paths.get("uploads/profile_pictures", filename);
+            // Extract filename (the S3 Object Key) from the full URL
+            // e.g., "https://my-bucket.s3.us-east-1.amazonaws.com/uuid.jpg" -> "uuid.jpg"
+            String key = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
 
-            if (Files.exists(filePath)) {
-                Files.delete(filePath);
-            }
-        } catch (IOException e) {
+            DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
+                    .bucket(profileBucket)
+                    .key(key)
+                    .build();
+
+            s3Client.deleteObject(deleteObjectRequest);
+        } catch (Exception e) {
             // Log the error but don't fail the upload if old file cleanup fails
-            logger.warn("Failed to delete old profile picture: {}", e.getMessage());
+            logger.warn("Failed to delete old profile picture from S3: {}", e.getMessage());
+        }
+    }
+
+    public String generatePresignedUrl(String fileUrl) {
+        if (fileUrl == null || fileUrl.isEmpty() || !fileUrl.contains("amazonaws.com")) {
+            return fileUrl; // Return as-is if it's empty or a local default image
+        }
+
+        try {
+            // Extract the key (e.g., uuid.jpg) from the full database URL
+            String key = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
+
+            GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                    .bucket(profileBucket)
+                    .key(key)
+                    .build();
+
+            // Create a temporary URL valid for 60 minutes
+            GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                    .signatureDuration(Duration.ofMinutes(60))
+                    .getObjectRequest(getObjectRequest)
+                    .build();
+
+            return s3Presigner.presignGetObject(presignRequest).url().toString();
+        } catch (Exception e) {
+            logger.error("Failed to generate presigned URL", e);
+            return null;
         }
     }
 }
