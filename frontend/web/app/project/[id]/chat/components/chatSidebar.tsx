@@ -10,7 +10,10 @@ interface ChatSidebarProps {
   selectedRoomId: number | null;
   onSelectUser: (user: string | null) => void;
   onSelectRoom: (roomId: number | null) => void;
-  lastPrivateMessages: Record<string, ChatMessage[]>;
+  privateUnseenCounts: Record<string, number>;
+  roomUnseenCounts: Record<number, number>;
+  privateLastMessages: Record<string, ChatMessage | null>;
+  roomLastMessages: Record<number, ChatMessage | null>;
   onCreateRoom: () => void;
   onDeleteRoom: (roomId: number) => void;
   onAddTeam: (teamName: string) => void;
@@ -26,7 +29,10 @@ export const ChatSidebar = ({
   onSelectUser,
   onSelectRoom,
   currentUser,
-  lastPrivateMessages,
+  privateUnseenCounts,
+  roomUnseenCounts,
+  privateLastMessages,
+  roomLastMessages,
   onCreateRoom,
   onDeleteRoom,
   onAddTeam,
@@ -81,8 +87,17 @@ export const ChatSidebar = ({
                 hasSelectedRoom && selectedRoomId === room.id ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-100'
               }`}
             >
-              <p className="text-sm font-medium text-slate-900 truncate">{room.name}</p>
-              <p className="text-xs text-slate-500 truncate">Created by {room.createdBy}</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-slate-900 truncate">{room.name}</p>
+                {(roomUnseenCounts[room.id] || 0) > 0 && (
+                  <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-blue-600 text-white text-[11px] font-semibold flex items-center justify-center">
+                    {roomUnseenCounts[room.id] > 99 ? '99+' : roomUnseenCounts[room.id]}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 truncate">
+                {roomLastMessages[room.id]?.content || `Created by ${room.createdBy}`}
+              </p>
             </button>
             <button
               onClick={() => onDeleteRoom(room.id)}
@@ -98,7 +113,8 @@ export const ChatSidebar = ({
         {users.length === 0 && <p className="text-xs text-slate-400 px-3">No active users</p>}
 
         {users.map(user => {
-            const lastMsg = lastPrivateMessages[user]?.slice(-1)[0]?.content;
+      const lastMsg = privateLastMessages[user]?.content;
+      const unseen = privateUnseenCounts[user] || 0;
             return (
             <button
                 key={user}
@@ -110,8 +126,15 @@ export const ChatSidebar = ({
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-bold">
                 {user.charAt(0).toUpperCase()}
                 </div>
-                <div className="overflow-hidden">
-                <p className="text-sm font-medium text-slate-900 truncate">{user}</p>
+                <div className="overflow-hidden flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-slate-900 truncate">{user}</p>
+                  {unseen > 0 && (
+                    <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-green-600 text-white text-[11px] font-semibold flex items-center justify-center">
+                      {unseen > 99 ? '99+' : unseen}
+                    </span>
+                  )}
+                </div>
                 {lastMsg && <p className="text-xs text-slate-500 truncate">{lastMsg}</p>}
                 </div>
             </button>

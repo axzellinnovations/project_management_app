@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import SockJS from 'sockjs-client';
 import { Stomp, CompatClient } from '@stomp/stompjs';
-import { ChatMessage, ChatRoom } from '../components/chat';
+import { ChatMessage, ChatRoom, DirectChatSummary, RoomChatSummary } from '../components/chat';
 
 interface RoomEvent {
   action: 'CREATED' | 'DELETED';
@@ -13,15 +13,25 @@ interface RoomEvent {
 export const useChat = (projectId: string) => {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<string>('');
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [privateMessages, setPrivateMessages] = useState<Record<string, ChatMessage[]>>({});
   const [roomMessages, setRoomMessages] = useState<Record<number, ChatMessage[]>>({});
+  const [privateUnseenCounts, setPrivateUnseenCounts] = useState<Record<string, number>>({});
+  const [roomUnseenCounts, setRoomUnseenCounts] = useState<Record<number, number>>({});
+  const [privateLastMessages, setPrivateLastMessages] = useState<Record<string, ChatMessage | null>>({});
+  const [roomLastMessages, setRoomLastMessages] = useState<Record<number, ChatMessage | null>>({});
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [users, setUsers] = useState<string[]>([]);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const stompClientRef = useRef<CompatClient | null>(null);
+  const selectedUserRef = useRef<string | null>(null);
+  const selectedRoomIdRef = useRef<number | null>(null);
+  const hasRestoredSelectionRef = useRef(false);
+  const selectionStorageKey = `chat-selection:${projectId}`;
 
   const addTeam = useCallback((teamName: string) => {
     setUsers(prev => {
@@ -29,6 +39,32 @@ export const useChat = (projectId: string) => {
       return [...prev, teamName];
     });
   }, []);
+
+  useEffect(() => {
+    selectedUserRef.current = selectedUser;
+  }, [selectedUser]);
+
+  useEffect(() => {
+    selectedRoomIdRef.current = selectedRoomId;
+  }, [selectedRoomId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !hasRestoredSelectionRef.current) {
+      return;
+    }
+
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const selection = selectedRoomId !== null && Number.isFinite(selectedRoomId)
+      ? { type: 'room', value: selectedRoomId }
+      : selectedUser
+      ? { type: 'private', value: selectedUser }
+      : { type: 'team', value: null };
+
+    window.sessionStorage.setItem(selectionStorageKey, JSON.stringify(selection));
+  }, [selectedRoomId, selectedUser, selectionStorageKey]);
 
   // 2. Fetch Users
   const fetchAllUsers = useCallback(async (token: string) => {
@@ -38,11 +74,15 @@ export const useChat = (projectId: string) => {
       });
       if (res.ok) {
         const data = await res.json();
-        setUsers(data.map((u: string) => u.toLowerCase()));
+        const normalizedUsers = data.map((u: string) => u.toLowerCase());
+        setUsers(normalizedUsers);
+        return normalizedUsers;
       }
     } catch (err) {
       console.error('Error fetching users:', err);
     }
+
+    return [] as string[];
   }, [projectId]);
 
   const loadRooms = useCallback(async () => {
@@ -59,11 +99,93 @@ export const useChat = (projectId: string) => {
           projectId: Number(room.projectId)
         })).filter((room: ChatRoom) => Number.isFinite(room.id));
         setRooms(normalizedRooms);
+        return normalizedRooms;
       }
     } catch (err) {
       console.error('Error fetching rooms:', err);
     }
+
+    return [] as ChatRoom[];
   }, [projectId]);
+
+  const loadSummaries = useCallback(async (token: string) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/chat/summaries`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        return;
+      }
+
+      const data = await res.json();
+      const directSummaries: DirectChatSummary[] = data.directMessages || [];
+      const roomSummaries: RoomChatSummary[] = data.rooms || [];
+
+      setPrivateUnseenCounts(Object.fromEntries(
+        directSummaries.map(summary => [summary.username.toLowerCase(), Number(summary.unseenCount) || 0])
+      ));
+      setRoomUnseenCounts(Object.fromEntries(
+        roomSummaries.map(summary => [Number(summary.roomId), Number(summary.unseenCount) || 0])
+      ));
+      setPrivateLastMessages(Object.fromEntries(
+        directSummaries.map(summary => [
+          summary.username.toLowerCase(),
+          summary.lastMessage
+            ? {
+                sender: summary.lastMessageSender || summary.username.toLowerCase(),
+                content: summary.lastMessage,
+                timestamp: summary.lastMessageTimestamp || undefined
+              }
+            : null
+        ])
+      ));
+      setRoomLastMessages(Object.fromEntries(
+        roomSummaries.map(summary => [
+          Number(summary.roomId),
+          summary.lastMessage
+            ? {
+                sender: summary.lastMessageSender || '',
+                content: summary.lastMessage,
+                timestamp: summary.lastMessageTimestamp || undefined,
+                roomId: Number(summary.roomId)
+              }
+            : null
+        ])
+      ));
+    } catch (err) {
+      console.error('Error fetching chat summaries:', err);
+    }
+  }, [projectId]);
+
+  const restoreSelection = useCallback((availableUsers: string[], availableRooms: ChatRoom[]) => {
+    if (typeof window === 'undefined') {
+      hasRestoredSelectionRef.current = true;
+      return;
+    }
+
+    const rawSelection = window.sessionStorage.getItem(selectionStorageKey);
+    if (!rawSelection) {
+      hasRestoredSelectionRef.current = true;
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(rawSelection) as { type?: 'team' | 'private' | 'room'; value?: string | number | null };
+      if (parsed.type === 'private' && typeof parsed.value === 'string' && availableUsers.includes(parsed.value)) {
+        setSelectedUser(parsed.value);
+      } else if (parsed.type === 'room') {
+        const roomId = Number(parsed.value);
+        if (Number.isFinite(roomId) && availableRooms.some(room => room.id === roomId)) {
+          setSelectedRoomId(roomId);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to restore chat selection', err);
+    } finally {
+      hasRestoredSelectionRef.current = true;
+    }
+  }, [selectionStorageKey]);
 
   const loadRoomHistory = useCallback(async (roomId: number) => {
     try {
@@ -74,6 +196,11 @@ export const useChat = (projectId: string) => {
       if (res.ok) {
         const data = await res.json();
         setRoomMessages(prev => ({ ...prev, [roomId]: data }));
+        setRoomLastMessages(prev => ({
+          ...prev,
+          [roomId]: data.length > 0 ? data[data.length - 1] : null
+        }));
+        setRoomUnseenCounts(prev => ({ ...prev, [roomId]: 0 }));
       }
     } catch (err) {
       console.error('Failed to load room history', err);
@@ -213,6 +340,14 @@ export const useChat = (projectId: string) => {
             ...prev,
             [sender]: [...(prev[sender] || []), msg]
           }));
+          setPrivateLastMessages(prev => ({ ...prev, [sender]: msg }));
+
+          if (sender !== username && selectedUserRef.current !== sender) {
+            setPrivateUnseenCounts(prev => ({
+              ...prev,
+              [sender]: (prev[sender] || 0) + 1
+            }));
+          }
           setUsers(prev => prev.includes(sender) ? prev : [...prev, sender]);
         });
 
@@ -228,12 +363,24 @@ export const useChat = (projectId: string) => {
               return;
             }
             setRooms(prev => prev.some(room => room.id === normalizedRoom.id) ? prev : [...prev, normalizedRoom]);
+            setRoomUnseenCounts(prev => ({ ...prev, [normalizedRoom.id]: prev[normalizedRoom.id] || 0 }));
+            setRoomLastMessages(prev => ({ ...prev, [normalizedRoom.id]: prev[normalizedRoom.id] || null }));
             return;
           }
 
           if (event.action === 'DELETED') {
             setRooms(prev => prev.filter(room => room.id !== Number(event.roomId)));
             setRoomMessages(prev => {
+              const next = { ...prev };
+              delete next[Number(event.roomId)];
+              return next;
+            });
+            setRoomUnseenCounts(prev => {
+              const next = { ...prev };
+              delete next[Number(event.roomId)];
+              return next;
+            });
+            setRoomLastMessages(prev => {
               const next = { ...prev };
               delete next[Number(event.roomId)];
               return next;
@@ -269,8 +416,10 @@ export const useChat = (projectId: string) => {
         setCurrentUser(username);
         setIsLoading(false);
 
-        fetchAllUsers(token);
-        await loadRooms();
+        const loadedUsers = await fetchAllUsers(token);
+        const loadedRooms = await loadRooms();
+        await loadSummaries(token);
+        restoreSelection(loadedUsers, loadedRooms);
         connectToChat(token, username);
         loadHistory(token, username);
       } catch (err) {
@@ -285,7 +434,7 @@ export const useChat = (projectId: string) => {
       setIsSocketConnected(false);
       if (stompClientRef.current?.connected) stompClientRef.current.disconnect();
     };
-  }, [router, fetchAllUsers, loadRooms, connectToChat, loadHistory]);
+  }, [router, fetchAllUsers, loadRooms, loadSummaries, restoreSelection, connectToChat, loadHistory]);
 
   useEffect(() => {
     if (!isSocketConnected || !stompClientRef.current) return;
@@ -297,13 +446,21 @@ export const useChat = (projectId: string) => {
           ...prev,
           [msg.roomId]: [...(prev[msg.roomId] || []), msg]
         }));
+        setRoomLastMessages(prev => ({ ...prev, [msg.roomId]: msg }));
+
+        if (msg.sender.toLowerCase() !== currentUser && selectedRoomIdRef.current !== msg.roomId) {
+          setRoomUnseenCounts(prev => ({
+            ...prev,
+            [msg.roomId]: (prev[msg.roomId] || 0) + 1
+          }));
+        }
       }
     }));
 
     return () => {
       subscriptions.forEach(sub => sub && sub.unsubscribe && sub.unsubscribe());
     };
-  }, [projectId, rooms, isSocketConnected]);
+  }, [projectId, rooms, isSocketConnected, currentUser]);
   // 4. fetch private conversation when needed
   const loadPrivateHistory = useCallback(async (recipient: string) => {
     if (!recipient || !currentUser) return;
@@ -317,6 +474,11 @@ export const useChat = (projectId: string) => {
       if (res.ok) {
         const data = await res.json();
         setPrivateMessages(prev => ({ ...prev, [recipient]: data }));
+        setPrivateLastMessages(prev => ({
+          ...prev,
+          [recipient]: data.length > 0 ? data[data.length - 1] : null
+        }));
+        setPrivateUnseenCounts(prev => ({ ...prev, [recipient]: 0 }));
       } else {
         console.warn('Private history fetch returned', res.status);
       }
@@ -324,6 +486,35 @@ export const useChat = (projectId: string) => {
       console.error('Failed to load private history', err);
     }
   }, [currentUser, projectId]);
+
+  useEffect(() => {
+    if (!selectedUser) {
+      return;
+    }
+    setPrivateUnseenCounts(prev => ({ ...prev, [selectedUser]: 0 }));
+  }, [selectedUser]);
+
+  useEffect(() => {
+    if (selectedRoomId === null || !Number.isFinite(selectedRoomId)) {
+      return;
+    }
+    setRoomUnseenCounts(prev => ({ ...prev, [selectedRoomId]: 0 }));
+  }, [selectedRoomId]);
+
+  const selectPrivateUser = useCallback((user: string | null) => {
+    setSelectedRoomId(null);
+    setSelectedUser(user);
+  }, []);
+
+  const selectRoom = useCallback((roomId: number | null) => {
+    setSelectedUser(null);
+    if (roomId === null) {
+      setSelectedRoomId(null);
+      return;
+    }
+    const normalizedRoomId = Number(roomId);
+    setSelectedRoomId(Number.isFinite(normalizedRoomId) ? normalizedRoomId : null);
+  }, []);
 
   // 4. Send Message Action
   const sendMessage = useCallback((content: string, recipient?: string | null) => {
@@ -339,6 +530,7 @@ export const useChat = (projectId: string) => {
         ...prev,
         [recipient.toLowerCase()]: [...(prev[recipient.toLowerCase()] || []), msg]
       }));
+      setPrivateLastMessages(prev => ({ ...prev, [recipient.toLowerCase()]: msg }));
     } else {
       // Public
       const msg = { sender: currentUser, content };
@@ -354,6 +546,7 @@ export const useChat = (projectId: string) => {
       ...prev,
       [roomId]: [...(prev[roomId] || []), msg]
     }));
+    setRoomLastMessages(prev => ({ ...prev, [roomId]: msg }));
   }, [currentUser, projectId]);
 
   return {
@@ -363,6 +556,14 @@ export const useChat = (projectId: string) => {
     privateMessages,
     rooms,
     roomMessages,
+    selectedUser,
+    selectedRoomId,
+    privateUnseenCounts,
+    roomUnseenCounts,
+    privateLastMessages,
+    roomLastMessages,
+    selectPrivateUser,
+    selectRoom,
     sendMessage,
     sendRoomMessage,
     loadRoomHistory,

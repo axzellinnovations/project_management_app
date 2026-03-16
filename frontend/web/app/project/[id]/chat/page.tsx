@@ -11,8 +11,6 @@ import styles from './chat.module.css';
 export default function ChatInterface() {
   const params = useParams();
   const projectId = params.id as string;
-  const [selectedUser, setSelectedUser] = useState<string | null>(null);
-  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const {
     currentUser,
@@ -21,6 +19,14 @@ export default function ChatInterface() {
     roomMessages,
     messages,
     privateMessages,
+    selectedUser,
+    selectedRoomId,
+    privateUnseenCounts,
+    roomUnseenCounts,
+    privateLastMessages,
+    roomLastMessages,
+    selectPrivateUser,
+    selectRoom,
     sendMessage,
     sendRoomMessage,
     loadPrivateHistory,
@@ -41,7 +47,7 @@ export default function ChatInterface() {
     ? privateMessages[selectedUser] || []
     : messages;
 
-  const filteredUsers = users.filter((u) => u.toLowerCase().includes(searchTerm.trim().toLowerCase()));
+  const filteredUsers = users.filter((u) => u !== currentUser && u.toLowerCase().includes(searchTerm.trim().toLowerCase()));
   const filteredMessages = displayMessages.filter((msg) => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.trim().toLowerCase();
@@ -87,8 +93,7 @@ export default function ChatInterface() {
       return;
     }
 
-    setSelectedUser(null);
-    setSelectedRoomId(createdRoom.id);
+    selectRoom(createdRoom.id);
     await loadRoomHistory(createdRoom.id);
   };
 
@@ -101,22 +106,12 @@ export default function ChatInterface() {
           rooms={rooms}
           selectedUser={selectedUser}
           selectedRoomId={selectedRoomId}
-          onSelectUser={(u) => {
-            if (u !== null) {
-              setSelectedRoomId(null);
-            }
-            setSelectedUser(u);
-          }}
-          onSelectRoom={(roomId) => {
-            setSelectedUser(null);
-            if (roomId === null) {
-              setSelectedRoomId(null);
-              return;
-            }
-            const normalizedRoomId = Number(roomId);
-            setSelectedRoomId(Number.isFinite(normalizedRoomId) ? normalizedRoomId : null);
-          }}
-          lastPrivateMessages={privateMessages}
+          onSelectUser={selectPrivateUser}
+          onSelectRoom={selectRoom}
+          privateUnseenCounts={privateUnseenCounts}
+          roomUnseenCounts={roomUnseenCounts}
+          privateLastMessages={privateLastMessages}
+          roomLastMessages={roomLastMessages}
           onCreateRoom={handleCreateRoom}
           onDeleteRoom={deleteRoom}
           onAddTeam={addTeam}

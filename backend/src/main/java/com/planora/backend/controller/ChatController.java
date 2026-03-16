@@ -1,6 +1,8 @@
 package com.planora.backend.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import java.util.Objects;
+
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -49,17 +51,10 @@ public class ChatController {
     public ChatMessage sendMessage(@DestinationVariable Long projectId,
                                    @Payload ChatMessage chatMessage,
                                    SimpMessageHeaderAccessor headerAccessor) {
-
-        if (headerAccessor.getUser() == null) {
-            throw new IllegalArgumentException("WebSocket user is not authenticated");
-        }
-
-        String username = headerAccessor.getUser().getName();
+        String username = requireAuthenticatedUsername(headerAccessor);
         validateProjectMembership(projectId, username);
 
-        if (chatMessage.getSender() != null) {
-            chatMessage.setSender(chatMessage.getSender().toLowerCase());
-        }
+        chatMessage.setSender(resolveCanonicalChatIdentifier(username));
 
         chatMessage.setProjectId(projectId);
         chatMessage.setChatType(ChatType.GROUP);
@@ -69,14 +64,14 @@ public class ChatController {
     }
     @MessageMapping("/project/{projectId}/chat.sendPrivateMessage")
     public void sendPrivateMessage(@DestinationVariable Long projectId, @Payload ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
-        String username = headerAccessor.getUser().getName();
+        String username = requireAuthenticatedUsername(headerAccessor);
         validateProjectMembership(projectId, username);
-        if (chatMessage.getSender() != null) {
-            chatMessage.setSender(chatMessage.getSender().toLowerCase());
-        }
-        if (chatMessage.getRecipient() != null) {
-            chatMessage.setRecipient(chatMessage.getRecipient().toLowerCase());
-        }
+
+        var canonicalSender = resolveCanonicalChatIdentifier(username);
+        var canonicalRecipient = resolveCanonicalChatIdentifier(chatMessage.getRecipient());
+        chatMessage.setSender(canonicalSender);
+        chatMessage.setRecipient(canonicalRecipient);
+
         // Validate recipient is also a member
         validateProjectMembership(projectId, chatMessage.getRecipient());
         System.out.println(
@@ -85,10 +80,7 @@ public class ChatController {
         chatMessage.setChatType(ChatType.PRIVATE);
         // persist private message as well
         ChatMessage saved = chatService.saveMessage(chatMessage);
-        simpMessagingTemplate.convertAndSendToUser(
-                chatMessage.getRecipient(),
-                "/queue/project/" + projectId + "/messages", // resulting in /user/{recipient}/queue/project/{projectId}/messages
-                saved);
+        sendPrivateMessageToRecipientAliases(projectId, Objects.requireNonNull(chatMessage.getRecipient()), Objects.requireNonNull(saved));
     }
 
     @MessageMapping("/project/{projectId}/room/{roomId}/send")
@@ -97,13 +89,11 @@ public class ChatController {
                                        @DestinationVariable Long roomId,
                                        @Payload ChatMessage chatMessage,
                                        SimpMessageHeaderAccessor headerAccessor) {
-        String username = headerAccessor.getUser().getName();
+        String username = requireAuthenticatedUsername(headerAccessor);
         validateProjectMembership(projectId, username);
         validateRoomMembership(roomId, username);
 
-        if (chatMessage.getSender() != null) {
-            chatMessage.setSender(chatMessage.getSender().toLowerCase());
-        }
+        chatMessage.setSender(resolveCanonicalChatIdentifier(username));
 
         chatMessage.setProjectId(projectId);
         chatMessage.setRoomId(roomId);
@@ -141,15 +131,16 @@ public class ChatController {
     @SendTo("/topic/project/{projectId}/public")
     public ChatMessage addUser(@DestinationVariable Long projectId, @Payload ChatMessage chatMessage,
                                SimpMessageHeaderAccessor headerAccessor) {
-        String username = headerAccessor.getUser().getName();
+        String username = requireAuthenticatedUsername(headerAccessor);
         validateProjectMembership(projectId, username);
-        if (chatMessage.getSender() != null) {
-            chatMessage.setSender(chatMessage.getSender().toLowerCase());
-        }
+        chatMessage.setSender(resolveCanonicalChatIdentifier(username));
         chatMessage.setProjectId(projectId);
         chatMessage.setChatType(ChatType.GROUP);
         // Add username in web socket session so we can retrieve it on disconnect
-        headerAccessor.getSessionAttributes().put("username", chatMessage.getSender());
+        var sessionAttributes = headerAccessor.getSessionAttributes();
+        if (sessionAttributes != null) {
+            sessionAttributes.put("username", chatMessage.getSender());
+        }
         // optionally save join notification and broadcast the managed entity
         ChatMessage saved = chatService.saveMessage(chatMessage);
         return saved;
@@ -194,6 +185,55 @@ public class ChatController {
             return byEmail;
         }
         return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
+    }
+
+    private String resolveCanonicalChatIdentifier(String usernameOrEmail) {
+        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
+            return usernameOrEmail;
+        }
+
+        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        if (user == null) {
+            return usernameOrEmail.toLowerCase();
+        }
+
+        if (user.getUsername() != null && !user.getUsername().isBlank()) {
+            return user.getUsername().toLowerCase();
+        }
+
+        return user.getEmail() != null ? user.getEmail().toLowerCase() : usernameOrEmail.toLowerCase();
+    }
+
+    private void sendPrivateMessageToRecipientAliases(Long projectId, String recipient, ChatMessage savedMessage) {
+        var resolvedRecipient = resolveUserByEmailOrUsername(recipient);
+        if (resolvedRecipient == null) {
+            simpMessagingTemplate.convertAndSendToUser(
+                    recipient.toLowerCase(),
+                    "/queue/project/" + projectId + "/messages",
+                    savedMessage);
+            return;
+        }
+
+        var destination = "/queue/project/" + projectId + "/messages";
+        var username = resolvedRecipient.getUsername() != null ? resolvedRecipient.getUsername().toLowerCase() : null;
+        var email = resolvedRecipient.getEmail() != null ? resolvedRecipient.getEmail().toLowerCase() : null;
+
+        if (username != null && !username.isBlank()) {
+            simpMessagingTemplate.convertAndSendToUser(username, destination, savedMessage);
+        }
+
+        if (email != null && !email.isBlank() && (username == null || !email.equals(username))) {
+            simpMessagingTemplate.convertAndSendToUser(email, destination, savedMessage);
+        }
+    }
+
+    private String requireAuthenticatedUsername(SimpMessageHeaderAccessor headerAccessor) {
+        var principal = headerAccessor.getUser();
+        if (principal == null || principal.getName() == null) {
+            throw new IllegalArgumentException("WebSocket user is not authenticated");
+        }
+
+        return principal.getName();
     }
 
     private boolean isRoomCreator(com.planora.backend.model.ChatRoom room, com.planora.backend.model.User user, String usernameOrEmail) {

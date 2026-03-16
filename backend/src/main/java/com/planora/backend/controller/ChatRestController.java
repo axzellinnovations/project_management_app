@@ -39,6 +39,8 @@ public class ChatRestController {
 
     public static record ChatRoomResponse(Long id, String name, Long projectId, String createdBy, String createdAt) {}
 
+    public static record ChatSidebarResponse(List<ChatService.RoomChatSummary> rooms, List<ChatService.DirectChatSummary> directMessages) {}
+
     private final ChatService chatService;
 
     private final ProjectRepository projectRepository;
@@ -70,7 +72,9 @@ public class ChatRestController {
         validateProjectMembership(projectId, username);
         if (roomId != null) {
             validateRoomMembership(roomId, username);
-            return new ResponseEntity<>(chatService.getRoomMessages(projectId, roomId), HttpStatus.OK);
+            var roomMessages = chatService.getRoomMessages(projectId, roomId);
+            chatService.markRoomAsRead(projectId, roomId, username);
+            return new ResponseEntity<>(roomMessages, HttpStatus.OK);
         }
         if (recipient == null && withUser == null) {
             return new ResponseEntity<>(chatService.getGroupMessages(projectId), HttpStatus.OK);
@@ -78,7 +82,9 @@ public class ChatRestController {
 
         // private conversation between recipient (current user usually) and withUser
         validateProjectMembership(projectId, withUser);
-        return new ResponseEntity<>(chatService.getPrivateConversation(projectId, recipient, withUser), HttpStatus.OK);
+        var privateConversation = chatService.getPrivateConversation(projectId, recipient, withUser);
+        chatService.markPrivateConversationAsRead(projectId, username, withUser);
+        return new ResponseEntity<>(privateConversation, HttpStatus.OK);
     }
 
     /**
@@ -98,23 +104,29 @@ public class ChatRestController {
     public ResponseEntity<List<ChatRoomResponse>> getRooms(@PathVariable Long projectId, Authentication authentication) {
         String username = authentication.getName();
         validateProjectMembership(projectId, username);
-        var currentUser = resolveUserByEmailOrUsername(username);
-        if (currentUser == null) {
-            return new ResponseEntity<>(List.of(), HttpStatus.OK);
-        }
-
-        var memberRoomIds = chatRoomMemberRepository.findByUserUserId(currentUser.getUserId()).stream()
-            .map(roomMember -> roomMember.getChatRoom().getId())
-            .distinct()
-            .toList();
-
-        var visibleRooms = chatRoomRepository.findByProjectId(projectId).stream()
-            .filter(room -> room.getCreatedBy() != null && room.getCreatedBy().equalsIgnoreCase(username)
-                || memberRoomIds.contains(room.getId()))
+        var visibleRooms = getVisibleRooms(projectId, username).stream()
             .map(this::toRoomResponse)
             .toList();
 
         return new ResponseEntity<>(visibleRooms, HttpStatus.OK);
+    }
+
+    @GetMapping("/summaries")
+    public ResponseEntity<ChatSidebarResponse> getChatSummaries(@PathVariable Long projectId, Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+
+        var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
+        var participants = teamMemberRepository.findByTeamId(project.getTeam().getId()).stream()
+                .map(tm -> tm.getUser().getUsername())
+                .toList();
+
+        var visibleRooms = getVisibleRooms(projectId, username);
+        var response = new ChatSidebarResponse(
+                chatService.buildRoomSummaries(projectId, username, visibleRooms),
+                chatService.buildDirectSummaries(projectId, username, participants));
+
+        return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
     public static record ChatRoomRequest(String name, List<String> members) {}
@@ -222,6 +234,23 @@ public class ChatRestController {
                 room.getCreatedBy(),
                 room.getCreatedAt() != null ? room.getCreatedAt().toString() : null);
     }
+
+            private List<ChatRoom> getVisibleRooms(Long projectId, String username) {
+            var currentUser = resolveUserByEmailOrUsername(username);
+            if (currentUser == null) {
+                return List.of();
+            }
+
+            var memberRoomIds = chatRoomMemberRepository.findByUserUserId(currentUser.getUserId()).stream()
+                .map(roomMember -> roomMember.getChatRoom().getId())
+                .distinct()
+                .toList();
+
+            return chatRoomRepository.findByProjectId(projectId).stream()
+                .filter(room -> room.getCreatedBy() != null && room.getCreatedBy().equalsIgnoreCase(username)
+                    || memberRoomIds.contains(room.getId()))
+                .toList();
+            }
 
     private void validateRoomMembership(Long roomId, String usernameOrEmail) {
         var user = resolveUserByEmailOrUsername(usernameOrEmail);

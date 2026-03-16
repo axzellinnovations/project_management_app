@@ -19,3 +19,19 @@ export interface ChatRoom {
   projectId: number;
   createdBy: string;
 }
+
+export interface DirectChatSummary {
+  username: string;
+  lastMessage: string | null;
+  lastMessageSender: string | null;
+  lastMessageTimestamp: string | null;
+  unseenCount: number;
+}
+
+export interface RoomChatSummary {
+  roomId: number;
+  lastMessage: string | null;
+  lastMessageSender: string | null;
+  lastMessageTimestamp: string | null;
+  unseenCount: number;
+}
