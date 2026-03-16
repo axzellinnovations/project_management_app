@@ -4,14 +4,15 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task } from '../types';
-import { Flag, User, Calendar, Trash2 } from 'lucide-react';
+import { Flag, User, Calendar, Trash2, Edit2 } from 'lucide-react';
 
 interface KanbanCardProps {
   task: Task;
   onDelete?: (taskId: number) => void;
+  onEdit?: (task: Task) => void;
 }
 
-export default function KanbanCard({ task, onDelete }: KanbanCardProps) {
+export default function KanbanCard({ task, onDelete, onEdit }: KanbanCardProps) {
   const {
     attributes,
     listeners,
@@ -111,19 +112,33 @@ export default function KanbanCard({ task, onDelete }: KanbanCardProps) {
         </div>
       )}
 
-      {/* Delete Button */}
-      {onDelete && (
+      {/* Action Buttons */}
+      {(onEdit || onDelete) && (
         <div className="flex justify-end gap-1 mt-2 pt-2 border-t border-gray-100">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(task.id);
-            }}
-            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-            title="Delete task"
-          >
-            <Trash2 size={14} />
-          </button>
+          {onEdit && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(task);
+              }}
+              className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+              title="Edit task"
+            >
+              <Edit2 size={14} />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(task.id);
+              }}
+              className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+              title="Delete task"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
         </div>
       )}
     </div>

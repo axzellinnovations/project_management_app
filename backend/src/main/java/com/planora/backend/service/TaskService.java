@@ -10,6 +10,7 @@ import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -55,8 +56,11 @@ public class TaskService {
         task.setProject(project);
 
         task.setStoryPoint(request.getStoryPoint());
-        task.setDueDate(request.getDueDate());
-        task.setStartDate(request.getStartDate());
+
+        // Ensure every task has a start date (use creation date when not provided) and a due date.
+        LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
+        task.setStartDate(startDate);
+        task.setDueDate(request.getDueDate() != null ? request.getDueDate() : startDate);
 
         //enum assign
         if(request.getPriority() != null) task.setPriority(Priority.valueOf(request.getPriority()));

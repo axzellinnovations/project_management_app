@@ -83,6 +83,10 @@ export default function TopBar() {
             return 'board';
         }
 
+        if (pathname.startsWith('/timeline')) {
+            return 'timeline';
+        }
+
         if (pathname.startsWith('/sprint-backlog')) {
             return 'backlog';
         }
@@ -146,7 +150,7 @@ export default function TopBar() {
             case 'summary':
                 return withProjectId('/summary');
             case 'timeline':
-                return withProjectId('/summary');
+                return withProjectId('/timeline');
             case 'backlog':
                 return '/sprint-backlog';
             case 'board':
