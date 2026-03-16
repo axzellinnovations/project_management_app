@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,7 +38,16 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ChatRestController {
 
-    public static record ChatRoomResponse(Long id, String name, Long projectId, String createdBy, String createdAt) {}
+    public static record ChatRoomResponse(Long id,
+                                          String name,
+                                          Long projectId,
+                                          String createdBy,
+                                          String topic,
+                                          String description,
+                                          boolean archived,
+                                          Long pinnedMessageId,
+                                          String createdAt,
+                                          String updatedAt) {}
 
     public static record ChatSidebarResponse(List<ChatService.RoomChatSummary> rooms, List<ChatService.DirectChatSummary> directMessages) {}
 
@@ -56,6 +66,20 @@ public class ChatRestController {
     private final SimpMessagingTemplate simpMessagingTemplate;
 
     public static record RoomEvent(String action, Long roomId, ChatRoomResponse room) {}
+
+    public static record EditMessageRequest(String content, ChatMessage.FormatType formatType) {}
+
+    public static record ThreadReplyRequest(String content, ChatMessage.FormatType formatType) {}
+
+    public static record ReactionToggleRequest(String emoji) {}
+
+    public static record RoomMetaUpdateRequest(String name, String topic, String description) {}
+
+    public static record RoomArchiveRequest(Boolean archived) {}
+
+    public static record RoomPinRequest(Long messageId) {}
+
+    public static record RoomRoleUpdateRequest(String role) {}
 
     /**
      * Get group or private chat history for a project.
@@ -87,6 +111,95 @@ public class ChatRestController {
         return new ResponseEntity<>(privateConversation, HttpStatus.OK);
     }
 
+    @GetMapping("/messages/{messageId}/thread")
+    public ResponseEntity<List<ChatMessage>> getThreadMessages(@PathVariable Long projectId,
+                                                               @PathVariable Long messageId,
+                                                               Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        return new ResponseEntity<>(chatService.getThreadMessages(projectId, messageId), HttpStatus.OK);
+    }
+
+    @PostMapping("/messages/{messageId}/thread/replies")
+    public ResponseEntity<ChatMessage> createThreadReply(@PathVariable Long projectId,
+                                                         @PathVariable Long messageId,
+                                                         @RequestBody ThreadReplyRequest request,
+                                                         Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+
+        if (request.content() == null || request.content().trim().isEmpty()) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+
+        var reply = new ChatMessage();
+        reply.setSender(resolveCanonicalChatIdentifier(username));
+        reply.setContent(request.content().trim());
+        reply.setType(ChatMessage.MessageType.CHAT);
+        reply.setFormatType(request.formatType() != null ? request.formatType() : ChatMessage.FormatType.PLAIN);
+
+        var saved = chatService.saveThreadReply(projectId, messageId, reply);
+        return new ResponseEntity<>(saved, HttpStatus.CREATED);
+    }
+
+    @PatchMapping("/messages/{messageId}")
+    public ResponseEntity<ChatMessage> editMessage(@PathVariable Long projectId,
+                                                   @PathVariable Long messageId,
+                                                   @RequestBody EditMessageRequest request,
+                                                   Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+
+        if (request.content() == null || request.content().trim().isEmpty()) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+
+        var updated = chatService.editMessage(
+                projectId,
+                messageId,
+                username,
+                request.content().trim(),
+                request.formatType());
+
+        return new ResponseEntity<>(updated, HttpStatus.OK);
+    }
+
+    @DeleteMapping("/messages/{messageId}")
+    public ResponseEntity<ChatMessage> deleteMessage(@PathVariable Long projectId,
+                                                     @PathVariable Long messageId,
+                                                     Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+
+        var deleted = chatService.softDeleteMessage(projectId, messageId, username);
+        return new ResponseEntity<>(deleted, HttpStatus.OK);
+    }
+
+    @GetMapping("/messages/{messageId}/reactions")
+    public ResponseEntity<List<ChatService.ChatReactionSummary>> getMessageReactions(@PathVariable Long projectId,
+                                                                                      @PathVariable Long messageId,
+                                                                                      Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        return new ResponseEntity<>(chatService.getMessageReactions(projectId, messageId, username), HttpStatus.OK);
+    }
+
+    @PostMapping("/messages/{messageId}/reactions/toggle")
+    public ResponseEntity<List<ChatService.ChatReactionSummary>> toggleMessageReaction(@PathVariable Long projectId,
+                                                                                        @PathVariable Long messageId,
+                                                                                        @RequestBody ReactionToggleRequest request,
+                                                                                        Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+
+        if (request.emoji() == null || request.emoji().isBlank()) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+
+        var reactions = chatService.toggleReaction(projectId, messageId, username, request.emoji());
+        return new ResponseEntity<>(reactions, HttpStatus.OK);
+    }
+
     /**
      * Get list of project members' usernames for chat.
      */
@@ -101,10 +214,12 @@ public class ChatRestController {
     }
 
     @GetMapping("/rooms")
-    public ResponseEntity<List<ChatRoomResponse>> getRooms(@PathVariable Long projectId, Authentication authentication) {
+    public ResponseEntity<List<ChatRoomResponse>> getRooms(@PathVariable Long projectId,
+                                                           @RequestParam(value = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
+                                                           Authentication authentication) {
         String username = authentication.getName();
         validateProjectMembership(projectId, username);
-        var visibleRooms = getVisibleRooms(projectId, username).stream()
+        var visibleRooms = getVisibleRooms(projectId, username, includeArchived).stream()
             .map(this::toRoomResponse)
             .toList();
 
@@ -112,7 +227,9 @@ public class ChatRestController {
     }
 
     @GetMapping("/summaries")
-    public ResponseEntity<ChatSidebarResponse> getChatSummaries(@PathVariable Long projectId, Authentication authentication) {
+    public ResponseEntity<ChatSidebarResponse> getChatSummaries(@PathVariable Long projectId,
+                                                                @RequestParam(value = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
+                                                                Authentication authentication) {
         String username = authentication.getName();
         validateProjectMembership(projectId, username);
 
@@ -121,7 +238,7 @@ public class ChatRestController {
                 .map(tm -> tm.getUser().getUsername())
                 .toList();
 
-        var visibleRooms = getVisibleRooms(projectId, username);
+        var visibleRooms = getVisibleRooms(projectId, username, includeArchived);
         var response = new ChatSidebarResponse(
                 chatService.buildRoomSummaries(projectId, username, visibleRooms),
                 chatService.buildDirectSummaries(projectId, username, participants));
@@ -147,6 +264,7 @@ public class ChatRestController {
         newRoom.setName(roomRequest.name().trim());
         newRoom.setProjectId(projectId);
         newRoom.setCreatedBy(username);
+        newRoom.setArchived(false);
         var savedRoom = chatRoomRepository.save(newRoom);
 
         var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
@@ -193,6 +311,9 @@ public class ChatRestController {
                 var roomMember = new ChatRoomMember();
                 roomMember.setChatRoom(savedRoom);
                 roomMember.setUser(user);
+                roomMember.setRole((creator != null && creator.getUserId().equals(user.getUserId()))
+                        ? ChatRoomMember.RoomRole.OWNER
+                        : ChatRoomMember.RoomRole.MEMBER);
                 chatRoomMemberRepository.save(roomMember);
             }
         });
@@ -203,6 +324,120 @@ public class ChatRestController {
 
         return new ResponseEntity<>(toRoomResponse(savedRoom), HttpStatus.CREATED);
     }
+
+        @PatchMapping("/rooms/{roomId}/meta")
+        @Transactional
+        public ResponseEntity<ChatRoomResponse> updateRoomMeta(@PathVariable Long projectId,
+                                   @PathVariable Long roomId,
+                                   @RequestBody RoomMetaUpdateRequest request,
+                                   Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+
+        var room = chatRoomRepository.findByIdAndProjectId(roomId, projectId)
+            .orElseThrow(() -> new RuntimeException("Chat room not found"));
+        requireRoomAdminOrOwner(projectId, room, username);
+
+        if (request.name() != null && !request.name().trim().isEmpty()) {
+            room.setName(request.name().trim());
+        }
+        room.setTopic(request.topic() != null ? request.topic().trim() : null);
+        room.setDescription(request.description() != null ? request.description().trim() : null);
+
+        var saved = chatRoomRepository.save(room);
+        simpMessagingTemplate.convertAndSend(
+            "/topic/project/" + projectId + "/rooms",
+            new RoomEvent("UPDATED", saved.getId(), toRoomResponse(saved)));
+
+        return new ResponseEntity<>(toRoomResponse(saved), HttpStatus.OK);
+        }
+
+        @PatchMapping("/rooms/{roomId}/archive")
+        @Transactional
+        public ResponseEntity<ChatRoomResponse> updateRoomArchive(@PathVariable Long projectId,
+                                      @PathVariable Long roomId,
+                                      @RequestBody RoomArchiveRequest request,
+                                      Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+
+        var room = chatRoomRepository.findByIdAndProjectId(roomId, projectId)
+            .orElseThrow(() -> new RuntimeException("Chat room not found"));
+            validateRoomMembership(roomId, username);
+
+        boolean archived = request.archived() != null && request.archived();
+        room.setArchived(archived);
+        room.setArchivedAt(archived ? java.time.LocalDateTime.now() : null);
+
+        var saved = chatRoomRepository.save(room);
+        simpMessagingTemplate.convertAndSend(
+            "/topic/project/" + projectId + "/rooms",
+            new RoomEvent("UPDATED", saved.getId(), toRoomResponse(saved)));
+
+        return new ResponseEntity<>(toRoomResponse(saved), HttpStatus.OK);
+        }
+
+        @PatchMapping("/rooms/{roomId}/pin")
+        @Transactional
+        public ResponseEntity<ChatRoomResponse> pinRoomMessage(@PathVariable Long projectId,
+                                   @PathVariable Long roomId,
+                                   @RequestBody RoomPinRequest request,
+                                   Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+
+        var room = chatRoomRepository.findByIdAndProjectId(roomId, projectId)
+            .orElseThrow(() -> new RuntimeException("Chat room not found"));
+        requireRoomAdminOrOwner(projectId, room, username);
+
+        if (request.messageId() != null) {
+            chatService.getRoomMessages(projectId, roomId).stream()
+                .filter(message -> message.getId() != null && message.getId().equals(request.messageId()))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Message does not belong to this room"));
+        }
+
+        room.setPinnedMessageId(request.messageId());
+        var saved = chatRoomRepository.save(room);
+
+        simpMessagingTemplate.convertAndSend(
+            "/topic/project/" + projectId + "/rooms",
+            new RoomEvent("UPDATED", saved.getId(), toRoomResponse(saved)));
+
+        return new ResponseEntity<>(toRoomResponse(saved), HttpStatus.OK);
+        }
+
+        @PatchMapping("/rooms/{roomId}/members/{memberUserId}/role")
+        @Transactional
+        public ResponseEntity<Void> updateRoomMemberRole(@PathVariable Long projectId,
+                                 @PathVariable Long roomId,
+                                 @PathVariable Long memberUserId,
+                                 @RequestBody RoomRoleUpdateRequest request,
+                                 Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+
+        var room = chatRoomRepository.findByIdAndProjectId(roomId, projectId)
+            .orElseThrow(() -> new RuntimeException("Chat room not found"));
+        requireRoomAdminOrOwner(projectId, room, username);
+
+        if (request.role() == null || request.role().isBlank()) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+
+        ChatRoomMember.RoomRole role;
+        try {
+            role = ChatRoomMember.RoomRole.valueOf(request.role().trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+
+        var member = chatRoomMemberRepository.findByChatRoomIdAndUserUserId(roomId, memberUserId)
+            .orElseThrow(() -> new RuntimeException("Room member not found"));
+        member.setRole(role);
+        chatRoomMemberRepository.save(member);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        }
 
     @DeleteMapping("/rooms/{roomId}")
     @Transactional
@@ -218,6 +453,7 @@ public class ChatRestController {
         }
 
         var room = roomOptional.get();
+        requireRoomAdminOrOwner(projectId, room, username);
         chatRoomMemberRepository.deleteByChatRoomId(roomId);
         chatRoomRepository.delete(room);
         simpMessagingTemplate.convertAndSend(
@@ -232,25 +468,53 @@ public class ChatRestController {
                 room.getName(),
                 room.getProjectId(),
                 room.getCreatedBy(),
-                room.getCreatedAt() != null ? room.getCreatedAt().toString() : null);
+                room.getTopic(),
+                room.getDescription(),
+                Boolean.TRUE.equals(room.getArchived()),
+                room.getPinnedMessageId(),
+                room.getCreatedAt() != null ? room.getCreatedAt().toString() : null,
+                room.getUpdatedAt() != null ? room.getUpdatedAt().toString() : null);
     }
 
-            private List<ChatRoom> getVisibleRooms(Long projectId, String username) {
-            var currentUser = resolveUserByEmailOrUsername(username);
-            if (currentUser == null) {
-                return List.of();
-            }
+    private List<ChatRoom> getVisibleRooms(Long projectId, String username, boolean includeArchived) {
+        var currentUser = resolveUserByEmailOrUsername(username);
+        if (currentUser == null) {
+            return List.of();
+        }
 
-            var memberRoomIds = chatRoomMemberRepository.findByUserUserId(currentUser.getUserId()).stream()
-                .map(roomMember -> roomMember.getChatRoom().getId())
-                .distinct()
-                .toList();
+        var memberRoomIds = chatRoomMemberRepository.findByUserUserId(currentUser.getUserId()).stream()
+            .map(roomMember -> roomMember.getChatRoom().getId())
+            .distinct()
+            .toList();
 
-            return chatRoomRepository.findByProjectId(projectId).stream()
-                .filter(room -> room.getCreatedBy() != null && room.getCreatedBy().equalsIgnoreCase(username)
-                    || memberRoomIds.contains(room.getId()))
-                .toList();
-            }
+        return chatRoomRepository.findByProjectId(projectId).stream()
+            .filter(room -> room.getCreatedBy() != null && room.getCreatedBy().equalsIgnoreCase(username)
+                || memberRoomIds.contains(room.getId()))
+            .filter(room -> includeArchived || !Boolean.TRUE.equals(room.getArchived()))
+            .toList();
+    }
+
+    private void requireRoomAdminOrOwner(Long projectId, ChatRoom room, String usernameOrEmail) {
+        validateProjectMembership(projectId, usernameOrEmail);
+        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        if (user == null) {
+            throw new RuntimeException("User not found");
+        }
+
+        if (isRoomCreator(room, user, usernameOrEmail)) {
+            return;
+        }
+
+        var member = chatRoomMemberRepository.findByChatRoomIdAndUserUserId(room.getId(), user.getUserId())
+                .orElseThrow(() -> new RuntimeException("User is not a room member"));
+
+        var role = member.getRole();
+        if (role == ChatRoomMember.RoomRole.OWNER || role == ChatRoomMember.RoomRole.ADMIN) {
+            return;
+        }
+
+        throw new RuntimeException("Only channel owner/admin can perform this action");
+    }
 
     private void validateRoomMembership(Long roomId, String usernameOrEmail) {
         var user = resolveUserByEmailOrUsername(usernameOrEmail);
@@ -278,11 +542,37 @@ public class ChatRestController {
             return null;
         }
         var normalized = usernameOrEmail.toLowerCase();
-        var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
-        if (byEmail != null) {
-            return byEmail;
+        if (normalized.contains("@")) {
+            var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
+            if (byEmail != null) {
+                return byEmail;
+            }
+            return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
         }
-        return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
+
+        var byUsername = userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
+        if (byUsername != null) {
+            return byUsername;
+        }
+
+        return userRepository.findByEmailIgnoreCase(normalized).orElse(null);
+    }
+
+    private String resolveCanonicalChatIdentifier(String usernameOrEmail) {
+        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
+            return usernameOrEmail;
+        }
+
+        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        if (user == null) {
+            return usernameOrEmail.toLowerCase();
+        }
+
+        if (user.getUsername() != null && !user.getUsername().isBlank()) {
+            return user.getUsername().toLowerCase();
+        }
+
+        return user.getEmail() != null ? user.getEmail().toLowerCase() : usernameOrEmail.toLowerCase();
     }
 
     private boolean isRoomCreator(ChatRoom room, com.planora.backend.model.User user, String usernameOrEmail) {
@@ -295,23 +585,11 @@ public class ChatRestController {
     }
 
     private void validateProjectMembership(Long projectId, String usernameOrEmail) {
-        // Try to find by email first
-        var user = userRepository.findByEmail(usernameOrEmail.toLowerCase());
-        
-        // If not found by email, search by username through team members
+        var user = resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
-            var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
-            var teamMembers = teamMemberRepository.findByTeamId(project.getTeam().getId());
-            boolean isMember = teamMembers.stream().anyMatch(tm -> 
-                tm.getUser().getEmail().equalsIgnoreCase(usernameOrEmail) || 
-                (tm.getUser().getUsername() != null && tm.getUser().getUsername().equalsIgnoreCase(usernameOrEmail))
-            );
-            if (!isMember) {
-                throw new RuntimeException("User is not a member of the project");
-            }
-            return;
+            throw new RuntimeException("User is not found");
         }
-        
+
         var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
         boolean isMember = teamMemberRepository.findByTeamIdAndUserUserId(project.getTeam().getId(), user.getUserId()).isPresent();
         if (!isMember) {

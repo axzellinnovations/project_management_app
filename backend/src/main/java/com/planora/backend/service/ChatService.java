@@ -1,17 +1,26 @@
 package com.planora.backend.service;
 
+import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.planora.backend.model.ChatMessage;
+import com.planora.backend.model.ChatReaction;
 import com.planora.backend.model.ChatReadState;
 import com.planora.backend.model.ChatRoom;
+import com.planora.backend.model.ChatThread;
 import com.planora.backend.repository.ChatMessageRepository;
+import com.planora.backend.repository.ChatReactionRepository;
 import com.planora.backend.repository.ChatReadStateRepository;
+import com.planora.backend.repository.ChatRoomRepository;
+import com.planora.backend.repository.ChatThreadRepository;
 import com.planora.backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -21,18 +30,180 @@ import lombok.RequiredArgsConstructor;
 public class ChatService {
     private final ChatMessageRepository chatMessageRepository;
     private final ChatReadStateRepository chatReadStateRepository;
+    private final ChatThreadRepository chatThreadRepository;
+    private final ChatRoomRepository chatRoomRepository;
+    private final ChatReactionRepository chatReactionRepository;
     private final UserRepository userRepository;
 
     public record RoomChatSummary(Long roomId, String lastMessage, String lastMessageSender, String lastMessageTimestamp, long unseenCount) {}
 
     public record DirectChatSummary(String username, String lastMessage, String lastMessageSender, String lastMessageTimestamp, long unseenCount) {}
 
+    public record ChatReactionSummary(String emoji, long count, boolean reactedByCurrentUser) {}
+
     /**
      * Persist a chat message.
      */
     @SuppressWarnings("null")
     public ChatMessage saveMessage(ChatMessage message) {
+        if (message.getFormatType() == null) {
+            message.setFormatType(ChatMessage.FormatType.PLAIN);
+        }
         return chatMessageRepository.save(message);
+    }
+
+    public List<ChatMessage> getThreadMessages(Long projectId, Long rootMessageId) {
+        var root = chatMessageRepository.findByIdAndProjectId(rootMessageId, projectId)
+                .orElseThrow(() -> new RuntimeException("Thread root message not found"));
+
+        var replies = chatMessageRepository.findByProjectIdAndParentMessageIdOrderByIdAsc(projectId, rootMessageId);
+        return Stream.concat(Stream.of(root), replies.stream()).toList();
+    }
+
+    public Optional<Long> resolveThreadTopicRootId(Long projectId, ChatMessage message) {
+        if (message == null || message.getId() == null) {
+            return Optional.empty();
+        }
+
+        if (message.getParentMessageId() != null) {
+            return Optional.of(message.getParentMessageId());
+        }
+
+        return chatThreadRepository.findByProjectIdAndRootMessageId(projectId, message.getId())
+                .map(thread -> thread.getRootMessageId());
+    }
+
+    public ChatMessage saveThreadReply(Long projectId, Long rootMessageId, ChatMessage replyMessage) {
+        var root = chatMessageRepository.findByIdAndProjectId(rootMessageId, projectId)
+                .orElseThrow(() -> new RuntimeException("Thread root message not found"));
+
+        if (root.getRoomId() != null) {
+            var room = chatRoomRepository.findById(root.getRoomId())
+                    .orElseThrow(() -> new RuntimeException("Chat room not found"));
+            if (Boolean.TRUE.equals(room.getArchived())) {
+                throw new RuntimeException("Channel is archived and read-only");
+            }
+        }
+
+        if (replyMessage.getFormatType() == null) {
+            replyMessage.setFormatType(ChatMessage.FormatType.PLAIN);
+        }
+
+        replyMessage.setParentMessageId(rootMessageId);
+        replyMessage.setProjectId(projectId);
+        replyMessage.setRoomId(root.getRoomId());
+        replyMessage.setChatType(root.getChatType());
+        replyMessage.setRecipient(root.getRecipient());
+
+        var saved = chatMessageRepository.save(replyMessage);
+
+        chatThreadRepository.findByProjectIdAndRootMessageId(projectId, rootMessageId)
+                .orElseGet(() -> {
+                    var thread = new ChatThread();
+                    thread.setProjectId(projectId);
+                    thread.setRootMessageId(rootMessageId);
+                    thread.setRoomId(root.getRoomId());
+                    thread.setCreatedBy(saved.getSender());
+                    return chatThreadRepository.save(thread);
+                });
+
+        return saved;
+    }
+
+    public ChatMessage editMessage(Long projectId, Long messageId, String actor, String content, ChatMessage.FormatType formatType) {
+        if (content == null || content.trim().isEmpty()) {
+            throw new RuntimeException("Message content is required");
+        }
+
+        var message = chatMessageRepository.findByIdAndProjectId(messageId, projectId)
+                .orElseThrow(() -> new RuntimeException("Message not found"));
+
+        ensureMessageOwnership(message, actor);
+        if (Boolean.TRUE.equals(message.getDeleted())) {
+            throw new RuntimeException("Cannot edit a deleted message");
+        }
+
+        message.setContent(content.trim());
+        message.setFormatType(formatType != null ? formatType : ChatMessage.FormatType.PLAIN);
+        message.setEditedAt(LocalDateTime.now());
+        return chatMessageRepository.save(message);
+    }
+
+    public ChatMessage softDeleteMessage(Long projectId, Long messageId, String actor) {
+        var message = chatMessageRepository.findByIdAndProjectId(messageId, projectId)
+                .orElseThrow(() -> new RuntimeException("Message not found"));
+
+        ensureMessageOwnership(message, actor);
+
+        message.setDeleted(true);
+        message.setDeletedAt(LocalDateTime.now());
+        message.setContent("[message deleted]");
+        return chatMessageRepository.save(message);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChatReactionSummary> getMessageReactions(Long projectId, Long messageId, String currentUser) {
+        chatMessageRepository.findByIdAndProjectId(messageId, projectId)
+                .orElseThrow(() -> new RuntimeException("Message not found"));
+
+        var currentAliases = resolveUserAliases(currentUser);
+        Map<String, Long> counts = new LinkedHashMap<>();
+        Map<String, Boolean> reactedByCurrentUser = new LinkedHashMap<>();
+
+        chatReactionRepository.findWithUserByMessageIdOrderByCreatedAtAsc(messageId).forEach(reaction -> {
+            var emoji = reaction.getEmoji();
+            if (emoji == null || emoji.isBlank()) {
+                return;
+            }
+
+            counts.put(emoji, counts.getOrDefault(emoji, 0L) + 1L);
+
+            var reactionUser = reaction.getUser();
+            if (reactionUser != null) {
+                var reactionAliases = Stream.of(reactionUser.getUsername(), reactionUser.getEmail())
+                        .filter(value -> value != null && !value.isBlank())
+                        .map(String::toLowerCase)
+                        .toList();
+
+                if (!reactionAliases.isEmpty() && reactionAliases.stream().anyMatch(currentAliases::contains)) {
+                    reactedByCurrentUser.put(emoji, true);
+                }
+            }
+        });
+
+        return counts.entrySet().stream()
+                .map(entry -> new ChatReactionSummary(entry.getKey(), entry.getValue(), reactedByCurrentUser.getOrDefault(entry.getKey(), false)))
+                .toList();
+    }
+
+    @SuppressWarnings("null")
+    @Transactional
+    public List<ChatReactionSummary> toggleReaction(Long projectId, Long messageId, String actor, String emoji) {
+        if (emoji == null || emoji.isBlank()) {
+            throw new RuntimeException("Emoji is required");
+        }
+
+        var message = chatMessageRepository.findByIdAndProjectId(messageId, projectId)
+                .orElseThrow(() -> new RuntimeException("Message not found"));
+        var actorUser = resolveUserByEmailOrUsername(actor);
+        if (actorUser == null) {
+            throw new RuntimeException("User not found");
+        }
+
+        var normalizedEmoji = emoji.trim();
+        var existing = chatReactionRepository.findByMessageIdAndUserUserIdAndEmoji(messageId, actorUser.getUserId(), normalizedEmoji);
+
+        if (existing.isPresent()) {
+            chatReactionRepository.delete(existing.get());
+        } else {
+            var reaction = new ChatReaction();
+            reaction.setMessage(message);
+            reaction.setUser(actorUser);
+            reaction.setEmoji(normalizedEmoji);
+            chatReactionRepository.save(reaction);
+        }
+
+        return getMessageReactions(projectId, messageId, actor);
     }
 
     /**
@@ -215,11 +386,30 @@ public class ChatService {
         }
 
         var normalized = usernameOrEmail.toLowerCase();
-        var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
-        if (byEmail != null) {
-            return byEmail;
+        if (normalized.contains("@")) {
+            var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
+            if (byEmail != null) {
+                return byEmail;
+            }
+            return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
         }
 
-        return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
+        var byUsername = userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
+        if (byUsername != null) {
+            return byUsername;
+        }
+
+        return userRepository.findByEmailIgnoreCase(normalized).orElse(null);
+    }
+
+    private void ensureMessageOwnership(ChatMessage message, String actor) {
+        if (message.getSender() == null) {
+            throw new RuntimeException("Message sender is missing");
+        }
+
+        var actorAliases = resolveUserAliases(actor);
+        if (!actorAliases.contains(message.getSender().toLowerCase())) {
+            throw new RuntimeException("Only the original sender can modify this message");
+        }
     }
 }

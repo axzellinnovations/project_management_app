@@ -1,8 +1,9 @@
 package com.planora.backend.controller;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import java.util.List;
 import java.util.Objects;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -22,6 +23,10 @@ import com.planora.backend.service.ChatService;
 
 @Controller
 public class ChatController {
+
+    public static record EditMessagePayload(String content, ChatMessage.FormatType formatType) {}
+
+    public static record ReactionTogglePayload(String emoji) {}
 
     @Autowired
     private SimpMessagingTemplate simpMessagingTemplate;
@@ -80,7 +85,7 @@ public class ChatController {
         chatMessage.setChatType(ChatType.PRIVATE);
         // persist private message as well
         ChatMessage saved = chatService.saveMessage(chatMessage);
-        sendPrivateMessageToRecipientAliases(projectId, Objects.requireNonNull(chatMessage.getRecipient()), Objects.requireNonNull(saved));
+        sendPrivateMessageToConversationParticipants(projectId, Objects.requireNonNull(saved));
     }
 
     @MessageMapping("/project/{projectId}/room/{roomId}/send")
@@ -93,6 +98,11 @@ public class ChatController {
         validateProjectMembership(projectId, username);
         validateRoomMembership(roomId, username);
 
+        var room = chatRoomRepository.findById(roomId).orElseThrow(() -> new RuntimeException("Chat room not found"));
+        if (Boolean.TRUE.equals(room.getArchived())) {
+            throw new RuntimeException("Channel is archived and read-only");
+        }
+
         chatMessage.setSender(resolveCanonicalChatIdentifier(username));
 
         chatMessage.setProjectId(projectId);
@@ -101,6 +111,69 @@ public class ChatController {
 
         ChatMessage saved = chatService.saveMessage(chatMessage);
         return saved;
+    }
+
+    @MessageMapping("/project/{projectId}/thread/{rootMessageId}/send")
+    @SendTo("/topic/project/{projectId}/thread/{rootMessageId}")
+    public ChatMessage sendThreadReply(@DestinationVariable Long projectId,
+                                       @DestinationVariable Long rootMessageId,
+                                       @Payload ChatMessage chatMessage,
+                                       SimpMessageHeaderAccessor headerAccessor) {
+        String username = requireAuthenticatedUsername(headerAccessor);
+        validateProjectMembership(projectId, username);
+
+        chatMessage.setSender(resolveCanonicalChatIdentifier(username));
+        chatMessage.setType(ChatMessage.MessageType.CHAT);
+        if (chatMessage.getFormatType() == null) {
+            chatMessage.setFormatType(ChatMessage.FormatType.PLAIN);
+        }
+
+        return chatService.saveThreadReply(projectId, rootMessageId, chatMessage);
+    }
+
+    @MessageMapping("/project/{projectId}/messages/{messageId}/edit")
+    public void editMessage(@DestinationVariable Long projectId,
+                            @DestinationVariable Long messageId,
+                            @Payload EditMessagePayload payload,
+                            SimpMessageHeaderAccessor headerAccessor) {
+        String username = requireAuthenticatedUsername(headerAccessor);
+        validateProjectMembership(projectId, username);
+
+        var updated = chatService.editMessage(
+                projectId,
+                messageId,
+                username,
+                payload.content(),
+                payload.formatType());
+
+        publishMessageEvent(projectId, updated);
+    }
+
+    @MessageMapping("/project/{projectId}/messages/{messageId}/delete")
+    public void deleteMessage(@DestinationVariable Long projectId,
+                              @DestinationVariable Long messageId,
+                              SimpMessageHeaderAccessor headerAccessor) {
+        String username = requireAuthenticatedUsername(headerAccessor);
+        validateProjectMembership(projectId, username);
+
+        var deleted = chatService.softDeleteMessage(projectId, messageId, username);
+        publishMessageEvent(projectId, deleted);
+    }
+
+    @SuppressWarnings("null")
+    @MessageMapping("/project/{projectId}/messages/{messageId}/reaction.toggle")
+    public void toggleReaction(@DestinationVariable Long projectId,
+                               @DestinationVariable Long messageId,
+                               @Payload ReactionTogglePayload payload,
+                               SimpMessageHeaderAccessor headerAccessor) {
+        String username = requireAuthenticatedUsername(headerAccessor);
+        validateProjectMembership(projectId, username);
+
+        var reactions = chatService.toggleReaction(projectId, messageId, username, payload.emoji());
+
+        simpMessagingTemplate.convertAndSend(
+                "/topic/project/" + projectId + "/messages/" + messageId + "/reactions",
+            Objects.requireNonNull(reactions));
     }
 
     private void validateRoomMembership(Long roomId, String usernameOrEmail) {
@@ -141,33 +214,19 @@ public class ChatController {
         if (sessionAttributes != null) {
             sessionAttributes.put("username", chatMessage.getSender());
         }
-        // optionally save join notification and broadcast the managed entity
-        ChatMessage saved = chatService.saveMessage(chatMessage);
-        return saved;
+        // Presence JOIN is ephemeral; do not persist it in chat_message.
+        if (chatMessage.getType() == null) {
+            chatMessage.setType(ChatMessage.MessageType.JOIN);
+        }
+        return chatMessage;
     }
 
     private void validateProjectMembership(Long projectId, String usernameOrEmail) {
-        // Try to find by email first (JWT principal name is typically email)
-        var user = userRepository.findByEmail(usernameOrEmail.toLowerCase());
-        
-        // If not found by email and it looks like it might be a username, search through all users
-        // and match by username
+        var user = resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
-            // Since UserRepository doesn't have findByUsername, we'll trust the authentication
-            // and just validate project membership by fetching the project and checking if
-            // the authenticated user's email/username exists in team members
-            var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
-            var teamMembers = teamMemberRepository.findByTeamId(project.getTeam().getId());
-            boolean isMember = teamMembers.stream().anyMatch(tm -> 
-                tm.getUser().getEmail().equalsIgnoreCase(usernameOrEmail) || 
-                (tm.getUser().getUsername() != null && tm.getUser().getUsername().equalsIgnoreCase(usernameOrEmail))
-            );
-            if (!isMember) {
-                throw new RuntimeException("User is not a member of the project");
-            }
-            return;
+            throw new RuntimeException("User is not found");
         }
-        
+
         var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
         boolean isMember = teamMemberRepository.findByTeamIdAndUserUserId(project.getTeam().getId(), user.getUserId()).isPresent();
         if (!isMember) {
@@ -180,11 +239,20 @@ public class ChatController {
             return null;
         }
         var normalized = usernameOrEmail.toLowerCase();
-        var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
-        if (byEmail != null) {
-            return byEmail;
+        if (normalized.contains("@")) {
+            var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
+            if (byEmail != null) {
+                return byEmail;
+            }
+            return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
         }
-        return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
+
+        var byUsername = userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
+        if (byUsername != null) {
+            return byUsername;
+        }
+
+        return userRepository.findByEmailIgnoreCase(normalized).orElse(null);
     }
 
     private String resolveCanonicalChatIdentifier(String usernameOrEmail) {
@@ -225,6 +293,50 @@ public class ChatController {
         if (email != null && !email.isBlank() && (username == null || !email.equals(username))) {
             simpMessagingTemplate.convertAndSendToUser(email, destination, savedMessage);
         }
+    }
+
+    private void publishMessageEvent(Long projectId, ChatMessage message) {
+        if (message.getRecipient() != null && !message.getRecipient().isBlank()) {
+            sendPrivateMessageToConversationParticipants(projectId, message);
+            return;
+        }
+
+        var threadRootId = chatService.resolveThreadTopicRootId(projectId, message).orElse(null);
+        if (threadRootId != null) {
+            simpMessagingTemplate.convertAndSend(
+                    "/topic/project/" + projectId + "/thread/" + threadRootId,
+                    message);
+        }
+
+        if (message.getRoomId() != null) {
+            simpMessagingTemplate.convertAndSend(
+                    "/topic/project/" + projectId + "/room/" + message.getRoomId(),
+                    message);
+            return;
+        }
+
+        simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/public", message);
+    }
+
+    private void sendPrivateMessageToConversationParticipants(Long projectId, ChatMessage savedMessage) {
+        var destination = "/queue/project/" + projectId + "/messages";
+        var aliases = List.of(
+                savedMessage.getSender(),
+                savedMessage.getRecipient());
+
+        aliases.stream()
+                .filter(alias -> alias != null && !alias.isBlank())
+                .map(this::resolveUserByEmailOrUsername)
+                .filter(Objects::nonNull)
+                .forEach(user -> {
+                    if (user.getUsername() != null && !user.getUsername().isBlank()) {
+                        simpMessagingTemplate.convertAndSendToUser(user.getUsername().toLowerCase(), destination, savedMessage);
+                    }
+
+                    if (user.getEmail() != null && !user.getEmail().isBlank()) {
+                        simpMessagingTemplate.convertAndSendToUser(user.getEmail().toLowerCase(), destination, savedMessage);
+                    }
+                });
     }
 
     private String requireAuthenticatedUsername(SimpMessageHeaderAccessor headerAccessor) {
