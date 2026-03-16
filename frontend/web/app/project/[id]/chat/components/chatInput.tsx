@@ -3,16 +3,18 @@ import styles from '../chat.module.css';
 
 interface ChatInputProps {
   onSendMessage: (msg: string) => void;
+  onTypingChange?: (isTyping: boolean) => void;
   disabled?: boolean;
 }
 
-export const ChatInput = ({ onSendMessage, disabled }: ChatInputProps) => {
+export const ChatInput = ({ onSendMessage, onTypingChange, disabled }: ChatInputProps) => {
   const [input, setInput] = useState('');
 
   const handleSend = () => {
     if (input.trim()) {
       onSendMessage(input);
       setInput('');
+      onTypingChange?.(false);
     }
   };
 
@@ -22,7 +24,12 @@ export const ChatInput = ({ onSendMessage, disabled }: ChatInputProps) => {
         <input
           type="text"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            const nextValue = e.target.value;
+            setInput(nextValue);
+            onTypingChange?.(nextValue.trim().length > 0);
+          }}
+          onBlur={() => onTypingChange?.(false)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder="Type a message..."
           disabled={disabled}

@@ -51,3 +51,22 @@ export interface RoomChatSummary {
   lastMessageTimestamp: string | null;
   unseenCount: number;
 }
+
+export interface TeamChatSummary {
+  lastMessage: string | null;
+  lastMessageSender: string | null;
+  lastMessageTimestamp: string | null;
+  unseenCount: number;
+}
+
+export interface PresenceResponse {
+  onlineUsers: string[];
+  onlineCount: number;
+}
+
+export interface UnreadBadgeSummary {
+  teamUnread: number;
+  roomsUnread: number;
+  directsUnread: number;
+  totalUnread: number;
+}

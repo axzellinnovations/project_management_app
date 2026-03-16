@@ -23,6 +23,8 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
 
     Optional<ChatMessage> findTopByProjectIdAndRoomIdOrderByIdDesc(Long projectId, Long roomId);
 
+    Optional<ChatMessage> findTopByProjectIdAndRecipientIsNullAndRoomIdIsNullOrderByIdDesc(Long projectId);
+
     // private conversation between two users in a project
     @Query("SELECT m FROM ChatMessage m WHERE m.projectId = :projectId AND ((m.sender = :user AND m.recipient = :other) OR (m.sender = :other AND m.recipient = :user)) ORDER BY m.id ASC")
     List<ChatMessage> findConversation(@Param("projectId") Long projectId, @Param("user") String user, @Param("other") String other);
@@ -63,4 +65,9 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
                                              @Param("otherAliases") List<String> otherAliases,
                                              @Param("currentUserAliases") List<String> currentUserAliases,
                                              @Param("lastReadMessageId") Long lastReadMessageId);
+
+    @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.projectId = :projectId AND m.recipient IS NULL AND m.roomId IS NULL AND LOWER(m.sender) NOT IN :currentUserAliases AND (:lastReadMessageId IS NULL OR m.id > :lastReadMessageId)")
+    long countUnreadTeamMessagesByAliases(@Param("projectId") Long projectId,
+                                          @Param("currentUserAliases") List<String> currentUserAliases,
+                                          @Param("lastReadMessageId") Long lastReadMessageId);
 }

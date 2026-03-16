@@ -28,6 +28,7 @@ import com.planora.backend.repository.ChatRoomRepository;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
+import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
 
 import lombok.RequiredArgsConstructor;
@@ -49,7 +50,16 @@ public class ChatRestController {
                                           String createdAt,
                                           String updatedAt) {}
 
-    public static record ChatSidebarResponse(List<ChatService.RoomChatSummary> rooms, List<ChatService.DirectChatSummary> directMessages) {}
+    public static record ChatSidebarResponse(ChatService.TeamChatSummary team,
+                                             List<ChatService.RoomChatSummary> rooms,
+                                             List<ChatService.DirectChatSummary> directMessages) {}
+
+    public static record PresenceResponse(List<String> onlineUsers, int onlineCount) {}
+
+    public static record UnreadBadgeResponse(long teamUnread,
+                                             long roomsUnread,
+                                             long directsUnread,
+                                             long totalUnread) {}
 
     private final ChatService chatService;
 
@@ -65,6 +75,8 @@ public class ChatRestController {
 
     private final SimpMessagingTemplate simpMessagingTemplate;
 
+    private final ChatPresenceService chatPresenceService;
+
     public static record RoomEvent(String action, Long roomId, ChatRoomResponse room) {}
 
     public static record EditMessageRequest(String content, ChatMessage.FormatType formatType) {}
@@ -74,8 +86,6 @@ public class ChatRestController {
     public static record ReactionToggleRequest(String emoji) {}
 
     public static record RoomMetaUpdateRequest(String name, String topic, String description) {}
-
-    public static record RoomArchiveRequest(Boolean archived) {}
 
     public static record RoomPinRequest(Long messageId) {}
 
@@ -213,6 +223,14 @@ public class ChatRestController {
         return new ResponseEntity<>(usernames, HttpStatus.OK);
     }
 
+    @GetMapping("/presence")
+    public ResponseEntity<PresenceResponse> getPresence(@PathVariable Long projectId, Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        var onlineUsers = chatPresenceService.getOnlineUsers(projectId);
+        return new ResponseEntity<>(new PresenceResponse(onlineUsers, onlineUsers.size()), HttpStatus.OK);
+    }
+
     @GetMapping("/rooms")
     public ResponseEntity<List<ChatRoomResponse>> getRooms(@PathVariable Long projectId,
                                                            @RequestParam(value = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
@@ -240,10 +258,43 @@ public class ChatRestController {
 
         var visibleRooms = getVisibleRooms(projectId, username, includeArchived);
         var response = new ChatSidebarResponse(
+                chatService.buildTeamSummary(projectId, username),
                 chatService.buildRoomSummaries(projectId, username, visibleRooms),
                 chatService.buildDirectSummaries(projectId, username, participants));
 
         return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
+        @GetMapping("/unread-badge")
+        public ResponseEntity<UnreadBadgeResponse> getUnreadBadge(@PathVariable Long projectId,
+                                       @RequestParam(value = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
+                                       Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+
+        var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
+        var participants = teamMemberRepository.findByTeamId(project.getTeam().getId()).stream()
+            .map(tm -> tm.getUser().getUsername())
+            .toList();
+        var visibleRooms = getVisibleRooms(projectId, username, includeArchived);
+        var badge = chatService.buildUnreadBadge(projectId, username, visibleRooms, participants);
+
+        return new ResponseEntity<>(
+            new UnreadBadgeResponse(
+                badge.teamUnread(),
+                badge.roomsUnread(),
+                badge.directsUnread(),
+                badge.totalUnread()),
+            HttpStatus.OK);
+        }
+
+    @PostMapping("/team/read")
+    public ResponseEntity<Void> markTeamChatAsRead(@PathVariable Long projectId,
+                                                   Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        chatService.markTeamAsRead(projectId, username);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
     public static record ChatRoomRequest(String name, List<String> members) {}
@@ -343,31 +394,6 @@ public class ChatRestController {
         }
         room.setTopic(request.topic() != null ? request.topic().trim() : null);
         room.setDescription(request.description() != null ? request.description().trim() : null);
-
-        var saved = chatRoomRepository.save(room);
-        simpMessagingTemplate.convertAndSend(
-            "/topic/project/" + projectId + "/rooms",
-            new RoomEvent("UPDATED", saved.getId(), toRoomResponse(saved)));
-
-        return new ResponseEntity<>(toRoomResponse(saved), HttpStatus.OK);
-        }
-
-        @PatchMapping("/rooms/{roomId}/archive")
-        @Transactional
-        public ResponseEntity<ChatRoomResponse> updateRoomArchive(@PathVariable Long projectId,
-                                      @PathVariable Long roomId,
-                                      @RequestBody RoomArchiveRequest request,
-                                      Authentication authentication) {
-        String username = authentication.getName();
-        validateProjectMembership(projectId, username);
-
-        var room = chatRoomRepository.findByIdAndProjectId(roomId, projectId)
-            .orElseThrow(() -> new RuntimeException("Chat room not found"));
-            validateRoomMembership(roomId, username);
-
-        boolean archived = request.archived() != null && request.archived();
-        room.setArchived(archived);
-        room.setArchivedAt(archived ? java.time.LocalDateTime.now() : null);
 
         var saved = chatRoomRepository.save(room);
         simpMessagingTemplate.convertAndSend(

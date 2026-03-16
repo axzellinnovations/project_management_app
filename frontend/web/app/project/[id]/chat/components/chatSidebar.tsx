@@ -15,10 +15,14 @@ interface ChatSidebarProps {
   roomUnseenCounts: Record<number, number>;
   privateLastMessages: Record<string, ChatMessage | null>;
   roomLastMessages: Record<number, ChatMessage | null>;
+  teamUnseenCount: number;
+  teamLastMessage: ChatMessage | null;
+  teamTypingUsers: string[];
+  roomTypingUsers: Record<number, string[]>;
+  privateTypingUsers: string[];
   onCreateRoom: () => void;
   onDeleteRoom: (roomId: number) => void;
   onUpdateRoomMeta: (roomId: number, updates: { name?: string; topic?: string; description?: string }) => void;
-  onToggleRoomArchive: (roomId: number, archived: boolean) => void;
   onAddTeam: (teamName: string) => void;
   searchTerm: string;
   onSearchChange: (value: string) => void;
@@ -37,16 +41,21 @@ export const ChatSidebar = ({
   roomUnseenCounts,
   privateLastMessages,
   roomLastMessages,
+  teamUnseenCount,
+  teamLastMessage,
+  teamTypingUsers,
+  roomTypingUsers,
+  privateTypingUsers,
   onCreateRoom,
   onDeleteRoom,
   onUpdateRoomMeta,
-  onToggleRoomArchive,
   onAddTeam,
   searchTerm,
   onSearchChange
 }: ChatSidebarProps) => {
   const hasSelectedRoom = selectedRoomId !== null && Number.isFinite(selectedRoomId);
   const currentUserIdentitySet = new Set([currentUser.toLowerCase(), ...currentUserAliases.map(alias => alias.toLowerCase())]);
+  const isTeamSelected = !selectedUser && !hasSelectedRoom;
 
   return (
     <aside className={styles.sidebar}>
@@ -79,13 +88,32 @@ export const ChatSidebar = ({
             !selectedUser && !hasSelectedRoom ? 'bg-blue-600 text-white' : 'bg-slate-50 hover:bg-slate-100 text-slate-900'
           }`}
         >
-          Team Chat
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate">Team Chat</span>
+            {teamUnseenCount > 0 && (
+              <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-green-600 text-white text-[11px] font-semibold flex items-center justify-center">
+                {teamUnseenCount > 99 ? '99+' : teamUnseenCount}
+              </span>
+            )}
+          </div>
+          {teamTypingUsers.length > 0 && !isTeamSelected ? (
+            <p className="text-xs truncate text-green-600 mt-1">
+              {teamTypingUsers[0]} is typing...
+            </p>
+          ) : teamLastMessage?.content && (
+            <p className="text-xs truncate opacity-80 mt-1">
+              {teamLastMessage.content}
+            </p>
+          )}
         </button>
 
         <p className="text-xs font-semibold text-slate-500 uppercase px-3 pt-4 pb-2">Group Chats</p>
         {rooms.length === 0 && <p className="text-xs text-slate-400 px-3">No group chats yet</p>}
         {rooms.map(room => {
           const isCreator = !!room.createdBy && currentUserIdentitySet.has(room.createdBy.toLowerCase());
+          const isRoomSelected = hasSelectedRoom && selectedRoomId === room.id;
+          const roomTypers = roomTypingUsers[room.id] || [];
+          const showRoomTypingInSidebar = roomTypers.length > 0 && !isRoomSelected;
 
           return (
             <div key={room.id} className="flex items-center justify-between gap-2 px-3 py-2.5">
@@ -94,14 +122,11 @@ export const ChatSidebar = ({
                   onSelectRoom(room.id);
                 }}
                 className={`flex-1 text-left rounded-lg px-2 py-2 transition-colors ${
-                  hasSelectedRoom && selectedRoomId === room.id ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-100'
+                  isRoomSelected ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-100'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-medium text-slate-900 truncate">{room.name}</p>
-                  {room.archived && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Archived</span>
-                  )}
                   {(roomUnseenCounts[room.id] || 0) > 0 && (
                     <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-blue-600 text-white text-[11px] font-semibold flex items-center justify-center">
                       {roomUnseenCounts[room.id] > 99 ? '99+' : roomUnseenCounts[room.id]}
@@ -109,7 +134,9 @@ export const ChatSidebar = ({
                   )}
                 </div>
                 <p className="text-xs text-slate-500 truncate">
-                  {room.topic || roomLastMessages[room.id]?.content || `Created by ${room.createdBy}`}
+                  {showRoomTypingInSidebar
+                    ? `${roomTypers[0]} is typing...`
+                    : room.topic || roomLastMessages[room.id]?.content || `Created by ${room.createdBy}`}
                 </p>
               </button>
               {isCreator && (
@@ -146,12 +173,6 @@ export const ChatSidebar = ({
                   </button>
                 </>
               )}
-              <button
-                onClick={() => onToggleRoomArchive(room.id, !room.archived)}
-                className="text-xs px-2 py-1 bg-amber-500 text-white rounded hover:bg-amber-600"
-              >
-                {room.archived ? 'Unarchive' : 'Archive'}
-              </button>
             </div>
           );
         })}
@@ -163,12 +184,15 @@ export const ChatSidebar = ({
         {users.map(user => {
       const lastMsg = privateLastMessages[user]?.content;
       const unseen = privateUnseenCounts[user] || 0;
+      const isTyping = privateTypingUsers.includes(user.toLowerCase());
+      const isSelectedDm = selectedUser === user;
+      const showTypingInSidebar = isTyping && !isSelectedDm;
             return (
             <button
                 key={user}
                 onClick={() => onSelectUser(user)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-left ${
-                selectedUser === user ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-100'
+                isSelectedDm ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-100'
                 }`}
             >
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-bold">
@@ -183,7 +207,9 @@ export const ChatSidebar = ({
                     </span>
                   )}
                 </div>
-                {lastMsg && <p className="text-xs text-slate-500 truncate">{lastMsg}</p>}
+                {showTypingInSidebar
+                  ? <p className="text-xs text-green-600 truncate">typing...</p>
+                  : lastMsg && <p className="text-xs text-slate-500 truncate">{lastMsg}</p>}
                 </div>
             </button>
             );

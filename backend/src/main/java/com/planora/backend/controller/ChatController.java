@@ -19,6 +19,7 @@ import com.planora.backend.repository.ChatRoomRepository;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
+import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
 
 @Controller
@@ -27,6 +28,12 @@ public class ChatController {
     public static record EditMessagePayload(String content, ChatMessage.FormatType formatType) {}
 
     public static record ReactionTogglePayload(String emoji) {}
+
+    public static record TypingPayload(String scope, Long roomId, String recipient, Boolean isTyping) {}
+
+    public static record TypingEvent(String sender, String scope, Long roomId, String recipient, boolean typing) {}
+
+    public static record PresenceEvent(String type, String user, List<String> onlineUsers) {}
 
     @Autowired
     private SimpMessagingTemplate simpMessagingTemplate;
@@ -49,6 +56,9 @@ public class ChatController {
     @Autowired
     private ChatRoomMemberRepository chatRoomMemberRepository;
 
+    @Autowired
+    private ChatPresenceService chatPresenceService;
+
     // This method handles messages sent to "/app/project/{projectId}/chat.sendMessage".
     // The return value is broadcast to all subscribers of "/topic/project/{projectId}/public".
     @MessageMapping("/project/{projectId}/chat.sendMessage")
@@ -65,6 +75,7 @@ public class ChatController {
         chatMessage.setChatType(ChatType.GROUP);
 
         ChatMessage saved = chatService.saveMessage(chatMessage);
+        publishUnreadBadgesForProject(projectId);
         return saved;
     }
     @MessageMapping("/project/{projectId}/chat.sendPrivateMessage")
@@ -86,6 +97,7 @@ public class ChatController {
         // persist private message as well
         ChatMessage saved = chatService.saveMessage(chatMessage);
         sendPrivateMessageToConversationParticipants(projectId, Objects.requireNonNull(saved));
+        publishUnreadBadgesForProject(projectId);
     }
 
     @MessageMapping("/project/{projectId}/room/{roomId}/send")
@@ -110,6 +122,7 @@ public class ChatController {
         chatMessage.setChatType(ChatType.GROUP);
 
         ChatMessage saved = chatService.saveMessage(chatMessage);
+        publishUnreadBadgesForProject(projectId);
         return saved;
     }
 
@@ -213,12 +226,69 @@ public class ChatController {
         var sessionAttributes = headerAccessor.getSessionAttributes();
         if (sessionAttributes != null) {
             sessionAttributes.put("username", chatMessage.getSender());
+            sessionAttributes.put("projectId", projectId);
         }
+
+        var onlineUsers = chatPresenceService.markOnline(projectId, chatMessage.getSender(), headerAccessor.getSessionId());
+        simpMessagingTemplate.convertAndSend(
+                "/topic/project/" + projectId + "/presence",
+                new PresenceEvent("ONLINE", chatMessage.getSender(), onlineUsers));
+
         // Presence JOIN is ephemeral; do not persist it in chat_message.
         if (chatMessage.getType() == null) {
             chatMessage.setType(ChatMessage.MessageType.JOIN);
         }
         return chatMessage;
+    }
+
+    @MessageMapping("/project/{projectId}/presence.ping")
+    public void pingPresence(@DestinationVariable Long projectId,
+                             SimpMessageHeaderAccessor headerAccessor) {
+        String username = requireAuthenticatedUsername(headerAccessor);
+        validateProjectMembership(projectId, username);
+
+        var onlineUsers = chatPresenceService.markOnline(projectId, resolveCanonicalChatIdentifier(username), headerAccessor.getSessionId());
+        simpMessagingTemplate.convertAndSend(
+                "/topic/project/" + projectId + "/presence",
+                new PresenceEvent("PING", resolveCanonicalChatIdentifier(username), onlineUsers));
+    }
+
+    @MessageMapping("/project/{projectId}/typing")
+    public void typingEvent(@DestinationVariable Long projectId,
+                            @Payload TypingPayload payload,
+                            SimpMessageHeaderAccessor headerAccessor) {
+        String username = requireAuthenticatedUsername(headerAccessor);
+        validateProjectMembership(projectId, username);
+
+        var canonicalSender = resolveCanonicalChatIdentifier(username);
+        var scope = payload.scope() != null ? payload.scope().trim().toUpperCase() : "TEAM";
+        var typing = payload.isTyping() != null && payload.isTyping();
+
+        if ("ROOM".equals(scope)) {
+            if (payload.roomId() == null) {
+                return;
+            }
+            validateRoomMembership(payload.roomId(), username);
+            simpMessagingTemplate.convertAndSend(
+                    "/topic/project/" + projectId + "/typing/room/" + payload.roomId(),
+                    new TypingEvent(canonicalSender, "ROOM", payload.roomId(), null, typing));
+            return;
+        }
+
+        if ("PRIVATE".equals(scope)) {
+            if (payload.recipient() == null || payload.recipient().isBlank()) {
+                return;
+            }
+            validateProjectMembership(projectId, payload.recipient());
+            var canonicalRecipient = resolveCanonicalChatIdentifier(payload.recipient());
+            var event = new TypingEvent(canonicalSender, "PRIVATE", null, canonicalRecipient, typing);
+            sendPrivateTypingEventToConversationParticipants(projectId, canonicalSender, canonicalRecipient, event);
+            return;
+        }
+
+        simpMessagingTemplate.convertAndSend(
+                "/topic/project/" + projectId + "/typing/team",
+                new TypingEvent(canonicalSender, "TEAM", null, null, typing));
     }
 
     private void validateProjectMembership(Long projectId, String usernameOrEmail) {
@@ -272,29 +342,6 @@ public class ChatController {
         return user.getEmail() != null ? user.getEmail().toLowerCase() : usernameOrEmail.toLowerCase();
     }
 
-    private void sendPrivateMessageToRecipientAliases(Long projectId, String recipient, ChatMessage savedMessage) {
-        var resolvedRecipient = resolveUserByEmailOrUsername(recipient);
-        if (resolvedRecipient == null) {
-            simpMessagingTemplate.convertAndSendToUser(
-                    recipient.toLowerCase(),
-                    "/queue/project/" + projectId + "/messages",
-                    savedMessage);
-            return;
-        }
-
-        var destination = "/queue/project/" + projectId + "/messages";
-        var username = resolvedRecipient.getUsername() != null ? resolvedRecipient.getUsername().toLowerCase() : null;
-        var email = resolvedRecipient.getEmail() != null ? resolvedRecipient.getEmail().toLowerCase() : null;
-
-        if (username != null && !username.isBlank()) {
-            simpMessagingTemplate.convertAndSendToUser(username, destination, savedMessage);
-        }
-
-        if (email != null && !email.isBlank() && (username == null || !email.equals(username))) {
-            simpMessagingTemplate.convertAndSendToUser(email, destination, savedMessage);
-        }
-    }
-
     private void publishMessageEvent(Long projectId, ChatMessage message) {
         if (message.getRecipient() != null && !message.getRecipient().isBlank()) {
             sendPrivateMessageToConversationParticipants(projectId, message);
@@ -316,6 +363,75 @@ public class ChatController {
         }
 
         simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/public", message);
+        publishUnreadBadgesForProject(projectId);
+    }
+
+    private void publishUnreadBadgesForProject(Long projectId) {
+        var project = projectRepository.findById(projectId).orElse(null);
+        if (project == null || project.getTeam() == null) {
+            return;
+        }
+
+        var participants = teamMemberRepository.findByTeamId(project.getTeam().getId()).stream()
+                .map(tm -> tm.getUser().getUsername())
+                .filter(Objects::nonNull)
+                .toList();
+
+        participants.forEach(participant -> {
+            var visibleRooms = getVisibleRooms(projectId, participant, false);
+            var badge = chatService.buildUnreadBadge(projectId, participant, visibleRooms, participants);
+            simpMessagingTemplate.convertAndSendToUser(
+                    participant.toLowerCase(),
+                    "/queue/project/" + projectId + "/unread-badge",
+                    badge);
+
+            var user = resolveUserByEmailOrUsername(participant);
+            if (user != null && user.getEmail() != null && !user.getEmail().isBlank()) {
+                simpMessagingTemplate.convertAndSendToUser(
+                        user.getEmail().toLowerCase(),
+                        "/queue/project/" + projectId + "/unread-badge",
+                        badge);
+            }
+        });
+    }
+
+    private List<com.planora.backend.model.ChatRoom> getVisibleRooms(Long projectId, String username, boolean includeArchived) {
+        var currentUser = resolveUserByEmailOrUsername(username);
+        if (currentUser == null) {
+            return List.of();
+        }
+
+        var memberRoomIds = chatRoomMemberRepository.findByUserUserId(currentUser.getUserId()).stream()
+                .map(roomMember -> roomMember.getChatRoom().getId())
+                .distinct()
+                .toList();
+
+        return chatRoomRepository.findByProjectId(projectId).stream()
+                .filter(room -> room.getCreatedBy() != null && room.getCreatedBy().equalsIgnoreCase(username)
+                        || memberRoomIds.contains(room.getId()))
+                .filter(room -> includeArchived || !Boolean.TRUE.equals(room.getArchived()))
+                .toList();
+    }
+
+    private void sendPrivateTypingEventToConversationParticipants(Long projectId,
+                                                                  String sender,
+                                                                  String recipient,
+                                                                  TypingEvent event) {
+        var destination = "/queue/project/" + projectId + "/typing/private";
+        var aliases = List.of(sender, recipient);
+
+        aliases.stream()
+                .filter(alias -> alias != null && !alias.isBlank())
+                .map(this::resolveUserByEmailOrUsername)
+                .filter(Objects::nonNull)
+                .forEach(user -> {
+                    if (user.getUsername() != null && !user.getUsername().isBlank()) {
+                        simpMessagingTemplate.convertAndSendToUser(user.getUsername().toLowerCase(), destination, event);
+                    }
+                    if (user.getEmail() != null && !user.getEmail().isBlank()) {
+                        simpMessagingTemplate.convertAndSendToUser(user.getEmail().toLowerCase(), destination, event);
+                    }
+                });
     }
 
     private void sendPrivateMessageToConversationParticipants(Long projectId, ChatMessage savedMessage) {

@@ -27,6 +27,12 @@ export default function ChatInterface() {
     roomUnseenCounts,
     privateLastMessages,
     roomLastMessages,
+    teamUnseenCount,
+    teamLastMessage,
+    onlineUsers,
+    teamTypingUsers,
+    roomTypingUsers,
+    privateTypingUsers,
     messageReactions,
     activeThreadRoot,
     threadMessages,
@@ -45,8 +51,8 @@ export default function ChatInterface() {
     createRoom,
     deleteRoom,
     updateRoomMeta,
-    toggleRoomArchive,
     pinRoomMessage,
+    sendTyping,
     addTeam,
     isLoading,
     error,
@@ -71,6 +77,14 @@ export default function ChatInterface() {
       (msg.content && msg.content.toLowerCase().includes(term))
     );
   });
+
+  const roomTyping = hasSelectedRoom && selectedRoomId !== null ? (roomTypingUsers[selectedRoomId] || []) : [];
+  const privateTyping = selectedUser ? privateTypingUsers.filter(user => user === selectedUser.toLowerCase()) : [];
+  const activeTypingLabel = hasSelectedRoom
+    ? (roomTyping.length > 0 ? `${roomTyping[0]} is typing...` : '')
+    : selectedUser
+    ? (privateTyping.length > 0 ? `${privateTyping[0]} is typing...` : '')
+    : (teamTypingUsers.length > 0 ? `${teamTypingUsers[0]} is typing...` : '');
 
   useEffect(() => {
     if (selectedUser) {
@@ -128,10 +142,14 @@ export default function ChatInterface() {
           roomUnseenCounts={roomUnseenCounts}
           privateLastMessages={privateLastMessages}
           roomLastMessages={roomLastMessages}
+          teamUnseenCount={teamUnseenCount}
+          teamLastMessage={teamLastMessage}
+          teamTypingUsers={teamTypingUsers}
+          roomTypingUsers={roomTypingUsers}
+          privateTypingUsers={privateTypingUsers}
           onCreateRoom={handleCreateRoom}
           onDeleteRoom={deleteRoom}
           onUpdateRoomMeta={updateRoomMeta}
-          onToggleRoomArchive={toggleRoomArchive}
           onAddTeam={addTeam}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
@@ -149,11 +167,11 @@ export default function ChatInterface() {
               </h3>
               <p className="text-sm text-slate-500 mt-1">
                 {hasSelectedRoom
-                  ? selectedRoom?.topic || (selectedRoom?.archived ? 'Archived channel (read-only)' : 'Group message')
+                  ? selectedRoom?.topic || 'Group message'
                   : selectedUser
                   ? 'Private message'
-                  : users.length > 0
-                  ? `Members online: ${users.join(', ')}`
+                  : onlineUsers.length > 0
+                  ? `Members online: ${onlineUsers.join(', ')}`
                   : 'No team member online'}
               </p>
             </div>
@@ -187,7 +205,12 @@ export default function ChatInterface() {
             onToggleReaction={toggleReaction}
             onPinRoomMessage={selectedRoomId ? (messageId) => pinRoomMessage(selectedRoomId, messageId) : undefined}
           />
-          <ChatInput onSendMessage={handleSendMessage} disabled={isLoading || !!error} />
+          {activeTypingLabel && (
+            <div className="px-3 pt-2 pb-1">
+              <p className="text-xs text-green-600">{activeTypingLabel}</p>
+            </div>
+          )}
+          <ChatInput onSendMessage={handleSendMessage} onTypingChange={sendTyping} disabled={isLoading || !!error} />
         </div>
 
         {activeThreadRoot && (

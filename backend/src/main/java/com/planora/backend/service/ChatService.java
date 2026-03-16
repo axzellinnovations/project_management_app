@@ -28,6 +28,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ChatService {
+    private static final String TEAM_CHAT_READ_KEY = "__TEAM_CHAT__";
+
     private final ChatMessageRepository chatMessageRepository;
     private final ChatReadStateRepository chatReadStateRepository;
     private final ChatThreadRepository chatThreadRepository;
@@ -38,6 +40,10 @@ public class ChatService {
     public record RoomChatSummary(Long roomId, String lastMessage, String lastMessageSender, String lastMessageTimestamp, long unseenCount) {}
 
     public record DirectChatSummary(String username, String lastMessage, String lastMessageSender, String lastMessageTimestamp, long unseenCount) {}
+
+    public record TeamChatSummary(String lastMessage, String lastMessageSender, String lastMessageTimestamp, long unseenCount) {}
+
+    public record UnreadBadgeSummary(long teamUnread, long roomsUnread, long directsUnread, long totalUnread) {}
 
     public record ChatReactionSummary(String emoji, long count, boolean reactedByCurrentUser) {}
 
@@ -278,6 +284,67 @@ public class ChatService {
         readState.setOtherParticipant(normalizedOtherParticipant);
         readState.setLastReadMessageId(latestMessage.get().getId());
         chatReadStateRepository.save(readState);
+    }
+
+    public void markTeamAsRead(Long projectId, String usernameOrEmail) {
+        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        if (user == null) {
+            return;
+        }
+
+        var latestMessage = chatMessageRepository.findTopByProjectIdAndRecipientIsNullAndRoomIdIsNullOrderByIdDesc(projectId);
+        if (latestMessage.isEmpty()) {
+            return;
+        }
+
+        var readState = chatReadStateRepository
+                .findByProjectIdAndUserUserIdAndOtherParticipantIgnoreCase(projectId, user.getUserId(), TEAM_CHAT_READ_KEY)
+                .orElseGet(ChatReadState::new);
+
+        readState.setProjectId(projectId);
+        readState.setUser(user);
+        readState.setRoomId(null);
+        readState.setOtherParticipant(TEAM_CHAT_READ_KEY);
+        readState.setLastReadMessageId(latestMessage.get().getId());
+        chatReadStateRepository.save(readState);
+    }
+
+    public TeamChatSummary buildTeamSummary(Long projectId, String currentUser) {
+        var currentUserEntity = resolveUserByEmailOrUsername(currentUser);
+        if (currentUserEntity == null) {
+            return new TeamChatSummary(null, null, null, 0);
+        }
+
+        var latestMessage = chatMessageRepository.findTopByProjectIdAndRecipientIsNullAndRoomIdIsNullOrderByIdDesc(projectId).orElse(null);
+        var readState = chatReadStateRepository
+                .findByProjectIdAndUserUserIdAndOtherParticipantIgnoreCase(projectId, currentUserEntity.getUserId(), TEAM_CHAT_READ_KEY)
+                .orElse(null);
+        var unseenCount = chatMessageRepository.countUnreadTeamMessagesByAliases(
+                projectId,
+                resolveUserAliases(currentUser),
+                readState != null ? readState.getLastReadMessageId() : null);
+
+        return new TeamChatSummary(
+                latestMessage != null ? latestMessage.getContent() : null,
+                latestMessage != null ? latestMessage.getSender() : null,
+                latestMessage != null && latestMessage.getTimestamp() != null ? latestMessage.getTimestamp().toString() : null,
+                unseenCount);
+    }
+
+    public UnreadBadgeSummary buildUnreadBadge(Long projectId, String currentUser, List<ChatRoom> rooms, List<String> participants) {
+        var teamSummary = buildTeamSummary(projectId, currentUser);
+        var roomSummaries = buildRoomSummaries(projectId, currentUser, rooms);
+        var directSummaries = buildDirectSummaries(projectId, currentUser, participants);
+
+        long teamUnread = teamSummary.unseenCount();
+        long roomUnread = roomSummaries.stream().mapToLong(RoomChatSummary::unseenCount).sum();
+        long directUnread = directSummaries.stream().mapToLong(DirectChatSummary::unseenCount).sum();
+
+        return new UnreadBadgeSummary(
+                teamUnread,
+                roomUnread,
+                directUnread,
+                teamUnread + roomUnread + directUnread);
     }
 
     public List<RoomChatSummary> buildRoomSummaries(Long projectId, String currentUser, List<ChatRoom> rooms) {

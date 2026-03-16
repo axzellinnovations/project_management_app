@@ -7,7 +7,10 @@ import {
   ChatReactionSummary,
   ChatRoom,
   DirectChatSummary,
-  RoomChatSummary
+  PresenceResponse,
+  RoomChatSummary,
+  TeamChatSummary,
+  UnreadBadgeSummary
 } from './chat';
 
 interface RoomEvent {
@@ -19,6 +22,20 @@ interface RoomEvent {
 interface AuthUserSummary {
   email?: string;
   username?: string;
+}
+
+interface PresenceEvent {
+  type: 'ONLINE' | 'OFFLINE' | 'PING';
+  user?: string;
+  onlineUsers?: string[];
+}
+
+interface TypingEvent {
+  sender: string;
+  scope: 'TEAM' | 'ROOM' | 'PRIVATE';
+  roomId?: number;
+  recipient?: string;
+  typing: boolean;
 }
 
 const MAX_REACTION_HYDRATION_MESSAGES = 20;
@@ -89,6 +106,13 @@ export const useChat = (projectId: string) => {
   const [roomUnseenCounts, setRoomUnseenCounts] = useState<Record<number, number>>({});
   const [privateLastMessages, setPrivateLastMessages] = useState<Record<string, ChatMessage | null>>({});
   const [roomLastMessages, setRoomLastMessages] = useState<Record<number, ChatMessage | null>>({});
+  const [teamUnseenCount, setTeamUnseenCount] = useState<number>(0);
+  const [teamLastMessage, setTeamLastMessage] = useState<ChatMessage | null>(null);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [teamTypingUsers, setTeamTypingUsers] = useState<string[]>([]);
+  const [roomTypingUsers, setRoomTypingUsers] = useState<Record<number, string[]>>({});
+  const [privateTypingUsers, setPrivateTypingUsers] = useState<string[]>([]);
+  const [unreadBadge, setUnreadBadge] = useState<UnreadBadgeSummary>({ teamUnread: 0, roomsUnread: 0, directsUnread: 0, totalUnread: 0 });
 
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [users, setUsers] = useState<string[]>([]);
@@ -101,6 +125,7 @@ export const useChat = (projectId: string) => {
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [hasRestoredSelection, setHasRestoredSelection] = useState(false);
 
   const stompClientRef = useRef<CompatClient | null>(null);
   const loadedReactionMessageIdsRef = useRef<Set<number>>(new Set());
@@ -111,6 +136,17 @@ export const useChat = (projectId: string) => {
   const hasRestoredSelectionRef = useRef(false);
 
   const selectionStorageKey = `chat-selection:${projectId}`;
+
+  const markTeamAsRead = useCallback(async () => {
+    try {
+      await fetch(`/api/projects/${projectId}/chat/team/read`, {
+        method: 'POST',
+        headers: tokenHeader()
+      });
+    } catch (markError) {
+      console.error('Failed to mark team chat as read', markError);
+    }
+  }, [projectId]);
 
   const addTeam = useCallback((teamName: string) => {
     setUsers(prev => {
@@ -138,6 +174,74 @@ export const useChat = (projectId: string) => {
   });
 
   const isStompConnected = () => Boolean(stompClientRef.current?.connected);
+
+  const loadPresence = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat/presence`, {
+        headers: tokenHeader()
+      });
+      if (!response.ok) {
+        return;
+      }
+
+      const data: PresenceResponse = await response.json();
+      setOnlineUsers((data.onlineUsers || []).map(user => user.toLowerCase()));
+    } catch (presenceError) {
+      console.error('Failed to load presence', presenceError);
+    }
+  }, [projectId]);
+
+  const loadUnreadBadge = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat/unread-badge`, {
+        headers: tokenHeader()
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const badge: UnreadBadgeSummary = await response.json();
+      setUnreadBadge({
+        teamUnread: Number(badge.teamUnread) || 0,
+        roomsUnread: Number(badge.roomsUnread) || 0,
+        directsUnread: Number(badge.directsUnread) || 0,
+        totalUnread: Number(badge.totalUnread) || 0
+      });
+    } catch (badgeError) {
+      console.error('Failed to load unread badge', badgeError);
+    }
+  }, [projectId]);
+
+  const sendTyping = useCallback((isTyping: boolean) => {
+    if (!isStompConnected()) {
+      return;
+    }
+
+    if (selectedRoomIdRef.current !== null && Number.isFinite(selectedRoomIdRef.current)) {
+      stompClientRef.current?.send(
+        `/app/project/${projectId}/typing`,
+        {},
+        JSON.stringify({ scope: 'ROOM', roomId: selectedRoomIdRef.current, isTyping })
+      );
+      return;
+    }
+
+    if (selectedUserRef.current) {
+      stompClientRef.current?.send(
+        `/app/project/${projectId}/typing`,
+        {},
+        JSON.stringify({ scope: 'PRIVATE', recipient: selectedUserRef.current, isTyping })
+      );
+      return;
+    }
+
+    stompClientRef.current?.send(
+      `/app/project/${projectId}/typing`,
+      {},
+      JSON.stringify({ scope: 'TEAM', isTyping })
+    );
+  }, [projectId]);
 
   const updateMessageEverywhere = useCallback((incoming: ChatMessage) => {
     setMessages(prev => mergeMessage(prev, incoming));
@@ -203,7 +307,7 @@ export const useChat = (projectId: string) => {
   }, [loadMessageReactions]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !hasRestoredSelectionRef.current) {
+    if (typeof window === 'undefined' || !hasRestoredSelection) {
       return;
     }
 
@@ -214,7 +318,7 @@ export const useChat = (projectId: string) => {
       : { type: 'team', value: null };
 
     window.sessionStorage.setItem(selectionStorageKey, JSON.stringify(selection));
-  }, [selectedRoomId, selectedUser, selectionStorageKey]);
+  }, [selectedRoomId, selectedUser, selectionStorageKey, hasRestoredSelection]);
 
   const fetchAllUsers = useCallback(async (token: string) => {
     try {
@@ -257,7 +361,7 @@ export const useChat = (projectId: string) => {
 
   const loadRooms = useCallback(async () => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/chat/rooms?includeArchived=true`, {
+      const response = await fetch(`/api/projects/${projectId}/chat/rooms`, {
         headers: tokenHeader()
       });
 
@@ -291,6 +395,18 @@ export const useChat = (projectId: string) => {
       const data = await response.json();
       const directSummaries: DirectChatSummary[] = data.directMessages || [];
       const roomSummaries: RoomChatSummary[] = data.rooms || [];
+      const teamSummary: TeamChatSummary | null = data.team || null;
+
+      setTeamUnseenCount(Number(teamSummary?.unseenCount) || 0);
+      setTeamLastMessage(
+        teamSummary?.lastMessage
+          ? {
+              sender: teamSummary.lastMessageSender || '',
+              content: teamSummary.lastMessage,
+              timestamp: teamSummary.lastMessageTimestamp || undefined
+            }
+          : null
+      );
 
       setPrivateUnseenCounts(
         Object.fromEntries(directSummaries.map(summary => [summary.username.toLowerCase(), Number(summary.unseenCount) || 0]))
@@ -298,6 +414,16 @@ export const useChat = (projectId: string) => {
       setRoomUnseenCounts(
         Object.fromEntries(roomSummaries.map(summary => [Number(summary.roomId), Number(summary.unseenCount) || 0]))
       );
+
+      const directUnread = directSummaries.reduce((acc, summary) => acc + (Number(summary.unseenCount) || 0), 0);
+      const roomUnread = roomSummaries.reduce((acc, summary) => acc + (Number(summary.unseenCount) || 0), 0);
+      const teamUnread = Number(teamSummary?.unseenCount) || 0;
+      setUnreadBadge({
+        teamUnread,
+        roomsUnread: roomUnread,
+        directsUnread: directUnread,
+        totalUnread: teamUnread + roomUnread + directUnread
+      });
 
       setPrivateLastMessages(
         Object.fromEntries(
@@ -337,12 +463,14 @@ export const useChat = (projectId: string) => {
   const restoreSelection = useCallback((availableUsers: string[], availableRooms: ChatRoom[]) => {
     if (typeof window === 'undefined') {
       hasRestoredSelectionRef.current = true;
+      setHasRestoredSelection(true);
       return;
     }
 
     const rawSelection = window.sessionStorage.getItem(selectionStorageKey);
     if (!rawSelection) {
       hasRestoredSelectionRef.current = true;
+      setHasRestoredSelection(true);
       return;
     }
 
@@ -361,6 +489,7 @@ export const useChat = (projectId: string) => {
       console.error('Failed to restore chat selection', parseError);
     } finally {
       hasRestoredSelectionRef.current = true;
+      setHasRestoredSelection(true);
     }
   }, [selectionStorageKey]);
 
@@ -376,6 +505,7 @@ export const useChat = (projectId: string) => {
 
       const data = await response.json();
       setMessages(data);
+      setTeamLastMessage(data.length > 0 ? data[data.length - 1] : null);
       hydrateReactions(data);
     } catch (fetchError) {
       console.error('Failed to load message history', fetchError);
@@ -564,30 +694,6 @@ export const useChat = (projectId: string) => {
     }
   }, [projectId]);
 
-  const toggleRoomArchive = useCallback(async (roomId: number, archived: boolean) => {
-    try {
-      const response = await fetch(`/api/projects/${projectId}/chat/rooms/${roomId}/archive`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...tokenHeader()
-        },
-        body: JSON.stringify({ archived })
-      });
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const updated = normalizeRoom(await response.json());
-      setRooms(prev => prev.map(room => (room.id === updated.id ? updated : room)));
-      return updated;
-    } catch (archiveError) {
-      console.error('Failed to archive room', archiveError);
-      return null;
-    }
-  }, [projectId]);
-
   const pinRoomMessage = useCallback(async (roomId: number, messageId: number | null) => {
     try {
       const response = await fetch(`/api/projects/${projectId}/chat/rooms/${roomId}/pin`, {
@@ -648,6 +754,15 @@ export const useChat = (projectId: string) => {
 
           if (incoming.type !== 'JOIN' && !incoming.roomId && !incoming.recipient) {
             setMessages(prev => mergeMessage(prev, incoming));
+            setTeamLastMessage(incoming);
+            if (incoming.sender.toLowerCase() !== username
+              && selectedRoomIdRef.current === null
+              && !selectedUserRef.current) {
+              setTeamUnseenCount(0);
+              markTeamAsRead();
+            } else if (incoming.sender.toLowerCase() !== username) {
+              setTeamUnseenCount(prev => prev + 1);
+            }
             if (incoming.id) {
               loadMessageReactions(incoming.id);
             }
@@ -744,7 +859,53 @@ export const useChat = (projectId: string) => {
           }
         });
 
+        client.subscribe(`/topic/project/${projectId}/presence`, payload => {
+          const event: PresenceEvent = JSON.parse(payload.body);
+          setOnlineUsers((event.onlineUsers || []).map(user => user.toLowerCase()));
+        });
+
+        client.subscribe(`/topic/project/${projectId}/typing/team`, payload => {
+          const event: TypingEvent = JSON.parse(payload.body);
+          const sender = event.sender?.toLowerCase();
+          if (!sender || sender === username.toLowerCase()) {
+            return;
+          }
+
+          setTeamTypingUsers(prev => {
+            if (event.typing) {
+              return prev.includes(sender) ? prev : [...prev, sender];
+            }
+            return prev.filter(user => user !== sender);
+          });
+        });
+
+        client.subscribe(`/user/queue/project/${projectId}/typing/private`, payload => {
+          const event: TypingEvent = JSON.parse(payload.body);
+          const sender = event.sender?.toLowerCase();
+          if (!sender || sender === username.toLowerCase()) {
+            return;
+          }
+
+          setPrivateTypingUsers(prev => {
+            if (event.typing) {
+              return prev.includes(sender) ? prev : [...prev, sender];
+            }
+            return prev.filter(user => user !== sender);
+          });
+        });
+
+        client.subscribe(`/user/queue/project/${projectId}/unread-badge`, payload => {
+          const badge: UnreadBadgeSummary = JSON.parse(payload.body);
+          setUnreadBadge({
+            teamUnread: Number(badge.teamUnread) || 0,
+            roomsUnread: Number(badge.roomsUnread) || 0,
+            directsUnread: Number(badge.directsUnread) || 0,
+            totalUnread: Number(badge.totalUnread) || 0
+          });
+        });
+
         client.send(`/app/project/${projectId}/chat.addUser`, {}, JSON.stringify({ sender: username, type: 'JOIN' }));
+        client.send(`/app/project/${projectId}/presence.ping`, {}, JSON.stringify({}));
       }, (connectError: unknown) => {
         setIsSocketConnected(false);
         setError('Connection failed. Is the backend running?');
@@ -755,7 +916,7 @@ export const useChat = (projectId: string) => {
       setError('Socket initialization failed.');
       console.error(connectError);
     }
-  }, [projectId, loadMessageReactions]);
+  }, [projectId, loadMessageReactions, markTeamAsRead]);
 
   useEffect(() => {
     const initialize = async () => {
@@ -793,6 +954,8 @@ export const useChat = (projectId: string) => {
         const loadedUsers = await fetchAllUsers(token);
         const loadedRooms = await loadRooms();
         await loadSummaries(token);
+        await loadPresence();
+        await loadUnreadBadge();
         restoreSelection(loadedUsers, loadedRooms);
 
         connectToChat(token, username, effectiveAliases);
@@ -811,7 +974,19 @@ export const useChat = (projectId: string) => {
         stompClientRef.current.disconnect();
       }
     };
-  }, [router, fetchAllUsers, fetchCanonicalUsernameAlias, loadRooms, loadSummaries, restoreSelection, connectToChat, loadHistory]);
+  }, [router, fetchAllUsers, fetchCanonicalUsernameAlias, loadRooms, loadSummaries, loadPresence, loadUnreadBadge, restoreSelection, connectToChat, loadHistory]);
+
+  useEffect(() => {
+    if (!isSocketConnected || !stompClientRef.current) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      stompClientRef.current?.send(`/app/project/${projectId}/presence.ping`, {}, JSON.stringify({}));
+    }, 30000);
+
+    return () => window.clearInterval(interval);
+  }, [projectId, isSocketConnected]);
 
   useEffect(() => {
     if (!isSocketConnected || !stompClientRef.current) {
@@ -819,23 +994,46 @@ export const useChat = (projectId: string) => {
     }
 
     const connectedClient = stompClientRef.current;
-    const subscriptions = rooms.map(room => connectedClient.subscribe(`/topic/project/${projectId}/room/${room.id}`, payload => {
-      const incoming: ChatMessage = JSON.parse(payload.body);
-      if (incoming.type === 'JOIN' || !incoming.roomId) {
-        return;
-      }
+    const subscriptions = rooms.flatMap(room => {
+      const messageSub = connectedClient.subscribe(`/topic/project/${projectId}/room/${room.id}`, payload => {
+        const incoming: ChatMessage = JSON.parse(payload.body);
+        if (incoming.type === 'JOIN' || !incoming.roomId) {
+          return;
+        }
 
-      setRoomMessages(prev => ({ ...prev, [incoming.roomId as number]: mergeMessage(prev[incoming.roomId as number] || [], incoming) }));
-      setRoomLastMessages(prev => ({ ...prev, [incoming.roomId as number]: incoming }));
+        setRoomMessages(prev => ({ ...prev, [incoming.roomId as number]: mergeMessage(prev[incoming.roomId as number] || [], incoming) }));
+        setRoomLastMessages(prev => ({ ...prev, [incoming.roomId as number]: incoming }));
 
-      if (incoming.sender.toLowerCase() !== currentUser && selectedRoomIdRef.current !== incoming.roomId) {
-        setRoomUnseenCounts(prev => ({ ...prev, [incoming.roomId as number]: (prev[incoming.roomId as number] || 0) + 1 }));
-      }
+        if (incoming.sender.toLowerCase() !== currentUser && selectedRoomIdRef.current !== incoming.roomId) {
+          setRoomUnseenCounts(prev => ({ ...prev, [incoming.roomId as number]: (prev[incoming.roomId as number] || 0) + 1 }));
+        }
 
-      if (incoming.id) {
-        loadMessageReactions(incoming.id);
-      }
-    }));
+        if (incoming.id) {
+          loadMessageReactions(incoming.id);
+        }
+      });
+
+      const typingSub = connectedClient.subscribe(`/topic/project/${projectId}/typing/room/${room.id}`, payload => {
+        const event: TypingEvent = JSON.parse(payload.body);
+        const sender = event.sender?.toLowerCase();
+        if (!sender || sender === currentUser.toLowerCase()) {
+          return;
+        }
+
+        setRoomTypingUsers(prev => {
+          const roomId = Number(event.roomId || room.id);
+          const existing = prev[roomId] || [];
+          return {
+            ...prev,
+            [roomId]: event.typing
+              ? (existing.includes(sender) ? existing : [...existing, sender])
+              : existing.filter(user => user !== sender)
+          };
+        });
+      });
+
+      return [messageSub, typingSub];
+    });
 
     return () => {
       subscriptions.forEach(subscription => subscription?.unsubscribe());
@@ -911,17 +1109,32 @@ export const useChat = (projectId: string) => {
 
   useEffect(() => {
     if (!selectedUser) {
+      setPrivateTypingUsers([]);
       return;
     }
+    setPrivateTypingUsers(prev => prev.filter(user => isSameIdentity(user, selectedUser)));
     setPrivateUnseenCounts(prev => ({ ...prev, [selectedUser]: 0 }));
   }, [selectedUser]);
 
   useEffect(() => {
     if (selectedRoomId === null || !Number.isFinite(selectedRoomId)) {
+      setRoomTypingUsers({});
       return;
     }
+    setRoomTypingUsers(prev => ({ [selectedRoomId]: prev[selectedRoomId] || [] }));
     setRoomUnseenCounts(prev => ({ ...prev, [selectedRoomId]: 0 }));
   }, [selectedRoomId]);
+
+  useEffect(() => {
+    if (!hasRestoredSelection) {
+      return;
+    }
+
+    if (selectedRoomId === null && !selectedUser) {
+      setTeamUnseenCount(0);
+      markTeamAsRead();
+    }
+  }, [selectedRoomId, selectedUser, markTeamAsRead, hasRestoredSelection]);
 
   const selectPrivateUser = useCallback((user: string | null) => {
     setSelectedRoomId(null);
@@ -1125,6 +1338,13 @@ export const useChat = (projectId: string) => {
     roomUnseenCounts,
     privateLastMessages,
     roomLastMessages,
+    teamUnseenCount,
+    teamLastMessage,
+    onlineUsers,
+    teamTypingUsers,
+    roomTypingUsers,
+    privateTypingUsers,
+    unreadBadge,
     messageReactions,
     activeThreadRoot,
     threadMessages,
@@ -1143,8 +1363,8 @@ export const useChat = (projectId: string) => {
     createRoom,
     deleteRoom,
     updateRoomMeta,
-    toggleRoomArchive,
     pinRoomMessage,
+    sendTyping,
     addTeam,
     isLoading,
     error,
