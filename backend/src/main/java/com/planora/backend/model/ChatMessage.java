@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 import org.hibernate.annotations.CreationTimestamp;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -35,6 +37,17 @@ public class ChatMessage {
 
     private ChatType chatType;
 
+    private Long parentMessageId;
+
+    @Enumerated(EnumType.STRING)
+    private FormatType formatType = FormatType.PLAIN;
+
+    private Boolean deleted = false;
+
+    private LocalDateTime deletedAt;
+
+    private LocalDateTime editedAt;
+
     @CreationTimestamp
     private LocalDateTime timestamp;
 
@@ -49,6 +62,11 @@ public class ChatMessage {
     public enum ChatType {
         GROUP,
         PRIVATE
+    }
+
+    public enum FormatType {
+        PLAIN,
+        MARKDOWN
     }
 
     // Getters and Setters

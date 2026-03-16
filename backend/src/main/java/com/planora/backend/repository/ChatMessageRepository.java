@@ -11,11 +11,15 @@ import com.planora.backend.model.ChatMessage;
 
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> {
 
+    Optional<ChatMessage> findByIdAndProjectId(Long id, Long projectId);
+
     // group messages for a project have no recipient and no room
     List<ChatMessage> findByProjectIdAndRecipientIsNullAndRoomIdIsNullOrderByIdAsc(Long projectId);
 
     // room-based group messages
     List<ChatMessage> findByProjectIdAndRoomIdOrderByIdAsc(Long projectId, Long roomId);
+
+    List<ChatMessage> findByProjectIdAndParentMessageIdOrderByIdAsc(Long projectId, Long parentMessageId);
 
     Optional<ChatMessage> findTopByProjectIdAndRoomIdOrderByIdDesc(Long projectId, Long roomId);
 
