@@ -1,41 +1,122 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import SockJS from 'sockjs-client';
-import { Stomp, CompatClient } from '@stomp/stompjs';
-import { ChatMessage, ChatRoom, DirectChatSummary, RoomChatSummary } from '../components/chat';
+import { CompatClient, Stomp } from '@stomp/stompjs';
+import {
+  ChatMessage,
+  ChatReactionSummary,
+  ChatRoom,
+  DirectChatSummary,
+  RoomChatSummary
+} from './chat';
 
 interface RoomEvent {
-  action: 'CREATED' | 'DELETED';
+  action: 'CREATED' | 'UPDATED' | 'DELETED';
   roomId: number;
   room?: ChatRoom;
 }
 
+interface AuthUserSummary {
+  email?: string;
+  username?: string;
+}
+
+const MAX_REACTION_HYDRATION_MESSAGES = 20;
+const REACTION_RETRY_BACKOFF_MS = 10000;
+
+const normalizeIdentity = (value?: string | null): string => (value || '').trim().toLowerCase();
+
+const localPart = (value: string): string => {
+  const normalized = normalizeIdentity(value);
+  if (!normalized.includes('@')) {
+    return normalized;
+  }
+
+  return normalized.split('@')[0];
+};
+
+const isSameIdentity = (left?: string | null, right?: string | null): boolean => {
+  const normalizedLeft = normalizeIdentity(left);
+  const normalizedRight = normalizeIdentity(right);
+
+  if (!normalizedLeft || !normalizedRight) {
+    return false;
+  }
+
+  if (normalizedLeft === normalizedRight) {
+    return true;
+  }
+
+  return localPart(normalizedLeft) === localPart(normalizedRight);
+};
+
+const mergeMessage = (list: ChatMessage[], incoming: ChatMessage): ChatMessage[] => {
+  if (!incoming.id) {
+    return [...list, incoming];
+  }
+
+  const index = list.findIndex(item => item.id === incoming.id);
+  if (index === -1) {
+    return [...list, incoming];
+  }
+
+  const next = [...list];
+  next[index] = { ...next[index], ...incoming };
+  return next;
+};
+
+const normalizeRoom = (room: ChatRoom): ChatRoom => ({
+  ...room,
+  id: Number(room.id),
+  projectId: Number(room.projectId),
+  archived: Boolean(room.archived),
+  pinnedMessageId: room.pinnedMessageId ?? null
+});
+
 export const useChat = (projectId: string) => {
   const router = useRouter();
+
   const [currentUser, setCurrentUser] = useState<string>('');
+  const [currentUserAliases, setCurrentUserAliases] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [privateMessages, setPrivateMessages] = useState<Record<string, ChatMessage[]>>({});
   const [roomMessages, setRoomMessages] = useState<Record<number, ChatMessage[]>>({});
+
   const [privateUnseenCounts, setPrivateUnseenCounts] = useState<Record<string, number>>({});
   const [roomUnseenCounts, setRoomUnseenCounts] = useState<Record<number, number>>({});
   const [privateLastMessages, setPrivateLastMessages] = useState<Record<string, ChatMessage | null>>({});
   const [roomLastMessages, setRoomLastMessages] = useState<Record<number, ChatMessage | null>>({});
+
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [users, setUsers] = useState<string[]>([]);
+
+  const [activeThreadRoot, setActiveThreadRoot] = useState<ChatMessage | null>(null);
+  const [threadMessages, setThreadMessages] = useState<ChatMessage[]>([]);
+
+  const [messageReactions, setMessageReactions] = useState<Record<number, ChatReactionSummary[]>>({});
+
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+
   const stompClientRef = useRef<CompatClient | null>(null);
+  const loadedReactionMessageIdsRef = useRef<Set<number>>(new Set());
+  const reactionFetchBackoffUntilRef = useRef<number>(0);
   const selectedUserRef = useRef<string | null>(null);
   const selectedRoomIdRef = useRef<number | null>(null);
+  const activeThreadRootRef = useRef<ChatMessage | null>(null);
   const hasRestoredSelectionRef = useRef(false);
+
   const selectionStorageKey = `chat-selection:${projectId}`;
 
   const addTeam = useCallback((teamName: string) => {
     setUsers(prev => {
-      if (!teamName.trim() || prev.includes(teamName)) return prev;
+      if (!teamName.trim() || prev.includes(teamName)) {
+        return prev;
+      }
       return [...prev, teamName];
     });
   }, []);
@@ -49,11 +130,80 @@ export const useChat = (projectId: string) => {
   }, [selectedRoomId]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !hasRestoredSelectionRef.current) {
+    activeThreadRootRef.current = activeThreadRoot;
+  }, [activeThreadRoot]);
+
+  const tokenHeader = () => ({
+    Authorization: `Bearer ${localStorage.getItem('token')}`
+  });
+
+  const isStompConnected = () => Boolean(stompClientRef.current?.connected);
+
+  const updateMessageEverywhere = useCallback((incoming: ChatMessage) => {
+    setMessages(prev => mergeMessage(prev, incoming));
+
+    setPrivateMessages(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach(key => {
+        next[key] = mergeMessage(next[key], incoming);
+      });
+      return next;
+    });
+
+    setRoomMessages(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach(key => {
+        const roomId = Number(key);
+        next[roomId] = mergeMessage(next[roomId], incoming);
+      });
+      return next;
+    });
+
+    setThreadMessages(prev => mergeMessage(prev, incoming));
+  }, []);
+
+  const loadMessageReactions = useCallback(async (messageId: number) => {
+    if (Date.now() < reactionFetchBackoffUntilRef.current) {
       return;
     }
 
-    if (typeof window === 'undefined') {
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat/messages/${messageId}/reactions`, {
+        headers: tokenHeader()
+      });
+
+      if (!response.ok) {
+        if (response.status >= 500) {
+          reactionFetchBackoffUntilRef.current = Date.now() + REACTION_RETRY_BACKOFF_MS;
+        }
+        return;
+      }
+
+      const reactions = await response.json();
+      setMessageReactions(prev => ({ ...prev, [messageId]: reactions }));
+    } catch (loadError) {
+      console.error('Failed to load message reactions', loadError);
+    }
+  }, [projectId]);
+
+  const hydrateReactions = useCallback((messageList: ChatMessage[]) => {
+    const recentMessages = messageList.slice(-MAX_REACTION_HYDRATION_MESSAGES);
+
+    recentMessages
+      .filter(message => typeof message.id === 'number')
+      .forEach(message => {
+        const id = message.id as number;
+        if (loadedReactionMessageIdsRef.current.has(id)) {
+          return;
+        }
+
+        loadedReactionMessageIdsRef.current.add(id);
+        loadMessageReactions(id);
+      });
+  }, [loadMessageReactions]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !hasRestoredSelectionRef.current) {
       return;
     }
 
@@ -66,95 +216,121 @@ export const useChat = (projectId: string) => {
     window.sessionStorage.setItem(selectionStorageKey, JSON.stringify(selection));
   }, [selectedRoomId, selectedUser, selectionStorageKey]);
 
-  // 2. Fetch Users
   const fetchAllUsers = useCallback(async (token: string) => {
     try {
-      const res = await fetch(`/api/projects/${projectId}/chat/members`, {
+      const response = await fetch(`/api/projects/${projectId}/chat/members`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) {
-        const data = await res.json();
-        const normalizedUsers = data.map((u: string) => u.toLowerCase());
-        setUsers(normalizedUsers);
-        return normalizedUsers;
-      }
-    } catch (err) {
-      console.error('Error fetching users:', err);
-    }
 
-    return [] as string[];
+      if (!response.ok) {
+        return [] as string[];
+      }
+
+      const data = await response.json();
+      const normalizedUsers = data.map((user: string) => user.toLowerCase());
+      setUsers(normalizedUsers);
+      return normalizedUsers;
+    } catch (fetchError) {
+      console.error('Error fetching users:', fetchError);
+      return [] as string[];
+    }
   }, [projectId]);
+
+  const fetchCanonicalUsernameAlias = useCallback(async (token: string): Promise<string | null> => {
+    try {
+      const response = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const current: AuthUserSummary = await response.json();
+      const username = current?.username?.trim().toLowerCase();
+      return username || null;
+    } catch (fetchError) {
+      console.error('Error fetching canonical username alias:', fetchError);
+      return null;
+    }
+  }, []);
 
   const loadRooms = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`/api/projects/${projectId}/chat/rooms`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await fetch(`/api/projects/${projectId}/chat/rooms?includeArchived=true`, {
+        headers: tokenHeader()
       });
-      if (res.ok) {
-        const data = await res.json();
-        const normalizedRooms: ChatRoom[] = (data || []).map((room: any) => ({
-          ...room,
-          id: Number(room.id),
-          projectId: Number(room.projectId)
-        })).filter((room: ChatRoom) => Number.isFinite(room.id));
-        setRooms(normalizedRooms);
-        return normalizedRooms;
-      }
-    } catch (err) {
-      console.error('Error fetching rooms:', err);
-    }
 
-    return [] as ChatRoom[];
+      if (!response.ok) {
+        return [] as ChatRoom[];
+      }
+
+      const data = await response.json();
+      const normalizedRooms: ChatRoom[] = (data || [])
+        .map((room: ChatRoom) => normalizeRoom(room))
+        .filter((room: ChatRoom) => Number.isFinite(room.id));
+
+      setRooms(normalizedRooms);
+      return normalizedRooms;
+    } catch (fetchError) {
+      console.error('Error fetching rooms:', fetchError);
+      return [] as ChatRoom[];
+    }
   }, [projectId]);
 
   const loadSummaries = useCallback(async (token: string) => {
     try {
-      const res = await fetch(`/api/projects/${projectId}/chat/summaries`, {
+      const response = await fetch(`/api/projects/${projectId}/chat/summaries`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      if (!res.ok) {
+      if (!response.ok) {
         return;
       }
 
-      const data = await res.json();
+      const data = await response.json();
       const directSummaries: DirectChatSummary[] = data.directMessages || [];
       const roomSummaries: RoomChatSummary[] = data.rooms || [];
 
-      setPrivateUnseenCounts(Object.fromEntries(
-        directSummaries.map(summary => [summary.username.toLowerCase(), Number(summary.unseenCount) || 0])
-      ));
-      setRoomUnseenCounts(Object.fromEntries(
-        roomSummaries.map(summary => [Number(summary.roomId), Number(summary.unseenCount) || 0])
-      ));
-      setPrivateLastMessages(Object.fromEntries(
-        directSummaries.map(summary => [
-          summary.username.toLowerCase(),
-          summary.lastMessage
-            ? {
-                sender: summary.lastMessageSender || summary.username.toLowerCase(),
-                content: summary.lastMessage,
-                timestamp: summary.lastMessageTimestamp || undefined
-              }
-            : null
-        ])
-      ));
-      setRoomLastMessages(Object.fromEntries(
-        roomSummaries.map(summary => [
-          Number(summary.roomId),
-          summary.lastMessage
-            ? {
-                sender: summary.lastMessageSender || '',
-                content: summary.lastMessage,
-                timestamp: summary.lastMessageTimestamp || undefined,
-                roomId: Number(summary.roomId)
-              }
-            : null
-        ])
-      ));
-    } catch (err) {
-      console.error('Error fetching chat summaries:', err);
+      setPrivateUnseenCounts(
+        Object.fromEntries(directSummaries.map(summary => [summary.username.toLowerCase(), Number(summary.unseenCount) || 0]))
+      );
+      setRoomUnseenCounts(
+        Object.fromEntries(roomSummaries.map(summary => [Number(summary.roomId), Number(summary.unseenCount) || 0]))
+      );
+
+      setPrivateLastMessages(
+        Object.fromEntries(
+          directSummaries.map(summary => [
+            summary.username.toLowerCase(),
+            summary.lastMessage
+              ? {
+                  sender: summary.lastMessageSender || summary.username.toLowerCase(),
+                  content: summary.lastMessage,
+                  timestamp: summary.lastMessageTimestamp || undefined
+                }
+              : null
+          ])
+        )
+      );
+
+      setRoomLastMessages(
+        Object.fromEntries(
+          roomSummaries.map(summary => [
+            Number(summary.roomId),
+            summary.lastMessage
+              ? {
+                  sender: summary.lastMessageSender || '',
+                  content: summary.lastMessage,
+                  timestamp: summary.lastMessageTimestamp || undefined,
+                  roomId: Number(summary.roomId)
+                }
+              : null
+          ])
+        )
+      );
+    } catch (fetchError) {
+      console.error('Error fetching chat summaries:', fetchError);
     }
   }, [projectId]);
 
@@ -172,6 +348,7 @@ export const useChat = (projectId: string) => {
 
     try {
       const parsed = JSON.parse(rawSelection) as { type?: 'team' | 'private' | 'room'; value?: string | number | null };
+
       if (parsed.type === 'private' && typeof parsed.value === 'string' && availableUsers.includes(parsed.value)) {
         setSelectedUser(parsed.value);
       } else if (parsed.type === 'room') {
@@ -180,228 +357,406 @@ export const useChat = (projectId: string) => {
           setSelectedRoomId(roomId);
         }
       }
-    } catch (err) {
-      console.error('Failed to restore chat selection', err);
+    } catch (parseError) {
+      console.error('Failed to restore chat selection', parseError);
     } finally {
       hasRestoredSelectionRef.current = true;
     }
   }, [selectionStorageKey]);
 
+  const loadHistory = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat/messages`, {
+        headers: tokenHeader()
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const data = await response.json();
+      setMessages(data);
+      hydrateReactions(data);
+    } catch (fetchError) {
+      console.error('Failed to load message history', fetchError);
+    }
+  }, [projectId, hydrateReactions]);
+
   const loadRoomHistory = useCallback(async (roomId: number) => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`/api/projects/${projectId}/chat/messages?roomId=${roomId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await fetch(`/api/projects/${projectId}/chat/messages?roomId=${roomId}`, {
+        headers: tokenHeader()
       });
-      if (res.ok) {
-        const data = await res.json();
-        setRoomMessages(prev => ({ ...prev, [roomId]: data }));
-        setRoomLastMessages(prev => ({
-          ...prev,
-          [roomId]: data.length > 0 ? data[data.length - 1] : null
-        }));
-        setRoomUnseenCounts(prev => ({ ...prev, [roomId]: 0 }));
-      }
-    } catch (err) {
-      console.error('Failed to load room history', err);
-    }
-  }, [projectId]);
 
-  // utility to fetch history
-  const loadHistory = useCallback(async (token: string, username: string) => {
-    try {
-      // use relative path; Next.js rewrite will proxy to backend
-      const res = await fetch(`/api/projects/${projectId}/chat/messages`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMessages(data);
-      } else {
-        console.warn('History fetch returned', res.status);
+      if (!response.ok) {
+        return;
       }
-    } catch (err) {
-      console.error('Failed to load message history', err);
+
+      const data = await response.json();
+      setRoomMessages(prev => ({ ...prev, [roomId]: data }));
+      setRoomLastMessages(prev => ({ ...prev, [roomId]: data.length > 0 ? data[data.length - 1] : null }));
+      setRoomUnseenCounts(prev => ({ ...prev, [roomId]: 0 }));
+      hydrateReactions(data);
+    } catch (fetchError) {
+      console.error('Failed to load room history', fetchError);
     }
-  }, [projectId]);
+  }, [projectId, hydrateReactions]);
+
+  const loadPrivateHistory = useCallback(async (recipient: string) => {
+    if (!recipient || !currentUser) {
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams();
+      params.append('recipient', currentUser);
+      params.append('with', recipient);
+
+      const response = await fetch(`/api/projects/${projectId}/chat/messages?${params.toString()}`, {
+        headers: tokenHeader()
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const data = await response.json();
+      setPrivateMessages(prev => ({ ...prev, [recipient]: data }));
+      setPrivateLastMessages(prev => ({ ...prev, [recipient]: data.length > 0 ? data[data.length - 1] : null }));
+      setPrivateUnseenCounts(prev => ({ ...prev, [recipient]: 0 }));
+      hydrateReactions(data);
+    } catch (fetchError) {
+      console.error('Failed to load private history', fetchError);
+    }
+  }, [currentUser, projectId, hydrateReactions]);
+
+  const openThread = useCallback(async (rootMessage: ChatMessage) => {
+    if (!rootMessage.id) {
+      return;
+    }
+
+    setActiveThreadRoot(rootMessage);
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat/messages/${rootMessage.id}/thread`, {
+        headers: tokenHeader()
+      });
+
+      if (!response.ok) {
+        setThreadMessages([rootMessage]);
+        return;
+      }
+
+      const data = await response.json();
+      setThreadMessages(data);
+      hydrateReactions(data);
+    } catch (fetchError) {
+      console.error('Failed to load thread messages', fetchError);
+      setThreadMessages([rootMessage]);
+    }
+  }, [projectId, hydrateReactions]);
+
+  const closeThread = useCallback(() => {
+    setActiveThreadRoot(null);
+    setThreadMessages([]);
+  }, []);
 
   const createRoom = useCallback(async () => {
-    const name = prompt('Enter new group chat name');
+    const name = window.prompt('Enter new group chat name');
     if (!name || !name.trim()) {
       return null;
     }
+
     if (users.length === 0) {
-      alert('No project members found to add.');
+      window.alert('No project members found to add.');
       return null;
     }
 
-    const members = prompt(`Enter group members (comma-separated, choose from: ${users.filter(u => u !== currentUser).join(', ')})`);
+    const members = window.prompt(`Enter group members (comma-separated, choose from: ${users.filter(user => user !== currentUser).join(', ')})`);
     if (!members) {
       return null;
     }
 
-    const chosenMembers = members.split(',')
-      .map(u => u.trim().toLowerCase())
-      .filter(u => u && u !== currentUser && users.includes(u));
+    const chosenMembers = members
+      .split(',')
+      .map(user => user.trim().toLowerCase())
+      .filter(user => user && user !== currentUser && users.includes(user));
 
     if (chosenMembers.length === 0) {
-      alert('Please include at least one valid member.');
+      window.alert('Please include at least one valid member.');
       return null;
     }
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`/api/projects/${projectId}/chat/rooms`, {
+      const response = await fetch(`/api/projects/${projectId}/chat/rooms`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          ...tokenHeader()
         },
         body: JSON.stringify({ name: name.trim(), members: chosenMembers })
       });
-      if (res.ok || res.status === 201) {
-        const rawRoom = await res.json();
-        const createdRoom: ChatRoom = {
-          ...rawRoom,
-          id: Number(rawRoom.id),
-          projectId: Number(rawRoom.projectId)
-        };
-        if (!Number.isFinite(createdRoom.id)) {
-          console.error('Created room returned invalid id', rawRoom);
-          alert('Room created but returned invalid id. Please refresh and try again.');
-          return null;
-        }
-        setRooms(prev => prev.some(room => room.id === createdRoom.id) ? prev : [...prev, createdRoom]);
-        setRoomMessages(prev => ({ ...prev, [createdRoom.id]: prev[createdRoom.id] || [] }));
-        return createdRoom;
-      } else {
-        const text = await res.text();
-        console.error('Failed to create room', res.status, text);
-        alert('Failed to create room');
+
+      if (!response.ok && response.status !== 201) {
         return null;
       }
-    } catch (err) {
-      console.error('Failed to create room', err);
-      alert('Failed to create room');
+
+      const rawRoom = await response.json();
+      const createdRoom: ChatRoom = {
+        ...rawRoom,
+        id: Number(rawRoom.id),
+        projectId: Number(rawRoom.projectId)
+      };
+
+      if (!Number.isFinite(createdRoom.id)) {
+        return null;
+      }
+
+      setRooms(prev => (prev.some(room => room.id === createdRoom.id) ? prev : [...prev, createdRoom]));
+      setRoomMessages(prev => ({ ...prev, [createdRoom.id]: prev[createdRoom.id] || [] }));
+      return createdRoom;
+    } catch (createError) {
+      console.error('Failed to create room', createError);
       return null;
     }
   }, [projectId, users, currentUser]);
 
   const deleteRoom = useCallback(async (roomId: number) => {
-    if (!confirm('Delete this group chat?')) return;
+    if (!window.confirm('Delete this group chat?')) {
+      return;
+    }
+
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`/api/projects/${projectId}/chat/rooms/${roomId}`, {
+      const response = await fetch(`/api/projects/${projectId}/chat/rooms/${roomId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: tokenHeader()
       });
-      if (res.ok || res.status === 204) {
+
+      if (response.ok || response.status === 204) {
         await loadRooms();
-      } else {
-        const text = await res.text();
-        console.error('Failed to delete room', res.status, text);
-        alert(res.status === 404 ? 'Group chat not found or already deleted.' : 'Failed to delete group chat.');
       }
-    } catch (err) {
-      console.error('Failed to delete room', err);
-      alert('Failed to delete group chat. Please try again.');
+    } catch (deleteError) {
+      console.error('Failed to delete room', deleteError);
     }
   }, [projectId, loadRooms]);
 
-  // 3. WebSocket Connection
-  const connectToChat = useCallback((token: string, username: string) => {
+  const updateRoomMeta = useCallback(async (roomId: number, updates: { name?: string; topic?: string; description?: string }) => {
     try {
-      const socket = new SockJS('http://localhost:8080/ws');
-      const client = Stomp.over(socket);
-      client.debug = () => {}; // Disable debug logs for cleaner console
+      const response = await fetch(`/api/projects/${projectId}/chat/rooms/${roomId}/meta`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...tokenHeader()
+        },
+        body: JSON.stringify(updates)
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const updated = normalizeRoom(await response.json());
+      setRooms(prev => prev.map(room => (room.id === updated.id ? updated : room)));
+      return updated;
+    } catch (updateError) {
+      console.error('Failed to update room metadata', updateError);
+      return null;
+    }
+  }, [projectId]);
+
+  const toggleRoomArchive = useCallback(async (roomId: number, archived: boolean) => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat/rooms/${roomId}/archive`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...tokenHeader()
+        },
+        body: JSON.stringify({ archived })
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const updated = normalizeRoom(await response.json());
+      setRooms(prev => prev.map(room => (room.id === updated.id ? updated : room)));
+      return updated;
+    } catch (archiveError) {
+      console.error('Failed to archive room', archiveError);
+      return null;
+    }
+  }, [projectId]);
+
+  const pinRoomMessage = useCallback(async (roomId: number, messageId: number | null) => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat/rooms/${roomId}/pin`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...tokenHeader()
+        },
+        body: JSON.stringify({ messageId })
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const updated = normalizeRoom(await response.json());
+      setRooms(prev => prev.map(room => (room.id === updated.id ? updated : room)));
+      return updated;
+    } catch (pinError) {
+      console.error('Failed to pin room message', pinError);
+      return null;
+    }
+  }, [projectId]);
+
+  const scheduleHistorySync = useCallback((recipient?: string | null, roomId?: number | null) => {
+    window.setTimeout(() => {
+      if (roomId !== null && roomId !== undefined) {
+        loadRoomHistory(roomId);
+        return;
+      }
+
+      if (recipient) {
+        loadPrivateHistory(recipient);
+        return;
+      }
+
+      loadHistory();
+    }, 450);
+  }, [loadHistory, loadPrivateHistory, loadRoomHistory]);
+
+  const connectToChat = useCallback((token: string, username: string, aliases: string[]) => {
+    try {
+      const client = Stomp.over(() => new SockJS('http://localhost:8080/ws'));
+      client.debug = () => {};
+      client.reconnect_delay = 5000;
+      const normalizedAliases = new Set(aliases.map(alias => alias.toLowerCase()));
 
       client.connect({ Authorization: `Bearer ${token}` }, () => {
         stompClientRef.current = client;
         setIsSocketConnected(true);
-        
-        // Subscribe to Public
-        client.subscribe(`/topic/project/${projectId}/public`, (payload) => {
-          const msg: ChatMessage = JSON.parse(payload.body);
-          if (msg.type === 'JOIN' && msg.sender !== username) {
-            setUsers(prev => prev.includes(msg.sender) ? prev : [...prev, msg.sender]);
+
+        client.subscribe(`/topic/project/${projectId}/public`, payload => {
+          const incoming: ChatMessage = JSON.parse(payload.body);
+          if (incoming.type === 'JOIN' && incoming.sender !== username) {
+            setUsers(prev => (prev.includes(incoming.sender) ? prev : [...prev, incoming.sender]));
+            return;
           }
 
-          // Team chat should only contain non-room, non-private messages.
-          if (msg.type !== 'JOIN' && !msg.roomId && !msg.recipient) {
-            setMessages(prev => [...prev, msg]);
+          if (incoming.type !== 'JOIN' && !incoming.roomId && !incoming.recipient) {
+            setMessages(prev => mergeMessage(prev, incoming));
+            if (incoming.id) {
+              loadMessageReactions(incoming.id);
+            }
           }
         });
 
-        // Subscribe to Private
-        client.subscribe(`/user/queue/project/${projectId}/messages`, (payload) => {
-          const msg: ChatMessage = JSON.parse(payload.body);
-          const sender = msg.sender.toLowerCase();
-          setPrivateMessages(prev => ({
-            ...prev,
-            [sender]: [...(prev[sender] || []), msg]
-          }));
-          setPrivateLastMessages(prev => ({ ...prev, [sender]: msg }));
+        client.subscribe(`/user/queue/project/${projectId}/messages`, payload => {
+          const incoming: ChatMessage = JSON.parse(payload.body);
+          const sender = incoming.sender?.toLowerCase() || '';
+          const recipient = incoming.recipient?.toLowerCase() || '';
+          const isFromCurrentUser = normalizedAliases.has(sender);
+          const partner = isFromCurrentUser ? recipient : sender;
 
-          if (sender !== username && selectedUserRef.current !== sender) {
-            setPrivateUnseenCounts(prev => ({
+          if (!partner) {
+            return;
+          }
+
+          setPrivateMessages(prev => {
+            const candidateKeys = new Set<string>([
+              partner,
+              ...(selectedUserRef.current ? [selectedUserRef.current.toLowerCase()] : []),
+              ...Object.keys(prev)
+            ]);
+
+            const matchedKey = Array.from(candidateKeys).find(key => isSameIdentity(key, partner)) || partner;
+            const updatedMessages = mergeMessage(prev[matchedKey] || [], incoming);
+
+            return {
               ...prev,
-              [sender]: (prev[sender] || 0) + 1
-            }));
+              [matchedKey]: updatedMessages,
+              ...(matchedKey !== partner ? { [partner]: updatedMessages } : {})
+            };
+          });
+
+          const activeConversationKey = selectedUserRef.current && isSameIdentity(selectedUserRef.current, partner)
+            ? selectedUserRef.current.toLowerCase()
+            : partner;
+
+          setPrivateLastMessages(prev => ({
+            ...prev,
+            [activeConversationKey]: incoming,
+            ...(activeConversationKey !== partner ? { [partner]: incoming } : {})
+          }));
+
+          if (!isFromCurrentUser && !(selectedUserRef.current && isSameIdentity(selectedUserRef.current, partner))) {
+            setPrivateUnseenCounts(prev => ({ ...prev, [activeConversationKey]: (prev[activeConversationKey] || 0) + 1 }));
           }
-          setUsers(prev => prev.includes(sender) ? prev : [...prev, sender]);
+
+          setUsers(prev => (prev.some(user => isSameIdentity(user, partner)) ? prev : [...prev, partner]));
+
+          if (incoming.id) {
+            loadMessageReactions(incoming.id);
+          }
         });
 
-        client.subscribe(`/topic/project/${projectId}/rooms`, (payload) => {
+        client.subscribe(`/topic/project/${projectId}/rooms`, payload => {
           const event: RoomEvent = JSON.parse(payload.body);
-          if (event.action === 'CREATED' && event.room) {
-            const normalizedRoom: ChatRoom = {
-              ...event.room,
-              id: Number(event.room.id),
-              projectId: Number(event.room.projectId)
-            };
+
+          if ((event.action === 'CREATED' || event.action === 'UPDATED') && event.room) {
+            const normalizedRoom: ChatRoom = normalizeRoom(event.room);
+
             if (!Number.isFinite(normalizedRoom.id)) {
               return;
             }
-            setRooms(prev => prev.some(room => room.id === normalizedRoom.id) ? prev : [...prev, normalizedRoom]);
+
+            setRooms(prev => (
+              prev.some(room => room.id === normalizedRoom.id)
+                ? prev.map(room => (room.id === normalizedRoom.id ? normalizedRoom : room))
+                : [...prev, normalizedRoom]
+            ));
             setRoomUnseenCounts(prev => ({ ...prev, [normalizedRoom.id]: prev[normalizedRoom.id] || 0 }));
             setRoomLastMessages(prev => ({ ...prev, [normalizedRoom.id]: prev[normalizedRoom.id] || null }));
             return;
           }
 
           if (event.action === 'DELETED') {
-            setRooms(prev => prev.filter(room => room.id !== Number(event.roomId)));
+            const removedId = Number(event.roomId);
+            setRooms(prev => prev.filter(room => room.id !== removedId));
             setRoomMessages(prev => {
               const next = { ...prev };
-              delete next[Number(event.roomId)];
+              delete next[removedId];
               return next;
             });
             setRoomUnseenCounts(prev => {
               const next = { ...prev };
-              delete next[Number(event.roomId)];
+              delete next[removedId];
               return next;
             });
             setRoomLastMessages(prev => {
               const next = { ...prev };
-              delete next[Number(event.roomId)];
+              delete next[removedId];
               return next;
             });
           }
         });
 
-        // Notify Join
         client.send(`/app/project/${projectId}/chat.addUser`, {}, JSON.stringify({ sender: username, type: 'JOIN' }));
-      }, (err: any) => {
+      }, (connectError: unknown) => {
         setIsSocketConnected(false);
         setError('Connection failed. Is the backend running?');
-        console.error(err);
+        console.error(connectError);
       });
-    } catch (err) {
+    } catch (connectError) {
       setIsSocketConnected(false);
       setError('Socket initialization failed.');
+      console.error(connectError);
     }
-  }, [projectId]);
+  }, [projectId, loadMessageReactions]);
 
-  // 1. Initial Auth & Setup
   useEffect(() => {
     const initialize = async () => {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -412,7 +767,26 @@ export const useChat = (projectId: string) => {
 
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        const username = (payload.username || payload.sub || payload.email || 'User').toLowerCase();
+        const canonicalUsername = await fetchCanonicalUsernameAlias(token);
+        const username = (canonicalUsername || payload.username || payload.sub || payload.email || 'User').toLowerCase();
+        const aliases = [payload.username, payload.sub, payload.email]
+          .filter((value: string | undefined | null): value is string => Boolean(value && value.trim()))
+          .map((value: string) => value.toLowerCase());
+        if (canonicalUsername) {
+          aliases.push(canonicalUsername);
+        }
+        const aliasWithLocalPart = aliases
+          .flatMap((value: string) => {
+            if (!value.includes('@')) {
+              return [value];
+            }
+
+            return [value, value.split('@')[0]];
+          })
+          .filter((value: string) => value && value.trim());
+
+        const effectiveAliases = Array.from(new Set([...aliasWithLocalPart, username.toLowerCase()]));
+        setCurrentUserAliases(effectiveAliases);
         setCurrentUser(username);
         setIsLoading(false);
 
@@ -420,9 +794,10 @@ export const useChat = (projectId: string) => {
         const loadedRooms = await loadRooms();
         await loadSummaries(token);
         restoreSelection(loadedUsers, loadedRooms);
-        connectToChat(token, username);
-        loadHistory(token, username);
-      } catch (err) {
+
+        connectToChat(token, username, effectiveAliases);
+        await loadHistory();
+      } catch {
         setError('Invalid authentication token.');
         router.push('/login');
       }
@@ -432,60 +807,107 @@ export const useChat = (projectId: string) => {
 
     return () => {
       setIsSocketConnected(false);
-      if (stompClientRef.current?.connected) stompClientRef.current.disconnect();
+      if (stompClientRef.current?.connected) {
+        stompClientRef.current.disconnect();
+      }
     };
-  }, [router, fetchAllUsers, loadRooms, loadSummaries, restoreSelection, connectToChat, loadHistory]);
+  }, [router, fetchAllUsers, fetchCanonicalUsernameAlias, loadRooms, loadSummaries, restoreSelection, connectToChat, loadHistory]);
 
   useEffect(() => {
-    if (!isSocketConnected || !stompClientRef.current) return;
-    const connectedClient = stompClientRef.current;
-    const subscriptions = rooms.map(room => connectedClient.subscribe(`/topic/project/${projectId}/room/${room.id}`, (payload) => {
-      const msg: ChatMessage = JSON.parse(payload.body);
-      if (msg.type !== 'JOIN' && msg.roomId) {
-        setRoomMessages(prev => ({
-          ...prev,
-          [msg.roomId]: [...(prev[msg.roomId] || []), msg]
-        }));
-        setRoomLastMessages(prev => ({ ...prev, [msg.roomId]: msg }));
+    if (!isSocketConnected || !stompClientRef.current) {
+      return;
+    }
 
-        if (msg.sender.toLowerCase() !== currentUser && selectedRoomIdRef.current !== msg.roomId) {
-          setRoomUnseenCounts(prev => ({
-            ...prev,
-            [msg.roomId]: (prev[msg.roomId] || 0) + 1
-          }));
-        }
+    const connectedClient = stompClientRef.current;
+    const subscriptions = rooms.map(room => connectedClient.subscribe(`/topic/project/${projectId}/room/${room.id}`, payload => {
+      const incoming: ChatMessage = JSON.parse(payload.body);
+      if (incoming.type === 'JOIN' || !incoming.roomId) {
+        return;
+      }
+
+      setRoomMessages(prev => ({ ...prev, [incoming.roomId as number]: mergeMessage(prev[incoming.roomId as number] || [], incoming) }));
+      setRoomLastMessages(prev => ({ ...prev, [incoming.roomId as number]: incoming }));
+
+      if (incoming.sender.toLowerCase() !== currentUser && selectedRoomIdRef.current !== incoming.roomId) {
+        setRoomUnseenCounts(prev => ({ ...prev, [incoming.roomId as number]: (prev[incoming.roomId as number] || 0) + 1 }));
+      }
+
+      if (incoming.id) {
+        loadMessageReactions(incoming.id);
       }
     }));
 
     return () => {
-      subscriptions.forEach(sub => sub && sub.unsubscribe && sub.unsubscribe());
+      subscriptions.forEach(subscription => subscription?.unsubscribe());
     };
-  }, [projectId, rooms, isSocketConnected, currentUser]);
-  // 4. fetch private conversation when needed
-  const loadPrivateHistory = useCallback(async (recipient: string) => {
-    if (!recipient || !currentUser) return;
-    try {
-      const params = new URLSearchParams();
-      params.append('recipient', currentUser);
-      params.append('with', recipient);
-      const res = await fetch(`/api/projects/${projectId}/chat/messages?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPrivateMessages(prev => ({ ...prev, [recipient]: data }));
-        setPrivateLastMessages(prev => ({
-          ...prev,
-          [recipient]: data.length > 0 ? data[data.length - 1] : null
-        }));
-        setPrivateUnseenCounts(prev => ({ ...prev, [recipient]: 0 }));
-      } else {
-        console.warn('Private history fetch returned', res.status);
-      }
-    } catch (err) {
-      console.error('Failed to load private history', err);
+  }, [projectId, rooms, isSocketConnected, currentUser, loadMessageReactions]);
+
+  useEffect(() => {
+    if (!isSocketConnected || !stompClientRef.current || !activeThreadRootRef.current?.id) {
+      return;
     }
-  }, [currentUser, projectId]);
+
+    const rootId = activeThreadRootRef.current.id;
+    const subscription = stompClientRef.current.subscribe(`/topic/project/${projectId}/thread/${rootId}`, payload => {
+      const incoming: ChatMessage = JSON.parse(payload.body);
+      setThreadMessages(prev => mergeMessage(prev, incoming));
+      if (incoming.id) {
+        loadMessageReactions(incoming.id);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [projectId, isSocketConnected, activeThreadRoot, loadMessageReactions]);
+
+  useEffect(() => {
+    if (!isSocketConnected || !stompClientRef.current) {
+      return;
+    }
+
+    const connectedClient = stompClientRef.current;
+    const messageIds = new Set<number>();
+
+    messages.forEach(message => {
+      if (message.id) {
+        messageIds.add(message.id);
+      }
+    });
+
+    Object.values(privateMessages).forEach(list => {
+      list.forEach(message => {
+        if (message.id) {
+          messageIds.add(message.id);
+        }
+      });
+    });
+
+    Object.values(roomMessages).forEach(list => {
+      list.forEach(message => {
+        if (message.id) {
+          messageIds.add(message.id);
+        }
+      });
+    });
+
+    threadMessages.forEach(message => {
+      if (message.id) {
+        messageIds.add(message.id);
+      }
+    });
+
+    const subscriptions = Array.from(messageIds).map(messageId =>
+      connectedClient.subscribe(`/topic/project/${projectId}/messages/${messageId}/reactions`, payload => {
+        const reactions: ChatReactionSummary[] = JSON.parse(payload.body);
+        setMessageReactions(prev => ({ ...prev, [messageId]: reactions }));
+      })
+    );
+
+    return () => {
+      subscriptions.forEach(subscription => subscription.unsubscribe());
+    };
+  }, [projectId, isSocketConnected, messages, privateMessages, roomMessages, threadMessages]);
 
   useEffect(() => {
     if (!selectedUser) {
@@ -512,45 +934,186 @@ export const useChat = (projectId: string) => {
       setSelectedRoomId(null);
       return;
     }
-    const normalizedRoomId = Number(roomId);
-    setSelectedRoomId(Number.isFinite(normalizedRoomId) ? normalizedRoomId : null);
+
+    const normalized = Number(roomId);
+    setSelectedRoomId(Number.isFinite(normalized) ? normalized : null);
   }, []);
 
-  // 4. Send Message Action
   const sendMessage = useCallback((content: string, recipient?: string | null) => {
-    if (!content.trim() || !stompClientRef.current) return;
+    const normalizedContent = content.trim();
+    if (!normalizedContent) {
+      return;
+    }
+
+    if (!isStompConnected()) {
+      setError('Realtime chat is reconnecting. Please wait a moment and try again.');
+      return;
+    }
 
     if (recipient) {
-      // Private
-      const msg = { sender: currentUser, content, recipient };
-      stompClientRef.current.send(`/app/project/${projectId}/chat.sendPrivateMessage`, {}, JSON.stringify(msg));
-      
-      // Optimistic update for sender
-      setPrivateMessages(prev => ({
-        ...prev,
-        [recipient.toLowerCase()]: [...(prev[recipient.toLowerCase()] || []), msg]
-      }));
-      setPrivateLastMessages(prev => ({ ...prev, [recipient.toLowerCase()]: msg }));
-    } else {
-      // Public
-      const msg = { sender: currentUser, content };
-      stompClientRef.current.send(`/app/project/${projectId}/chat.sendMessage`, {}, JSON.stringify(msg));
+      const message = { sender: currentUser, content: normalizedContent, recipient, type: 'CHAT', formatType: 'PLAIN' };
+      stompClientRef.current?.send(`/app/project/${projectId}/chat.sendPrivateMessage`, {}, JSON.stringify(message));
+      scheduleHistorySync(recipient, null);
+      return;
     }
-  }, [currentUser, projectId]);
+
+    const message = { sender: currentUser, content: normalizedContent, type: 'CHAT', formatType: 'PLAIN' };
+    stompClientRef.current?.send(`/app/project/${projectId}/chat.sendMessage`, {}, JSON.stringify(message));
+    scheduleHistorySync(null, null);
+  }, [currentUser, projectId, scheduleHistorySync]);
 
   const sendRoomMessage = useCallback((content: string, roomId: number) => {
-    if (!content.trim() || !stompClientRef.current) return;
-    const msg = { sender: currentUser, content, roomId };
-    stompClientRef.current.send(`/app/project/${projectId}/room/${roomId}/send`, {}, JSON.stringify(msg));
-    setRoomMessages(prev => ({
-      ...prev,
-      [roomId]: [...(prev[roomId] || []), msg]
-    }));
-    setRoomLastMessages(prev => ({ ...prev, [roomId]: msg }));
-  }, [currentUser, projectId]);
+    const normalizedContent = content.trim();
+    if (!normalizedContent) {
+      return;
+    }
+
+    if (!isStompConnected()) {
+      setError('Realtime chat is reconnecting. Please wait a moment and try again.');
+      return;
+    }
+
+    const message = { sender: currentUser, content: normalizedContent, roomId, type: 'CHAT', formatType: 'PLAIN' };
+    stompClientRef.current?.send(`/app/project/${projectId}/room/${roomId}/send`, {}, JSON.stringify(message));
+    scheduleHistorySync(null, roomId);
+  }, [currentUser, projectId, scheduleHistorySync]);
+
+  const sendThreadReply = useCallback(async (content: string) => {
+    if (!activeThreadRoot?.id) {
+      return;
+    }
+
+    const normalizedContent = content.trim();
+    if (!normalizedContent) {
+      return;
+    }
+
+    if (isStompConnected()) {
+      const message = { sender: currentUser, content: normalizedContent, type: 'CHAT', formatType: 'PLAIN' };
+      stompClientRef.current?.send(`/app/project/${projectId}/thread/${activeThreadRoot.id}/send`, {}, JSON.stringify(message));
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat/messages/${activeThreadRoot.id}/thread/replies`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...tokenHeader()
+        },
+        body: JSON.stringify({ content: normalizedContent, formatType: 'PLAIN' })
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const saved = await response.json();
+      setThreadMessages(prev => mergeMessage(prev, saved));
+      updateMessageEverywhere(saved);
+    } catch (sendError) {
+      console.error('Failed to send thread reply', sendError);
+    }
+  }, [activeThreadRoot, currentUser, projectId, updateMessageEverywhere]);
+
+  const editMessage = useCallback(async (messageId: number, content: string) => {
+    const normalized = content.trim();
+    if (!normalized) {
+      return;
+    }
+
+    if (isStompConnected()) {
+      stompClientRef.current?.send(`/app/project/${projectId}/messages/${messageId}/edit`, {}, JSON.stringify({ content: normalized, formatType: 'PLAIN' }));
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat/messages/${messageId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...tokenHeader()
+        },
+        body: JSON.stringify({ content: normalized, formatType: 'PLAIN' })
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const updated = await response.json();
+      updateMessageEverywhere(updated);
+    } catch (editError) {
+      console.error('Failed to edit message', editError);
+    }
+  }, [projectId, updateMessageEverywhere]);
+
+  const deleteMessage = useCallback(async (messageId: number) => {
+    if (!window.confirm('Delete this message?')) {
+      return;
+    }
+
+    if (isStompConnected()) {
+      stompClientRef.current?.send(`/app/project/${projectId}/messages/${messageId}/delete`, {}, JSON.stringify({}));
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat/messages/${messageId}`, {
+        method: 'DELETE',
+        headers: tokenHeader()
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const deletedMessage = await response.json();
+      updateMessageEverywhere(deletedMessage);
+    } catch (deleteError) {
+      console.error('Failed to delete message', deleteError);
+    }
+  }, [projectId, updateMessageEverywhere]);
+
+  const toggleReaction = useCallback(async (messageId: number, emoji: string) => {
+    const normalizedEmoji = emoji.trim();
+    if (!normalizedEmoji) {
+      return;
+    }
+
+    if (isStompConnected()) {
+      stompClientRef.current?.send(
+        `/app/project/${projectId}/messages/${messageId}/reaction.toggle`,
+        {},
+        JSON.stringify({ emoji: normalizedEmoji })
+      );
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat/messages/${messageId}/reactions/toggle`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...tokenHeader()
+        },
+        body: JSON.stringify({ emoji: normalizedEmoji })
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const reactions: ChatReactionSummary[] = await response.json();
+      setMessageReactions(prev => ({ ...prev, [messageId]: reactions }));
+    } catch (toggleError) {
+      console.error('Failed to toggle reaction', toggleError);
+    }
+  }, [projectId]);
 
   return {
     currentUser,
+    currentUserAliases,
     users,
     messages,
     privateMessages,
@@ -562,17 +1125,29 @@ export const useChat = (projectId: string) => {
     roomUnseenCounts,
     privateLastMessages,
     roomLastMessages,
+    messageReactions,
+    activeThreadRoot,
+    threadMessages,
     selectPrivateUser,
     selectRoom,
     sendMessage,
     sendRoomMessage,
+    sendThreadReply,
+    openThread,
+    closeThread,
+    editMessage,
+    deleteMessage,
+    toggleReaction,
     loadRoomHistory,
     loadPrivateHistory,
     createRoom,
     deleteRoom,
+    updateRoomMeta,
+    toggleRoomArchive,
+    pinRoomMessage,
     addTeam,
     isLoading,
     error,
-    retryConnection: () => window.location.reload() // Simple retry strategy
+    retryConnection: () => window.location.reload()
   };
 };

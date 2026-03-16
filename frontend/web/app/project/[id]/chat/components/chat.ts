@@ -6,6 +6,17 @@ export interface ChatMessage {
   recipient?: string;
   type?: 'CHAT' | 'JOIN' | 'LEAVE';
   roomId?: number;
+  parentMessageId?: number;
+  formatType?: 'PLAIN' | 'MARKDOWN';
+  deleted?: boolean;
+  deletedAt?: string;
+  editedAt?: string;
+}
+
+export interface ChatReactionSummary {
+  emoji: string;
+  count: number;
+  reactedByCurrentUser: boolean;
 }
 
 export interface User {
@@ -18,6 +29,11 @@ export interface ChatRoom {
   name: string;
   projectId: number;
   createdBy: string;
+  topic?: string;
+  description?: string;
+  archived?: boolean;
+  pinnedMessageId?: number | null;
+  updatedAt?: string;
 }
 
 export interface DirectChatSummary {

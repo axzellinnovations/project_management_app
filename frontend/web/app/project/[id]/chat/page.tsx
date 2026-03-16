@@ -6,6 +6,7 @@ import { useChat } from './components/useChat';
 import { ChatSidebar } from './components/chatSidebar';
 import { ChatMessages } from './components/chatMessage';
 import { ChatInput } from './components/chatInput';
+import { ThreadPanel } from './components/threadPanel';
 import styles from './chat.module.css';
 
 export default function ChatInterface() {
@@ -14,6 +15,7 @@ export default function ChatInterface() {
   const [searchTerm, setSearchTerm] = useState('');
   const {
     currentUser,
+    currentUserAliases,
     users,
     rooms,
     roomMessages,
@@ -25,14 +27,26 @@ export default function ChatInterface() {
     roomUnseenCounts,
     privateLastMessages,
     roomLastMessages,
+    messageReactions,
+    activeThreadRoot,
+    threadMessages,
     selectPrivateUser,
     selectRoom,
     sendMessage,
     sendRoomMessage,
+    sendThreadReply,
+    openThread,
+    closeThread,
+    editMessage,
+    deleteMessage,
+    toggleReaction,
     loadPrivateHistory,
     loadRoomHistory,
     createRoom,
     deleteRoom,
+    updateRoomMeta,
+    toggleRoomArchive,
+    pinRoomMessage,
     addTeam,
     isLoading,
     error,
@@ -40,6 +54,7 @@ export default function ChatInterface() {
   } = useChat(projectId);
 
   const hasSelectedRoom = selectedRoomId !== null && Number.isFinite(selectedRoomId);
+  const selectedRoom = hasSelectedRoom ? rooms.find(r => r.id === selectedRoomId) : null;
 
   const displayMessages = hasSelectedRoom
     ? roomMessages[selectedRoomId as number] || []
@@ -102,6 +117,7 @@ export default function ChatInterface() {
       <div className={styles.container}>
         <ChatSidebar
           currentUser={currentUser}
+          currentUserAliases={currentUserAliases}
           users={filteredUsers}
           rooms={rooms}
           selectedUser={selectedUser}
@@ -114,6 +130,8 @@ export default function ChatInterface() {
           roomLastMessages={roomLastMessages}
           onCreateRoom={handleCreateRoom}
           onDeleteRoom={deleteRoom}
+          onUpdateRoomMeta={updateRoomMeta}
+          onToggleRoomArchive={toggleRoomArchive}
           onAddTeam={addTeam}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
@@ -124,14 +142,14 @@ export default function ChatInterface() {
             <div>
               <h3 className="text-lg font-semibold text-slate-900">
                 {hasSelectedRoom
-                  ? `Group: ${rooms.find(r => r.id === selectedRoomId)?.name ?? 'Group Chat'}`
+                  ? `Group: ${selectedRoom?.name ?? 'Group Chat'}`
                   : selectedUser
                   ? `Chat with ${selectedUser}`
                   : 'Team Chat'}
               </h3>
               <p className="text-sm text-slate-500 mt-1">
                 {hasSelectedRoom
-                  ? 'Group message'
+                  ? selectedRoom?.topic || (selectedRoom?.archived ? 'Archived channel (read-only)' : 'Group message')
                   : selectedUser
                   ? 'Private message'
                   : users.length > 0
@@ -156,9 +174,32 @@ export default function ChatInterface() {
             </div>
           )}
 
-          <ChatMessages messages={filteredMessages} currentUser={currentUser} />
+          <ChatMessages
+            messages={filteredMessages}
+            currentUser={currentUser}
+            currentUserAliases={currentUserAliases}
+            activeRoomId={selectedRoomId}
+            pinnedMessageId={selectedRoom?.pinnedMessageId ?? null}
+            reactionsByMessageId={messageReactions}
+            onOpenThread={openThread}
+            onEditMessage={editMessage}
+            onDeleteMessage={deleteMessage}
+            onToggleReaction={toggleReaction}
+            onPinRoomMessage={selectedRoomId ? (messageId) => pinRoomMessage(selectedRoomId, messageId) : undefined}
+          />
           <ChatInput onSendMessage={handleSendMessage} disabled={isLoading || !!error} />
         </div>
+
+        {activeThreadRoot && (
+          <ThreadPanel
+            rootMessage={activeThreadRoot}
+            threadMessages={threadMessages}
+            reactionsByMessageId={messageReactions}
+            onClose={closeThread}
+            onSendReply={sendThreadReply}
+            onToggleReaction={toggleReaction}
+          />
+        )}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import styles from '../chat.module.css';
 
 interface ChatSidebarProps {
   currentUser: string;
+  currentUserAliases: string[];
   users: string[];
   rooms: ChatRoom[];
   selectedUser: string | null;
@@ -16,30 +17,36 @@ interface ChatSidebarProps {
   roomLastMessages: Record<number, ChatMessage | null>;
   onCreateRoom: () => void;
   onDeleteRoom: (roomId: number) => void;
+  onUpdateRoomMeta: (roomId: number, updates: { name?: string; topic?: string; description?: string }) => void;
+  onToggleRoomArchive: (roomId: number, archived: boolean) => void;
   onAddTeam: (teamName: string) => void;
   searchTerm: string;
   onSearchChange: (value: string) => void;
 }
 
 export const ChatSidebar = ({
+  currentUser,
+  currentUserAliases,
   users,
   rooms,
   selectedUser,
   selectedRoomId,
   onSelectUser,
   onSelectRoom,
-  currentUser,
   privateUnseenCounts,
   roomUnseenCounts,
   privateLastMessages,
   roomLastMessages,
   onCreateRoom,
   onDeleteRoom,
+  onUpdateRoomMeta,
+  onToggleRoomArchive,
   onAddTeam,
   searchTerm,
   onSearchChange
 }: ChatSidebarProps) => {
   const hasSelectedRoom = selectedRoomId !== null && Number.isFinite(selectedRoomId);
+  const currentUserIdentitySet = new Set([currentUser.toLowerCase(), ...currentUserAliases.map(alias => alias.toLowerCase())]);
 
   return (
     <aside className={styles.sidebar}>
@@ -77,36 +84,77 @@ export const ChatSidebar = ({
 
         <p className="text-xs font-semibold text-slate-500 uppercase px-3 pt-4 pb-2">Group Chats</p>
         {rooms.length === 0 && <p className="text-xs text-slate-400 px-3">No group chats yet</p>}
-        {rooms.map(room => (
-          <div key={room.id} className="flex items-center justify-between gap-2 px-3 py-2.5">
-            <button
-              onClick={() => {
-                onSelectRoom(room.id);
-              }}
-              className={`flex-1 text-left rounded-lg px-2 py-2 transition-colors ${
-                hasSelectedRoom && selectedRoomId === room.id ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-100'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-slate-900 truncate">{room.name}</p>
-                {(roomUnseenCounts[room.id] || 0) > 0 && (
-                  <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-blue-600 text-white text-[11px] font-semibold flex items-center justify-center">
-                    {roomUnseenCounts[room.id] > 99 ? '99+' : roomUnseenCounts[room.id]}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 truncate">
-                {roomLastMessages[room.id]?.content || `Created by ${room.createdBy}`}
-              </p>
-            </button>
-            <button
-              onClick={() => onDeleteRoom(room.id)}
-              className="text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-            >
-              Delete
-            </button>
-          </div>
-        ))}
+        {rooms.map(room => {
+          const isCreator = !!room.createdBy && currentUserIdentitySet.has(room.createdBy.toLowerCase());
+
+          return (
+            <div key={room.id} className="flex items-center justify-between gap-2 px-3 py-2.5">
+              <button
+                onClick={() => {
+                  onSelectRoom(room.id);
+                }}
+                className={`flex-1 text-left rounded-lg px-2 py-2 transition-colors ${
+                  hasSelectedRoom && selectedRoomId === room.id ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-slate-900 truncate">{room.name}</p>
+                  {room.archived && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Archived</span>
+                  )}
+                  {(roomUnseenCounts[room.id] || 0) > 0 && (
+                    <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-blue-600 text-white text-[11px] font-semibold flex items-center justify-center">
+                      {roomUnseenCounts[room.id] > 99 ? '99+' : roomUnseenCounts[room.id]}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 truncate">
+                  {room.topic || roomLastMessages[room.id]?.content || `Created by ${room.createdBy}`}
+                </p>
+              </button>
+              {isCreator && (
+                <>
+                  <button
+                    onClick={() => {
+                      const nextName = window.prompt('Channel name', room.name);
+                      if (nextName === null) {
+                        return;
+                      }
+                      const nextTopic = window.prompt('Channel topic (optional)', room.topic || '');
+                      if (nextTopic === null) {
+                        return;
+                      }
+                      const nextDescription = window.prompt('Channel description (optional)', room.description || '');
+                      if (nextDescription === null) {
+                        return;
+                      }
+                      onUpdateRoomMeta(room.id, {
+                        name: nextName.trim() || room.name,
+                        topic: nextTopic,
+                        description: nextDescription
+                      });
+                    }}
+                    className="text-xs px-2 py-1 bg-slate-500 text-white rounded hover:bg-slate-600"
+                  >
+                    Manage
+                  </button>
+                  <button
+                    onClick={() => onDeleteRoom(room.id)}
+                    className="text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => onToggleRoomArchive(room.id, !room.archived)}
+                className="text-xs px-2 py-1 bg-amber-500 text-white rounded hover:bg-amber-600"
+              >
+                {room.archived ? 'Unarchive' : 'Archive'}
+              </button>
+            </div>
+          );
+        })}
 
         <p className="text-xs font-semibold text-slate-500 uppercase px-3 pt-4 pb-2">Direct Messages</p>
 

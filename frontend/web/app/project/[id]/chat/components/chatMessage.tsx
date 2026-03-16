@@ -1,13 +1,36 @@
 import React, { useEffect, useRef } from 'react';
-import { ChatMessage } from './chat';
+import { ChatMessage, ChatReactionSummary } from './chat';
 import styles from '../chat.module.css';
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
   currentUser: string;
+  currentUserAliases: string[];
+  activeRoomId?: number | null;
+  pinnedMessageId?: number | null;
+  reactionsByMessageId: Record<number, ChatReactionSummary[]>;
+  onOpenThread: (message: ChatMessage) => void;
+  onEditMessage: (messageId: number, content: string) => void;
+  onDeleteMessage: (messageId: number) => void;
+  onToggleReaction: (messageId: number, emoji: string) => void;
+  onPinRoomMessage?: (messageId: number | null) => void;
 }
 
-export const ChatMessages = ({ messages, currentUser }: ChatMessagesProps) => {
+const QUICK_REACTIONS = ['👍', '🔥', '✅', '🎉'];
+
+export const ChatMessages = ({
+  messages,
+  currentUser,
+  currentUserAliases,
+  activeRoomId,
+  pinnedMessageId,
+  reactionsByMessageId,
+  onOpenThread,
+  onEditMessage,
+  onDeleteMessage,
+  onToggleReaction,
+  onPinRoomMessage
+}: ChatMessagesProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom
@@ -28,7 +51,10 @@ export const ChatMessages = ({ messages, currentUser }: ChatMessagesProps) => {
   return (
     <div ref={scrollRef} className={styles.chatBox}>
       {messages.filter(msg => msg.type !== 'JOIN').map((msg, idx) => {
-        const isMe = msg.sender === currentUser;
+        const sender = msg.sender?.toLowerCase() || '';
+        const aliasSet = new Set([currentUser.toLowerCase(), ...currentUserAliases.map(alias => alias.toLowerCase())]);
+        const isMe = aliasSet.has(sender);
+        const msgReactions = msg.id ? (reactionsByMessageId[msg.id] || []) : [];
         return (
           <div key={idx} className={`flex gap-3 ${isMe ? 'justify-end' : 'justify-start'}`}>
             {!isMe && (
@@ -44,7 +70,71 @@ export const ChatMessages = ({ messages, currentUser }: ChatMessagesProps) => {
                     ? 'bg-blue-600 text-white rounded-br-sm' 
                     : 'bg-white text-slate-900 border border-slate-200 rounded-bl-sm'
                 }`}>
-                    {msg.content}
+                    {msg.deleted ? <em>[message deleted]</em> : msg.content}
+                </div>
+                {!msg.deleted && msg.editedAt && (
+                  <span className="text-[10px] text-slate-400 mt-0.5">edited</span>
+                )}
+                {!!msg.id && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {msgReactions.map(reaction => (
+                      <button
+                        key={`${msg.id}-${reaction.emoji}`}
+                        onClick={() => onToggleReaction(msg.id as number, reaction.emoji)}
+                        className={`text-[11px] px-2 py-0.5 rounded-full border ${reaction.reactedByCurrentUser ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-slate-100 border-slate-200 text-slate-700'}`}
+                      >
+                        {reaction.emoji} {reaction.count}
+                      </button>
+                    ))}
+                    {QUICK_REACTIONS.map(emoji => (
+                      <button
+                        key={`${msg.id}-quick-${emoji}`}
+                        onClick={() => onToggleReaction(msg.id as number, emoji)}
+                        className="text-[11px] px-1.5 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-100"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-1 flex items-center gap-2">
+                  {!!msg.id && (
+                    <button
+                      onClick={() => onOpenThread(msg)}
+                      className="text-[11px] text-slate-500 hover:text-slate-700"
+                    >
+                      Thread
+                    </button>
+                  )}
+                  {!!activeRoomId && !!msg.id && onPinRoomMessage && (
+                    <button
+                      onClick={() => onPinRoomMessage(pinnedMessageId === msg.id ? null : (msg.id as number))}
+                      className="text-[11px] text-amber-600 hover:text-amber-700"
+                    >
+                      {pinnedMessageId === msg.id ? 'Unpin' : 'Pin'}
+                    </button>
+                  )}
+                  {isMe && !!msg.id && !msg.deleted && (
+                    <>
+                      <button
+                        onClick={() => {
+                          const updated = window.prompt('Edit message', msg.content);
+                          if (updated !== null) {
+                            onEditMessage(msg.id as number, updated);
+                          }
+                        }}
+                        className="text-[11px] text-blue-600 hover:text-blue-700"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => onDeleteMessage(msg.id as number)}
+                        className="text-[11px] text-red-600 hover:text-red-700"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </div>
                 {msg.timestamp && (
                   <span className="text-[10px] text-slate-400 mt-0.5 self-end">
