@@ -48,6 +48,7 @@ export default function Sidebar() {
         return getUserFromToken();
     }, [token]);
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+    const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
     const [folderStats, setFolderStats] = useState({
         viewAll: 0,
         recent: 0,
@@ -190,19 +191,31 @@ export default function Sidebar() {
                 </div>
 
                 <div className="mt-4">
-                    <div className="flex items-center gap-1 px-2 mb-2 group cursor-pointer">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-[#99A1AF] transform rotate-90">
+                    <button
+                        type="button"
+                        onClick={() => setIsFoldersExpanded((prev) => !prev)}
+                        className="w-full flex items-center gap-1 px-2 mb-2 group cursor-pointer"
+                    >
+                        <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 12 12"
+                            fill="none"
+                            className={`text-[#99A1AF] transform transition-transform ${isFoldersExpanded ? 'rotate-90' : 'rotate-0'}`}
+                        >
                             <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                         <span className="font-arimo text-[11px] font-bold text-[#99A1AF] uppercase tracking-wider">FOLDERS</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <NavItem label="View all" href="/folders/view-all" icon={<FolderIcon />} badge={folderStats.viewAll} active={pathname === '/folders/view-all'} />
-                        <NavItem label="Recent" href="/folders/recent" icon={<ClockIcon />} badge={folderStats.recent} active={pathname === '/folders/recent'} />
-                        <NavItem label="Favorites" href="/folders/favorites" icon={<StarIcon />} badge={folderStats.favorites} active={pathname === '/folders/favorites'} />
-                        <NavItem label="Shared" href="/folders/shared" icon={<UsersIcon />} badge={folderStats.shared} active={pathname === '/folders/shared'} />
-                        <NavItem label="Trash" href="/folders/trash" icon={<TrashIcon />} badge={folderStats.trash} active={pathname === '/folders/trash'} />
-                    </div>
+                    </button>
+                    {isFoldersExpanded && (
+                        <div className="flex flex-col gap-1">
+                            <NavItem label="View all" href="/folders/view-all" icon={<FolderIcon />} badge={folderStats.viewAll} active={pathname === '/folders/view-all'} />
+                            <NavItem label="Recent" href="/folders/recent" icon={<ClockIcon />} badge={folderStats.recent} active={pathname === '/folders/recent'} />
+                            <NavItem label="Favorites" href="/folders/favorites" icon={<StarIcon />} badge={folderStats.favorites} active={pathname === '/folders/favorites'} />
+                            <NavItem label="Shared" href="/folders/shared" icon={<UsersIcon />} badge={folderStats.shared} active={pathname === '/folders/shared'} />
+                            <NavItem label="Trash" href="/folders/trash" icon={<TrashIcon />} badge={folderStats.trash} active={pathname === '/folders/trash'} />
+                        </div>
+                    )}
                 </div>
 
                 <div className="mt-4">
@@ -222,24 +235,26 @@ export default function Sidebar() {
             {/* Bottom User Section */}
             <div className="mt-auto p-4 border-t border-[#F2F4F7]">
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-[#F2F4F7] flex items-center justify-center text-[#4A5565] font-semibold text-sm overflow-hidden border border-[#E3E8EF]">
-                        {resolvedProfilePicUrl ? (
-                            <Image
-                                src={resolvedProfilePicUrl}
-                                alt="Profile"
-                                width={36}
-                                height={36}
-                                className="w-full h-full object-cover"
-                                unoptimized
-                            />
-                        ) : (
-                            <span>{user?.username?.charAt(0).toUpperCase() || 'U'}</span>
-                        )}
-                    </div>
-                    <div className="flex flex-col overflow-hidden">
-                        <span className="text-[14px] font-medium text-[#101828] truncate">{user?.username || 'Guest'}</span>
-                        <span className="text-[12px] text-[#6A7282] truncate" title={user?.email}>{user?.email || 'Please login'}</span>
-                    </div>
+                    <Link href="/profile" className="flex items-center gap-3 min-w-0 flex-1 rounded-md px-1 py-1 hover:bg-[#F9FAFB] transition-colors">
+                        <div className="w-9 h-9 rounded-full bg-[#F2F4F7] flex items-center justify-center text-[#4A5565] font-semibold text-sm overflow-hidden border border-[#E3E8EF]">
+                            {resolvedProfilePicUrl ? (
+                                <Image
+                                    src={resolvedProfilePicUrl}
+                                    alt="Profile"
+                                    width={36}
+                                    height={36}
+                                    className="w-full h-full object-cover"
+                                    unoptimized
+                                />
+                            ) : (
+                                <span>{user?.username?.charAt(0).toUpperCase() || 'U'}</span>
+                            )}
+                        </div>
+                        <div className="flex flex-col overflow-hidden">
+                            <span className="text-[14px] font-medium text-[#101828] truncate">{user?.username || 'Guest'}</span>
+                            <span className="text-[12px] text-[#6A7282] truncate" title={user?.email}>{user?.email || 'Please login'}</span>
+                        </div>
+                    </Link>
                     <button onClick={handleLogout} className="ml-auto text-[#6A7282] hover:text-red-500 transition-colors" title="Logout">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
