@@ -9,7 +9,6 @@ import {
   Pencil,
   Check,
   Trash2,
-  UserCircle2,
 } from 'lucide-react';
 import type { SprintItem } from '../page';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
@@ -205,9 +204,26 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
     updateTaskOnServer(taskId, { storyPoint: value });
   };
 
-  const handleDueDateChange = (taskId: number, date: string) => {
-    updateTask(taskId, { endDate: date });
-    updateTaskOnServer(taskId, { dueDate: date });
+  const handleDueDateChange = async (taskId: number, date: string) => {
+    const normalizedDate = date ? String(date).slice(0, 10) : '';
+    const previousDate = localTasks.find((task) => task.id === taskId)?.endDate ?? '';
+
+    updateTask(taskId, { endDate: normalizedDate });
+
+    try {
+      const response = await api.put(`/api/tasks/${taskId}`, {
+        dueDate: normalizedDate || null,
+      });
+
+      const serverDueDate = response?.data?.dueDate
+        ? String(response.data.dueDate).slice(0, 10)
+        : '';
+
+      updateTask(taskId, { endDate: serverDueDate });
+    } catch {
+      updateTask(taskId, { endDate: previousDate });
+      alert('Failed to update due date.');
+    }
   };
 
   const formatDate = (value: string) => {
@@ -449,7 +465,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
                           input.showPicker();
                         }
                       }}
-                      className="flex items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-1.5 text-[12px] font-medium cursor-pointer hover:border-[#98A2B3] transition-colors duration-150"
+                      className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-1.5 text-[12px] font-medium cursor-pointer whitespace-nowrap hover:border-[#98A2B3] transition-colors duration-150"
                     >
                       <CalendarDays size={14} className="text-[#667085]" />
                       <span className={task.endDate ? 'text-[#344054]' : 'text-[#98A2B3]'}>

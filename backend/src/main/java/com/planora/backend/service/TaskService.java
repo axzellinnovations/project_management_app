@@ -54,7 +54,7 @@ public class TaskService {
         task.setDescription(request.getDescription());
         task.setProject(project);
 
-        task.setStoryPoint(request.getStoryPoint());
+        task.setStoryPoint(request.getStoryPoint() != null ? request.getStoryPoint() : 0);
         task.setDueDate(request.getDueDate());
         task.setStartDate(request.getStartDate());
 
@@ -108,7 +108,7 @@ public class TaskService {
         if(request.getStatus() != null) task.setStatus(Status.valueOf(request.getStatus()));
 
         //update fields-other attributes
-        if(request.getStoryPoint() != 0) task.setStoryPoint(request.getStoryPoint());
+        if(request.getStoryPoint() != null) task.setStoryPoint(request.getStoryPoint());
         if(request.getStartDate() != null) task.setStartDate(request.getStartDate());
         if(request.getDueDate() != null) task.setDueDate(request.getDueDate());
 
@@ -134,7 +134,7 @@ public class TaskService {
                 .orElseThrow(()-> new EntityNotFoundException("Task not found"));
 
         //validate user- OWNER
-        Long teamId = task.getProject().getId();
+        Long teamId = task.getProject().getTeam().getId();
 
         //fetch user role
         TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId,currentUserId)
