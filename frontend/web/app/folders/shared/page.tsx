@@ -1,7 +1,7 @@
 'use client';
 
-import DmsWorkspace from '@/app/folders/components/DmsWorkspace';
+import FoldersPage from '@/app/folders/components/FoldersPage';
 
 export default function FoldersSharedPage() {
-    return <DmsWorkspace mode="shared" />;
+    return <FoldersPage mode="shared" />;
 }

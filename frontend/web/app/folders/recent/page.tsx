@@ -1,7 +1,7 @@
 'use client';
 
-import DmsWorkspace from '@/app/folders/components/DmsWorkspace';
+import FoldersPage from '@/app/folders/components/FoldersPage';
 
 export default function FoldersRecentPage() {
-    return <DmsWorkspace mode="recent" />;
+    return <FoldersPage mode="recent" />;
 }
