@@ -95,7 +95,7 @@ export default function TopBar() {
             return 'pages';
         }
 
-        if (pathname.startsWith('/spaces')) {
+        if (pathname.startsWith('/spaces') || pathname.startsWith('/folders')) {
             return 'list';
         }
 

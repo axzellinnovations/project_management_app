@@ -5,10 +5,12 @@ import com.planora.backend.model.UserPrincipal;
 import com.planora.backend.service.DocumentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -41,6 +43,18 @@ public class DocumentController {
                 HttpStatus.CREATED
         );
     }
+
+        @PostMapping(value = "/documents/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        public ResponseEntity<DocumentResponseDTO> uploadViaBackend(
+                        @PathVariable Long projectId,
+                        @RequestParam("file") MultipartFile file,
+                        @RequestParam(value = "folderId", required = false) Long folderId,
+                        @AuthenticationPrincipal UserPrincipal principal) {
+                return new ResponseEntity<>(
+                                documentService.uploadDocumentViaBackend(projectId, principal.getUserId(), file, folderId),
+                                HttpStatus.CREATED
+                );
+        }
 
     @PostMapping("/documents/{documentId}/versions/upload/init")
     public ResponseEntity<DocumentUploadInitResponseDTO> initVersionUpload(

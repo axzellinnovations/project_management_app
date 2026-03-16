@@ -15,10 +15,13 @@ import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
+import software.amazon.awssdk.core.sync.RequestBody;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -128,6 +131,51 @@ public class DocumentService {
         documentVersionRepository.save(version);
 
         return mapDocument(savedDocument, true);
+    }
+
+    @Transactional
+    public DocumentResponseDTO uploadDocumentViaBackend(Long projectId, Long userId, MultipartFile file, Long folderId) {
+        TeamMember member = getProjectMember(projectId, userId);
+        requireNotViewer(member);
+
+        if (file == null || file.isEmpty()) {
+            throw new RuntimeException("file is required");
+        }
+
+        String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "upload.bin";
+        String resolvedContentType = resolveContentType(file.getContentType(), fileName);
+
+        validateFileRequest(fileName, resolvedContentType, file.getSize());
+
+        if (folderId != null) {
+            resolveFolder(projectId, folderId);
+        }
+
+        String objectKey = buildObjectKey(projectId, folderId, fileName);
+
+        try {
+            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                    .bucket(dmsBucket)
+                    .key(objectKey)
+                    .contentType(resolvedContentType)
+                    .build();
+
+            s3Client.putObject(
+                    putObjectRequest,
+                    RequestBody.fromInputStream(file.getInputStream(), file.getSize())
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Could not upload file to S3 from backend: " + e.getMessage());
+        }
+
+        DocumentUploadFinalizeRequestDTO finalizeRequest = new DocumentUploadFinalizeRequestDTO();
+        finalizeRequest.setFileName(fileName);
+        finalizeRequest.setContentType(resolvedContentType);
+        finalizeRequest.setFileSize(file.getSize());
+        finalizeRequest.setObjectKey(objectKey);
+        finalizeRequest.setFolderId(folderId);
+
+        return finalizeUpload(projectId, userId, finalizeRequest);
     }
 
     @Transactional(readOnly = true)
@@ -459,6 +507,34 @@ public class DocumentService {
         if (fileSize == null || fileSize <= 0 || fileSize > MAX_FILE_SIZE_BYTES) {
             throw new RuntimeException("fileSize must be between 1 byte and 25MB");
         }
+    }
+
+    private String resolveContentType(String contentType, String fileName) {
+        if (contentType != null && !contentType.isBlank() && !"application/octet-stream".equalsIgnoreCase(contentType)) {
+            return contentType;
+        }
+
+        String extension = "";
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex >= 0 && dotIndex < fileName.length() - 1) {
+            extension = fileName.substring(dotIndex + 1).toLowerCase();
+        }
+
+        Map<String, String> mimeMap = Map.ofEntries(
+                Map.entry("pdf", "application/pdf"),
+                Map.entry("doc", "application/msword"),
+                Map.entry("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+                Map.entry("xls", "application/vnd.ms-excel"),
+                Map.entry("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+                Map.entry("txt", "text/plain"),
+                Map.entry("jpeg", "image/jpeg"),
+                Map.entry("jpg", "image/jpeg"),
+                Map.entry("png", "image/png"),
+                Map.entry("gif", "image/gif"),
+                Map.entry("webp", "image/webp")
+        );
+
+        return mimeMap.getOrDefault(extension, "application/octet-stream");
     }
 
     private String buildObjectKey(Long projectId, Long folderId, String fileName) {
