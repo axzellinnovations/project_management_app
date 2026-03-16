@@ -82,9 +82,20 @@ export async function deleteTask(taskId: number): Promise<void> {
  */
 export async function createTask(taskData: any): Promise<Task> {
   try {
+    // Validate required fields
+    if (!taskData.title || !taskData.title.trim()) {
+      throw new Error('Task title is required');
+    }
+    if (!taskData.projectId) {
+      throw new Error('Project ID is required');
+    }
+    if (!taskData.status) {
+      throw new Error('Task status is required');
+    }
+
     // Format the request to match backend expectations
     const requestData = {
-      title: taskData.title,
+      title: taskData.title.trim(),
       description: taskData.description || '',
       status: taskData.status,
       priority: taskData.priority || 'MEDIUM',
@@ -109,13 +120,11 @@ export async function createTask(taskData: any): Promise<Task> {
     } else if (axiosError.response?.status === 400) {
       errorMessage = 'Invalid task data. Please check your inputs.';
     } else if (axiosError.response?.status === 401) {
-      errorMessage = 'You are not authorized to create tasks. Please log in again.';
+      errorMessage = 'Authentication required. Please log in again.';
     } else if (axiosError.response?.status === 403) {
       errorMessage = 'You do not have permission to create tasks in this project.';
-    } else if (axiosError.response?.status === 404) {
-      errorMessage = 'Project or team not found.';
-    } else if (axiosError.message === 'Network Error') {
-      errorMessage = 'Network error. Please check your connection.';
+    } else if (axiosError.response?.status === 500) {
+      errorMessage = 'Server error. Please try again later.';
     }
     
     throw new Error(errorMessage);
