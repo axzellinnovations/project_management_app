@@ -1,7 +1,9 @@
 package com.planora.backend.controller;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
@@ -21,9 +23,12 @@ import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
 import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
+import com.planora.backend.service.ChatWebhookService;
 
 @Controller
 public class ChatController {
+
+    private static final Pattern MENTION_PATTERN = Pattern.compile("(?<!\\S)@([A-Za-z0-9._-]+)");
 
     public static record EditMessagePayload(String content, ChatMessage.FormatType formatType) {}
 
@@ -34,6 +39,14 @@ public class ChatController {
     public static record TypingEvent(String sender, String scope, Long roomId, String recipient, boolean typing) {}
 
     public static record PresenceEvent(String type, String user, List<String> onlineUsers) {}
+
+    public static record MentionEvent(String type,
+                                      Long projectId,
+                                      Long messageId,
+                                      String sender,
+                                      String scope,
+                                      Long roomId,
+                                      String preview) {}
 
     @Autowired
     private SimpMessagingTemplate simpMessagingTemplate;
@@ -59,6 +72,9 @@ public class ChatController {
     @Autowired
     private ChatPresenceService chatPresenceService;
 
+    @Autowired
+    private ChatWebhookService chatWebhookService;
+
     // This method handles messages sent to "/app/project/{projectId}/chat.sendMessage".
     // The return value is broadcast to all subscribers of "/topic/project/{projectId}/public".
     @MessageMapping("/project/{projectId}/chat.sendMessage")
@@ -75,6 +91,8 @@ public class ChatController {
         chatMessage.setChatType(ChatType.GROUP);
 
         ChatMessage saved = chatService.saveMessage(chatMessage);
+        publishMentionNotifications(projectId, saved, "TEAM");
+        chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "TEAM", saved);
         publishUnreadBadgesForProject(projectId);
         return saved;
     }
@@ -97,6 +115,8 @@ public class ChatController {
         // persist private message as well
         ChatMessage saved = chatService.saveMessage(chatMessage);
         sendPrivateMessageToConversationParticipants(projectId, Objects.requireNonNull(saved));
+        publishMentionNotifications(projectId, saved, "PRIVATE");
+        chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "PRIVATE", saved);
         publishUnreadBadgesForProject(projectId);
     }
 
@@ -122,6 +142,8 @@ public class ChatController {
         chatMessage.setChatType(ChatType.GROUP);
 
         ChatMessage saved = chatService.saveMessage(chatMessage);
+        publishMentionNotifications(projectId, saved, "ROOM");
+        chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "ROOM", saved);
         publishUnreadBadgesForProject(projectId);
         return saved;
     }
@@ -141,7 +163,10 @@ public class ChatController {
             chatMessage.setFormatType(ChatMessage.FormatType.PLAIN);
         }
 
-        return chatService.saveThreadReply(projectId, rootMessageId, chatMessage);
+        var saved = chatService.saveThreadReply(projectId, rootMessageId, chatMessage);
+        publishMentionNotifications(projectId, saved, "THREAD");
+        chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "THREAD", saved);
+        return saved;
     }
 
     @MessageMapping("/project/{projectId}/messages/{messageId}/edit")
@@ -343,8 +368,11 @@ public class ChatController {
     }
 
     private void publishMessageEvent(Long projectId, ChatMessage message) {
+        var eventType = Boolean.TRUE.equals(message.getDeleted()) ? "MESSAGE_DELETED" : "MESSAGE_UPDATED";
+
         if (message.getRecipient() != null && !message.getRecipient().isBlank()) {
             sendPrivateMessageToConversationParticipants(projectId, message);
+            chatWebhookService.dispatchMessageEvent(projectId, eventType, "PRIVATE", message);
             return;
         }
 
@@ -359,10 +387,12 @@ public class ChatController {
             simpMessagingTemplate.convertAndSend(
                     "/topic/project/" + projectId + "/room/" + message.getRoomId(),
                     message);
+            chatWebhookService.dispatchMessageEvent(projectId, eventType, "ROOM", message);
             return;
         }
 
         simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/public", message);
+        chatWebhookService.dispatchMessageEvent(projectId, eventType, "TEAM", message);
         publishUnreadBadgesForProject(projectId);
     }
 
@@ -453,6 +483,74 @@ public class ChatController {
                         simpMessagingTemplate.convertAndSendToUser(user.getEmail().toLowerCase(), destination, savedMessage);
                     }
                 });
+    }
+
+    private void publishMentionNotifications(Long projectId, ChatMessage savedMessage, String scope) {
+        if (savedMessage == null || savedMessage.getContent() == null || savedMessage.getContent().isBlank()) {
+            return;
+        }
+
+        var mentions = new LinkedHashSet<String>();
+        var matcher = MENTION_PATTERN.matcher(savedMessage.getContent());
+        while (matcher.find()) {
+            var mention = matcher.group(1);
+            if (mention != null && !mention.isBlank()) {
+                mentions.add(mention.toLowerCase());
+            }
+        }
+
+        if (mentions.isEmpty()) {
+            return;
+        }
+
+        var senderAliases = resolveUserByEmailOrUsername(savedMessage.getSender());
+        var senderUsername = senderAliases != null && senderAliases.getUsername() != null
+                ? senderAliases.getUsername().toLowerCase()
+                : null;
+        var senderEmail = senderAliases != null && senderAliases.getEmail() != null
+                ? senderAliases.getEmail().toLowerCase()
+                : null;
+
+        var destination = "/queue/project/" + projectId + "/mentions";
+        var preview = savedMessage.getContent().length() > 120
+                ? savedMessage.getContent().substring(0, 120)
+                : savedMessage.getContent();
+
+        mentions.forEach(mentioned -> {
+            var user = resolveUserByEmailOrUsername(mentioned);
+            if (user == null) {
+                return;
+            }
+
+            var isSender = (senderUsername != null && senderUsername.equalsIgnoreCase(user.getUsername()))
+                    || (senderEmail != null && senderEmail.equalsIgnoreCase(user.getEmail()));
+            if (isSender) {
+                return;
+            }
+
+            var isProjectMember = projectRepository.findById(projectId)
+                    .flatMap(project -> teamMemberRepository.findByTeamIdAndUserUserId(project.getTeam().getId(), user.getUserId()))
+                    .isPresent();
+            if (!isProjectMember) {
+                return;
+            }
+
+            var event = new MentionEvent(
+                    "MENTIONED",
+                    projectId,
+                    savedMessage.getId(),
+                    savedMessage.getSender(),
+                    scope,
+                    savedMessage.getRoomId(),
+                    preview);
+
+            if (user.getUsername() != null && !user.getUsername().isBlank()) {
+                simpMessagingTemplate.convertAndSendToUser(user.getUsername().toLowerCase(), destination, event);
+            }
+            if (user.getEmail() != null && !user.getEmail().isBlank()) {
+                simpMessagingTemplate.convertAndSendToUser(user.getEmail().toLowerCase(), destination, event);
+            }
+        });
     }
 
     private String requireAuthenticatedUsername(SimpMessageHeaderAccessor headerAccessor) {

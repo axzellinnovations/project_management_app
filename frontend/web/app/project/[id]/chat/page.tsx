@@ -13,6 +13,7 @@ export default function ChatInterface() {
   const params = useParams();
   const projectId = params.id as string;
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const {
     currentUser,
     currentUserAliases,
@@ -33,6 +34,10 @@ export default function ChatInterface() {
     teamTypingUsers,
     roomTypingUsers,
     privateTypingUsers,
+    featureFlags,
+    searchResults,
+    isSearchLoading,
+    commandNotice,
     messageReactions,
     activeThreadRoot,
     threadMessages,
@@ -53,6 +58,8 @@ export default function ChatInterface() {
     updateRoomMeta,
     pinRoomMessage,
     sendTyping,
+    searchMessages,
+    trackTelemetry,
     addTeam,
     isLoading,
     error,
@@ -69,6 +76,7 @@ export default function ChatInterface() {
     : messages;
 
   const filteredUsers = users.filter((u) => u !== currentUser && u.toLowerCase().includes(searchTerm.trim().toLowerCase()));
+  const mentionCandidates = users.filter((u) => u !== currentUser);
   const filteredMessages = displayMessages.filter((msg) => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.trim().toLowerCase();
@@ -77,6 +85,38 @@ export default function ChatInterface() {
       (msg.content && msg.content.toLowerCase().includes(term))
     );
   });
+
+  const executeSearch = async () => {
+    await searchMessages(searchQuery);
+  };
+
+  const jumpToSearchResult = async (result: { context: string; roomId?: number | null; sender?: string; recipient?: string | null }) => {
+    const aliases = new Set(currentUserAliases.map(alias => alias.toLowerCase()));
+    aliases.add(currentUser.toLowerCase());
+
+    if (result.context === 'ROOM' && result.roomId) {
+      selectRoom(result.roomId);
+      await loadRoomHistory(result.roomId);
+      trackTelemetry('chat_search_result_opened', 'room', `roomId=${result.roomId}`);
+      return;
+    }
+
+    if (result.context === 'PRIVATE') {
+      const sender = (result.sender || '').toLowerCase();
+      const recipient = (result.recipient || '').toLowerCase();
+      const partner = aliases.has(sender) ? recipient : sender;
+      if (partner) {
+        selectPrivateUser(partner);
+        await loadPrivateHistory(partner);
+        trackTelemetry('chat_search_result_opened', 'private', `partner=${partner}`);
+      }
+      return;
+    }
+
+    selectRoom(null);
+    selectPrivateUser(null);
+    trackTelemetry('chat_search_result_opened', 'team');
+  };
 
   const roomTyping = hasSelectedRoom && selectedRoomId !== null ? (roomTypingUsers[selectedRoomId] || []) : [];
   const privateTyping = selectedUser ? privateTypingUsers.filter(user => user === selectedUser.toLowerCase()) : [];
@@ -91,6 +131,12 @@ export default function ChatInterface() {
       loadPrivateHistory(selectedUser);
     }
   }, [selectedUser, loadPrivateHistory]);
+
+  useEffect(() => {
+    if (featureFlags.phaseEEnabled && featureFlags.telemetryEnabled) {
+      trackTelemetry('chat_screen_opened', 'chat', `project=${projectId}`);
+    }
+  }, [featureFlags.phaseEEnabled, featureFlags.telemetryEnabled, projectId, trackTelemetry]);
 
   useEffect(() => {
     if (hasSelectedRoom) {
@@ -177,6 +223,42 @@ export default function ChatInterface() {
             </div>
           </div>
 
+          {featureFlags.phaseDEnabled && (
+            <div className="px-3 pt-2 pb-1 border-b border-slate-200 bg-slate-50">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && executeSearch()}
+                  placeholder="Search all chat messages..."
+                  className="flex-1 px-3 py-2 rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={executeSearch}
+                  className="px-3 py-2 rounded-md bg-slate-900 text-white text-sm hover:bg-slate-800"
+                  disabled={isSearchLoading}
+                >
+                  {isSearchLoading ? 'Searching...' : 'Search'}
+                </button>
+              </div>
+              {searchResults.length > 0 && (
+                <div className="mt-2 max-h-40 overflow-auto rounded-md border border-slate-200 bg-white">
+                  {searchResults.slice(0, 10).map(result => (
+                    <button
+                      key={result.messageId}
+                      onClick={() => jumpToSearchResult(result)}
+                      className="w-full text-left px-3 py-2 border-b border-slate-100 last:border-b-0 hover:bg-slate-50"
+                    >
+                      <p className="text-xs text-slate-500">{result.context} • {result.sender}</p>
+                      <p className="text-sm text-slate-800 truncate">{result.content}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {error && (
             <div className="mb-3 p-4 bg-red-50 rounded-lg border border-red-200">
               <p className="text-red-700 text-sm font-medium">{error}</p>
@@ -189,6 +271,12 @@ export default function ChatInterface() {
               >
                 Retry Connection
               </button>
+            </div>
+          )}
+
+          {!error && commandNotice && (
+            <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-blue-700 text-sm font-medium">{commandNotice}</p>
             </div>
           )}
 
@@ -210,7 +298,14 @@ export default function ChatInterface() {
               <p className="text-xs text-green-600">{activeTypingLabel}</p>
             </div>
           )}
-          <ChatInput onSendMessage={handleSendMessage} onTypingChange={sendTyping} disabled={isLoading || !!error} />
+          <ChatInput
+            onSendMessage={handleSendMessage}
+            onTypingChange={sendTyping}
+            disabled={isLoading || !!error}
+            placeholder='Type a message...'
+            enableMentions={!selectedUser}
+            mentionCandidates={mentionCandidates}
+          />
         </div>
 
         {activeThreadRoot && (

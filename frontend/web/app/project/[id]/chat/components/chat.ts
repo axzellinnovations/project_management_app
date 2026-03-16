@@ -70,3 +70,28 @@ export interface UnreadBadgeSummary {
   directsUnread: number;
   totalUnread: number;
 }
+
+export interface ChatFeatureFlags {
+  phaseDEnabled: boolean;
+  phaseEEnabled: boolean;
+  webhooksEnabled: boolean;
+  telemetryEnabled: boolean;
+}
+
+export interface ChatSearchResult {
+  messageId: number;
+  sender: string;
+  content: string;
+  context: 'TEAM' | 'ROOM' | 'PRIVATE' | string;
+  roomId?: number | null;
+  recipient?: string | null;
+  timestamp?: string | null;
+}
+
+export interface ChatWebhook {
+  id: string;
+  url: string;
+  events: string[];
+  active: boolean;
+  createdAt: string;
+}

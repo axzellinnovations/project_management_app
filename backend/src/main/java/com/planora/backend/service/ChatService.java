@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import org.springframework.stereotype.Service;
@@ -345,6 +346,38 @@ public class ChatService {
                 roomUnread,
                 directUnread,
                 teamUnread + roomUnread + directUnread);
+    }
+
+    public List<ChatMessage> searchMessages(Long projectId,
+                                            String currentUser,
+                                            String query,
+                                            Set<Long> visibleRoomIds,
+                                            int limit) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+
+        var normalized = query.trim().toLowerCase();
+        var currentAliases = resolveUserAliases(currentUser);
+
+        return chatMessageRepository.searchMessages(projectId, normalized).stream()
+                .filter(message -> isMessageVisibleToUser(message, currentAliases, visibleRoomIds))
+                .limit(Math.max(1, limit))
+                .toList();
+    }
+
+    private boolean isMessageVisibleToUser(ChatMessage message, List<String> currentAliases, Set<Long> visibleRoomIds) {
+        if (message.getRoomId() != null) {
+            return visibleRoomIds.contains(message.getRoomId());
+        }
+
+        if (message.getRecipient() != null && !message.getRecipient().isBlank()) {
+            var sender = message.getSender() != null ? message.getSender().toLowerCase() : "";
+            var recipient = message.getRecipient().toLowerCase();
+            return currentAliases.contains(sender) || currentAliases.contains(recipient);
+        }
+
+        return true;
     }
 
     public List<RoomChatSummary> buildRoomSummaries(Long projectId, String currentUser, List<ChatRoom> rooms) {

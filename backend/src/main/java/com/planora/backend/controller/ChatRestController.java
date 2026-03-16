@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -30,6 +31,7 @@ import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
 import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
+import com.planora.backend.service.ChatWebhookService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -61,6 +63,34 @@ public class ChatRestController {
                                              long directsUnread,
                                              long totalUnread) {}
 
+    public static record FeatureFlagsResponse(boolean phaseDEnabled,
+                                              boolean phaseEEnabled,
+                                              boolean webhooksEnabled,
+                                              boolean telemetryEnabled) {}
+
+    public static record SearchResultResponse(Long messageId,
+                                              String sender,
+                                              String content,
+                                              String context,
+                                              Long roomId,
+                                              String recipient,
+                                              String timestamp) {}
+
+    public static record ChatWebhookRequest(String url,
+                                            List<String> events,
+                                            Boolean active,
+                                            String secret) {}
+
+    public static record ChatWebhookResponse(String id,
+                                             String url,
+                                             List<String> events,
+                                             boolean active,
+                                             String createdAt) {}
+
+    public static record TelemetryEventRequest(String eventName,
+                                               String scope,
+                                               String metadata) {}
+
     private final ChatService chatService;
 
     private final ProjectRepository projectRepository;
@@ -76,6 +106,20 @@ public class ChatRestController {
     private final SimpMessagingTemplate simpMessagingTemplate;
 
     private final ChatPresenceService chatPresenceService;
+
+    private final ChatWebhookService chatWebhookService;
+
+    @Value("${chat.features.phase-d-enabled:true}")
+    private boolean phaseDEnabled;
+
+    @Value("${chat.features.phase-e-enabled:true}")
+    private boolean phaseEEnabled;
+
+    @Value("${chat.features.webhooks-enabled:true}")
+    private boolean webhooksEnabled;
+
+    @Value("${chat.features.telemetry-enabled:true}")
+    private boolean telemetryEnabled;
 
     public static record RoomEvent(String action, Long roomId, ChatRoomResponse room) {}
 
@@ -229,6 +273,122 @@ public class ChatRestController {
         validateProjectMembership(projectId, username);
         var onlineUsers = chatPresenceService.getOnlineUsers(projectId);
         return new ResponseEntity<>(new PresenceResponse(onlineUsers, onlineUsers.size()), HttpStatus.OK);
+    }
+
+    @GetMapping("/features")
+    public ResponseEntity<FeatureFlagsResponse> getFeatureFlags(@PathVariable Long projectId, Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        return new ResponseEntity<>(
+                new FeatureFlagsResponse(
+                        phaseDEnabled,
+                        phaseEEnabled,
+                        webhooksEnabled,
+                        telemetryEnabled),
+                HttpStatus.OK);
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<List<SearchResultResponse>> searchMessages(@PathVariable Long projectId,
+                                                                     @RequestParam("query") String query,
+                                                                     @RequestParam(value = "limit", required = false, defaultValue = "20") int limit,
+                                                                     Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+
+        var visibleRoomIds = getVisibleRooms(projectId, username, false).stream().map(ChatRoom::getId).collect(java.util.stream.Collectors.toSet());
+        var matches = chatService.searchMessages(projectId, username, query, visibleRoomIds, limit);
+
+        var response = matches.stream().map(message -> {
+            String context = message.getRoomId() != null
+                    ? "ROOM"
+                    : (message.getRecipient() != null && !message.getRecipient().isBlank() ? "PRIVATE" : "TEAM");
+
+            return new SearchResultResponse(
+                    message.getId(),
+                    message.getSender(),
+                    message.getContent(),
+                    context,
+                    message.getRoomId(),
+                    message.getRecipient(),
+                    message.getTimestamp() != null ? message.getTimestamp().toString() : null);
+        }).toList();
+
+        return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
+    @GetMapping("/webhooks")
+    public ResponseEntity<List<ChatWebhookResponse>> listWebhooks(@PathVariable Long projectId,
+                                                                   Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        if (!webhooksEnabled) {
+            return new ResponseEntity<>(List.of(), HttpStatus.OK);
+        }
+
+        var hooks = chatWebhookService.listWebhooks(projectId).stream()
+                .map(this::toWebhookResponse)
+                .toList();
+        return new ResponseEntity<>(hooks, HttpStatus.OK);
+    }
+
+    @PostMapping("/webhooks")
+    public ResponseEntity<ChatWebhookResponse> createWebhook(@PathVariable Long projectId,
+                                                              @RequestBody ChatWebhookRequest request,
+                                                              Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        if (!webhooksEnabled || request.url() == null || request.url().isBlank()) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+
+        var webhook = chatWebhookService.createWebhook(projectId, request.url().trim(), request.events(), request.active(), request.secret());
+        return new ResponseEntity<>(toWebhookResponse(webhook), HttpStatus.CREATED);
+    }
+
+    @DeleteMapping("/webhooks/{webhookId}")
+    public ResponseEntity<Void> deleteWebhook(@PathVariable Long projectId,
+                                              @PathVariable String webhookId,
+                                              Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        if (!webhooksEnabled) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+
+        boolean deleted = chatWebhookService.deleteWebhook(projectId, webhookId);
+        return new ResponseEntity<>(deleted ? HttpStatus.NO_CONTENT : HttpStatus.NOT_FOUND);
+    }
+
+    @PostMapping("/webhooks/test")
+    public ResponseEntity<String> testWebhooks(@PathVariable Long projectId,
+                                               Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        if (!webhooksEnabled) {
+            return new ResponseEntity<>("Webhooks disabled", HttpStatus.BAD_REQUEST);
+        }
+
+        int dispatched = chatWebhookService.testWebhooks(projectId);
+        return new ResponseEntity<>("Dispatched test payload to " + dispatched + " webhook(s)", HttpStatus.OK);
+    }
+
+    @PostMapping("/telemetry")
+    public ResponseEntity<Void> ingestTelemetry(@PathVariable Long projectId,
+                                                @RequestBody TelemetryEventRequest request,
+                                                Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        if (!telemetryEnabled) {
+            return new ResponseEntity<>(HttpStatus.ACCEPTED);
+        }
+
+        System.out.println("chat_telemetry project=" + projectId
+                + " user=" + username
+                + " event=" + request.eventName()
+                + " scope=" + request.scope()
+                + " metadata=" + request.metadata());
+        return new ResponseEntity<>(HttpStatus.ACCEPTED);
     }
 
     @GetMapping("/rooms")
@@ -518,6 +678,15 @@ public class ChatRestController {
                 || memberRoomIds.contains(room.getId()))
             .filter(room -> includeArchived || !Boolean.TRUE.equals(room.getArchived()))
             .toList();
+    }
+
+    private ChatWebhookResponse toWebhookResponse(ChatWebhookService.ChatWebhook webhook) {
+        return new ChatWebhookResponse(
+                webhook.id(),
+                webhook.url(),
+                webhook.events(),
+                webhook.active(),
+                webhook.createdAt());
     }
 
     private void requireRoomAdminOrOwner(Long projectId, ChatRoom room, String usernameOrEmail) {

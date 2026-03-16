@@ -3,9 +3,11 @@ import { useRouter } from 'next/navigation';
 import SockJS from 'sockjs-client';
 import { CompatClient, Stomp } from '@stomp/stompjs';
 import {
+  ChatFeatureFlags,
   ChatMessage,
   ChatReactionSummary,
   ChatRoom,
+  ChatSearchResult,
   DirectChatSummary,
   PresenceResponse,
   RoomChatSummary,
@@ -38,8 +40,24 @@ interface TypingEvent {
   typing: boolean;
 }
 
+interface MentionEvent {
+  type: 'MENTIONED';
+  projectId: number;
+  messageId?: number;
+  sender: string;
+  scope: 'TEAM' | 'ROOM' | 'PRIVATE' | 'THREAD' | string;
+  roomId?: number;
+  preview?: string;
+}
+
 const MAX_REACTION_HYDRATION_MESSAGES = 20;
 const REACTION_RETRY_BACKOFF_MS = 10000;
+const DEFAULT_FEATURE_FLAGS: ChatFeatureFlags = {
+  phaseDEnabled: process.env.NEXT_PUBLIC_CHAT_PHASE_D_ENABLED !== 'false',
+  phaseEEnabled: process.env.NEXT_PUBLIC_CHAT_PHASE_E_ENABLED !== 'false',
+  webhooksEnabled: process.env.NEXT_PUBLIC_CHAT_WEBHOOKS_ENABLED !== 'false',
+  telemetryEnabled: process.env.NEXT_PUBLIC_CHAT_TELEMETRY_ENABLED !== 'false'
+};
 
 const normalizeIdentity = (value?: string | null): string => (value || '').trim().toLowerCase();
 
@@ -113,6 +131,9 @@ export const useChat = (projectId: string) => {
   const [roomTypingUsers, setRoomTypingUsers] = useState<Record<number, string[]>>({});
   const [privateTypingUsers, setPrivateTypingUsers] = useState<string[]>([]);
   const [unreadBadge, setUnreadBadge] = useState<UnreadBadgeSummary>({ teamUnread: 0, roomsUnread: 0, directsUnread: 0, totalUnread: 0 });
+  const [featureFlags, setFeatureFlags] = useState<ChatFeatureFlags>(DEFAULT_FEATURE_FLAGS);
+  const [searchResults, setSearchResults] = useState<ChatSearchResult[]>([]);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
 
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [users, setUsers] = useState<string[]>([]);
@@ -125,6 +146,7 @@ export const useChat = (projectId: string) => {
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [commandNotice, setCommandNotice] = useState('');
   const [hasRestoredSelection, setHasRestoredSelection] = useState(false);
 
   const stompClientRef = useRef<CompatClient | null>(null);
@@ -147,6 +169,11 @@ export const useChat = (projectId: string) => {
       console.error('Failed to mark team chat as read', markError);
     }
   }, [projectId]);
+
+  const showCommandNotice = useCallback((message: string) => {
+    setCommandNotice(message);
+    window.setTimeout(() => setCommandNotice(''), 4500);
+  }, []);
 
   const addTeam = useCallback((teamName: string) => {
     setUsers(prev => {
@@ -190,6 +217,75 @@ export const useChat = (projectId: string) => {
       console.error('Failed to load presence', presenceError);
     }
   }, [projectId]);
+
+  const trackTelemetry = useCallback(async (eventName: string, scope: string, metadata?: string) => {
+    if (!featureFlags.phaseEEnabled || !featureFlags.telemetryEnabled) {
+      return;
+    }
+
+    try {
+      await fetch(`/api/projects/${projectId}/chat/telemetry`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...tokenHeader()
+        },
+        body: JSON.stringify({ eventName, scope, metadata: metadata || '' })
+      });
+    } catch (telemetryError) {
+      console.error('Failed to send telemetry', telemetryError);
+    }
+  }, [projectId, featureFlags.phaseEEnabled, featureFlags.telemetryEnabled]);
+
+  const loadFeatureFlags = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat/features`, {
+        headers: tokenHeader()
+      });
+      if (!response.ok) {
+        return;
+      }
+
+      const flags: ChatFeatureFlags = await response.json();
+      setFeatureFlags({
+        phaseDEnabled: Boolean(flags.phaseDEnabled),
+        phaseEEnabled: Boolean(flags.phaseEEnabled),
+        webhooksEnabled: Boolean(flags.webhooksEnabled),
+        telemetryEnabled: Boolean(flags.telemetryEnabled)
+      });
+    } catch (flagError) {
+      console.error('Failed to load chat feature flags', flagError);
+    }
+  }, [projectId]);
+
+  const searchMessages = useCallback(async (query: string) => {
+    const normalized = query.trim();
+    if (!featureFlags.phaseDEnabled || !normalized) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearchLoading(true);
+    try {
+      const params = new URLSearchParams({ query: normalized, limit: '30' });
+      const response = await fetch(`/api/projects/${projectId}/chat/search?${params.toString()}`, {
+        headers: tokenHeader()
+      });
+      if (!response.ok) {
+        setSearchResults([]);
+        return;
+      }
+
+      const results: ChatSearchResult[] = await response.json();
+      setSearchResults(results || []);
+      trackTelemetry('chat_search_executed', 'chat', `queryLength=${normalized.length};results=${(results || []).length}`);
+    } catch (searchError) {
+      console.error('Failed to search messages', searchError);
+      setSearchResults([]);
+    } finally {
+      setIsSearchLoading(false);
+    }
+  }, [featureFlags.phaseDEnabled, projectId, trackTelemetry]);
 
   const loadUnreadBadge = useCallback(async () => {
     try {
@@ -904,6 +1000,19 @@ export const useChat = (projectId: string) => {
           });
         });
 
+        client.subscribe(`/user/queue/project/${projectId}/mentions`, payload => {
+          const mention: MentionEvent = JSON.parse(payload.body);
+          const context = mention.scope === 'ROOM'
+            ? 'group chat'
+            : mention.scope === 'PRIVATE'
+            ? 'direct chat'
+            : mention.scope === 'THREAD'
+            ? 'thread'
+            : 'team chat';
+          showCommandNotice(`You are mentioned by ${mention.sender} in ${context}.`);
+          trackTelemetry('chat_mention_received', mention.scope || 'chat', `messageId=${mention.messageId || ''}`);
+        });
+
         client.send(`/app/project/${projectId}/chat.addUser`, {}, JSON.stringify({ sender: username, type: 'JOIN' }));
         client.send(`/app/project/${projectId}/presence.ping`, {}, JSON.stringify({}));
       }, (connectError: unknown) => {
@@ -916,7 +1025,7 @@ export const useChat = (projectId: string) => {
       setError('Socket initialization failed.');
       console.error(connectError);
     }
-  }, [projectId, loadMessageReactions, markTeamAsRead]);
+  }, [projectId, loadMessageReactions, markTeamAsRead, showCommandNotice, trackTelemetry]);
 
   useEffect(() => {
     const initialize = async () => {
@@ -953,6 +1062,7 @@ export const useChat = (projectId: string) => {
 
         const loadedUsers = await fetchAllUsers(token);
         const loadedRooms = await loadRooms();
+        await loadFeatureFlags();
         await loadSummaries(token);
         await loadPresence();
         await loadUnreadBadge();
@@ -974,7 +1084,7 @@ export const useChat = (projectId: string) => {
         stompClientRef.current.disconnect();
       }
     };
-  }, [router, fetchAllUsers, fetchCanonicalUsernameAlias, loadRooms, loadSummaries, loadPresence, loadUnreadBadge, restoreSelection, connectToChat, loadHistory]);
+  }, [router, fetchAllUsers, fetchCanonicalUsernameAlias, loadRooms, loadFeatureFlags, loadSummaries, loadPresence, loadUnreadBadge, restoreSelection, connectToChat, loadHistory]);
 
   useEffect(() => {
     if (!isSocketConnected || !stompClientRef.current) {
@@ -1167,13 +1277,15 @@ export const useChat = (projectId: string) => {
       const message = { sender: currentUser, content: normalizedContent, recipient, type: 'CHAT', formatType: 'PLAIN' };
       stompClientRef.current?.send(`/app/project/${projectId}/chat.sendPrivateMessage`, {}, JSON.stringify(message));
       scheduleHistorySync(recipient, null);
+      trackTelemetry('chat_private_message_sent', 'private');
       return;
     }
 
     const message = { sender: currentUser, content: normalizedContent, type: 'CHAT', formatType: 'PLAIN' };
     stompClientRef.current?.send(`/app/project/${projectId}/chat.sendMessage`, {}, JSON.stringify(message));
     scheduleHistorySync(null, null);
-  }, [currentUser, projectId, scheduleHistorySync]);
+    trackTelemetry('chat_team_message_sent', 'team');
+  }, [currentUser, projectId, scheduleHistorySync, trackTelemetry]);
 
   const sendRoomMessage = useCallback((content: string, roomId: number) => {
     const normalizedContent = content.trim();
@@ -1189,7 +1301,8 @@ export const useChat = (projectId: string) => {
     const message = { sender: currentUser, content: normalizedContent, roomId, type: 'CHAT', formatType: 'PLAIN' };
     stompClientRef.current?.send(`/app/project/${projectId}/room/${roomId}/send`, {}, JSON.stringify(message));
     scheduleHistorySync(null, roomId);
-  }, [currentUser, projectId, scheduleHistorySync]);
+    trackTelemetry('chat_room_message_sent', 'room', `roomId=${roomId}`);
+  }, [currentUser, projectId, scheduleHistorySync, trackTelemetry]);
 
   const sendThreadReply = useCallback(async (content: string) => {
     if (!activeThreadRoot?.id) {
@@ -1345,6 +1458,10 @@ export const useChat = (projectId: string) => {
     roomTypingUsers,
     privateTypingUsers,
     unreadBadge,
+    featureFlags,
+    searchResults,
+    isSearchLoading,
+    commandNotice,
     messageReactions,
     activeThreadRoot,
     threadMessages,
@@ -1365,6 +1482,8 @@ export const useChat = (projectId: string) => {
     updateRoomMeta,
     pinRoomMessage,
     sendTyping,
+    searchMessages,
+    trackTelemetry,
     addTeam,
     isLoading,
     error,

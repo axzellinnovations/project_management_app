@@ -70,4 +70,8 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     long countUnreadTeamMessagesByAliases(@Param("projectId") Long projectId,
                                           @Param("currentUserAliases") List<String> currentUserAliases,
                                           @Param("lastReadMessageId") Long lastReadMessageId);
+
+    @Query("SELECT m FROM ChatMessage m WHERE m.projectId = :projectId AND m.content IS NOT NULL AND LOWER(m.content) LIKE LOWER(CONCAT('%', :query, '%')) ORDER BY m.id DESC")
+    List<ChatMessage> searchMessages(@Param("projectId") Long projectId,
+                                     @Param("query") String query);
 }
