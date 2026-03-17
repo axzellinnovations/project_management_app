@@ -1,8 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ChatMessage, ChatReactionSummary } from './chat';
+import api from '@/lib/axios';
 import styles from '../chat.module.css';
 
 interface ChatMessagesProps {
+  projectId: string;
   messages: ChatMessage[];
   currentUser: string;
   currentUserAliases: string[];
@@ -16,9 +18,25 @@ interface ChatMessagesProps {
   onPinRoomMessage?: (messageId: number | null) => void;
 }
 
+export const isFileDocument = (content: string) => {
+  try {
+    const url = new URL(content);
+    // Common S3 URL patterns (both path-style and virtual-hosted style)
+    const isS3Domain = url.hostname.includes('s3') && url.hostname.includes('amazonaws.com');
+    // Common pre-signed URL query parameters
+    const hasS3Signature = url.searchParams.has('X-Amz-Signature') && url.searchParams.has('X-Amz-Credential');
+    
+    return isS3Domain || hasS3Signature;
+  } catch (e) {
+    // Not a valid URL
+    return false;
+  }
+};
+
 const QUICK_REACTIONS = ['👍', '🔥', '✅', '🎉'];
 
 export const ChatMessages = ({
+  projectId,
   messages,
   currentUser,
   currentUserAliases,
@@ -32,6 +50,29 @@ export const ChatMessages = ({
   onPinRoomMessage
 }: ChatMessagesProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [loadingFileId, setLoadingFileId] = useState<number | null>(null);
+
+  const handleDocumentClick = async (e: React.MouseEvent<HTMLAnchorElement>, originalUrl: string, messageId?: number) => {
+    e.preventDefault();
+    if (!messageId) {
+        window.open(originalUrl, '_blank');
+        return;
+    }
+    
+    setLoadingFileId(messageId);
+    try {
+      const response = await api.get(`/api/projects/${projectId}/chat/messages/refresh-document`, {
+        params: { url: originalUrl }
+      });
+      window.open(response.data, '_blank');
+    } catch (err) {
+      console.error('Failed to refresh document URL', err);
+      // Fallback to original
+      window.open(originalUrl, '_blank');
+    } finally {
+      setLoadingFileId(null);
+    }
+  };
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -70,7 +111,25 @@ export const ChatMessages = ({
                     ? 'bg-blue-600 text-white rounded-br-sm' 
                     : 'bg-white text-slate-900 border border-slate-200 rounded-bl-sm'
                 }`}>
-                    {msg.deleted ? <em>[message deleted]</em> : msg.content}
+                      {msg.deleted ? (
+                        <em>[message deleted]</em>
+                      ) :
+                        isFileDocument(msg.content) ? (
+                          <a
+                            href={msg.content}
+                            onClick={(e) => handleDocumentClick(e, msg.content, msg.id as number)}
+                            className={`flex items-center gap-2 text-blue-700 hover:underline ${loadingFileId === msg.id ? 'opacity-50 cursor-wait' : ''}`}
+                            style={{ minWidth: '120px', maxWidth: '100%', overflowWrap: 'break-word' }}
+                          >
+                            <span role="img" aria-label="file" className="text-lg">📄</span>
+                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px', display: 'inline-block' }}>
+                                {loadingFileId === msg.id ? 'Loading...' : 'View File'}
+                            </span>
+                          </a>
+                        ) : (
+                          <span style={{ wordBreak: 'break-word', maxWidth: '250px', display: 'inline-block' }}>{msg.content}</span>
+                        )
+                      }
                 </div>
                 {!msg.deleted && msg.editedAt && (
                   <span className="text-[10px] text-slate-400 mt-0.5">edited</span>

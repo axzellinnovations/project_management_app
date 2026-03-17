@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,8 @@ import com.planora.backend.repository.UserRepository;
 import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
 import com.planora.backend.service.ChatWebhookService;
+
+import com.planora.backend.service.ChatDocumentService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -108,6 +112,51 @@ public class ChatRestController {
     private final ChatPresenceService chatPresenceService;
 
     private final ChatWebhookService chatWebhookService;
+
+    private final ChatDocumentService chatDocumentService;
+    /**
+     * Upload a document to chat (S3-backed, like WhatsApp)
+     */
+    @PostMapping("/messages/upload-document")
+    public ResponseEntity<String> uploadChatDocument(
+            @PathVariable Long projectId,
+            @RequestPart("file") MultipartFile file,
+            Authentication authentication
+    ) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body("File is required");
+        }
+        // Use a unique key for S3 (e.g., projectId/username/timestamp_filename)
+        String key = String.format("%d/%s/%d_%s", projectId, username, System.currentTimeMillis(), file.getOriginalFilename());
+        String url = chatDocumentService.uploadChatDocument(file, key);
+        return ResponseEntity.ok(url);
+    }
+
+    /**
+     * Get a fresh pre-signed S3 URL for a previously uploaded document
+     */
+    @GetMapping("/messages/refresh-document")
+    public ResponseEntity<String> refreshChatDocument(
+            @PathVariable Long projectId,
+            @RequestParam("url") String expiredUrl,
+            Authentication authentication
+    ) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        
+        if (expiredUrl == null || expiredUrl.isBlank()) {
+            return ResponseEntity.badRequest().body("URL is required");
+        }
+        
+        try {
+            String freshUrl = chatDocumentService.refreshPresignedUrl(expiredUrl);
+            return ResponseEntity.ok(freshUrl);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to refresh URL");
+        }
+    }
 
     @Value("${chat.features.phase-d-enabled:true}")
     private boolean phaseDEnabled;

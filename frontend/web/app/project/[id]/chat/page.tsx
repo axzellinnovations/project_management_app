@@ -281,6 +281,7 @@ export default function ChatInterface() {
           )}
 
           <ChatMessages
+            projectId={projectId}
             messages={filteredMessages}
             currentUser={currentUser}
             currentUserAliases={currentUserAliases}

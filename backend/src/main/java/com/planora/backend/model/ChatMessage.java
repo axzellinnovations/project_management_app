@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 import org.hibernate.annotations.CreationTimestamp;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -27,6 +28,8 @@ public class ChatMessage {
     private Long id;
 
     private MessageType type;
+
+    @Column(columnDefinition = "text")
     private String content;
     private String sender;
     private String recipient;

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChatMessage, ChatRoom } from './chat';
+import { isFileDocument } from './chatMessage';
 import styles from '../chat.module.css';
 
 interface ChatSidebarProps {
@@ -102,7 +103,7 @@ export const ChatSidebar = ({
             </p>
           ) : teamLastMessage?.content && (
             <p className="text-xs truncate opacity-80 mt-1">
-              {teamLastMessage.content}
+              {isFileDocument(teamLastMessage.content) ? '📄 File' : teamLastMessage.content}
             </p>
           )}
         </button>
@@ -136,7 +137,7 @@ export const ChatSidebar = ({
                 <p className="text-xs text-slate-500 truncate">
                   {showRoomTypingInSidebar
                     ? `${roomTypers[0]} is typing...`
-                    : room.topic || roomLastMessages[room.id]?.content || `Created by ${room.createdBy}`}
+                    : room.topic || (roomLastMessages[room.id]?.content ? (isFileDocument(roomLastMessages[room.id]!.content) ? '📄 File' : roomLastMessages[room.id]!.content) : null) || `Created by ${room.createdBy}`}
                 </p>
               </button>
               {isCreator && (
@@ -209,7 +210,7 @@ export const ChatSidebar = ({
                 </div>
                 {showTypingInSidebar
                   ? <p className="text-xs text-green-600 truncate">typing...</p>
-                  : lastMsg && <p className="text-xs text-slate-500 truncate">{lastMsg}</p>}
+                  : lastMsg && <p className="text-xs text-slate-500 truncate">{isFileDocument(lastMsg) ? '📄 File' : lastMsg}</p>}
                 </div>
             </button>
             );
