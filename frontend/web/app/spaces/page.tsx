@@ -10,7 +10,7 @@ export default function SpacesPage() {
     const [projects, setProjects] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortBy, setSortBy] = useState<'recent' | 'alphabetical'>('recent');
+    const [sortBy, setSortBy] = useState<'recent' | 'alphabetical' | 'starred'>('recent');
     const [user, setUser] = useState<User | null>(null);
 
     useEffect(() => {
@@ -32,16 +32,21 @@ export default function SpacesPage() {
     }, []);
 
     const filteredAndSortedProjects = [...projects]
-        .filter(project => 
-            project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (project.projectKey && project.projectKey.toLowerCase().includes(searchQuery.toLowerCase()))
-        )
+        .filter(project => {
+            const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (project.projectKey && project.projectKey.toLowerCase().includes(searchQuery.toLowerCase()));
+            
+            if (sortBy === 'starred') {
+                return matchesSearch && project.isFavorite;
+            }
+            return matchesSearch;
+        })
         .sort((a, b) => {
             if (sortBy === 'alphabetical') {
                 return a.name.localeCompare(b.name);
             }
-            // 'recent' is the default order from the API
-            return 0; // Maintain API order
+            // 'recent' and 'starred' (when filtering) maintain API order
+            return 0;
         });
 
     return (
@@ -92,6 +97,16 @@ export default function SpacesPage() {
                     >
                         Alphabetical
                     </button>
+                    <button
+                        onClick={() => setSortBy('starred')}
+                        className={`px-4 py-1.5 rounded-[6px] text-[14px] font-medium transition-all ${
+                            sortBy === 'starred' 
+                            ? 'bg-white text-[#0052CC] shadow-sm' 
+                            : 'text-[#4A5565] hover:text-[#101828]'
+                        }`}
+                    >
+                        Starred
+                    </button>
                 </div>
             </div>
 
@@ -110,6 +125,14 @@ export default function SpacesPage() {
                             id={project.id.toString()}
                             name={project.name}
                             projectKey={project.projectKey}
+                            isFavorite={project.isFavorite}
+                            onFavoriteToggle={() => {
+                                const fetchProjects = async () => {
+                                    const response = await api.get('/api/projects');
+                                    setProjects(response.data);
+                                };
+                                fetchProjects();
+                            }}
                             type={project.type === 'AGILE' ? 'Agile Scrum' : 'Kanban'}
                             boardCount={1}
                             width="w-full"

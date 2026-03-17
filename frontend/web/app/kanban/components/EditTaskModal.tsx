@@ -3,27 +3,25 @@
 import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { X, Calendar, User, Plus } from 'lucide-react';
+import { X, Calendar, User, Edit2 } from 'lucide-react';
 import { Task } from '../types';
 import { fetchProject, fetchTeamMembers } from '../api';
 
-interface CreateTaskModalProps {
+interface EditTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateTask: (taskData: Partial<Task>) => Promise<void>;
-  columnStatus: string;
-  projectId: number;
+  onUpdateTask: (taskId: number, taskData: Partial<Task>) => Promise<void>;
+  task: Task | null;
   loading?: boolean;
 }
 
-export default function CreateTaskModal({
+export default function EditTaskModal({
   isOpen,
   onClose,
-  onCreateTask,
-  columnStatus,
-  projectId,
+  onUpdateTask,
+  task,
   loading = false,
-}: CreateTaskModalProps) {
+}: EditTaskModalProps) {
   const [title, setTitle] = useState('');
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [assignee, setAssignee] = useState<number | ''>('');
@@ -31,8 +29,19 @@ export default function CreateTaskModal({
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showDueDatePicker, setShowDueDatePicker] = useState(false);
   const safeTeamMembers = Array.isArray(teamMembers) ? teamMembers : [];
+
+  // Initialize form when task changes
+  useEffect(() => {
+    if (task && isOpen) {
+      setTitle(task.title || '');
+      setDueDate(task.dueDate ? new Date(task.dueDate) : null);
+      setAssignee(task.assigneeId || '');
+      setError(null);
+      setSubmitError(null);
+    }
+  }, [task, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,40 +53,33 @@ export default function CreateTaskModal({
       return;
     }
 
-        const todayIso = new Date().toISOString().split('T')[0];
+    const taskData: Partial<Task> = {
+      title: title.trim(),
+      dueDate: dueDate ? dueDate.toISOString().split('T')[0] : undefined,
+      assigneeId: assignee || undefined,
+    };
 
-        const taskData: Partial<Task> = {
-          title: title.trim(),
-          status: columnStatus,
-          projectId,
-          startDate: todayIso,
-          dueDate: dueDate ? dueDate.toISOString().split('T')[0] : todayIso,
-        };
-
-        try {
-          await onCreateTask(taskData);
-          setTitle('');
-          setDueDate(null);
-          setAssignee('');
-          setShowDatePicker(false);
-          onClose();
-        } catch (err) {
-          setSubmitError(
-            err instanceof Error ? err.message : 'Failed to create task. Please try again.'
-          );
-          console.error('Task creation error:', err);
-        }
+    try {
+      if (task) {
+        await onUpdateTask(task.id, taskData);
+        onClose();
+      }
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : 'Failed to update task. Please try again.'
+      );
+      console.error('Task update error:', err);
+    }
   };
 
   // fetch team members when modal opens
   useEffect(() => {
-    if (!isOpen) return;
-    if (!projectId) return;
+    if (!isOpen || !task) return;
 
     const loadMembers = async () => {
       setLoadingMembers(true);
       try {
-        const project = await fetchProject(projectId);
+        const project = await fetchProject(task.projectId || 0);
         if (project.teamId) {
           const members = await fetchTeamMembers(project.teamId);
           setTeamMembers(members || []);
@@ -86,16 +88,16 @@ export default function CreateTaskModal({
         }
       } catch (err) {
         console.error('Failed to load team members:', err);
-        setTeamMembers([]); // Set empty array on error
+        setTeamMembers([]);
       } finally {
         setLoadingMembers(false);
       }
     };
 
     loadMembers();
-  }, [isOpen, projectId]);
+  }, [isOpen, task]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !task) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
@@ -105,9 +107,9 @@ export default function CreateTaskModal({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-                <Plus size={20} className="text-white" />
+                <Edit2 size={20} className="text-white" />
               </div>
-              <h2 className="text-xl font-semibold text-white">Create New Task</h2>
+              <h2 className="text-xl font-semibold text-white">Edit Task</h2>
             </div>
             <button
               onClick={onClose}
@@ -135,7 +137,6 @@ export default function CreateTaskModal({
               placeholder="What needs to be done?"
               className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-sm transition-all duration-200"
               disabled={loading}
-              autoFocus
             />
             {error && (
               <p className="text-red-600 text-xs flex items-center gap-1">
@@ -147,6 +148,8 @@ export default function CreateTaskModal({
             )}
           </div>
 
+
+
           {/* Due Date Section */}
           <div className="space-y-3">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
@@ -155,55 +158,39 @@ export default function CreateTaskModal({
               <span className="text-xs text-gray-400 font-normal">(Optional)</span>
             </label>
 
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setShowDatePicker(!showDatePicker)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 transition-all duration-200 ${
-                  dueDate
-                    ? 'border-blue-200 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300 hover:bg-gray-100'
-                }`}
-                disabled={loading}
-              >
-                <Calendar size={16} />
-                {dueDate ? (
-                  <span className="text-sm font-medium">
-                    {dueDate.toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric'
-                    })}
-                  </span>
-                ) : (
-                  <span className="text-sm">Set due date</span>
-                )}
-              </button>
-
-              {dueDate && (
-                <button
-                  type="button"
-                  onClick={() => setDueDate(null)}
-                  className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors"
-                  disabled={loading}
-                >
-                  Clear
-                </button>
+            <button
+              type="button"
+              onClick={() => setShowDueDatePicker(!showDueDatePicker)}
+              className={`w-full flex items-center gap-2 px-4 py-2 rounded-xl border-2 transition-all duration-200 ${
+                dueDate
+                  ? 'border-blue-200 bg-blue-50 text-blue-700'
+                  : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300 hover:bg-gray-100'
+              }`}
+              disabled={loading}
+            >
+              <Calendar size={16} />
+              {dueDate ? (
+                <span className="text-sm font-medium">
+                  {dueDate.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
+                </span>
+              ) : (
+                <span className="text-sm">Set due date</span>
               )}
-            </div>
+            </button>
 
-            {/* Date Picker */}
-            {showDatePicker && (
+            {showDueDatePicker && (
               <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
                 <DatePicker
                   selected={dueDate}
                   onChange={(date: Date | null) => {
                     setDueDate(date);
-                    setShowDatePicker(false);
+                    setShowDueDatePicker(false);
                   }}
                   dateFormat="MMM d, yyyy"
-                  minDate={new Date()}
-                  maxDate={new Date(2030, 11, 31)}
                   inline
                   disabled={loading}
                 />
@@ -255,7 +242,7 @@ export default function CreateTaskModal({
                 <span className="text-red-600 text-xs font-bold">!</span>
               </div>
               <div>
-                <p className="font-medium">Error creating task</p>
+                <p className="font-medium">Error updating task</p>
                 <p className="text-xs mt-1">{submitError}</p>
               </div>
             </div>
@@ -279,12 +266,12 @@ export default function CreateTaskModal({
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
                   <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin"></div>
-                  Creating...
+                  Updating...
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-2">
-                  <Plus size={16} />
-                  Create Task
+                  <Edit2 size={16} />
+                  Update Task
                 </div>
               )}
             </button>

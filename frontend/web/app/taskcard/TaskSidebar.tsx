@@ -109,7 +109,7 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
             }}
             className="w-full flex items-center justify-between px-3 py-2 bg-white border border-gray-300 text-gray-800 font-semibold text-sm rounded hover:bg-gray-50 transition-colors shadow-sm uppercase"
           >
-            <span>{status.replace('_', ' ')}</span>
+            <span>{(status ?? 'TODO').replace('_', ' ')}</span>
             <ChevronDown size={16} className="text-gray-500" />
           </button>
           {isStatusOpen && (

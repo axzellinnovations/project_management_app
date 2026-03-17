@@ -6,11 +6,12 @@ import { useSearchParams } from 'next/navigation';
 import DragDropProvider from './components/DragDropProvider';
 import KanbanColumn from './components/KanbanColumn';
 import CreateTaskModal from './components/CreateTaskModal';
+import EditTaskModal from './components/EditTaskModal';
 import Sidebar from '../nav/Sidebar';
 import TopBar from '../nav/TopBar';
 // removed DateRangeFilter import per requirements
 import { Task, KanbanColumn as KanbanColumnType, TaskStatus } from './types';
-import { fetchTasksByProject, updateTaskStatus, deleteTask, createTask } from './api';
+import { fetchTasksByProject, updateTaskStatus, deleteTask, createTask, updateTask } from './api';
 import { AlertCircle, Loader, CheckCircle2, Plus } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -69,12 +70,36 @@ export default function KanbanPage() {
   // column config state for ordering and dynamic additions
   const [columnConfigs, setColumnConfigs] = useState(DEFAULT_COLUMN_CONFIGS);
 
+  // Load column configs from localStorage on mount
+  useEffect(() => {
+    if (projectId) {
+      const saved = localStorage.getItem(`kanban-columns-${projectId}`);
+      if (saved) {
+        try {
+          setColumnConfigs(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to parse saved columns', e);
+        }
+      }
+    }
+  }, [projectId]);
+
+  // Save column configs to localStorage when they change
+  useEffect(() => {
+    if (projectId) {
+      localStorage.setItem(`kanban-columns-${projectId}`, JSON.stringify(columnConfigs));
+    }
+  }, [columnConfigs, projectId]);
+
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedColumnStatus, setSelectedColumnStatus] = useState<string>('TODO');
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [completeSuccess, setCompleteSuccess] = useState(false);
   const [createSuccess, setCreateSuccess] = useState<string>('');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isUpdatingTask, setIsUpdatingTask] = useState(false);
 
   // handlers for column interactions
   const handleAddColumn = () => {
@@ -236,6 +261,32 @@ export default function KanbanPage() {
     }
   };
 
+  // Handle edit task button click
+  const handleEditTaskClick = (task: Task) => {
+    setEditingTask(task);
+    setIsEditModalOpen(true);
+  };
+
+  // Handle edit task submission
+  const handleUpdateTask = async (taskId: number, taskData: Partial<Task>) => {
+    setIsUpdatingTask(true);
+    try {
+      const updatedTask = await updateTask(taskId, taskData);
+      setTasks((prevTasks) =>
+        prevTasks.map((t) => (t.id === taskId ? updatedTask : t))
+      );
+      setIsEditModalOpen(false);
+      setEditingTask(null);
+      setCreateSuccess('Task updated successfully!');
+      setTimeout(() => setCreateSuccess(''), 3000);
+    } catch (err) {
+      setError(`Failed to update task: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      console.error('Failed to update task:', err);
+    } finally {
+      setIsUpdatingTask(false);
+    }
+  };
+
   // Handle complete board
   const handleCompleteBoard = async () => {
     if (confirm('Are you sure you want to mark this board as complete? This action cannot be undone.')) {
@@ -343,6 +394,7 @@ export default function KanbanPage() {
                       column={column}
                       onDeleteTask={handleDeleteTask}
                       onCreateTask={handleCreateTaskClick}
+                      onEditTask={handleEditTaskClick}
                     />
                   </SortableColumn>
                 ))}
@@ -378,6 +430,20 @@ export default function KanbanPage() {
               columnStatus={selectedColumnStatus}
               projectId={parseInt(projectId as string)}
               loading={isCreatingTask}
+            />
+          )}
+
+          {/* Edit Task Modal */}
+          {projectId && (
+            <EditTaskModal
+              isOpen={isEditModalOpen}
+              onClose={() => {
+                setIsEditModalOpen(false);
+                setEditingTask(null);
+              }}
+              onUpdateTask={handleUpdateTask}
+              task={editingTask}
+              loading={isUpdatingTask}
             />
           )}
         </div>
