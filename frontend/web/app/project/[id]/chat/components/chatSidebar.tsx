@@ -1,35 +1,100 @@
 import React from 'react';
-import { ChatMessage } from './chat';
+import { ChatMessage, ChatRoom } from './chat';
+import styles from '../chat.module.css';
 
 interface ChatSidebarProps {
   currentUser: string;
   users: string[];
+  rooms: ChatRoom[];
   selectedUser: string | null;
+  selectedRoomId: number | null;
   onSelectUser: (user: string | null) => void;
+  onSelectRoom: (roomId: number | null) => void;
   lastPrivateMessages: Record<string, ChatMessage[]>;
+  onCreateRoom: () => void;
+  onDeleteRoom: (roomId: number) => void;
+  onAddTeam: (teamName: string) => void;
+  searchTerm: string;
+  onSearchChange: (value: string) => void;
 }
 
-export const ChatSidebar = ({ users, selectedUser, onSelectUser, currentUser, lastPrivateMessages }: ChatSidebarProps) => {
+export const ChatSidebar = ({
+  users,
+  rooms,
+  selectedUser,
+  selectedRoomId,
+  onSelectUser,
+  onSelectRoom,
+  currentUser,
+  lastPrivateMessages,
+  onCreateRoom,
+  onDeleteRoom,
+  onAddTeam,
+  searchTerm,
+  onSearchChange
+}: ChatSidebarProps) => {
+  const hasSelectedRoom = selectedRoomId !== null && Number.isFinite(selectedRoomId);
+
   return (
-    <aside className="w-72 bg-white border-r border-slate-200 flex flex-col h-full">
-      <div className="p-4 border-b border-slate-200">
+    <aside className={styles.sidebar}>
+      <div className={styles.sidebarHeader}>
         <h2 className="text-lg font-semibold text-slate-900">Chats</h2>
-        <p className="text-xs text-slate-500 mt-1">Logged in as {currentUser}</p>
+        <button
+          onClick={onCreateRoom}
+          className="h-8 w-8 rounded-full bg-blue-600 text-white text-sm font-bold leading-[1.9] hover:bg-blue-700 transition-colors"
+          aria-label="Create new group"
+        >
+          +
+        </button>
       </div>
 
-      <div className="p-3 space-y-1 overflow-y-auto flex-1">
+      <div className="px-3 py-2">
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search users or messages"
+          className="w-full px-3 py-2 rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <div className={styles.userList}>
         {/* Team Chat Button */}
         <button
-          onClick={() => onSelectUser(null)}
+          onClick={() => { onSelectUser(null); onSelectRoom(null); }}
           className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-            selectedUser === null ? 'bg-blue-600 text-white' : 'bg-slate-50 hover:bg-slate-100 text-slate-900'
+            !selectedUser && !hasSelectedRoom ? 'bg-blue-600 text-white' : 'bg-slate-50 hover:bg-slate-100 text-slate-900'
           }`}
         >
           Team Chat
         </button>
 
+        <p className="text-xs font-semibold text-slate-500 uppercase px-3 pt-4 pb-2">Group Chats</p>
+        {rooms.length === 0 && <p className="text-xs text-slate-400 px-3">No group chats yet</p>}
+        {rooms.map(room => (
+          <div key={room.id} className="flex items-center justify-between gap-2 px-3 py-2.5">
+            <button
+              onClick={() => {
+                onSelectRoom(room.id);
+              }}
+              className={`flex-1 text-left rounded-lg px-2 py-2 transition-colors ${
+                hasSelectedRoom && selectedRoomId === room.id ? 'bg-blue-50 border-blue-200' : 'hover:bg-slate-100'
+              }`}
+            >
+              <p className="text-sm font-medium text-slate-900 truncate">{room.name}</p>
+              <p className="text-xs text-slate-500 truncate">Created by {room.createdBy}</p>
+            </button>
+            <button
+              onClick={() => onDeleteRoom(room.id)}
+              className="text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+            >
+              Delete
+            </button>
+          </div>
+        ))}
+
         <p className="text-xs font-semibold text-slate-500 uppercase px-3 pt-4 pb-2">Direct Messages</p>
-        
+
         {users.length === 0 && <p className="text-xs text-slate-400 px-3">No active users</p>}
 
         {users.map(user => {

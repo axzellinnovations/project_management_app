@@ -101,12 +101,19 @@ export default function RecentProjectCard({
     const themeIndex = Math.abs(id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % COLOR_THEMES.length;
     const theme = COLOR_THEMES[themeIndex];
 
-    const handleCardClick = async () => {
+    const recordProjectAccess = async () => {
         try {
             await api.post(`/api/projects/${id}/access`);
-        } catch (error) {
-            console.error("Failed to record project access:", error);
+        } catch (error: unknown) {
+            const status = (error as { response?: { status?: number } })?.response?.status;
+            if (status !== 403) {
+                console.error("Failed to record project access:", error);
+            }
         }
+    };
+
+    const handleCardClick = async () => {
+        await recordProjectAccess();
         localStorage.setItem('currentProjectName', name);
         localStorage.setItem('currentProjectId', id);
         router.push(`/summary`);
@@ -185,11 +192,7 @@ export default function RecentProjectCard({
                         href={`/summary`}
                         onClick={async (e) => {
                             e.stopPropagation();
-                            try {
-                                await api.post(`/api/projects/${id}/access`);
-                            } catch (err) {
-                                console.error("Failed to record project access:", err);
-                            }
+                            await recordProjectAccess();
                             localStorage.setItem('currentProjectName', name);
                             localStorage.setItem('currentProjectId', id);
                         }}

@@ -1,10 +1,5 @@
 package com.planora.backend.service;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -156,7 +151,7 @@ public class UserService {
 
             if (authentication.isAuthenticated()) {
                 User authenticatedUser = userRepository.findByEmailIgnoreCase(user.getEmail().toLowerCase()).orElse(null);
-                String token = jwtService.generateToken(user.getEmail(), authenticatedUser.getUsername());
+                String token = jwtService.generateToken(user.getEmail().toLowerCase(), authenticatedUser.getUsername());
                 LoginResponse response = new LoginResponse();
                 response.setSuccess(true);
                 response.setMessage("Login successful");

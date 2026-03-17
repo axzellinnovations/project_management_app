@@ -31,6 +31,8 @@ public class ChatMessage {
 
     private Long projectId;
 
+    private Long roomId;
+
     private ChatType chatType;
 
     @CreationTimestamp

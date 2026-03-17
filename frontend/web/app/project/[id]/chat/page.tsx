@@ -1,67 +1,151 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useChat } from './components/useChat';
 import { ChatSidebar } from './components/chatSidebar';
 import { ChatMessages } from './components/chatMessage';
 import { ChatInput } from './components/chatInput';
+import styles from './chat.module.css';
 
 export default function ChatInterface() {
   const params = useParams();
   const projectId = params.id as string;
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
-  const { currentUser, users, messages, privateMessages, sendMessage, loadPrivateHistory, isLoading, error, retryConnection } = useChat(projectId);
+  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const {
+    currentUser,
+    users,
+    rooms,
+    roomMessages,
+    messages,
+    privateMessages,
+    sendMessage,
+    sendRoomMessage,
+    loadPrivateHistory,
+    loadRoomHistory,
+    createRoom,
+    deleteRoom,
+    addTeam,
+    isLoading,
+    error,
+    retryConnection
+  } = useChat(projectId);
 
-  const displayMessages = selectedUser ? privateMessages[selectedUser] || [] : messages;
+  const hasSelectedRoom = selectedRoomId !== null && Number.isFinite(selectedRoomId);
 
-  // when user switches to a private chat, load history if we haven't
-  React.useEffect(() => {
+  const displayMessages = hasSelectedRoom
+    ? roomMessages[selectedRoomId as number] || []
+    : selectedUser
+    ? privateMessages[selectedUser] || []
+    : messages;
+
+  const filteredUsers = users.filter((u) => u.toLowerCase().includes(searchTerm.trim().toLowerCase()));
+  const filteredMessages = displayMessages.filter((msg) => {
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.trim().toLowerCase();
+    return (
+      msg.sender.toLowerCase().includes(term) ||
+      (msg.content && msg.content.toLowerCase().includes(term))
+    );
+  });
+
+  useEffect(() => {
     if (selectedUser) {
       loadPrivateHistory(selectedUser);
     }
   }, [selectedUser, loadPrivateHistory]);
 
+  useEffect(() => {
+    if (hasSelectedRoom) {
+      loadRoomHistory(selectedRoomId as number);
+    }
+  }, [selectedRoomId, hasSelectedRoom, loadRoomHistory]);
+
   if (isLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-slate-50">
-        <p className="text-slate-600">Loading chat...</p>
+      <div className={styles.main}>
+        <div className={styles.container}>
+          <p className="text-slate-600">Loading chat...</p>
+        </div>
       </div>
     );
   }
 
   const handleSendMessage = (content: string) => {
-    sendMessage(content, selectedUser);
+    if (hasSelectedRoom) {
+      sendRoomMessage(content, selectedRoomId as number);
+    } else {
+      sendMessage(content, selectedUser);
+    }
+  };
+
+  const handleCreateRoom = async () => {
+    const createdRoom = await createRoom();
+    if (!createdRoom) {
+      return;
+    }
+
+    setSelectedUser(null);
+    setSelectedRoomId(createdRoom.id);
+    await loadRoomHistory(createdRoom.id);
   };
 
   return (
-    <div className="flex h-screen w-full bg-slate-50">
-      <ChatSidebar
-        currentUser={currentUser}
-        users={users}
-        selectedUser={selectedUser}
-        onSelectUser={setSelectedUser}
-        lastPrivateMessages={privateMessages}
-      />
+    <div className={styles.main}>
+      <div className={styles.container}>
+        <ChatSidebar
+          currentUser={currentUser}
+          users={filteredUsers}
+          rooms={rooms}
+          selectedUser={selectedUser}
+          selectedRoomId={selectedRoomId}
+          onSelectUser={(u) => {
+            if (u !== null) {
+              setSelectedRoomId(null);
+            }
+            setSelectedUser(u);
+          }}
+          onSelectRoom={(roomId) => {
+            setSelectedUser(null);
+            if (roomId === null) {
+              setSelectedRoomId(null);
+              return;
+            }
+            const normalizedRoomId = Number(roomId);
+            setSelectedRoomId(Number.isFinite(normalizedRoomId) ? normalizedRoomId : null);
+          }}
+          lastPrivateMessages={privateMessages}
+          onCreateRoom={handleCreateRoom}
+          onDeleteRoom={deleteRoom}
+          onAddTeam={addTeam}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+        />
 
-      <div className="flex-1 flex flex-col bg-white min-w-0">
-        {/* Header */}
-        <div className="p-4 lg:p-6 border-b border-slate-200 flex items-center justify-between bg-white/50 backdrop-blur-sm">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">
-              {selectedUser ? `Chat with ${selectedUser}` : 'Team Chat'}
-            </h3>
-            <p className="text-sm text-slate-500 mt-1">
-              {selectedUser ? 'Private message' : 'All team members'}
-            </p>
+        <div className={styles.chatArea}>
+          <div className={styles.chatHeader}>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">
+                {hasSelectedRoom
+                  ? `Group: ${rooms.find(r => r.id === selectedRoomId)?.name ?? 'Group Chat'}`
+                  : selectedUser
+                  ? `Chat with ${selectedUser}`
+                  : 'Team Chat'}
+              </h3>
+              <p className="text-sm text-slate-500 mt-1">
+                {hasSelectedRoom
+                  ? 'Group message'
+                  : selectedUser
+                  ? 'Private message'
+                  : users.length > 0
+                  ? `Members online: ${users.join(', ')}`
+                  : 'No team member online'}
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Messages */}
-        <ChatMessages messages={displayMessages} currentUser={currentUser} />
-
-        {/* Input Area */}
-        <div className="p-4 lg:p-6 bg-white border-t border-slate-200">
           {error && (
             <div className="mb-3 p-4 bg-red-50 rounded-lg border border-red-200">
               <p className="text-red-700 text-sm font-medium">{error}</p>
@@ -76,6 +160,8 @@ export default function ChatInterface() {
               </button>
             </div>
           )}
+
+          <ChatMessages messages={filteredMessages} currentUser={currentUser} />
           <ChatInput onSendMessage={handleSendMessage} disabled={isLoading || !!error} />
         </div>
       </div>

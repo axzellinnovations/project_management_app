@@ -56,9 +56,11 @@ public class TaskController {
 
     @GetMapping("/project/{projectId}")
     public ResponseEntity<List<TaskResponseDTO>> getTasksByProject(
-            @PathVariable Long projectId
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal UserPrincipal currentUser
     ){
-        return new ResponseEntity<>(service.getTasksByProject(projectId), HttpStatus.OK);
+        Long currentUserId = currentUser.getUserId();
+        return new ResponseEntity<>(service.getTasksByProject(projectId, currentUserId), HttpStatus.OK);
     }
 
     // SUBTASKS

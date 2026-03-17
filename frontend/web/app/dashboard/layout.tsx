@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Sidebar from "../nav/Sidebar";
 
 export default function DashboardLayout({
@@ -5,6 +9,25 @@ export default function DashboardLayout({
 }: {
     children: React.ReactNode;
 }) {
+    const router = useRouter();
+
+    useEffect(() => {
+        const token = localStorage.getItem("token");
+        if (!token) {
+            router.replace("/login");
+            return;
+        }
+
+        const handleStorage = (event: StorageEvent) => {
+            if (event.key === "token" && !event.newValue) {
+                router.replace("/login");
+            }
+        };
+
+        window.addEventListener("storage", handleStorage);
+        return () => window.removeEventListener("storage", handleStorage);
+    }, [router]);
+
     return (
         <div className="flex h-screen bg-white">
             {/* Sidebar */}

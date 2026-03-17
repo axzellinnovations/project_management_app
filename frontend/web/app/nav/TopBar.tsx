@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
 import { getUserFromToken, User } from '@/lib/auth';
-import { useParams, usePathname } from 'next/navigation';
+import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import api from '@/lib/axios';
 
-const tabs = [
+const baseTabs = [
     { id: 'summary', label: 'Summary' },
     { id: 'timeline', label: 'Timeline' },
     { id: 'backlog', label: 'Backlog' },
@@ -20,13 +20,47 @@ const tabs = [
     { id: 'list', label: 'List' },
 ];
 
+const subscribeToBrowserStorage = (onStoreChange: () => void) => {
+    if (typeof window === 'undefined') {
+        return () => {};
+    }
+
+    const handler = () => onStoreChange();
+    window.addEventListener('storage', handler);
+    window.addEventListener('focus', handler);
+
+    return () => {
+        window.removeEventListener('storage', handler);
+        window.removeEventListener('focus', handler);
+    };
+};
+
 export default function TopBar() {
-    const [activeTab, setActiveTab] = useState('summary');
-    const [projectName, setProjectName] = useState('Project Name');
-    const [user, setUser] = useState<User | null>(null);
+    const projectName = useSyncExternalStore(
+        subscribeToBrowserStorage,
+        () => localStorage.getItem('currentProjectName') || 'Project Name',
+        () => 'Project Name'
+    );
+    const storedProjectId = useSyncExternalStore(
+        subscribeToBrowserStorage,
+        () => localStorage.getItem('currentProjectId'),
+        () => null
+    );
+    const token = useSyncExternalStore<string | null>(
+        subscribeToBrowserStorage,
+        () => localStorage.getItem('token'),
+        () => null
+    );
+        const user = useMemo<User | null>(() => {
+            if (!token) return null;
+            return getUserFromToken();
+        }, [token]);
+
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
     const [isFavorite, setIsFavorite] = useState(false);
-    const [projectId, setProjectId] = useState<string | null>(null);
+    const params = useParams();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
@@ -36,46 +70,122 @@ export default function TopBar() {
             return profilePicUrl;
         }
         return `${API_BASE_URL}${profilePicUrl}`;
-    }, [profilePicUrl]);
+    }, [profilePicUrl, API_BASE_URL]);
+
+    const projectId = useMemo(() => {
+        const queryProjectId = searchParams.get('projectId');
+        const routeProjectId = typeof params?.id === 'string' ? params.id : null;
+
+        return queryProjectId || routeProjectId || storedProjectId;
+    }, [params, searchParams, storedProjectId]);
+
+    const activeTab = useMemo(() => {
+        if (pathname.startsWith('/kanban') || pathname.startsWith('/sprint-board')) {
+            return 'board';
+        }
+
+        if (pathname.startsWith('/timeline')) {
+            return 'timeline';
+        }
+
+        if (pathname.startsWith('/sprint-backlog')) {
+            return 'backlog';
+        }
+
+        if (pathname.startsWith('/project/') && pathname.includes('/chat')) {
+            return 'chats';
+        }
+
+        if (pathname.startsWith('/pages')) {
+            return 'pages';
+        }
+
+        if (pathname.startsWith('/spaces') || pathname.startsWith('/folders')) {
+            return 'list';
+        }
+
+        if (pathname.startsWith('/summary')) {
+            return 'summary';
+        }
+
+        return 'summary';
+    }, [pathname]);
 
     useEffect(() => {
-        const storedName = localStorage.getItem('currentProjectName');
-        if (storedName) {
-            setProjectName(storedName);
+        if (projectId && localStorage.getItem('currentProjectId') !== projectId) {
+            localStorage.setItem('currentProjectId', projectId);
         }
 
-        const storedId = localStorage.getItem('currentProjectId');
-        if (storedId) {
-            setProjectId(storedId);
-            const fetchProjectStatus = async () => {
-                try {
-                    const response = await api.get(`/api/projects/${storedId}`);
-                    setIsFavorite(response.data.isFavorite);
-                } catch (e) {}
-            };
-            fetchProjectStatus();
-        }
-        
-        const userData = getUserFromToken();
-        setUser(userData);
+        const fetchProjectStatus = async () => {
+            if (!projectId) {
+                setIsFavorite(false);
+                return;
+            }
 
-        if (userData?.email) {
+            try {
+                const response = await api.get(`/api/projects/${projectId}`);
+                setIsFavorite(Boolean(response.data?.isFavorite));
+            } catch {
+                setIsFavorite(false);
+            }
+        };
+
+        void fetchProjectStatus();
+    }, [projectId]);
+
+    useEffect(() => {
+        if (user?.email) {
             const loadProfilePic = async () => {
                 try {
                     const response = await api.get('/api/auth/users');
+                    interface UserSummary {
+                        email: string;
+                        profilePicUrl?: string;
+                    }
+
                     const currentUser = response.data.find(
-                        (u: any) => u.email.toLowerCase() === userData.email.toLowerCase()
+                        (u: UserSummary) => u.email.toLowerCase() === user.email.toLowerCase()
                     );
                     if (currentUser?.profilePicUrl) {
                         setProfilePicUrl(currentUser.profilePicUrl);
                     }
-                } catch (error) {
+                } catch {
                     // Silently fail
                 }
             };
             void loadProfilePic();
         }
-    }, []);
+    }, [user]);
+
+    const withProjectId = (basePath: string) => {
+        if (!projectId) return basePath;
+        return `${basePath}?projectId=${projectId}`;
+    };
+
+    const getTabHref = (tabId: string) => {
+        switch (tabId) {
+            case 'summary':
+                return withProjectId('/summary');
+            case 'timeline':
+                return withProjectId('/timeline');
+            case 'backlog':
+                return '/sprint-backlog';
+            case 'board':
+                return withProjectId('/kanban');
+            case 'calendar':
+                return withProjectId('/summary');
+            case 'chats':
+                return projectId ? `/project/${projectId}/chat` : '/summary';
+            case 'members':
+                return withProjectId('/summary');
+            case 'pages':
+                return withProjectId('/pages');
+            case 'list':
+                return '/spaces';
+            default:
+                return withProjectId('/summary');
+        }
+    };
 
     return (
         <div className="w-full h-[119px] relative flex flex-col">
@@ -151,16 +261,15 @@ export default function TopBar() {
                         )}
                         <div className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[10px] text-gray-600 font-bold">+2</div>
                     </div>
-                    <button className="bg-[#0052CC] text-white px-3 py-1.5 rounded-md font-arimo text-[13px] font-semibold">Share</button>
                 </div>
             </div>
 
             {/* Bottom Nav Section (45px) */}
             <div className="h-[45px] bg-white border-b border-[#E3E8EF] px-8 flex items-end gap-8">
-                {tabs.map((tab) => (
-                    <button
+                {baseTabs.map((tab) => (
+                    <Link
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
+                        href={getTabHref(tab.id)}
                         className="relative pb-3 px-1"
                     >
                         <span
@@ -178,7 +287,7 @@ export default function TopBar() {
                                 transition={{ type: "spring", stiffness: 500, damping: 30 }}
                             />
                         )}
-                    </button>
+                    </Link>
                 ))}
             </div>
         </div>
