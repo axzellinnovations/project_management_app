@@ -169,7 +169,7 @@ export default function TopBar() {
             case 'timeline':
                 return withProjectId('/timeline');
             case 'backlog':
-                return '/sprint-backlog';
+                return withProjectId('/sprint-backlog');
             case 'board':
                 return withProjectId('/kanban');
             case 'calendar':
