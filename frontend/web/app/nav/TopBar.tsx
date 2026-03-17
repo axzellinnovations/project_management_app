@@ -25,6 +25,8 @@ export default function TopBar() {
     const [projectName, setProjectName] = useState('Project Name');
     const [user, setUser] = useState<User | null>(null);
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+    const [isFavorite, setIsFavorite] = useState(false);
+    const [projectId, setProjectId] = useState<string | null>(null);
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
@@ -40,6 +42,18 @@ export default function TopBar() {
         const storedName = localStorage.getItem('currentProjectName');
         if (storedName) {
             setProjectName(storedName);
+        }
+
+        const storedId = localStorage.getItem('currentProjectId');
+        if (storedId) {
+            setProjectId(storedId);
+            const fetchProjectStatus = async () => {
+                try {
+                    const response = await api.get(`/api/projects/${storedId}`);
+                    setIsFavorite(response.data.isFavorite);
+                } catch (e) {}
+            };
+            fetchProjectStatus();
         }
         
         const userData = getUserFromToken();
@@ -79,7 +93,37 @@ export default function TopBar() {
                         <span className="font-arimo text-[12px] uppercase tracking-[0.3px] text-[#6A7282] mb-0.5">Projects</span>
                         <div className="flex items-center gap-2">
                             <span className="font-arimo text-[19px] text-[#1D293D] whitespace-nowrap">{projectName}</span>
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            
+                            {/* Favorite Toggle Icon */}
+                            <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={async () => {
+                                    if (!projectId) return;
+                                    const nextState = !isFavorite;
+                                    setIsFavorite(nextState);
+                                    try {
+                                        await api.post(`/api/projects/${projectId}/favorite`);
+                                    } catch (e) {
+                                        setIsFavorite(!nextState);
+                                    }
+                                }}
+                                className="ml-1"
+                            >
+                                <motion.svg
+                                    animate={{ 
+                                        fill: isFavorite ? "#FFD700" : "transparent",
+                                        stroke: isFavorite ? "#FFD700" : "#6A7282",
+                                        scale: isFavorite ? [1, 1.3, 1] : 1
+                                    }}
+                                    transition={{ duration: 0.3 }}
+                                    width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                                >
+                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                                </motion.svg>
+                            </motion.button>
+
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-1">
                                 <path d="M4 6L8 10L12 6" stroke="#1D293D" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                         </div>

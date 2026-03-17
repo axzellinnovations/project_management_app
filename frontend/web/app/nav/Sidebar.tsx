@@ -12,6 +12,9 @@ export default function Sidebar() {
     const pathname = usePathname();
     const [user, setUser] = useState<User | null>(null);
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+    const [recentProjects, setRecentProjects] = useState<any[]>([]);
+    const [favoriteProjects, setFavoriteProjects] = useState<any[]>([]);
+    const [loadingProjects, setLoadingProjects] = useState(true);
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
@@ -41,8 +44,23 @@ export default function Sidebar() {
                     // Silently fail - just show initials
                 }
             };
-            void loadProfilePic();
+            loadProfilePic();
         }
+
+        const fetchRecentProjects = async () => {
+            try {
+                const response = await api.get('/api/projects');
+                const allProjects = response.data;
+                setRecentProjects(allProjects.slice(0, 3));
+                setFavoriteProjects(allProjects.filter((p: any) => p.isFavorite).slice(0, 3));
+            } catch (error: any) {
+                console.error("Failed to fetch recent projects for sidebar:", error.response?.data?.message || error.message);
+            } finally {
+                setLoadingProjects(false);
+            }
+        };
+
+        fetchRecentProjects();
     }, [pathname]);
 
     const handleLogout = () => {
@@ -81,15 +99,44 @@ export default function Sidebar() {
                             </svg>
                             <span className="font-arimo text-[11px] font-bold text-[#99A1AF] uppercase tracking-wider">PROJECTS</span>
                         </div>
-                        <button className="text-[#99A1AF] hover:text-[#0052CC] transition-colors p-1 rounded hover:bg-gray-100">
+                        <button 
+                            onClick={() => router.push('/createProject')}
+                            className="text-[#99A1AF] hover:text-[#0052CC] transition-colors p-1 rounded hover:bg-gray-100"
+                        >
                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M6 2.5V9.5M2.5 6H9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                         </button>
                     </div>
                     <div className="flex flex-col gap-1">
-                        {/* Empty Projects List */}
-                        <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No projects</div>
+                        {loadingProjects ? (
+                            <div className="px-3 py-2 animate-pulse flex flex-col gap-2">
+                                <div className="h-3 w-20 bg-gray-100 rounded" />
+                                <div className="h-3 w-24 bg-gray-100 rounded" />
+                            </div>
+                        ) : recentProjects.length > 0 ? (
+                            recentProjects.map((project) => (
+                                <Link 
+                                    key={project.id} 
+                                    href="/summary"
+                                    onClick={async () => {
+                                        try {
+                                            await api.post(`/api/projects/${project.id}/access`);
+                                        } catch (e) {}
+                                        localStorage.setItem('currentProjectName', project.name);
+                                        localStorage.setItem('currentProjectId', project.id.toString());
+                                    }}
+                                >
+                                    <ProjectItem 
+                                        label={`${project.projectKey || ''} - ${project.name}`}
+                                        color={Math.abs(project.id.toString().split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)) % 2 === 0 ? 'bg-blue-500' : 'bg-purple-500'}
+                                        active={false} 
+                                    />
+                                </Link>
+                            ))
+                        ) : (
+                            <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No projects</div>
+                        )}
                     </div>
                 </div>
 
@@ -101,8 +148,29 @@ export default function Sidebar() {
                         <span className="font-arimo text-[11px] font-bold text-[#99A1AF] uppercase tracking-wider">FAVORITES</span>
                     </div>
                     <div className="flex flex-col gap-1">
-                        {/* Empty Favorites List */}
-                        <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No favorites</div>
+                        {loadingProjects ? (
+                            <div className="px-3 py-2 animate-pulse flex flex-col gap-2">
+                                <div className="h-3 w-20 bg-gray-100 rounded" />
+                            </div>
+                        ) : favoriteProjects.length > 0 ? (
+                            favoriteProjects.map((project) => (
+                                <Link 
+                                    key={project.id} 
+                                    href="/summary"
+                                    onClick={async () => {
+                                        try {
+                                            await api.post(`/api/projects/${project.id}/access`);
+                                        } catch (e) {}
+                                        localStorage.setItem('currentProjectName', project.name);
+                                        localStorage.setItem('currentProjectId', project.id.toString());
+                                    }}
+                                >
+                                    <FavoriteItem label={`${project.projectKey || ''} - ${project.name}`} />
+                                </Link>
+                            ))
+                        ) : (
+                            <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No favorites</div>
+                        )}
                     </div>
                 </div>
             </div>
