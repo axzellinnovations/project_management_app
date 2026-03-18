@@ -17,6 +17,7 @@
     "@types/react-datepicker": "^6.2.0",
     "axios": "^1.13.5",
     "date-fns": "^4.1.0",
+    "emoji-picker-react": "^4.18.0",
     "framer-motion": "^12.34.0",
     "lucide-react": "^0.574.0",
     "next": "16.1.6",
