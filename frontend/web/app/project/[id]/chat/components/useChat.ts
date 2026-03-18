@@ -137,6 +137,7 @@ export const useChat = (projectId: string) => {
 
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [users, setUsers] = useState<string[]>([]);
+  const [userProfilePics, setUserProfilePics] = useState<Record<string, string>>({});
 
   const [activeThreadRoot, setActiveThreadRoot] = useState<ChatMessage | null>(null);
   const [threadMessages, setThreadMessages] = useState<ChatMessage[]>([]);
@@ -436,6 +437,25 @@ export const useChat = (projectId: string) => {
     }
   }, [projectId]);
 
+  const fetchUserProfilePics = useCallback(async (token: string) => {
+    try {
+      const response = await fetch('/api/auth/users', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      const pics: Record<string, string> = {};
+      data.forEach((u: any) => {
+        if (u.profilePicUrl && u.username) {
+          pics[u.username.toLowerCase()] = u.profilePicUrl;
+        }
+      });
+      setUserProfilePics(pics);
+    } catch (fetchError) {
+      console.error('Error fetching profile pictures:', fetchError);
+    }
+  }, []);
+
   const fetchCanonicalUsernameAlias = useCallback(async (token: string): Promise<string | null> => {
     try {
       const response = await fetch('/api/auth/me', {
@@ -687,29 +707,15 @@ export const useChat = (projectId: string) => {
     setThreadMessages([]);
   }, []);
 
-  const createRoom = useCallback(async () => {
-    const name = window.prompt('Enter new group chat name');
-    if (!name || !name.trim()) {
-      return null;
-    }
-
-    if (users.length === 0) {
-      window.alert('No project members found to add.');
-      return null;
-    }
-
-    const members = window.prompt(`Enter group members (comma-separated, choose from: ${users.filter(user => user !== currentUser).join(', ')})`);
-    if (!members) {
-      return null;
-    }
+  const createRoom = useCallback(async (name: string, members: string[]) => {
+    if (!name || !name.trim()) return null;
 
     const chosenMembers = members
-      .split(',')
       .map(user => user.trim().toLowerCase())
       .filter(user => user && user !== currentUser && users.includes(user));
 
     if (chosenMembers.length === 0) {
-      window.alert('Please include at least one valid member.');
+      console.error('Please include at least one valid member.');
       return null;
     }
 
@@ -1061,6 +1067,7 @@ export const useChat = (projectId: string) => {
         setIsLoading(false);
 
         const loadedUsers = await fetchAllUsers(token);
+        await fetchUserProfilePics(token);
         const loadedRooms = await loadRooms();
         await loadFeatureFlags();
         await loadSummaries(token);
@@ -1453,6 +1460,7 @@ export const useChat = (projectId: string) => {
     roomLastMessages,
     teamUnseenCount,
     teamLastMessage,
+    userProfilePics,
     onlineUsers,
     teamTypingUsers,
     roomTypingUsers,

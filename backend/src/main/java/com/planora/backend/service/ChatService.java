@@ -37,6 +37,7 @@ public class ChatService {
     private final ChatRoomRepository chatRoomRepository;
     private final ChatReactionRepository chatReactionRepository;
     private final UserRepository userRepository;
+    private final ChatDocumentService chatDocumentService;
 
     public record RoomChatSummary(Long roomId, String lastMessage, String lastMessageSender, String lastMessageTimestamp, long unseenCount) {}
 
@@ -141,6 +142,10 @@ public class ChatService {
                 .orElseThrow(() -> new RuntimeException("Message not found"));
 
         ensureMessageOwnership(message, actor);
+
+        if (message.getContent() != null && message.getContent().startsWith("http")) {
+            chatDocumentService.deleteChatDocument(message.getContent());
+        }
 
         message.setDeleted(true);
         message.setDeletedAt(LocalDateTime.now());

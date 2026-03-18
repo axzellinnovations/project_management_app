@@ -14,6 +14,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
@@ -81,6 +82,30 @@ public class ChatDocumentService {
             return s3Presigner.presignGetObject(presignRequest).url().toString();
         } catch (Exception e) {
             throw new RuntimeException("Failed to refresh chat document URL", e);
+        }
+    }
+
+    public void deleteChatDocument(String documentUrl) {
+        try {
+            URL url = new URL(documentUrl);
+            String path = url.getPath();
+            
+            if (path.startsWith("/")) {
+                path = path.substring(1);
+            }
+            
+            String key = URLDecoder.decode(path, StandardCharsets.UTF_8.name());
+            if (key.startsWith(chatBucket + "/")) {
+                key = key.substring(chatBucket.length() + 1);
+            }
+
+            DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
+                    .bucket(chatBucket)
+                    .key(key)
+                    .build();
+            s3Client.deleteObject(deleteObjectRequest);
+        } catch (Exception e) {
+            System.err.println("Failed to delete chat document from S3 or Not a valid S3 URL: " + e.getMessage());
         }
     }
 }
