@@ -8,7 +8,7 @@ import { getUserFromToken, User } from '@/lib/auth';
 import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import api from '@/lib/axios';
 
-const tabs = [
+const baseTabs = [
     { id: 'summary', label: 'Summary' },
     { id: 'timeline', label: 'Timeline' },
     { id: 'backlog', label: 'Backlog' },
@@ -99,7 +99,7 @@ export default function TopBar() {
             return 'pages';
         }
 
-        if (pathname.startsWith('/spaces')) {
+        if (pathname.startsWith('/spaces') || pathname.startsWith('/folders')) {
             return 'list';
         }
 
@@ -219,7 +219,7 @@ export default function TopBar() {
 
             {/* Bottom Nav Section (45px) */}
             <div className="h-[45px] bg-white border-b border-[#E3E8EF] px-8 flex items-end gap-8">
-                {tabs.map((tab) => (
+                {baseTabs.map((tab) => (
                     <Link
                         key={tab.id}
                         href={getTabHref(tab.id)}
