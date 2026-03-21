@@ -293,9 +293,10 @@ export const useChat = (projectId: string) => {
     const subscriptions = rooms.map(room => connectedClient.subscribe(`/topic/project/${projectId}/room/${room.id}`, (payload) => {
       const msg: ChatMessage = JSON.parse(payload.body);
       if (msg.type !== 'JOIN' && msg.roomId) {
+        const rId = msg.roomId as number;
         setRoomMessages(prev => ({
           ...prev,
-          [msg.roomId]: [...(prev[msg.roomId] || []), msg]
+          [rId]: [...(prev[rId] || []), msg]
         }));
       }
     }));

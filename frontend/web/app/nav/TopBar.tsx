@@ -14,6 +14,7 @@ const tabs = [
     { id: 'backlog', label: 'Backlog' },
     { id: 'board', label: 'Board' },
     { id: 'calendar', label: 'Calendar' },
+    { id: 'burndown', label: 'Burndown' },
     { id: 'chats', label: 'Chats' },
     { id: 'members', label: 'Members' },
     { id: 'pages', label: 'Pages' },
@@ -81,6 +82,10 @@ export default function TopBar() {
     const activeTab = useMemo(() => {
         if (pathname.startsWith('/calendar')) {
             return 'calendar';
+        }
+
+        if (pathname.startsWith('/burndown')) {
+            return 'burndown';
         }
 
         if (pathname.startsWith('/kanban') || pathname.startsWith('/sprint-board')) {
@@ -152,11 +157,13 @@ export default function TopBar() {
             case 'timeline':
                 return withProjectId('/summary');
             case 'backlog':
-                return '/sprint-backlog';
+                return withProjectId('/sprint-backlog');
             case 'board':
                 return withProjectId('/kanban');
             case 'calendar':
                 return withProjectId('/calendar');
+            case 'burndown':
+                return withProjectId('/burndown');
             case 'chats':
                 return projectId ? `/project/${projectId}/chat` : '/summary';
             case 'members':

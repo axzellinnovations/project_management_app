@@ -42,7 +42,7 @@ export default function CreateTaskModal({
       return;
     }
 
-    const taskData: Partial<Task> = {
+    const taskData: any = {
       title: title.trim(),
       status: columnStatus,
       projectId,

@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { motion } from "./motionShim";
+import { motion } from "framer-motion";
 import type { Task } from "./types";
 
 export default function TaskCard({ task }: { task: Task }) {

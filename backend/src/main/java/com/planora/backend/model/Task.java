@@ -53,6 +53,7 @@ public class Task {
     private LocalDate startDate;
     private LocalDate dueDate;
     private LocalDateTime updatedAt;
+    private LocalDateTime completedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reporter_id")
