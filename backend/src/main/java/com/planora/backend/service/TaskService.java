@@ -10,6 +10,7 @@ import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -54,13 +55,22 @@ public class TaskService {
         task.setDescription(request.getDescription());
         task.setProject(project);
 
+<<<<<<< HEAD
         task.setStoryPoint(request.getStoryPoint() != null ? request.getStoryPoint() : 0);
         task.setDueDate(request.getDueDate());
         task.setStartDate(request.getStartDate());
+=======
+        task.setStoryPoint(request.getStoryPoint());
+
+        // Ensure every task has a start date (use creation date when not provided) and a due date.
+        LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
+        task.setStartDate(startDate);
+        task.setDueDate(request.getDueDate() != null ? request.getDueDate() : startDate);
+>>>>>>> 4c4640ac4d3ee909fdd22930d0ef8f0fedb7898c
 
         //enum assign
         if(request.getPriority() != null) task.setPriority(Priority.valueOf(request.getPriority()));
-        if(request.getStatus() != null) task.setStatus(Status.valueOf(request.getStatus()));
+        if(request.getStatus() != null) task.setStatus(request.getStatus());
 
         //handle sprint-if provided
         if(request.getSprintId() != null){
@@ -105,7 +115,7 @@ public class TaskService {
         if(request.getTitle() != null) task.setTitle(request.getTitle());
         if(request.getDescription() != null) task.setDescription(request.getDescription());
         if(request.getPriority() != null) task.setPriority(Priority.valueOf(request.getPriority()));
-        if(request.getStatus() != null) task.setStatus(Status.valueOf(request.getStatus()));
+        if(request.getStatus() != null) task.setStatus(request.getStatus());
 
         //update fields-other attributes
         if(request.getStoryPoint() != null) task.setStoryPoint(request.getStoryPoint());
@@ -148,7 +158,12 @@ public class TaskService {
     }
 
     //5. GET PROJECT BY ID
-    public List<TaskResponseDTO> getTasksByProject(Long projectId) {
+    public List<TaskResponseDTO> getTasksByProject(Long projectId, Long currentUserId) {
+        // Check if user has permission to view tasks in this project
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Project not found"));
+        validatePermission(project.getTeam().getId(), currentUserId, null); // Allow all team members to view
+
         return taskRepository.findByProjectId(projectId).stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
@@ -258,8 +273,8 @@ public class TaskService {
         TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId,userId)
                 .orElseThrow(()-> new RuntimeException("User is not a member of this Team"));
 
-        //forbidden == viewer, owner, admin, member are allowed
-        if(member.getRole() == forbiddenRole){
+        // If forbiddenRole is specified, check that user doesn't have that role
+        if(forbiddenRole != null && member.getRole() == forbiddenRole){
             throw new RuntimeException("Insufficient Permissions: " + forbiddenRole + " cannot perform this action.");
         }
     }
@@ -278,7 +293,7 @@ public class TaskService {
         dto.setDescription(task.getDescription());
         dto.setProjectId(task.getProject().getId());
         dto.setPriority(task.getPriority() != null ? task.getPriority().name(): null);
-        dto.setStatus(task.getStatus() !=null ? task.getStatus().name(): null);
+        dto.setStatus(task.getStatus());
         dto.setStoryPoint(task.getStoryPoint());
         dto.setDueDate(task.getDueDate());
         dto.setStartDate(task.getStartDate());

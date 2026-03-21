@@ -8,7 +8,7 @@ import { getUserFromToken, User } from '@/lib/auth';
 import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import api from '@/lib/axios';
 
-const tabs = [
+const baseTabs = [
     { id: 'summary', label: 'Summary' },
     { id: 'timeline', label: 'Timeline' },
     { id: 'backlog', label: 'Backlog' },
@@ -58,6 +58,7 @@ export default function TopBar() {
         }, [token]);
 
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+    const [isFavorite, setIsFavorite] = useState(false);
     const params = useParams();
     const pathname = usePathname();
     const searchParams = useSearchParams();
@@ -92,6 +93,10 @@ export default function TopBar() {
             return 'board';
         }
 
+        if (pathname.startsWith('/timeline')) {
+            return 'timeline';
+        }
+
         if (pathname.startsWith('/sprint-backlog')) {
             return 'backlog';
         }
@@ -104,7 +109,7 @@ export default function TopBar() {
             return 'pages';
         }
 
-        if (pathname.startsWith('/spaces')) {
+        if (pathname.startsWith('/spaces') || pathname.startsWith('/folders')) {
             return 'list';
         }
 
@@ -119,6 +124,22 @@ export default function TopBar() {
         if (projectId && localStorage.getItem('currentProjectId') !== projectId) {
             localStorage.setItem('currentProjectId', projectId);
         }
+
+        const fetchProjectStatus = async () => {
+            if (!projectId) {
+                setIsFavorite(false);
+                return;
+            }
+
+            try {
+                const response = await api.get(`/api/projects/${projectId}`);
+                setIsFavorite(Boolean(response.data?.isFavorite));
+            } catch {
+                setIsFavorite(false);
+            }
+        };
+
+        void fetchProjectStatus();
     }, [projectId]);
 
     useEffect(() => {
@@ -155,7 +176,7 @@ export default function TopBar() {
             case 'summary':
                 return withProjectId('/summary');
             case 'timeline':
-                return withProjectId('/summary');
+                return withProjectId('/timeline');
             case 'backlog':
                 return withProjectId('/sprint-backlog');
             case 'board':
@@ -193,7 +214,37 @@ export default function TopBar() {
                         <span className="font-arimo text-[12px] uppercase tracking-[0.3px] text-[#6A7282] mb-0.5">Projects</span>
                         <div className="flex items-center gap-2">
                             <span className="font-arimo text-[19px] text-[#1D293D] whitespace-nowrap">{projectName}</span>
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            
+                            {/* Favorite Toggle Icon */}
+                            <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={async () => {
+                                    if (!projectId) return;
+                                    const nextState = !isFavorite;
+                                    setIsFavorite(nextState);
+                                    try {
+                                        await api.post(`/api/projects/${projectId}/favorite`);
+                                    } catch (e) {
+                                        setIsFavorite(!nextState);
+                                    }
+                                }}
+                                className="ml-1"
+                            >
+                                <motion.svg
+                                    animate={{ 
+                                        fill: isFavorite ? "#FFD700" : "transparent",
+                                        stroke: isFavorite ? "#FFD700" : "#6A7282",
+                                        scale: isFavorite ? [1, 1.3, 1] : 1
+                                    }}
+                                    transition={{ duration: 0.3 }}
+                                    width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                                >
+                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                                </motion.svg>
+                            </motion.button>
+
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-1">
                                 <path d="M4 6L8 10L12 6" stroke="#1D293D" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                         </div>
@@ -226,7 +277,7 @@ export default function TopBar() {
 
             {/* Bottom Nav Section (45px) */}
             <div className="h-[45px] bg-white border-b border-[#E3E8EF] px-8 flex items-end gap-8">
-                {tabs.map((tab) => (
+                {baseTabs.map((tab) => (
                     <Link
                         key={tab.id}
                         href={getTabHref(tab.id)}

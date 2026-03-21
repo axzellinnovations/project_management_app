@@ -44,8 +44,7 @@ public class Task {
     @Enumerated(EnumType.STRING)
     private Priority priority;
 
-    @Enumerated(EnumType.STRING)
-    private Status status;
+    private String status;
 
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

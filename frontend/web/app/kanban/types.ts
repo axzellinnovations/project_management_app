@@ -42,8 +42,10 @@ export interface Task {
   createdAt?: string;
   updatedAt?: string;
   assignee?: Assignee;
+  assigneeId?: number;
   assigneeName?: string;
   reporter?: Assignee;
+  reporterId?: number;
   reporterName?: string;
   projectId?: number;
   sprintId?: number;
