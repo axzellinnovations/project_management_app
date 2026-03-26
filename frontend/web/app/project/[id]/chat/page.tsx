@@ -68,6 +68,8 @@ export default function ChatInterface() {
     isLoading,
     error,
     retryConnection,
+    roomMentionCounts,
+    teamMentionCount,
   } = useChat(projectId);
 
   const hasSelectedRoom = selectedRoomId !== null && Number.isFinite(selectedRoomId);
@@ -273,6 +275,8 @@ export default function ChatInterface() {
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
         isLoading={false}
+        roomMentionCounts={roomMentionCounts}
+        teamMentionCount={teamMentionCount}
       />
 
       {/* ── Main chat area ── */}

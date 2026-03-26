@@ -82,6 +82,39 @@ function isGrouped(current: ChatMessage, previous?: ChatMessage): boolean {
   return diff < 120000; // 2 minutes
 }
 
+/** Renders message content with @mentions highlighted for the current user. */
+function renderMentionContent(content: string, aliasSet: Set<string>): React.ReactNode {
+  // Split on @word boundaries (word chars + dots/dashes/underscores)
+  const parts = content.split(/(@[a-zA-Z0-9._-]+)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('@')) {
+      const handle = part.slice(1).toLowerCase();
+      const isMentionedUser = aliasSet.has(handle) || Array.from(aliasSet).some(a => a.split('@')[0] === handle);
+      if (isMentionedUser) {
+        return (
+          <mark
+            key={i}
+            className="bg-amber-100 text-amber-800 font-semibold rounded px-0.5 not-italic"
+            style={{ boxShadow: '0 0 0 1px rgba(251,191,36,0.4)' }}
+          >
+            {part}
+          </mark>
+        );
+      }
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+}
+
+function messageIsMentioned(content: string | undefined | null, aliasSet: Set<string>): boolean {
+  if (!content) return false;
+  const mentions = content.match(/@([a-zA-Z0-9._-]+)/g) || [];
+  return mentions.some(m => {
+    const handle = m.slice(1).toLowerCase();
+    return aliasSet.has(handle) || Array.from(aliasSet).some(a => a.split('@')[0] === handle);
+  });
+}
+
 function TypingIndicator({ user, userProfilePics = {} }: { user: string; userProfilePics?: Record<string, string> }) {
   return (
     <motion.div
@@ -182,6 +215,7 @@ export const ChatMessages = ({
           const isPinned = pinnedMessageId === msg.id;
           const fileDoc = !msg.deleted && isFileDocument(msg.content);
           const isLoadingFile = loadingFileId === msg.id;
+          const isMentioned = !isMe && !msg.deleted && !fileDoc && messageIsMentioned(msg.content, aliasSet);
 
           return (
             <React.Fragment key={msg.id ?? idx}>
@@ -200,7 +234,7 @@ export const ChatMessages = ({
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18, ease: 'easeOut' }}
-                className={`flex items-end gap-2.5 group relative ${grouped ? 'mt-0.5' : 'mt-3'} ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
+                className={`flex items-end gap-2.5 group relative ${grouped ? 'mt-0.5' : 'mt-3'} ${isMe ? 'flex-row-reverse' : 'flex-row'} ${isMentioned ? 'pl-1.5 border-l-2 border-amber-400 rounded-l' : ''}`}
               >
                 {/* Avatar */}
                 {!isMe && (
@@ -319,7 +353,9 @@ export const ChatMessages = ({
                           </span>
                         </a>
                       ) : (
-                        <span className="break-words whitespace-pre-wrap">{msg.content}</span>
+                        <span className="break-words whitespace-pre-wrap">
+                          {renderMentionContent(msg.content, aliasSet)}
+                        </span>
                       )}
                     </div>
                   </div>
