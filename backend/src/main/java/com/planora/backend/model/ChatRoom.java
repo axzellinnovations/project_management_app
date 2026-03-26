@@ -3,7 +3,9 @@ package com.planora.backend.model;
 import java.time.LocalDateTime;
 
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -30,6 +32,20 @@ public class ChatRoom {
 
     private String createdBy;
 
+    private String topic;
+
+    @Column(length = 1000)
+    private String description;
+
+    private Boolean archived = false;
+
+    private LocalDateTime archivedAt;
+
+    private Long pinnedMessageId;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
 }

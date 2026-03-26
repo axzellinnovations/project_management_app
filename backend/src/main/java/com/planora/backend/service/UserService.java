@@ -285,6 +285,15 @@ public class UserService {
         return userRepository.findAll();
     }
 
+    public User getUserByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new RuntimeException("User email is required");
+        }
+
+        return userRepository.findByEmailIgnoreCase(email.toLowerCase())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
     @Transactional
     public User updateUserDetails(String email, String newFullName) {
         User user = userRepository.findByEmailIgnoreCase(email.toLowerCase()).orElse(null);
