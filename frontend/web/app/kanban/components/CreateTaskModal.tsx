@@ -44,7 +44,17 @@ export default function CreateTaskModal({
       return;
     }
 
+<<<<<<< HEAD
+    const taskData: any = {
+      title: title.trim(),
+      status: columnStatus,
+      projectId,
+      dueDate: dueDate ? dueDate.toISOString().split('T')[0] : undefined,
+      assigneeId: assignee || undefined,
+    };
+=======
         const todayIso = new Date().toISOString().split('T')[0];
+>>>>>>> 4c4640ac4d3ee909fdd22930d0ef8f0fedb7898c
 
         const taskData: Partial<Task> = {
           title: title.trim(),

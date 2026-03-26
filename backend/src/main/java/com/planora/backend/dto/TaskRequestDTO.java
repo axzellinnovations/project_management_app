@@ -17,7 +17,7 @@ public class TaskRequestDTO {
     private String priority;
     private String status;
 
-    private int storyPoint;
+    private Integer storyPoint;
 
     private LocalDate dueDate;
     private LocalDate startDate;

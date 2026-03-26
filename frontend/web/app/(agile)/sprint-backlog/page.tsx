@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import BacklogCard from './components/BacklogCard';
 import ProductBacklogSection from './components/ProductBacklogSection';
@@ -36,7 +36,7 @@ type RawTask = {
   dueDate?: string;
 };
 
-export default function SprintBacklogPage() {
+function SprintBacklogContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const projectId = searchParams.get('projectId');
@@ -184,7 +184,7 @@ export default function SprintBacklogPage() {
     }
   };
 
-  const createSprint = async (name: string, startDate: string, endDate: string) => {
+  const createSprint = async (name: string, startDate: string = new Date().toISOString().split('T')[0], endDate: string = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]) => {
     const trimmed = name.trim();
     if (!trimmed || !projectId) return;
 
@@ -290,5 +290,13 @@ export default function SprintBacklogPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function SprintBacklogPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-64 text-gray-500">Loading sprint backlog...</div>}>
+      <SprintBacklogContent />
+    </Suspense>
   );
 }
