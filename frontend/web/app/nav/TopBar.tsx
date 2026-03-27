@@ -1,6 +1,5 @@
 'use client';
-
-import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useState, useEffect, useMemo, useSyncExternalStore, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -38,7 +37,7 @@ const subscribeToBrowserStorage = (onStoreChange: () => void) => {
     };
 };
 
-export default function TopBar() {
+function TopBarContent() {
     const projectName = useSyncExternalStore(
         subscribeToBrowserStorage,
         () => localStorage.getItem('currentProjectName') || 'Project Name',
@@ -371,4 +370,12 @@ export default function TopBar() {
         </div>
     );
 
+}
+
+export default function TopBar() {
+    return (
+        <Suspense fallback={<div className="w-full h-[74px] bg-[#F1F6F9] border-b border-[#E3E8EF] px-4 sm:px-8 flex items-center shrink-0"><div className="animate-pulse bg-gray-200 h-4 w-32 rounded"></div></div>}>
+            <TopBarContent />
+        </Suspense>
+    );
 }

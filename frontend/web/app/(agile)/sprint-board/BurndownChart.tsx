@@ -22,8 +22,9 @@ export default function BurndownChart({ sprintId }: { sprintId: number }) {
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
     axios
-      .get(`http://localhost:8080/api/sprints/${sprintId}/burndown`)
+      .get(`${API_BASE_URL}/api/sprints/${sprintId}/burndown`)
       .then((res) => {
         const formatted = res.data.map((p: BurndownPoint) => ({
           day: `Day ${p.day}`,
