@@ -14,7 +14,10 @@ import com.planora.backend.model.User;
 import com.planora.backend.service.UserService;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
+
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -106,6 +109,20 @@ public class UserController {
     @GetMapping("/try")
     public String myTry(){
         return "Try - Running Successfully";
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<?> getCurrentUser(Authentication authentication) {
+        try {
+            String email = authentication.getName();
+            User user = service.getUserByEmail(email);
+            return new ResponseEntity<>(Map.of(
+                    "email", user.getEmail(),
+                    "username", user.getUsername() != null ? user.getUsername() : ""
+            ), HttpStatus.OK);
+        } catch (Exception e) {
+            return new ResponseEntity<>("Failed to fetch current user: " + e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
     }
 
 }
