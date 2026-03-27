@@ -32,6 +32,8 @@ interface ChatSidebarProps {
   searchTerm: string;
   onSearchChange: (value: string) => void;
   isLoading?: boolean;
+  roomMentionCounts?: Record<number, number>;
+  teamMentionCount?: number;
 }
 
 const AVATAR_COLORS = [
@@ -64,6 +66,18 @@ function UnreadBadge({ count }: { count: number }) {
   return (
     <span className="ml-auto flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-blue-500 text-white text-xs font-semibold flex items-center justify-center leading-none">
       {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
+function MentionBadge({ count }: { count: number }) {
+  if (!count) return null;
+  return (
+    <span
+      className="flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-amber-400 text-white text-xs font-bold flex items-center justify-center leading-none gap-0.5"
+      title={`${count} mention${count !== 1 ? 's' : ''}`}
+    >
+      🔔{count > 9 ? '9+' : count}
     </span>
   );
 }
@@ -109,6 +123,8 @@ export const ChatSidebar = ({
   searchTerm,
   onSearchChange,
   isLoading,
+  roomMentionCounts = {},
+  teamMentionCount = 0,
 }: ChatSidebarProps) => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editRoomData, setEditRoomData] = useState<ChatRoom | null>(null);
@@ -212,6 +228,7 @@ export const ChatSidebar = ({
                   )}
                 </div>
                 <UnreadBadge count={teamUnseenCount} />
+                <MentionBadge count={teamMentionCount} />
               </button>
             </div>
 
@@ -270,6 +287,7 @@ export const ChatSidebar = ({
                           )}
                         </div>
                         <UnreadBadge count={unseen} />
+                        <MentionBadge count={roomMentionCounts[room.id] || 0} />
                       </button>
 
                       {/* Room owner actions */}

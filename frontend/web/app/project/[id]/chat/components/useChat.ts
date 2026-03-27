@@ -130,6 +130,8 @@ export const useChat = (projectId: string) => {
   const [teamTypingUsers, setTeamTypingUsers] = useState<string[]>([]);
   const [roomTypingUsers, setRoomTypingUsers] = useState<Record<number, string[]>>({});
   const [privateTypingUsers, setPrivateTypingUsers] = useState<string[]>([]);
+  const [roomMentionCounts, setRoomMentionCounts] = useState<Record<number, number>>({});
+  const [teamMentionCount, setTeamMentionCount] = useState<number>(0);
   const [unreadBadge, setUnreadBadge] = useState<UnreadBadgeSummary>({ teamUnread: 0, roomsUnread: 0, directsUnread: 0, totalUnread: 0 });
   const [featureFlags, setFeatureFlags] = useState<ChatFeatureFlags>(DEFAULT_FEATURE_FLAGS);
   const [searchResults, setSearchResults] = useState<ChatSearchResult[]>([]);
@@ -1017,6 +1019,17 @@ export const useChat = (projectId: string) => {
             : 'team chat';
           showCommandNotice(`You are mentioned by ${mention.sender} in ${context}.`);
           trackTelemetry('chat_mention_received', mention.scope || 'chat', `messageId=${mention.messageId || ''}`);
+
+          // Bump sidebar badge when the user is not currently viewing that chat
+          if (mention.scope === 'ROOM' && mention.roomId) {
+            const rid = Number(mention.roomId);
+            if (selectedRoomIdRef.current !== rid) {
+              setRoomMentionCounts(prev => ({ ...prev, [rid]: (prev[rid] || 0) + 1 }));
+            }
+          } else if ((mention.scope === 'TEAM' || !mention.scope) &&
+            (selectedRoomIdRef.current !== null || selectedUserRef.current !== null)) {
+            setTeamMentionCount(prev => prev + 1);
+          }
         });
 
         client.send(`/app/project/${projectId}/chat.addUser`, {}, JSON.stringify({ sender: username, type: 'JOIN' }));
@@ -1240,6 +1253,7 @@ export const useChat = (projectId: string) => {
     }
     setRoomTypingUsers(prev => ({ [selectedRoomId]: prev[selectedRoomId] || [] }));
     setRoomUnseenCounts(prev => ({ ...prev, [selectedRoomId]: 0 }));
+    setRoomMentionCounts(prev => ({ ...prev, [selectedRoomId]: 0 }));
   }, [selectedRoomId]);
 
   useEffect(() => {
@@ -1249,6 +1263,7 @@ export const useChat = (projectId: string) => {
 
     if (selectedRoomId === null && !selectedUser) {
       setTeamUnseenCount(0);
+      setTeamMentionCount(0);
       markTeamAsRead();
     }
   }, [selectedRoomId, selectedUser, markTeamAsRead, hasRestoredSelection]);
@@ -1495,6 +1510,8 @@ export const useChat = (projectId: string) => {
     addTeam,
     isLoading,
     error,
+    roomMentionCounts,
+    teamMentionCount,
     retryConnection: () => window.location.reload()
   };
 };

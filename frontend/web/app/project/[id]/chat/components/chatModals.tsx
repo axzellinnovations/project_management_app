@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Users, Hash, MessageSquare } from 'lucide-react';
+import { X, Users, Hash, MessageSquare, Search } from 'lucide-react';
 
 interface ModalProps {
   isOpen: boolean;
@@ -87,12 +87,16 @@ export function CreateChannelModal({ isOpen, onClose, users, onCreate }: {
 }) {
   const [name, setName] = useState('');
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [memberSearch, setMemberSearch] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
 
   // Reset when opened
   useEffect(() => {
     if (isOpen) {
       setName('');
       setSelectedUsers(new Set());
+      setMemberSearch('');
+      // Focus the channel name field first
     }
   }, [isOpen]);
 
@@ -101,12 +105,20 @@ export function CreateChannelModal({ isOpen, onClose, users, onCreate }: {
     if (next.has(u)) next.delete(u);
     else next.add(u);
     setSelectedUsers(next);
+    // Keep focus on the search field after toggling
+    searchRef.current?.focus();
   };
+
+  const filteredUsers = users.filter(u =>
+    !memberSearch.trim() || u.toLowerCase().includes(memberSearch.trim().toLowerCase())
+  );
 
   const handleSubmit = () => {
     onCreate(name.trim(), Array.from(selectedUsers));
     onClose();
   };
+
+  const selectedList = Array.from(selectedUsers);
 
   return (
     <BaseModal
@@ -119,6 +131,7 @@ export function CreateChannelModal({ isOpen, onClose, users, onCreate }: {
       submitDisabled={!name.trim() || selectedUsers.size === 0}
     >
       <div className="space-y-4">
+        {/* Channel name */}
         <div>
           <label className="block text-[12px] font-bold text-gray-700 uppercase tracking-wide mb-1.5">Channel Name</label>
           <input
@@ -130,24 +143,92 @@ export function CreateChannelModal({ isOpen, onClose, users, onCreate }: {
             autoFocus
           />
         </div>
+
+        {/* Members section */}
         <div>
-          <label className="block text-[12px] font-bold text-gray-700 uppercase tracking-wide mb-1.5">Add Members ({selectedUsers.size})</label>
-          <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-            {users.length === 0 ? (
-              <p className="text-[13px] text-gray-500 italic">No other team members found.</p>
-            ) : (
-              users.map(u => (
-                <button
+          <label className="block text-[12px] font-bold text-gray-700 uppercase tracking-wide mb-1.5">
+            Add Members {selectedUsers.size > 0 && <span className="text-blue-500">({selectedUsers.size} selected)</span>}
+          </label>
+
+          {/* Selected chips row */}
+          {selectedList.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2.5 p-2 bg-blue-50 rounded-xl border border-blue-100">
+              {selectedList.map(u => (
+                <span
                   key={u}
-                  onClick={() => toggleUser(u)}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors text-left"
+                  className="flex items-center gap-1 px-2.5 py-1 bg-white border border-blue-200 text-blue-700 rounded-full text-[12px] font-semibold shadow-sm"
                 >
-                  <span className="text-[13.5px] font-medium text-gray-800">{u}</span>
-                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${selectedUsers.has(u) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
-                    {selectedUsers.has(u) && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                  </div>
-                </button>
-              ))
+                  <span className="w-4 h-4 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0">
+                    {u.charAt(0).toUpperCase()}
+                  </span>
+                  {u}
+                  <button
+                    type="button"
+                    onClick={() => toggleUser(u)}
+                    className="text-blue-400 hover:text-red-400 transition-colors ml-0.5"
+                    aria-label={`Remove ${u}`}
+                  >
+                    <X size={10} strokeWidth={2.5} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Search input */}
+          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 mb-2 focus-within:bg-white focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-50 transition-all">
+            <Search size={13} className="text-gray-400 flex-shrink-0" strokeWidth={2.5} />
+            <input
+              ref={searchRef}
+              type="text"
+              value={memberSearch}
+              onChange={(e) => setMemberSearch(e.target.value)}
+              placeholder="Search members…"
+              className="flex-1 bg-transparent text-[13px] text-gray-700 placeholder:text-gray-400 outline-none"
+              aria-label="Search members"
+            />
+            {memberSearch && (
+              <button onClick={() => setMemberSearch('')} className="text-gray-300 hover:text-gray-500">
+                <X size={12} strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
+
+          {/* Filtered member list */}
+          <div className="space-y-0.5 max-h-44 overflow-y-auto pr-0.5">
+            {users.length === 0 ? (
+              <p className="text-[13px] text-gray-500 italic px-1 py-2">No other team members found.</p>
+            ) : filteredUsers.length === 0 ? (
+              <p className="text-[13px] text-gray-400 italic px-2 py-2">No members match "{memberSearch}"</p>
+            ) : (
+              filteredUsers.map(u => {
+                const isSelected = selectedUsers.has(u);
+                return (
+                  <button
+                    key={u}
+                    onClick={() => toggleUser(u)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border transition-all text-left
+                      ${isSelected
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'border-transparent hover:bg-gray-50 hover:border-gray-100'}`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-7 h-7 rounded-full bg-gradient-to-br flex items-center justify-center text-white text-xs font-bold flex-shrink-0
+                        ${isSelected ? 'from-blue-500 to-indigo-600' : 'from-gray-400 to-gray-500'}`}>
+                        {u.charAt(0).toUpperCase()}
+                      </div>
+                      <span className={`text-[13.5px] font-medium ${isSelected ? 'text-blue-700' : 'text-gray-800'}`}>{u}</span>
+                    </div>
+                    <div className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
+                      {isSelected && (
+                        <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                );
+              })
             )}
           </div>
         </div>
