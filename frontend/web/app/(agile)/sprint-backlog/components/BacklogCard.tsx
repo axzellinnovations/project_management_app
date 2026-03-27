@@ -26,6 +26,7 @@ interface BacklogCardProps {
   onDropTask: (taskId: number, sprintId: number) => void;
   onCreateTask: (title: string, sprintId: number) => void;
   onDeleteTask: (taskId: number, sprintId: number) => void;
+  onDeleteSprint: (sprintId: number) => void;
 }
 
 type SprintStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
@@ -58,7 +59,7 @@ interface LocalSprintTask {
   subtasks: string;
 }
 
-export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTask, onDeleteTask }: BacklogCardProps) {
+export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTask, onDeleteTask, onDeleteSprint }: BacklogCardProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [showSprintMenu, setShowSprintMenu] = useState(false);
@@ -247,7 +248,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
   };
 
   const handleDeleteSprint = () => {
-    alert(`Delete ${sprint.name}`);
+    onDeleteSprint(sprint.id);
     setShowSprintMenu(false);
   };
 
@@ -409,8 +410,12 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
               localTasks.map((task) => (
                 <div
                   key={task.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', String(task.id));
+                  }}
                   onClick={() => setSelectedTaskId(task.id)}
-                  className="group relative flex items-center gap-4 rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 cursor-pointer hover:border-[#175CD3]/30 hover:shadow-md transition-all duration-200 ease-in-out"
+                  className="group relative flex items-center gap-4 rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 cursor-grab hover:border-[#175CD3]/30 hover:shadow-md transition-all duration-200 ease-in-out"
                 >
                   {/* Task type indicator */}
                   <div className="h-6 w-6 flex-shrink-0 rounded border-2 border-[#175CD3] bg-[#EFF8FF] transition-colors duration-150" />

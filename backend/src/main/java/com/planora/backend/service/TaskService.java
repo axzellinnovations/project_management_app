@@ -55,7 +55,7 @@ public class TaskService {
         task.setDescription(request.getDescription());
         task.setProject(project);
 
-        task.setStoryPoint(request.getStoryPoint());
+        task.setStoryPoint(request.getStoryPoint() != null ? request.getStoryPoint() : 0);
 
         // Ensure every task has a start date (use creation date when not provided) and a due date.
         LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
@@ -112,7 +112,7 @@ public class TaskService {
         if(request.getStatus() != null) task.setStatus(request.getStatus());
 
         //update fields-other attributes
-        if(request.getStoryPoint() != 0) task.setStoryPoint(request.getStoryPoint());
+        if(request.getStoryPoint() != null) task.setStoryPoint(request.getStoryPoint());
         if(request.getStartDate() != null) task.setStartDate(request.getStartDate());
         if(request.getDueDate() != null) task.setDueDate(request.getDueDate());
 

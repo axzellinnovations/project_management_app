@@ -1,11 +1,12 @@
 'use client';
-
-import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useState, useEffect, useMemo, useSyncExternalStore, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
 import { getUserFromToken, User } from '@/lib/auth';
 import { useParams, usePathname, useSearchParams } from 'next/navigation';
+import { useNavigation } from '@/lib/navigation-context';
+import { Menu } from 'lucide-react';
 import api from '@/lib/axios';
 
 const baseTabs = [
@@ -36,7 +37,7 @@ const subscribeToBrowserStorage = (onStoreChange: () => void) => {
     };
 };
 
-export default function TopBar() {
+function TopBarContent() {
     const projectName = useSyncExternalStore(
         subscribeToBrowserStorage,
         () => localStorage.getItem('currentProjectName') || 'Project Name',
@@ -57,6 +58,7 @@ export default function TopBar() {
             return getUserFromToken();
         }, [token]);
 
+    const { toggleSidebar } = useNavigation();
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
     const [isFavorite, setIsFavorite] = useState(false);
     const params = useParams();
@@ -198,11 +200,75 @@ export default function TopBar() {
         }
     };
 
-    return (
-        <div className="w-full h-[119px] relative flex flex-col">
-            {/* Top Header Section (74px) */}
-            <div className="flex-1 bg-[#F1F6F9] px-8 flex items-center justify-between">
+    const isProjectPage = useMemo(() => {
+        const projectPaths = [
+            '/summary',
+            '/timeline',
+            '/sprint-backlog',
+            '/kanban',
+            '/calendar',
+            '/burndown',
+            '/pages',
+            '/project/',
+        ];
+        return projectPaths.some(path => pathname.startsWith(path));
+    }, [pathname]);
+
+    if (!isProjectPage) {
+        return (
+            <div className="w-full h-[64px] bg-[#F1F6F9] border-b border-[#E3E8EF] px-4 sm:px-8 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-4">
+                    {/* Hamburger Menu (Mobile Only) */}
+                    <button 
+                        onClick={toggleSidebar}
+                        className="lg:hidden p-2 -ml-2 text-[#6A7282] hover:bg-gray-200/50 rounded-lg transition-colors"
+                        aria-label="Toggle Sidebar"
+                    >
+                        <Menu size={20} />
+                    </button>
+                    <span className="font-arimo text-[16px] font-semibold text-[#1D293D]">Dashboard</span>
+                </div>
+
+                {/* Right Side Actions */}
+                <div className="flex items-center gap-3">
+                    <div className="flex -space-x-2">
+                        {resolvedProfilePicUrl ? (
+                            <div className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-white">
+                                <Image
+                                    src={resolvedProfilePicUrl}
+                                    alt="Profile"
+                                    width={32}
+                                    height={32}
+                                    className="w-full h-full object-cover"
+                                    unoptimized
+                                />
+                            </div>
+                        ) : (
+                            <div className="w-8 h-8 rounded-full bg-blue-500 border-2 border-white flex items-center justify-center text-white text-[12px] font-bold">
+                                {user?.username?.charAt(0).toUpperCase() || 'U'}
+                            </div>
+                        )}
+                        <div className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[10px] text-gray-600 font-bold">+2</div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="w-full h-[119px] relative flex flex-col shrink-0">
+            {/* Top Header Section (74px) */}
+            <div className="flex-1 bg-[#F1F6F9] px-4 sm:px-8 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    {/* Hamburger Menu (Mobile Only) */}
+                    <button 
+                        onClick={toggleSidebar}
+                        className="lg:hidden p-2 -ml-2 text-[#6A7282] hover:bg-gray-200/50 rounded-lg transition-colors"
+                        aria-label="Toggle Sidebar"
+                    >
+                        <Menu size={20} />
+                    </button>
+
                     {/* Icon */}
                     <div className="w-10 h-10 bg-[#00D3F3] rounded-lg flex items-center justify-center shrink-0">
                         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -276,12 +342,12 @@ export default function TopBar() {
             </div>
 
             {/* Bottom Nav Section (45px) */}
-            <div className="h-[45px] bg-white border-b border-[#E3E8EF] px-8 flex items-end gap-8">
+            <div className="h-[45px] bg-white border-b border-[#E3E8EF] px-8 flex items-end gap-8 overflow-x-auto no-scrollbar">
                 {baseTabs.map((tab) => (
                     <Link
                         key={tab.id}
                         href={getTabHref(tab.id)}
-                        className="relative pb-3 px-1"
+                        className="relative pb-3 px-1 shrink-0"
                     >
                         <span
                             className={`font-inter text-[14px] leading-[20px] transition-colors duration-200 ${activeTab === tab.id
@@ -302,5 +368,14 @@ export default function TopBar() {
                 ))}
             </div>
         </div>
+    );
+
+}
+
+export default function TopBar() {
+    return (
+        <Suspense fallback={<div className="w-full h-[74px] bg-[#F1F6F9] border-b border-[#E3E8EF] px-4 sm:px-8 flex items-center shrink-0"><div className="animate-pulse bg-gray-200 h-4 w-32 rounded"></div></div>}>
+            <TopBarContent />
+        </Suspense>
     );
 }

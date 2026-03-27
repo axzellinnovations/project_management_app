@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -214,22 +215,92 @@ function SprintBacklogContent() {
   };
 
   const moveTaskToSprint = async (taskId: number, sprintId: number) => {
-    const draggedTask = productTasks.find((task) => task.id === taskId);
+    let draggedTask = productTasks.find((task) => task.id === taskId);
+    let sourceSprintId: number | null = null;
+
+    if (!draggedTask) {
+      for (const sprint of sprints) {
+        const t = sprint.tasks.find((t) => t.id === taskId);
+        if (t) {
+          draggedTask = t;
+          sourceSprintId = sprint.id;
+          break;
+        }
+      }
+    }
+
     if (!draggedTask) return;
+    if (sourceSprintId === sprintId) return;
 
     try {
       await api.put(`/api/tasks/${taskId}`, { sprintId });
+      const updatedTask = { ...draggedTask, selected: false, sprintId };
+
+      if (sourceSprintId === null) {
+        setProductTasks((prev) => prev.filter((task) => task.id !== taskId));
+      } else {
+        setSprints((prev) =>
+          prev.map((s) => s.id === sourceSprintId ? { ...s, tasks: s.tasks.filter(t => t.id !== taskId) } : s)
+        );
+      }
+
       setSprints((prev) =>
         prev.map((sprint) =>
           sprint.id === sprintId
-            ? { ...sprint, tasks: [...sprint.tasks, { ...draggedTask, selected: false, sprintId }] }
+            ? { ...sprint, tasks: [...sprint.tasks, updatedTask] }
             : sprint
         )
       );
-      setProductTasks((prev) => prev.filter((task) => task.id !== taskId));
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
       alert(axiosErr?.response?.data?.message || 'Failed to move task to sprint.');
+    }
+  };
+
+  const moveTaskToProductBacklog = async (taskId: number) => {
+    let draggedTask: TaskItem | undefined;
+    let sourceSprintId: number | null = null;
+
+    for (const sprint of sprints) {
+      const t = sprint.tasks.find((t) => t.id === taskId);
+      if (t) {
+        draggedTask = t;
+        sourceSprintId = sprint.id;
+        break;
+      }
+    }
+
+    if (!draggedTask || sourceSprintId === null) return;
+
+    try {
+      await api.put(`/api/tasks/${taskId}`, { sprintId: null });
+      const updatedTask = { ...draggedTask, selected: false, sprintId: null };
+
+      setSprints((prev) =>
+        prev.map((s) => s.id === sourceSprintId ? { ...s, tasks: s.tasks.filter(t => t.id !== taskId) } : s)
+      );
+
+      setProductTasks((prev) => [...prev, updatedTask]);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      alert(axiosErr?.response?.data?.message || 'Failed to move task to product backlog.');
+    }
+  };
+
+  const handleDeleteSprint = async (sprintId: number) => {
+    if (!window.confirm('Are you sure you want to delete this sprint? Tasks will be moved back to the product backlog.')) return;
+    try {
+      await api.delete(`/api/sprints/${sprintId}`);
+      
+      const sprintToDelete = sprints.find((s) => s.id === sprintId);
+      if (sprintToDelete) {
+        const tasksToMove = sprintToDelete.tasks.map((t) => ({ ...t, sprintId: null, selected: false }));
+        setProductTasks((prev) => [...prev, ...tasksToMove]);
+      }
+      setSprints((prev) => prev.filter((s) => s.id !== sprintId));
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      alert(axiosErr?.response?.data?.message || 'Failed to delete sprint.');
     }
   };
 
@@ -262,6 +333,7 @@ function SprintBacklogContent() {
               projectId={projectId!}
               onDropTask={moveTaskToSprint}
               onCreateTask={createSprintTask}
+              onDeleteSprint={handleDeleteSprint}
               onDeleteTask={(taskId, sprintId) => {
                 setSprints((prev) =>
                   prev.map((s) =>
@@ -281,6 +353,7 @@ function SprintBacklogContent() {
             onStoryPointsChange={updateTaskStoryPoints}
             onCreateTask={createTask}
             onCreateSprint={createSprint}
+            onDropTask={moveTaskToProductBacklog}
             onAssignTask={(taskId, assigneeName) => {
               setProductTasks((prev) =>
                 prev.map((t) => t.id === taskId ? { ...t, assigneeName } : t)

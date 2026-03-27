@@ -1,12 +1,16 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Outfit, Arimo } from 'next/font/google'
 import "./globals.css";
+import { Suspense } from "react";
 import Sidebar from "./nav/Sidebar";
 import TopBar from "./nav/TopBar";
+
+import { NavigationProvider } from "@/lib/navigation-context";
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' })
 const arimo = Arimo({ subsets: ['latin'], variable: '--font-arimo' })
+
 
 export const metadata: Metadata = {
   title: "Planora",
@@ -27,7 +31,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} ${outfit.variable} ${arimo.variable} antialiased bg-[#F4F5F7]`}>
-        {children}
+        <NavigationProvider>
+          <Suspense fallback={null}>
+            {children}
+          </Suspense>
+        </NavigationProvider>
       </body>
     </html>
   );

@@ -22,6 +22,7 @@ interface ProductBacklogSectionProps {
   onStoryPointsChange: (id: number, points: number) => void;
   onCreateTask: (title: string) => void;
   onCreateSprint: (name: string) => void;
+  onDropTask: (taskId: number) => void;
   onAssignTask: (taskId: number, assigneeName: string) => void;
 }
 
@@ -32,6 +33,7 @@ export default function ProductBacklogSection({
   onStoryPointsChange,
   onCreateTask,
   onCreateSprint,
+  onDropTask,
   onAssignTask,
 }: ProductBacklogSectionProps) {
   const [isOpen, setIsOpen] = useState(true);
@@ -186,7 +188,14 @@ export default function ProductBacklogSection({
       </div>
 
       {isOpen && (
-        <div>
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const taskId = Number(e.dataTransfer.getData('text/plain'));
+            if (taskId) onDropTask(taskId);
+          }}
+        >
           <div className="space-y-2">
             {tasks.map((task) => (
               <div

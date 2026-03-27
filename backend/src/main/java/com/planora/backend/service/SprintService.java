@@ -10,6 +10,8 @@ import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.SprintRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
+import com.planora.backend.repository.TaskRepository;
+import com.planora.backend.model.Task;
 import com.planora.backend.service.SprintboardService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -26,17 +28,20 @@ public class SprintService {
     private final TeamMemberRepository teamMemberRepository;
     private final UserRepository userRepository;
     private final SprintboardService sprintboardService;
+    private final TaskRepository taskRepository;
 
     public SprintService(SprintRepository sprintRepository,
                          ProjectRepository projectRepository,
                          TeamMemberRepository teamMemberRepository,
                          UserRepository userRepository,
-                         SprintboardService sprintboardService) {
+                         SprintboardService sprintboardService,
+                         TaskRepository taskRepository) {
         this.sprintRepository = sprintRepository;
         this.projectRepository = projectRepository;
         this.teamMemberRepository = teamMemberRepository;
         this.userRepository = userRepository;
         this.sprintboardService = sprintboardService;
+        this.taskRepository = taskRepository;
     }
 
     // ---------- Get Current User from SecurityContext ----------
@@ -154,6 +159,15 @@ public class SprintService {
                 .orElseThrow(() -> new RuntimeException("Sprint not found"));
 
         requireConfigureBoard(existing.getProId());
+
+        List<Task> sprintTasks = taskRepository.findBySprintId(id);
+        if (!sprintTasks.isEmpty()) {
+            for (Task task : sprintTasks) {
+                task.setSprint(null);
+            }
+            taskRepository.saveAll(sprintTasks);
+        }
+
         sprintRepository.deleteById(id);
     }
 
