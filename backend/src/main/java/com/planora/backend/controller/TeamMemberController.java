@@ -5,6 +5,8 @@ import com.planora.backend.model.TeamMember;
 import com.planora.backend.model.TeamRole;
 import com.planora.backend.model.UserPrincipal;
 import com.planora.backend.service.TeamMemberService;
+import com.planora.backend.repository.TaskRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +21,9 @@ import java.util.List;
 public class TeamMemberController {
 
     private final TeamMemberService teamMemberService;
+
+        @Autowired
+        private TaskRepository taskRepository;
 
     // ---------------- ADD MEMBER TO TEAM (OWNER ONLY) ----------------
     @PostMapping("/{teamId}/members/{userId}")
@@ -52,8 +57,10 @@ public class TeamMemberController {
         // Only team members can view members
         teamMemberService.validateMembership(teamId, currentUserId);
 
-        List<TeamMemberResponseDTO> dtos = teamMemberService.getTeamMembers(teamId)
-                .stream()
+
+
+        List<TeamMember> members = teamMemberService.getTeamMembers(teamId);
+        List<TeamMemberResponseDTO> dtos = members.stream()
                 .map(member -> TeamMemberResponseDTO.builder()
                         .id(member.getId())
                         .role(member.getRole().name())
@@ -64,6 +71,9 @@ public class TeamMemberController {
                                 .email(member.getUser().getEmail())
                                 .profilePicUrl(member.getUser().getProfilePicUrl())
                                 .build())
+                        .lastActive(member.getUser().getLastActive())
+                        .taskCount(taskRepository.countByAssigneeAndProject_TeamId(member, teamId))
+                        .status("Active")
                         .build())
                 .toList();
 

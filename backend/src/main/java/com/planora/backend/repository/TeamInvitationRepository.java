@@ -1,12 +1,15 @@
 package com.planora.backend.repository;
 
-import com.planora.backend.model.TeamInvitation;
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.util.Optional;
+import com.planora.backend.model.TeamInvitation;
 
 public interface TeamInvitationRepository extends JpaRepository<TeamInvitation, Long> {
     Optional<TeamInvitation> findByTeamIdAndEmail(Long teamId, String email);
 
     Optional<TeamInvitation> findByToken(String token);
+
+    java.util.List<TeamInvitation> findByTeamIdAndStatus(Long teamId, String status);
 }
