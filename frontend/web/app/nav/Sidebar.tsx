@@ -5,6 +5,8 @@ import Image from 'next/image';
 import { useEffect, useState, useMemo, useSyncExternalStore } from 'react';
 import { getUserFromToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigation } from '@/lib/navigation-context';
 import api from '@/lib/axios';
 
 interface NavItemProps {
@@ -47,6 +49,7 @@ export default function Sidebar() {
         if (!token) return null;
         return getUserFromToken();
     }, [token]);
+    const { isSidebarOpen, setSidebarOpen } = useNavigation();
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
     const [recentProjects, setRecentProjects] = useState<any[]>([]);
     const [favoriteProjects, setFavoriteProjects] = useState<any[]>([]);
@@ -59,6 +62,18 @@ export default function Sidebar() {
         shared: 0,
         trash: 0,
     });
+
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 1024);
+        };
+        
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
@@ -166,7 +181,30 @@ export default function Sidebar() {
     };
 
     return (
-        <div className="w-[260px] h-screen bg-white border-r border-[#E3E8EF] flex flex-col flex-shrink-0">
+        <>
+            {/* Mobile Backdrop */}
+            <AnimatePresence>
+                {isSidebarOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setSidebarOpen(false)}
+                        className="fixed inset-0 bg-black/30 backdrop-blur-[2px] z-[45] lg:hidden"
+                    />
+                )}
+            </AnimatePresence>
+
+            <motion.div 
+                initial={false}
+                animate={{ 
+                    x: isMobile 
+                        ? (isSidebarOpen ? 0 : -260) 
+                        : 0 
+                }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="fixed lg:relative z-50 w-[260px] h-screen bg-white border-r border-[#E3E8EF] flex flex-col flex-shrink-0"
+            >
             {/* Workspace Switcher */}
             <div className="h-[70px] flex items-center px-6 border-b border-[#F2F4F7]">
                 <div className="flex items-center gap-3">
@@ -332,7 +370,8 @@ export default function Sidebar() {
                     </button>
                 </div>
             </div>
-        </div>
+        </motion.div>
+        </>
     );
 }
 

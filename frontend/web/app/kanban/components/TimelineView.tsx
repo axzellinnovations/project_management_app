@@ -25,8 +25,16 @@ const priorityColors = {
   URGENT: 'border-l-red-500',
 };
 
+interface TimelineTask extends Task {
+  left: string;
+  width: string;
+  row: number;
+  startDateObj: Date;
+  dueDateObj: Date;
+}
+
 export default function TimelineView({ tasks, onTaskUpdate, projectId }: TimelineViewProps) {
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedTask, setSelectedTask] = useState<TimelineTask | null>(null);
 
   const timelineData = useMemo(() => {
     const validTasks = tasks.filter(t => t.startDate && t.dueDate);
@@ -48,7 +56,7 @@ export default function TimelineView({ tasks, onTaskUpdate, projectId }: Timelin
 
     const totalDays = differenceInDays(endMonth, startMonth);
 
-    const taskBars = validTasks.map((task, index) => {
+    const taskBars: TimelineTask[] = validTasks.map((task, index) => {
       const start = parseISO(task.startDate!);
       const end = parseISO(task.dueDate!);
       const left = (differenceInDays(start, startMonth) / totalDays) * 100;
@@ -58,15 +66,15 @@ export default function TimelineView({ tasks, onTaskUpdate, projectId }: Timelin
         left: `${left}%`,
         width: `${width}%`,
         row: index,
-        startDate: start,
-        endDate: end
+        startDateObj: start,
+        dueDateObj: end
       };
     });
 
     return { months, tasks: taskBars, totalDays, startDate: startMonth };
   }, [tasks]);
 
-  const handleTaskClick = (task: Task) => {
+  const handleTaskClick = (task: TimelineTask) => {
     setSelectedTask(task);
   };
 
@@ -127,7 +135,7 @@ export default function TimelineView({ tasks, onTaskUpdate, projectId }: Timelin
                 minWidth: '120px'
               }}
               onClick={() => handleTaskClick(task)}
-              title={`${task.title} (${format(task.startDate, 'MMM dd')} - ${format(task.endDate, 'MMM dd')})`}
+              title={`${task.title} (${format(task.startDateObj, 'MMM dd')} - ${format(task.dueDateObj, 'MMM dd')})`}
             >
               <div className="flex items-center gap-2 truncate">
                 <span className="text-xs">{getPriorityIcon(task.priority)}</span>
@@ -177,13 +185,21 @@ export default function TimelineView({ tasks, onTaskUpdate, projectId }: Timelin
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="w-4 h-4 text-gray-400" />
                   <span className="text-gray-600">Start:</span>
-                  <span className="font-medium">{selectedTask.startDate ? format(parseISO(selectedTask.startDate), 'MMM dd, yyyy') : 'Not set'}</span>
+                  <span className="font-medium">
+                    {selectedTask.startDateObj ? (
+                      format(selectedTask.startDateObj, 'MMM dd, yyyy')
+                    ) : 'Not set'}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="w-4 h-4 text-gray-400" />
                   <span className="text-gray-600">Due:</span>
-                  <span className="font-medium">{selectedTask.dueDate ? format(parseISO(selectedTask.dueDate), 'MMM dd, yyyy') : 'Not set'}</span>
+                  <span className="font-medium">
+                    {selectedTask.dueDateObj ? (
+                      format(selectedTask.dueDateObj, 'MMM dd, yyyy')
+                    ) : 'Not set'}
+                  </span>
                 </div>
 
                 {selectedTask.assigneeName && (
