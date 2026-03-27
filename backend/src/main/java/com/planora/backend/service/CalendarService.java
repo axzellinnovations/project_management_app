@@ -47,7 +47,7 @@ public class CalendarService {
             event.setDescription(task.getDescription());
             event.setKind("task");
             event.setType(task.getStatus() != null ? "Task" : "Task"); // extend later if you add a task-type field
-            event.setStatus(task.getStatus() != null ? task.getStatus().name() : null);
+            event.setStatus(task.getStatus());
             event.setStartDate(task.getStartDate());
             event.setEndDate(task.getDueDate());   // tasks: end = dueDate
             event.setDueDate(task.getDueDate());

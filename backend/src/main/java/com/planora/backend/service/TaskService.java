@@ -55,18 +55,12 @@ public class TaskService {
         task.setDescription(request.getDescription());
         task.setProject(project);
 
-<<<<<<< HEAD
         task.setStoryPoint(request.getStoryPoint() != null ? request.getStoryPoint() : 0);
-        task.setDueDate(request.getDueDate());
-        task.setStartDate(request.getStartDate());
-=======
-        task.setStoryPoint(request.getStoryPoint());
 
         // Ensure every task has a start date (use creation date when not provided) and a due date.
         LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
         task.setStartDate(startDate);
         task.setDueDate(request.getDueDate() != null ? request.getDueDate() : startDate);
->>>>>>> 4c4640ac4d3ee909fdd22930d0ef8f0fedb7898c
 
         //enum assign
         if(request.getPriority() != null) task.setPriority(Priority.valueOf(request.getPriority()));
