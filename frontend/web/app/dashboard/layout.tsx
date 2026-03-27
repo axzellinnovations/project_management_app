@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "../nav/Sidebar";
 import TopBar from "../nav/TopBar";
@@ -31,19 +31,19 @@ export default function DashboardLayout({
 
     return (
         <div className="flex h-screen bg-white">
-            {/* Sidebar */}
-            <Sidebar />
+            <Suspense fallback={<div className="w-[260px] bg-white border-r border-[#E3E8EF]" />}>
+                <Sidebar />
+            </Suspense>
 
             <div className="flex-1 flex flex-col overflow-hidden">
-                {/* TopBar */}
-                <TopBar />
+                <Suspense fallback={<div className="h-[74px] bg-[#F1F6F9] border-b border-[#E3E8EF]" />}>
+                    <TopBar />
+                </Suspense>
 
-                {/* Main Content Area */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto bg-white p-8">
                     {children}
                 </main>
             </div>
         </div>
-
     );
 }
