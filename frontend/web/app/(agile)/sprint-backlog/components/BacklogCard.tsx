@@ -9,7 +9,6 @@ import {
   Pencil,
   Check,
   Trash2,
-  UserCircle2,
 } from 'lucide-react';
 import type { SprintItem } from '../page';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
@@ -27,6 +26,7 @@ interface BacklogCardProps {
   onDropTask: (taskId: number, sprintId: number) => void;
   onCreateTask: (title: string, sprintId: number) => void;
   onDeleteTask: (taskId: number, sprintId: number) => void;
+  onDeleteSprint: (sprintId: number) => void;
 }
 
 type SprintStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
@@ -59,7 +59,7 @@ interface LocalSprintTask {
   subtasks: string;
 }
 
-export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTask, onDeleteTask }: BacklogCardProps) {
+export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTask, onDeleteTask, onDeleteSprint }: BacklogCardProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [showSprintMenu, setShowSprintMenu] = useState(false);
@@ -205,9 +205,26 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
     updateTaskOnServer(taskId, { storyPoint: value });
   };
 
-  const handleDueDateChange = (taskId: number, date: string) => {
-    updateTask(taskId, { endDate: date });
-    updateTaskOnServer(taskId, { dueDate: date });
+  const handleDueDateChange = async (taskId: number, date: string) => {
+    const normalizedDate = date ? String(date).slice(0, 10) : '';
+    const previousDate = localTasks.find((task) => task.id === taskId)?.endDate ?? '';
+
+    updateTask(taskId, { endDate: normalizedDate });
+
+    try {
+      const response = await api.put(`/api/tasks/${taskId}`, {
+        dueDate: normalizedDate || null,
+      });
+
+      const serverDueDate = response?.data?.dueDate
+        ? String(response.data.dueDate).slice(0, 10)
+        : '';
+
+      updateTask(taskId, { endDate: serverDueDate });
+    } catch {
+      updateTask(taskId, { endDate: previousDate });
+      alert('Failed to update due date.');
+    }
   };
 
   const formatDate = (value: string) => {
@@ -231,7 +248,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
   };
 
   const handleDeleteSprint = () => {
-    alert(`Delete ${sprint.name}`);
+    onDeleteSprint(sprint.id);
     setShowSprintMenu(false);
   };
 
@@ -393,8 +410,12 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
               localTasks.map((task) => (
                 <div
                   key={task.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', String(task.id));
+                  }}
                   onClick={() => setSelectedTaskId(task.id)}
-                  className="group relative flex items-center gap-4 rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 cursor-pointer hover:border-[#175CD3]/30 hover:shadow-md transition-all duration-200 ease-in-out"
+                  className="group relative flex items-center gap-4 rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 cursor-grab hover:border-[#175CD3]/30 hover:shadow-md transition-all duration-200 ease-in-out"
                 >
                   {/* Task type indicator */}
                   <div className="h-6 w-6 flex-shrink-0 rounded border-2 border-[#175CD3] bg-[#EFF8FF] transition-colors duration-150" />
@@ -449,7 +470,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
                           input.showPicker();
                         }
                       }}
-                      className="flex items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-1.5 text-[12px] font-medium cursor-pointer hover:border-[#98A2B3] transition-colors duration-150"
+                      className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-1.5 text-[12px] font-medium cursor-pointer whitespace-nowrap hover:border-[#98A2B3] transition-colors duration-150"
                     >
                       <CalendarDays size={14} className="text-[#667085]" />
                       <span className={task.endDate ? 'text-[#344054]' : 'text-[#98A2B3]'}>
