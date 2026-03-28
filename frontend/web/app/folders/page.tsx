@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function FoldersRootPage() {
+function FoldersRootContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -26,4 +26,12 @@ export default function FoldersRootPage() {
     }, [router, searchParams]);
 
     return null;
+}
+
+export default function FoldersRootPage() {
+    return (
+        <Suspense fallback={null}>
+            <FoldersRootContent />
+        </Suspense>
+    );
 }

@@ -95,11 +95,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                             throw new IllegalArgumentException("Invalid username in token");
                         }
 
-                        System.out.println("[WebSocket] Setting user principal: " + username);
-                        accessor.setUser(new StompPrincipal(username));
-                        accessor.getSessionAttributes().put("username", username);
+                        String normalizedUsername = username.toLowerCase();
+
+                        System.out.println("[WebSocket] Setting user principal: " + normalizedUsername);
+                        accessor.setUser(new StompPrincipal(normalizedUsername));
+                        accessor.getSessionAttributes().put("username", normalizedUsername);
                         
-                        System.out.println("[WebSocket] Authentication successful for user: " + username);
+                        System.out.println("[WebSocket] Authentication successful for user: " + normalizedUsername);
                     } catch (Exception e) {
                         System.err.println("[WebSocket] Authentication error: " + e.getMessage());
                         e.printStackTrace();

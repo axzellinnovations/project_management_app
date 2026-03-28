@@ -6,6 +6,7 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.MalformedJwtException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -36,7 +37,10 @@ public class JwtFilter extends OncePerRequestFilter {
             "/api/auth/resend",
             "/api/auth/forgot",
             "/api/auth/reset",
-            "/ws/**"
+            "/ws/**",
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html"
         );
 
     public JwtFilter(JWTService jwtService,UserDetailsService userDetailsService) {
@@ -83,7 +87,11 @@ public class JwtFilter extends OncePerRequestFilter {
 
 
         filterChain.doFilter(request, response);
-        }catch (ExpiredJwtException e) {
+        } catch (UsernameNotFoundException e) {
+            logger.info("User not found for token: {}", e.getMessage());
+            // Continue the filter chain without authentication
+            filterChain.doFilter(request, response);
+        } catch (ExpiredJwtException e) {
             logger.info("JWT Token expired: {}", e.getMessage());
             sendErrorResponse(response, "Token has expired");
         } catch (MalformedJwtException e) {

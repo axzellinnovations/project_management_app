@@ -44,8 +44,7 @@ public class Task {
     @Enumerated(EnumType.STRING)
     private Priority priority;
 
-    @Enumerated(EnumType.STRING)
-    private Status status;
+    private String status;
 
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -53,6 +52,7 @@ public class Task {
     private LocalDate startDate;
     private LocalDate dueDate;
     private LocalDateTime updatedAt;
+    private LocalDateTime completedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reporter_id")

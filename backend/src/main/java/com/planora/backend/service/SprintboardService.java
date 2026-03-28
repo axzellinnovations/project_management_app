@@ -193,8 +193,7 @@ public class SprintboardService {
         }
 
         // Update task status to match the column
-        Status taskStatus = Status.valueOf(newStatus.toString());
-        task.setStatus(taskStatus);
+        task.setStatus(newStatus.toString());
 
         taskRepository.save(task);
     }

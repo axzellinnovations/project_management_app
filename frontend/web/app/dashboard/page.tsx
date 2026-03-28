@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import { useEffect, useState, useRef } from 'react';
 import { getUserFromToken, User } from '@/lib/auth';
@@ -11,6 +12,7 @@ interface ProjectSummary {
     id: number;
     name: string;
     projectKey?: string;
+    isFavorite?: boolean;
     type: 'AGILE' | 'KANBAN' | string;
 }
 
@@ -76,10 +78,12 @@ export default function DashboardPage() {
     };
 
     const [recentSpacesSearch, setRecentSpacesSearch] = useState('');
+    const [recentFilter, setRecentFilter] = useState<'recent' | 'favorites'>('recent');
 
     const filteredRecentProjects = projects.filter(project => 
-        project.name.toLowerCase().includes(recentSpacesSearch.toLowerCase()) ||
-        (project.projectKey && project.projectKey.toLowerCase().includes(recentSpacesSearch.toLowerCase()))
+        (recentFilter === 'favorites' ? project.isFavorite : true) &&
+        (project.name.toLowerCase().includes(recentSpacesSearch.toLowerCase()) ||
+        (project.projectKey && project.projectKey.toLowerCase().includes(recentSpacesSearch.toLowerCase())))
     );
 
     return (
@@ -109,7 +113,26 @@ export default function DashboardPage() {
                                     className="block w-full pl-9 pr-3 py-1.5 border border-[#D1D5DC] rounded-[4px] leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-[14px] font-arimo"
                                 />
                             </div>
-                            <button className="px-3 py-1.5 rounded bg-blue-50 text-[#0052CC] font-arimo text-[14px] font-medium border border-[#0052CC]/10">Recent</button>
+                            <button 
+                                onClick={() => setRecentFilter('recent')}
+                                className={`px-3 py-1.5 rounded font-arimo text-[14px] font-medium border transition-all ${
+                                    recentFilter === 'recent' 
+                                    ? 'bg-blue-50 text-[#0052CC] border-[#0052CC]/10' 
+                                    : 'text-[#4A5565] border-transparent hover:bg-gray-50'
+                                }`}
+                            >
+                                Recent
+                            </button>
+                            <button 
+                                onClick={() => setRecentFilter('favorites')}
+                                className={`px-3 py-1.5 rounded font-arimo text-[14px] font-medium border transition-all ${
+                                    recentFilter === 'favorites' 
+                                    ? 'bg-blue-50 text-[#0052CC] border-[#0052CC]/10' 
+                                    : 'text-[#4A5565] border-transparent hover:bg-gray-50'
+                                }`}
+                            >
+                                Starred
+                            </button>
                         </div>
                         <Link href="/spaces" className="font-arimo text-[16px] text-[#0052CC] hover:underline">View all spaces</Link>
                     </div>
@@ -160,6 +183,15 @@ export default function DashboardPage() {
                                     id={project.id.toString()}
                                     name={project.name}
                                     projectKey={project.projectKey}
+                                    isFavorite={project.isFavorite}
+                                    onFavoriteToggle={() => {
+                                        // Refresh projects to update other UI parts if needed
+                                        const fetchProjects = async () => {
+                                            const response = await api.get('/api/projects');
+                                            setProjects(response.data);
+                                        };
+                                        fetchProjects();
+                                    }}
                                     type={project.type === 'AGILE' ? 'Agile Scrum' : 'Kanban'}
                                     boardCount={1}
                                 />

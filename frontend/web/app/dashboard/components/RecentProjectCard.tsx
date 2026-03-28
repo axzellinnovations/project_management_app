@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import api from '@/lib/axios';
 
 interface RecentProjectCardProps {
@@ -15,6 +15,8 @@ interface RecentProjectCardProps {
     type?: string;
     boardCount?: number;
     width?: string;
+    isFavorite?: boolean;
+    onFavoriteToggle?: (isFavorite: boolean) => void;
 }
 
 const COLOR_THEMES = [
@@ -36,10 +38,30 @@ export default function RecentProjectCard({
     iconText,
     type = "Team-managed software",
     boardCount = 1,
-    width
+    width,
+    isFavorite: initialIsFavorite = false,
+    onFavoriteToggle
 }: RecentProjectCardProps) {
     const router = useRouter();
     const [isHovered, setIsHovered] = useState(false);
+    const [isFavorite, setIsFavorite] = useState(initialIsFavorite);
+
+    useEffect(() => {
+        setIsFavorite(initialIsFavorite);
+    }, [initialIsFavorite]);
+
+    const handleFavoriteClick = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const nextState = !isFavorite;
+        setIsFavorite(nextState);
+        try {
+            await api.post(`/api/projects/${id}/favorite`);
+            if (onFavoriteToggle) onFavoriteToggle(nextState);
+        } catch (error) {
+            console.error("Failed to toggle favorite:", error);
+            setIsFavorite(!nextState); // Revert on failure
+        }
+    };
 
     // Tilt Animation Values
     const x = useMotionValue(0);
@@ -116,8 +138,30 @@ export default function RecentProjectCard({
                     background: `radial-gradient(400px circle at ${mouseX}px ${mouseY}px, ${theme.glow}, transparent 80%)`,
                     opacity: isHovered ? 1 : 0,
                 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
                 className="absolute inset-0 pointer-events-none transition-opacity duration-300 z-0"
             />
+
+            {/* Favorite Star Icon */}
+            <motion.button
+                whileHover={{ scale: 1.2 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={handleFavoriteClick}
+                className="absolute top-4 right-4 z-30 p-1 rounded-full hover:bg-black/5 transition-colors"
+                title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            >
+                <motion.svg
+                    animate={{
+                        fill: isFavorite ? "#FFD700" : "transparent",
+                        stroke: isFavorite ? "#FFD700" : "#99A1AF",
+                        scale: isFavorite ? [1, 1.4, 1] : 1
+                    }}
+                    transition={{ duration: 0.3 }}
+                    width="20" height="20" viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                >
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </motion.svg>
+            </motion.button>
 
             {/* Content Container (Layered for 3D depth) */}
             <div style={{ transform: "translateZ(50px)" }} className="relative z-10 h-full flex flex-col">

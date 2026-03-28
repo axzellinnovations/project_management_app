@@ -5,6 +5,8 @@ import Image from 'next/image';
 import { useEffect, useState, useMemo, useSyncExternalStore } from 'react';
 import { getUserFromToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigation } from '@/lib/navigation-context';
 import api from '@/lib/axios';
 
 interface NavItemProps {
@@ -47,7 +49,11 @@ export default function Sidebar() {
         if (!token) return null;
         return getUserFromToken();
     }, [token]);
+    const { isSidebarOpen, setSidebarOpen } = useNavigation();
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+    const [recentProjects, setRecentProjects] = useState<any[]>([]);
+    const [favoriteProjects, setFavoriteProjects] = useState<any[]>([]);
+    const [loadingProjects, setLoadingProjects] = useState(true);
     const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
     const [folderStats, setFolderStats] = useState({
         viewAll: 0,
@@ -56,6 +62,18 @@ export default function Sidebar() {
         shared: 0,
         trash: 0,
     });
+
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 1024);
+        };
+        
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
@@ -84,8 +102,23 @@ export default function Sidebar() {
                     // Silently fail - just show initials
                 }
             };
-            void loadProfilePic();
+            loadProfilePic();
         }
+
+        const fetchRecentProjects = async () => {
+            try {
+                const response = await api.get('/api/projects');
+                const allProjects = response.data;
+                setRecentProjects(allProjects.slice(0, 3));
+                setFavoriteProjects(allProjects.filter((p: any) => p.isFavorite).slice(0, 3));
+            } catch (error: any) {
+                console.error("Failed to fetch recent projects for sidebar:", error.response?.data?.message || error.message);
+            } finally {
+                setLoadingProjects(false);
+            }
+        };
+
+        void fetchRecentProjects();
 
         const loadFolderStats = async () => {
             if (typeof window === 'undefined') {
@@ -148,7 +181,30 @@ export default function Sidebar() {
     };
 
     return (
-        <div className="w-[260px] h-screen bg-white border-r border-[#E3E8EF] flex flex-col flex-shrink-0">
+        <>
+            {/* Mobile Backdrop */}
+            <AnimatePresence>
+                {isSidebarOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setSidebarOpen(false)}
+                        className="fixed inset-0 bg-black/30 backdrop-blur-[2px] z-[45] lg:hidden"
+                    />
+                )}
+            </AnimatePresence>
+
+            <motion.div 
+                initial={false}
+                animate={{ 
+                    x: isMobile 
+                        ? (isSidebarOpen ? 0 : -260) 
+                        : 0 
+                }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="fixed lg:relative z-50 w-[260px] h-screen bg-white border-r border-[#E3E8EF] flex flex-col flex-shrink-0"
+            >
             {/* Workspace Switcher */}
             <div className="h-[70px] flex items-center px-6 border-b border-[#F2F4F7]">
                 <div className="flex items-center gap-3">
@@ -178,15 +234,44 @@ export default function Sidebar() {
                             </svg>
                             <span className="font-arimo text-[11px] font-bold text-[#99A1AF] uppercase tracking-wider">PROJECTS</span>
                         </div>
-                        <button className="text-[#99A1AF] hover:text-[#0052CC] transition-colors p-1 rounded hover:bg-gray-100">
+                        <button 
+                            onClick={() => router.push('/createProject')}
+                            className="text-[#99A1AF] hover:text-[#0052CC] transition-colors p-1 rounded hover:bg-gray-100"
+                        >
                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M6 2.5V9.5M2.5 6H9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                         </button>
                     </div>
                     <div className="flex flex-col gap-1">
-                        {/* Empty Projects List */}
-                        <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No projects</div>
+                        {loadingProjects ? (
+                            <div className="px-3 py-2 animate-pulse flex flex-col gap-2">
+                                <div className="h-3 w-20 bg-gray-100 rounded" />
+                                <div className="h-3 w-24 bg-gray-100 rounded" />
+                            </div>
+                        ) : recentProjects.length > 0 ? (
+                            recentProjects.map((project) => (
+                                <Link 
+                                    key={project.id} 
+                                    href="/summary"
+                                    onClick={async () => {
+                                        try {
+                                            await api.post(`/api/projects/${project.id}/access`);
+                                        } catch (e) {}
+                                        localStorage.setItem('currentProjectName', project.name);
+                                        localStorage.setItem('currentProjectId', project.id.toString());
+                                    }}
+                                >
+                                    <ProjectItem 
+                                        label={`${project.projectKey || ''} - ${project.name}`}
+                                        color={Math.abs(project.id.toString().split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)) % 2 === 0 ? 'bg-blue-500' : 'bg-purple-500'}
+                                        active={false} 
+                                    />
+                                </Link>
+                            ))
+                        ) : (
+                            <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No projects</div>
+                        )}
                     </div>
                 </div>
 
@@ -226,8 +311,29 @@ export default function Sidebar() {
                         <span className="font-arimo text-[11px] font-bold text-[#99A1AF] uppercase tracking-wider">FAVORITES</span>
                     </div>
                     <div className="flex flex-col gap-1">
-                        {/* Empty Favorites List */}
-                        <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No favorites</div>
+                        {loadingProjects ? (
+                            <div className="px-3 py-2 animate-pulse flex flex-col gap-2">
+                                <div className="h-3 w-20 bg-gray-100 rounded" />
+                            </div>
+                        ) : favoriteProjects.length > 0 ? (
+                            favoriteProjects.map((project) => (
+                                <Link 
+                                    key={project.id} 
+                                    href="/summary"
+                                    onClick={async () => {
+                                        try {
+                                            await api.post(`/api/projects/${project.id}/access`);
+                                        } catch (e) {}
+                                        localStorage.setItem('currentProjectName', project.name);
+                                        localStorage.setItem('currentProjectId', project.id.toString());
+                                    }}
+                                >
+                                    <FavoriteItem label={`${project.projectKey || ''} - ${project.name}`} />
+                                </Link>
+                            ))
+                        ) : (
+                            <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No favorites</div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -264,7 +370,8 @@ export default function Sidebar() {
                     </button>
                 </div>
             </div>
-        </div>
+        </motion.div>
+        </>
     );
 }
 
@@ -278,6 +385,26 @@ function NavItem({ label, href, icon, active, badge }: NavItemProps) {
             )}
         </Link>
     )
+}
+
+function ProjectItem({ label, color, active = false }: { label: string; color: string; active?: boolean }) {
+    return (
+        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-200 ${active ? 'bg-[#EFF6FF]' : 'hover:bg-[#F9FAFB]'}`}>
+            <div className={`w-2 h-2 rounded-full ${color}`} />
+            <span className="font-arimo text-[13px] text-[#4A5565] truncate">{label}</span>
+        </div>
+    );
+}
+
+function FavoriteItem({ label }: { label: string }) {
+    return (
+        <div className="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-200 hover:bg-[#F9FAFB]">
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor" className="text-[#F59E0B] flex-shrink-0">
+                <path d="m10 2.8 2.2 4.6 5 .7-3.6 3.5.9 5L10 14.7 5.5 16.6l.9-5L2.8 8.1l5-.7L10 2.8z" />
+            </svg>
+            <span className="font-arimo text-[13px] text-[#4A5565] truncate">{label}</span>
+        </div>
+    );
 }
 
 // Icons
