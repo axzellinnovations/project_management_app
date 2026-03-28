@@ -44,6 +44,8 @@ const STATUS_COLORS: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-700",
 };
 
+const ROLE_OPTIONS = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
+
 export default function MembersPageClient({ projectId }: { projectId: string }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [pending, setPending] = useState<PendingInvite[]>([]);
@@ -52,6 +54,13 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  // Modal state
+  const [showModal, setShowModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteSuccess, setInviteSuccess] = useState("");
 
   useEffect(() => {
     async function fetchData() {
@@ -103,6 +112,30 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
   const adminCount = allMembers.filter((m) => m.role === "ADMIN").length;
   const pendingCount = allMembers.filter((m) => m.status === "Pending").length;
 
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteLoading(true);
+    setInviteError("");
+    setInviteSuccess("");
+    try {
+      await axios.post(`/api/projects/${projectId}/invitations`, {
+        email: inviteEmail,
+        role: inviteRole,
+      });
+      setInviteSuccess("Invitation sent!");
+      setInviteEmail("");
+      setInviteRole("");
+      setShowModal(false);
+      // Refresh pending invites
+      const pendingRes = await axios.get(`/api/projects/${projectId}/pending-invites`);
+      setPending(pendingRes.data);
+    } catch (err: any) {
+      setInviteError(err?.response?.data?.message || "Failed to send invite");
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
   if (loading) return <div className="p-8">Loading...</div>;
 
   return (
@@ -112,7 +145,10 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
           <h1 className="text-2xl font-bold">Team Members</h1>
           <div className="text-gray-500 mt-1">Manage your team and their permissions</div>
         </div>
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded font-medium flex items-center gap-2 self-start md:self-auto">
+        <button
+          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded font-medium flex items-center gap-2 self-start md:self-auto"
+          onClick={() => setShowModal(true)}
+        >
           <span className="text-lg">👤</span> Invite Member
         </button>
       </div>
@@ -237,6 +273,66 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
           </tbody>
         </table>
       </div>
+
+      {/* Invite Modal */}
+      {showModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+            <button
+              className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+              onClick={() => setShowModal(false)}
+            >
+              &times;
+            </button>
+            <h2 className="text-xl font-bold mb-4">Invite Team Member</h2>
+            <form onSubmit={handleInvite} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Email Address <span className="text-red-500">*</span></label>
+                <input
+                  type="email"
+                  className="w-full border rounded px-3 py-2"
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Role <span className="text-red-500">*</span></label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={inviteRole}
+                  onChange={e => setInviteRole(e.target.value)}
+                  required
+                >
+                  <option value="">Select a role</option>
+                  {ROLE_OPTIONS.map(role => (
+                    <option key={role} value={role}>{role}</option>
+                  ))}
+                </select>
+              </div>
+              {inviteError && <div className="text-red-600 text-sm">{inviteError}</div>}
+              {inviteSuccess && <div className="text-green-600 text-sm">{inviteSuccess}</div>}
+              <div className="flex gap-2 mt-4">
+                <button
+                  type="button"
+                  className="flex-1 py-2 rounded border border-gray-300 bg-gray-100 hover:bg-gray-200"
+                  onClick={() => setShowModal(false)}
+                  disabled={inviteLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center"
+                  disabled={inviteLoading}
+                >
+                  {inviteLoading ? "Sending..." : (<><span className="mr-2">✉️</span>Send Invite</>)}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

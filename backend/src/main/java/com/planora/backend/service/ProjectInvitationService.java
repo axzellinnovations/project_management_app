@@ -1,22 +1,23 @@
 package com.planora.backend.service;
 
-import com.planora.backend.dto.ProjectInviteRequest;
-import com.planora.backend.model.Project;
-import com.planora.backend.model.TeamInvitation;
-import com.planora.backend.model.User;
-import com.planora.backend.repository.ProjectRepository;
-import com.planora.backend.repository.TeamInvitationRepository;
-import com.planora.backend.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.planora.backend.dto.ProjectInviteRequest;
+import com.planora.backend.model.Project;
+import com.planora.backend.model.TeamInvitation;
 import com.planora.backend.model.TeamMember;
 import com.planora.backend.model.TeamRole;
+import com.planora.backend.model.User;
+import com.planora.backend.repository.ProjectRepository;
+import com.planora.backend.repository.TeamInvitationRepository;
 import com.planora.backend.repository.TeamMemberRepository;
+import com.planora.backend.repository.UserRepository;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -34,8 +35,12 @@ public class ProjectInvitationService {
         if (request == null || request.getEmail() == null || request.getEmail().trim().isEmpty()) {
             throw new RuntimeException("Email is required");
         }
+        if (request.getRole() == null || request.getRole().trim().isEmpty()) {
+            throw new RuntimeException("Role is required");
+        }
 
         String inviteeEmail = request.getEmail().trim().toLowerCase();
+        String roleStr = request.getRole().trim().toUpperCase();
 
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
@@ -62,6 +67,10 @@ public class ProjectInvitationService {
         invitation.setToken(UUID.randomUUID().toString());
         invitation.setInvitedAt(LocalDateTime.now());
         invitation.setExpiresAt(LocalDateTime.now().plusDays(7));
+        // Store role as a string property (if you want to persist it, add a field to TeamInvitation)
+        // For now, we will use the role when accepting the invitation
+        invitation.setStatus("PENDING");
+        // Optionally: invitation.setRole(roleStr); // if you add a field
 
         teamInvitationRepository.save(invitation);
 

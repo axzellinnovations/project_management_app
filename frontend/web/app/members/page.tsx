@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import axios from "@/lib/axios";
+import { useParams } from "next/navigation";
 
 interface Member {
   id: number;
@@ -24,10 +25,20 @@ interface PendingInvite {
   status: string;
 }
 
-export default function MembersPage({ teamId }: { teamId: number }) {
+const ROLE_OPTIONS = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
+
+export default function MembersPage() {
+  const params = useParams();
+  const teamId = Number(params.projectId);
   const [members, setMembers] = useState<Member[]>([]);
   const [pending, setPending] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState("");
+  const [inviteSuccess, setInviteSuccess] = useState("");
 
   useEffect(() => {
     async function fetchData() {
@@ -42,6 +53,31 @@ export default function MembersPage({ teamId }: { teamId: number }) {
     }
     fetchData();
   }, [teamId]);
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteLoading(true);
+    setInviteError("");
+    setInviteSuccess("");
+    try {
+      // You may need to get projectId from context/route; here we assume teamId == projectId for demo
+      await axios.post(`/api/projects/${teamId}/invitations`, {
+        email: inviteEmail,
+        role: inviteRole,
+      });
+      setInviteSuccess("Invitation sent!");
+      setInviteEmail("");
+      setInviteRole("");
+      setShowModal(false);
+      // Refresh pending invites
+      const pendingRes = await axios.get(`/api/teams/${teamId}/pending-invites`);
+      setPending(pendingRes.data);
+    } catch (err: any) {
+      setInviteError(err?.response?.data?.message || "Failed to send invite");
+    } finally {
+      setInviteLoading(false);
+    }
+  };
 
   if (loading) return <div className="p-8">Loading...</div>;
 
@@ -98,7 +134,71 @@ export default function MembersPage({ teamId }: { teamId: number }) {
           </div>
         ))}
       </div>
-      <button className="mt-8 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Invite Member</button>
+      <button
+        className="mt-8 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        onClick={() => setShowModal(true)}
+      >
+        Invite Member
+      </button>
+
+      {showModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+            <button
+              className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+              onClick={() => setShowModal(false)}
+            >
+              &times;
+            </button>
+            <h2 className="text-xl font-bold mb-4">Invite Team Member</h2>
+            <form onSubmit={handleInvite} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Email Address <span className="text-red-500">*</span></label>
+                <input
+                  type="email"
+                  className="w-full border rounded px-3 py-2"
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Role <span className="text-red-500">*</span></label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={inviteRole}
+                  onChange={e => setInviteRole(e.target.value)}
+                  required
+                >
+                  <option value="">Select a role</option>
+                  {ROLE_OPTIONS.map(role => (
+                    <option key={role} value={role}>{role}</option>
+                  ))}
+                </select>
+              </div>
+              {inviteError && <div className="text-red-600 text-sm">{inviteError}</div>}
+              {inviteSuccess && <div className="text-green-600 text-sm">{inviteSuccess}</div>}
+              <div className="flex gap-2 mt-4">
+                <button
+                  type="button"
+                  className="flex-1 py-2 rounded border border-gray-300 bg-gray-100 hover:bg-gray-200"
+                  onClick={() => setShowModal(false)}
+                  disabled={inviteLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center"
+                  disabled={inviteLoading}
+                >
+                  {inviteLoading ? "Sending..." : (<><span className="mr-2">✉️</span>Send Invite</>)}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
