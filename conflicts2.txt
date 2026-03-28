@@ -1,0 +1,5 @@
+100644 8680b36e5d2bf1550da857af2f94cc6cdd6deca5 1	backend/src/main/java/com/planora/backend/repository/TaskRepository.java
+100644 376f0f24194ab89d58f33c1cbb96fafa09245c2e 2	backend/src/main/java/com/planora/backend/repository/TaskRepository.java
+100644 5aefb7db6b7a9d9345f31d7b0ca6cdf962a5cd28 3	backend/src/main/java/com/planora/backend/repository/TaskRepository.java
+100644 5a4e9dec86561a1e007befe149804fc997a86085 1	backend/src/main/java/com/planora/backend/service/BurndownService.java
+100644 0ea35b5ce0ced468360a5d1cf34ffbf788ef8116 3	backend/src/main/java/com/planora/backend/service/BurndownService.java
