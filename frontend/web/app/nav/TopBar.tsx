@@ -87,10 +87,6 @@ function TopBarContent() {
             return 'calendar';
         }
 
-        if (pathname.startsWith('/burndown')) {
-            return 'burndown';
-        }
-
         if (pathname.startsWith('/kanban') || pathname.startsWith('/sprint-board')) {
             return 'board';
         }
@@ -185,8 +181,6 @@ function TopBarContent() {
                 return withProjectId('/kanban');
             case 'calendar':
                 return withProjectId('/calendar');
-            case 'burndown':
-                return withProjectId('/burndown');
             case 'chats':
                 return projectId ? `/project/${projectId}/chat` : '/summary';
             case 'members':

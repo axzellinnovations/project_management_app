@@ -3,7 +3,6 @@ package com.planora.backend.service;
 import com.planora.backend.dto.BurndownDataPointDTO;
 import com.planora.backend.dto.BurndownResponseDTO;
 import com.planora.backend.model.Sprint;
-import com.planora.backend.model.Status;
 import com.planora.backend.model.Task;
 import com.planora.backend.repository.SprintRepository;
 import com.planora.backend.repository.TaskRepository;
@@ -14,6 +13,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class BurndownService {
@@ -62,7 +62,9 @@ public class BurndownService {
 
         // Fetch tasks
         List<Task> allTasks  = taskRepository.findBySprintId(sprintId);
-        List<Task> doneTasks = taskRepository.findBySprintIdAndStatus(sprintId, Status.DONE);
+        List<Task> doneTasks = allTasks.stream()
+                .filter(t -> "done".equalsIgnoreCase(t.getStatus()))
+                .collect(Collectors.toList());
 
         // Total story points (all tasks in sprint)
         int total = allTasks.stream().mapToInt(Task::getStoryPoint).sum();
