@@ -28,4 +28,7 @@ public class TeamInvitation {
 
     private LocalDateTime invitedAt = LocalDateTime.now();
     private LocalDateTime expiresAt;
+
+    @Column(nullable = false)
+    private String status = "PENDING"; // E.g., PENDING, ACCEPTED
 }

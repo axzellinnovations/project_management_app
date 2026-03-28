@@ -1,6 +1,5 @@
 package com.planora.backend.listener;
 
-import com.planora.backend.model.ChatMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +8,9 @@ import org.springframework.messaging.simp.SimpMessageSendingOperations;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
+
+import com.planora.backend.controller.ChatController;
+import com.planora.backend.service.ChatPresenceService;
 
 @Component
 public class WebSocketEventListener {
@@ -19,6 +21,9 @@ public class WebSocketEventListener {
     @Autowired
     private SimpMessageSendingOperations messagingTemplate;
 
+    @Autowired
+    private ChatPresenceService chatPresenceService;
+
     // This method is called whenever a WebSocket connection is disconnected
     @EventListener
     public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
@@ -27,18 +32,21 @@ public class WebSocketEventListener {
 
         // Retrieve the username from the session attributes (we added it in
         // ChatController.addUser)
-        String username = (String) headerAccessor.getSessionAttributes().get("username");
+        var sessionAttributes = headerAccessor.getSessionAttributes();
+        if (sessionAttributes == null) {
+            return;
+        }
+
+        String username = (String) sessionAttributes.get("username");
+        String sessionId = headerAccessor.getSessionId();
 
         if (username != null) {
             logger.info("User Disconnected : " + username);
-
-            // Create a LEAVE message
-            ChatMessage chatMessage = new ChatMessage();
-            chatMessage.setType(ChatMessage.MessageType.LEAVE);
-            chatMessage.setSender(username);
-
-            // Broadcast the LEAVE message to all subscribers of /topic/public
-            messagingTemplate.convertAndSend("/topic/public", chatMessage);
+            var presenceUpdates = chatPresenceService.markOfflineForSession(sessionId, username);
+            presenceUpdates.forEach((projectId, onlineUsers) ->
+                    messagingTemplate.convertAndSend(
+                            "/topic/project/" + projectId + "/presence",
+                            new ChatController.PresenceEvent("OFFLINE", username, onlineUsers)));
         }
     }
 }

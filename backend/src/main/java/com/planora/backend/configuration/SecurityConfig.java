@@ -6,10 +6,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -20,6 +20,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
 
 
 @Configuration
@@ -27,26 +28,39 @@ import java.util.Arrays;
 public class SecurityConfig {
 
     @Autowired
-    private UserDetailsService userDetailsService;
-
-    @Autowired
     private JwtFilter jwtFilter;
+
+    private static final List<String> PUBLIC_ENDPOINTS = List.of(
+            "/api/auth/register",
+            "/api/auth/reg/verify",
+            "/api/auth/login",
+            "/api/auth/resend",
+            "/api/auth/forgot",
+            "/api/auth/reset",
+            "/ws/**",
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html"
+        );
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .cors(Customizer.withDefaults())
-                .csrf(customizer -> customizer.disable())
-                .authorizeHttpRequests(request ->request
-                        .requestMatchers("/api/auth/**")
+            .cors(cors -> {
+            })
+            .csrf(AbstractHttpConfigurer::disable)
+            .authorizeHttpRequests(request -> request
+                .requestMatchers(PUBLIC_ENDPOINTS.toArray(new String[0]))
                         .permitAll()
                         .anyRequest().authenticated())
-                .httpBasic(Customizer.withDefaults())
+            .formLogin(AbstractHttpConfigurer::disable)
+            .httpBasic(AbstractHttpConfigurer::disable)
+            .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
-                return http.build();
+        return http.build();
     }
 
     @Bean
@@ -71,9 +85,8 @@ public class SecurityConfig {
 
     @Bean
     public AuthenticationProvider authenticationProvider(UserDetailsService userDetailsService){
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
-        provider.setUserDetailsService(userDetailsService);
         return provider;
     }
 

@@ -1,10 +1,15 @@
 "use client";
 import React from "react";
+import { motion } from "framer-motion";
 import type { Task } from "./types";
 
 export default function TaskCard({ task }: { task: Task }) {
   return (
-    <div className="bg-white rounded-lg shadow p-3 w-full transform transition duration-150 ease-out hover:-translate-y-1 hover:shadow-lg">
+    <motion.div
+      className="bg-white rounded-lg shadow p-3 w-full"
+      whileHover={{ y: -6 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+    >
       <div className="font-medium text-sm text-slate-900">{task.title}</div>
       <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
         <div className="flex items-center gap-2">
@@ -16,6 +21,6 @@ export default function TaskCard({ task }: { task: Task }) {
           <div className="text-xs text-gray-500">{task.due}</div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

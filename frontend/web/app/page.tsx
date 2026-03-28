@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 import { ReactNode } from 'react';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { getUserFromToken } from '@/lib/auth';
 import styles from './page.module.css';
 
 // --- ICONS ---
@@ -38,6 +41,22 @@ function IconTeam() {
   );
 }
 
+function IconUser() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
+  );
+}
+
+function IconStart() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+       <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+    </svg>
+  );
+}
+
 // --- REUSABLE COMPONENTS ---
 
 type ButtonVariant = 'primary' | 'ghost' | 'outlined';
@@ -68,12 +87,13 @@ interface ButtonProps {
   variant?: ButtonVariant;
   href?: string;
   icon?: ArrowType;
+  mobileIcon?: ReactNode;
   children: ReactNode;
   fullWidth?: boolean;
 }
 
-function Button({ variant = 'primary', href, icon, children, fullWidth = false }: ButtonProps) {
-  const baseClasses = "h-11 sm:h-10 rounded-lg px-6 cursor-pointer transition-all flex items-center justify-center gap-2";
+function Button({ variant = 'primary', href, icon, mobileIcon, children, fullWidth = false }: ButtonProps) {
+  const baseClasses = "h-11 sm:h-10 rounded-lg px-4 sm:px-6 cursor-pointer transition-all flex items-center justify-center gap-2";
   
   const variantClasses = {
     primary: "bg-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 group",
@@ -91,9 +111,10 @@ function Button({ variant = 'primary', href, icon, children, fullWidth = false }
   const heightClass = variant === 'ghost' ? 'h-9' : 'h-11 sm:h-10';
   
   const content = (
-    <div className={`${baseClasses} ${heightClass} ${variantClasses[variant]} ${widthClass}`}>
-      <p className={textClasses[variant]}>{children}</p>
-      {icon && <ArrowIcon type={icon} variant={variant} />}
+    <div className={`${baseClasses} ${heightClass} ${variantClasses[variant]} ${widthClass} ${textClasses[variant]}`}>
+      {mobileIcon && <div className="sm:hidden flex items-center justify-center">{mobileIcon}</div>}
+      <p className={`${mobileIcon ? 'hidden sm:block' : ''}`}>{children}</p>
+      {icon && <div className={mobileIcon ? 'hidden sm:block' : ''}><ArrowIcon type={icon} variant={variant} /></div>}
     </div>
   );
 
@@ -129,8 +150,8 @@ function LogoContainer() {
 function NavButtons() {
   return (
     <div className="flex gap-2 sm:gap-3 items-center">
-        <Button variant="ghost" href="/login">Sign In</Button>
-        <Button variant="primary" href="/register">Get Started</Button>
+        <Button variant="ghost" href="/login" mobileIcon={<IconUser />}>Sign In</Button>
+        <Button variant="primary" href="/register" mobileIcon={<IconStart />}>Get Started</Button>
     </div>
   );
 }
@@ -148,21 +169,21 @@ function Navigation() {
 
 function HeroSection() {
   return (
-    <div className="relative w-full flex flex-col items-center pt-8 sm:pt-12 md:pt-16 px-4">
+    <div className="relative w-full flex flex-col items-center pt-10 sm:pt-16 md:pt-20 px-4">
       {/* Badge */}
       <div className={styles.heroBadge}>
-        <p className="font-medium text-xs text-white">✨ The Future of Project Management</p>
+        <p className="font-semibold text-[10px] sm:text-xs text-white uppercase tracking-wider">✨ The Future of Project Management</p>
       </div>
 
-      <h1 className="font-bold text-3xl sm:text-4xl md:text-5xl lg:text-[56px] leading-tight text-center text-white mb-4 sm:mb-5">
-        Manage Projects <br className="hidden sm:block"/> <span className="sm:hidden"> </span>with Planora
+      <h1 className="font-bold text-[32px] sm:text-4xl md:text-5xl lg:text-[64px] leading-[1.1] text-center text-white mb-6 max-w-4xl">
+        Manage Projects <br className="hidden sm:block"/> <span className="sm:hidden text-white/90">Smartly</span> with Planora
       </h1>
 
-      <p className="text-sm sm:text-base md:text-[16px] leading-relaxed text-white/90 text-center max-w-2xl mb-8 px-2">
-        The all-in-one project management platform that helps teams plan, track, and deliver exceptional work. Streamline your workflow and boost productivity.
+      <p className="text-[14px] sm:text-base md:text-lg leading-relaxed text-white/80 text-center max-w-xl mb-10 px-4">
+        The all-in-one platform for high-performance teams. Plan, track, and deliver extraordinary work without the complexity.
       </p>
 
-      <div className="flex flex-col sm:flex-row gap-3 items-center justify-center mb-12 sm:mb-16 w-full sm:w-auto px-4 sm:px-0">
+      <div className="flex flex-col sm:flex-row gap-4 items-center justify-center mb-16 sm:mb-20 w-full sm:w-auto max-w-[280px] sm:max-w-none">
         <Button variant="primary" href="/register" icon="arrow-right" fullWidth>
           Get Started
         </Button>
@@ -189,27 +210,35 @@ function FeatureCard({ icon, title, desc }: { icon: ReactNode, title: string, de
 function FeaturesGrid() {
   return (
     // Added ID for smooth scrolling
-    <div id="features" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6 max-w-6xl mx-auto px-4 sm:px-6 pb-12 sm:pb-16 scroll-mt-20">
+    <div id="features" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-6 md:gap-8 max-w-6xl mx-auto px-6 sm:px-8 pb-16 sm:pb-24 scroll-mt-20">
       <FeatureCard 
         icon={<IconSmart />}
         title="Smart Backlogs"
-        desc="Organize your work with intelligent backlogs, sprints, and task management."
+        desc="Organize your work with intelligent backlogs, sprints, and automated task management."
       />
       <FeatureCard 
         icon={<IconTimeline />}
         title="Timeline & Calendar"
-        desc="Visualize your project timeline and schedule. Track deadlines and milestones."
+        desc="Visualize your project lifecycle. Track deadlines, milestones, and team velocity at a glance."
       />
       <FeatureCard 
         icon={<IconTeam />}
-        title="Team Collaboration"
-        desc="Built-in chat, pages, and real-time updates keep everyone connected."
+        title="Unified Collaboration"
+        desc="Built-in communication tools ensure your team stays synchronized, wherever they are."
       />
     </div>
   );
 }
 
 export default function Page() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (getUserFromToken()) {
+      router.replace('/dashboard');
+    }
+  }, [router]);
+
   return (
     <div className={styles.mainContainer}>
       <Navigation />

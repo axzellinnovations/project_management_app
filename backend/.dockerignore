@@ -1,0 +1,11 @@
+target/
+.DS_Store
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+Dockerfile
+docker-compose.yml
+node_modules/
+frontend/
