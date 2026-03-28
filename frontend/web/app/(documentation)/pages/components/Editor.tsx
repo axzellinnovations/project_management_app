@@ -74,8 +74,10 @@ export default function Editor({ content, onUpdate, editable = true }: EditorPro
       SlashCommand.configure({ suggestion: slashSuggestion }),
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
-        // Disable StarterKit's bundled link & underline to avoid duplicate warnings
-        // when we register them explicitly below with custom config
+        // Disable StarterKit's bundled versions so our explicit imports below
+        // (with custom config) are the sole registered instances.
+        link: false,
+        underline: false,
       }),
       Placeholder.configure({ placeholder: "Type '/' for commands, or start writing..." }),
       Highlight,
