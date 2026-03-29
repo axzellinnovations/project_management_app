@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Outfit, Arimo } from 'next/font/google'
 import "./globals.css";
-import { Suspense } from "react";
-import Sidebar from "./nav/Sidebar";
+import SidebarLayout from "./nav/SidebarLayout";
 import TopBar from "./nav/TopBar";
 
 import { NavigationProvider } from "@/lib/navigation-context";

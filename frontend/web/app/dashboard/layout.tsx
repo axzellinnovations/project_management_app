@@ -36,11 +36,8 @@ export default function DashboardLayout({
             </Suspense>
 
             <div className="flex-1 flex flex-col overflow-hidden">
-                <Suspense fallback={<div className="h-[74px] bg-[#F1F6F9] border-b border-[#E3E8EF]" />}>
-                    <TopBar />
-                </Suspense>
-
-                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-white p-8">
+                {/* Main Content Area */}
+                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-white px-4 md:px-8 pt-4 pb-8">
                     {children}
                 </main>
             </div>

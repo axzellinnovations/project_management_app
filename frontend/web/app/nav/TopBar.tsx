@@ -172,7 +172,7 @@ function TopBarContent() {
     const getTabHref = (tabId: string) => {
         switch (tabId) {
             case 'summary':
-                return withProjectId('/summary');
+                return projectId ? `/summary/${projectId}` : '/dashboard';
             case 'timeline':
                 return withProjectId('/timeline');
             case 'backlog':
@@ -180,17 +180,17 @@ function TopBarContent() {
             case 'board':
                 return withProjectId('/kanban');
             case 'calendar':
-                return withProjectId('/calendar');
+                return projectId ? `/summary/${projectId}` : '/dashboard';
             case 'chats':
-                return projectId ? `/project/${projectId}/chat` : '/summary';
+                return projectId ? `/project/${projectId}/chat` : '/dashboard';
             case 'members':
-                return withProjectId('/summary');
+                return projectId ? `/summary/${projectId}` : '/dashboard';
             case 'pages':
                 return withProjectId('/pages');
             case 'list':
                 return '/spaces';
             default:
-                return withProjectId('/summary');
+                return projectId ? `/summary/${projectId}` : '/dashboard';
         }
     };
 
@@ -285,6 +285,8 @@ function TopBarContent() {
                                     setIsFavorite(nextState);
                                     try {
                                         await api.post(`/api/projects/${projectId}/favorite`);
+                                        // Notify sidebar to re-fetch favourites immediately
+                                        window.dispatchEvent(new CustomEvent('planora:favorite-toggled'));
                                     } catch (e) {
                                         setIsFavorite(!nextState);
                                     }

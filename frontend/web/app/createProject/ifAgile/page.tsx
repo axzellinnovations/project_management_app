@@ -109,7 +109,7 @@ export default function AgileProjectPage() {
             }
 
             if (teamOption === 'EXISTING') {
-                router.push('/summary');
+                router.push(`/summary/${res.data.id}`);
             } else {
                 router.push(`/createProject/inviteMembers?projectId=${res.data.id}&projectKey=${projectKey}`);
             }
