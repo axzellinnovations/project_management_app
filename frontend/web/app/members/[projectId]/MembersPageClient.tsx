@@ -1,6 +1,17 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+// Heroicons and custom SVGs for UI icons
+const ICONS = {
+  members: <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 20h5v-2a4 4 0 0 0-3-3.87M9 20H4v-2a4 4 0 0 1 3-3.87M16 3.13a4 4 0 1 1-8 0M12 7a4 4 0 0 1 4-4" /></svg>,
+  active: <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3" /></svg>,
+  admin: <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 20h14M12 4v16m0-16l4 4m-4-4l-4 4" /></svg>,
+  pending: <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3" /></svg>,
+  owner: <svg className="w-4 h-4 inline text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l2.39 4.84 5.34.78-3.87 3.77.91 5.33L10 13.27l-4.77 2.51.91-5.33-3.87-3.77 5.34-.78L10 2z" /></svg>,
+  adminRole: <svg className="w-4 h-4 inline text-purple-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l2.39 4.84 5.34.78-3.87 3.77.91 5.33L10 13.27l-4.77 2.51.91-5.33-3.87-3.77 5.34-.78L10 2z" /></svg>,
+  member: <svg className="w-4 h-4 inline text-blue-500" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" /></svg>,
+  viewer: <svg className="w-4 h-4 inline text-gray-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M2.05 12a9.94 9.94 0 0 1 19.9 0 9.94 9.94 0 0 1-19.9 0z" /></svg>,
+};
 import axios from "@/lib/axios";
 
 interface Member {
@@ -155,30 +166,78 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
           <div className="text-gray-500 mt-1">Manage your team and their permissions</div>
         </div>
         <button
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded font-medium flex items-center gap-2 self-start md:self-auto"
+          className="flex items-center gap-2 px-5 py-1.5 rounded-[12px] bg-[#185ADB] text-white font-medium text-base shadow-md hover:bg-[#185ADB] focus:outline-none focus:ring-2 focus:ring-blue-300"
+          style={{ boxShadow: '0 2px 8px 0 rgba(24,90,219,0.10)' }}
           onClick={() => setShowModal(true)}
         >
-          <span className="text-lg">👤</span> Invite Member
+          {/* User Plus Icon (smaller, white, left-aligned) */}
+          <svg className="w-5 h-5 mr-1" fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24">
+            <circle cx="9" cy="8" r="4" stroke="white" strokeWidth="2" />
+            <path d="M17 8v6M20 11h-6" stroke="white" strokeWidth="2" strokeLinecap="round" />
+            <path d="M3 20v-1a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v1" stroke="white" strokeWidth="2" />
+          </svg>
+          Invite Member
         </button>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center">
-          <div className="text-gray-500 text-xs mb-1">Total Members</div>
-          <div className="text-2xl font-bold">{totalMembers}</div>
+        {/* Total Members */}
+        <div className="bg-white rounded-xl shadow p-4 flex flex-row items-center justify-between min-w-[180px]">
+          <div>
+            <div className="text-gray-500 text-sm mb-1">Total Members</div>
+            <div className="text-xl font-semibold text-gray-900">{totalMembers}</div>
+          </div>
+          <div className="bg-blue-100 rounded-[16px] p-3 flex items-center justify-center">
+            {/* Single-person with partial second-person outline, blue, smaller size */}
+            <svg className="w-6 h-6 text-[#185ADB]" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 32 32">
+              <circle cx="16" cy="14" r="5" />
+              <path d="M7 26c0-3 4.5-5 9-5s9 2 9 5" />
+              <path d="M23 10c1.5 0 3 1.12 3 3s-1.5 3-3 3" />
+            </svg>
+          </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center">
-          <div className="text-gray-500 text-xs mb-1">Active</div>
-          <div className="text-2xl font-bold">{activeCount}</div>
+        {/* Active */}
+        <div className="bg-white rounded-xl shadow p-4 flex flex-row items-center justify-between min-w-[180px]">
+          <div>
+            <div className="text-gray-500 text-sm mb-1">Active</div>
+            <div className="text-xl font-semibold text-gray-900">{activeCount}</div>
+          </div>
+          <div className="bg-green-100 rounded-[16px] p-3 flex items-center justify-center">
+            {/* Activity icon, smaller size */}
+            <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 32 32">
+              <polyline points="4,18 10,18 14,6 18,26 22,14 28,14" />
+            </svg>
+          </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center">
-          <div className="text-gray-500 text-xs mb-1">Admins</div>
-          <div className="text-2xl font-bold">{adminCount}</div>
+        {/* Admins */}
+        <div className="bg-white rounded-xl shadow p-4 flex flex-row items-center justify-between min-w-[180px]">
+          <div>
+            <div className="text-gray-500 text-sm mb-1">Admins</div>
+            <div className="text-xl font-semibold text-gray-900">{adminCount}</div>
+          </div>
+          <div className="bg-[#F3EFFF] rounded-[16px] p-3 flex items-center justify-center">
+            {/* Classic crown icon, purple, smaller size */}
+            <svg className="w-6 h-6 text-[#A259FF]" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 32 32">
+              <polyline points="8,20 12,12 16,18 20,12 24,20" />
+              <line x1="10" y1="24" x2="22" y2="24" />
+              <line x1="12" y1="22" x2="20" y2="22" />
+            </svg>
+          </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center">
-          <div className="text-gray-500 text-xs mb-1">Pending</div>
-          <div className="text-2xl font-bold">{pendingCount}</div>
+        {/* Pending */}
+        <div className="bg-white rounded-xl shadow p-4 flex flex-row items-center justify-between min-w-[180px]">
+          <div>
+            <div className="text-gray-500 text-sm mb-1">Pending</div>
+            <div className="text-xl font-semibold text-gray-900">{pendingCount}</div>
+          </div>
+          <div className="bg-yellow-100 rounded-[16px] p-3 flex items-center justify-center">
+            {/* Clock icon, smaller size */}
+            <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 32 32">
+              <circle cx="16" cy="16" r="12" />
+              <path d="M16 10v7l5 3" />
+            </svg>
+          </div>
         </div>
       </div>
 
@@ -254,7 +313,13 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${ROLE_COLORS[m.role] || "bg-gray-100 text-gray-700"}`}>{ROLE_LABELS[m.role] || m.role}</span>
+                  <span className={`px-2 py-1 rounded text-xs font-medium flex items-center gap-1 ${ROLE_COLORS[m.role] || "bg-gray-100 text-gray-700"}`}>
+                    {m.role === "OWNER" && ICONS.owner}
+                    {m.role === "ADMIN" && ICONS.adminRole}
+                    {m.role === "MEMBER" && ICONS.member}
+                    {m.role === "VIEWER" && ICONS.viewer}
+                    {ROLE_LABELS[m.role] || m.role}
+                  </span>
                 </td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-1 rounded text-xs font-medium ${STATUS_COLORS[m.status] || "bg-gray-100 text-gray-700"}`}>{m.status}</span>
