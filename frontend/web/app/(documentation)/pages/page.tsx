@@ -3,19 +3,21 @@ export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import PagesList from './components/PagesList';
-import PagesContent from './components/PagesContent';
-import PageEditor from './components/PageEditor';
+import DocumentSidebar from './components/DocumentSidebar';
+import TemplateSelector, { predefinedTemplates } from './components/TemplateSelector';
+import Editor from './components/Editor';
 import { usePages } from './components/usePages';
+import { Template } from './components/types';
 
 export default function PagesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [projectId, setProjectId] = useState<string | number | null>(null);
-  const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
 
-  // Prefer route query (?projectId=), then fallback to localStorage
+  // We are currently viewing the root page list
+  // The selected page logic is usually handled by [pageId]/page.tsx
+  // But here in the root, we default to TemplateSelector
+  
   useEffect(() => {
     const queryProjectId = searchParams.get('projectId');
     if (queryProjectId) {
@@ -32,26 +34,22 @@ export default function PagesPage() {
 
   const {
     filteredPages,
-    loading,
     error,
-    activeTab,
-    setActiveTab,
     searchQuery,
     setSearchQuery,
     createPage,
   } = usePages(projectId);
 
-  const handleCreatePage = async (title: string, content: string) => {
-    setIsSaving(true);
+  const handleTemplateSelect = async (template: Template) => {
     try {
-      const newPage = await createPage(title, content);
-      router.push(projectId ? `/pages/${newPage.id}?projectId=${projectId}` : `/pages/${newPage.id}`);
-      setIsEditorOpen(false);
+      router.push(projectId ? `/pages/new?projectId=${projectId}&template=${template.id}` : `/pages/new?template=${template.id}`);
     } catch (err) {
-      console.error('Error creating page:', err);
-    } finally {
-      setIsSaving(false);
+      console.error('Error selecting template:', err);
     }
+  };
+
+  const handleCancelTemplate = () => {
+    // If they cancel, they just stay here empty
   };
 
   if (!projectId) {
@@ -66,37 +64,27 @@ export default function PagesPage() {
 
   return (
     <>
-      <div className="flex h-full w-full gap-6 bg-[#f4f7f9]">
+      <div className="flex h-full w-full bg-white overflow-hidden rounded-lg border border-gray-200 shadow-sm mt-4 mb-4 ml-4 mr-4 mx-4">
         {/* Left Sidebar */}
-        <PagesList
+        <DocumentSidebar
           pages={filteredPages}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           projectId={projectId}
-          onCreateClick={() => setIsEditorOpen(true)}
+          selectedPageId={null} // Root path has no selected page
+          onCreateClick={() => {
+            // Already showing template selector here in root, but just in case
+          }}
         />
 
         {/* Main Content Area */}
-        <PagesContent
-          selectedPage={null}
-          loading={loading}
-          onCreateClick={() => setIsEditorOpen(true)}
-          onEditClick={() => {}}
-          onDeleteClick={() => {}}
-          onStarClick={() => {}}
-        />
+        <div className="flex-1 overflow-y-auto">
+          <TemplateSelector 
+            onSelect={handleTemplateSelect} 
+            onCancel={handleCancelTemplate}
+          />
+        </div>
       </div>
-
-      {/* Page Editor Modal */}
-      <PageEditor
-        isOpen={isEditorOpen}
-        page={null}
-        onClose={() => setIsEditorOpen(false)}
-        onSave={handleCreatePage}
-        isLoading={isSaving}
-      />
 
       {/* Error Toast */}
       {error && (
