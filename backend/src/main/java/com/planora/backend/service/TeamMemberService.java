@@ -1,5 +1,9 @@
 package com.planora.backend.service;
 
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
 import com.planora.backend.model.Team;
 import com.planora.backend.model.TeamMember;
 import com.planora.backend.model.TeamRole;
@@ -7,14 +11,22 @@ import com.planora.backend.model.User;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.TeamRepository;
 import com.planora.backend.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
-import java.util.List;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 public class TeamMemberService {
+        // =====================================================
+        // HELPER : VALIDATE OWNER OR ADMIN (STRICT)
+        // =====================================================
+        public TeamMember validateOwnerOrAdmin(Long teamId, Long userId) {
+                TeamMember member = validateMembership(teamId, userId);
+                if (member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN) {
+                        throw new RuntimeException("Only TEAM OWNER or ADMIN can perform this action");
+                }
+                return member;
+        }
 
         private final TeamMemberRepository teamMemberRepository;
         private final TeamRepository teamRepository;

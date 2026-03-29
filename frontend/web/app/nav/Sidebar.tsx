@@ -5,6 +5,8 @@ import Image from 'next/image';
 import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef } from 'react';
 import { getUserFromToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigation } from '@/lib/navigation-context';
 import api from '@/lib/axios';
 
 /* ─────────────────────────────────────────────

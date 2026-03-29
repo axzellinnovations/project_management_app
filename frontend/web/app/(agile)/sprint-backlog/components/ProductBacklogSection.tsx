@@ -21,7 +21,7 @@ interface ProductBacklogSectionProps {
   onToggleTask: (id: number) => void;
   onStoryPointsChange: (id: number, points: number) => void;
   onCreateTask: (title: string) => void;
-  onCreateSprint: (name: string) => void;
+  onCreateSprint: (name: string, startDate: string, endDate: string) => void;
   onAssignTask: (taskId: number, assigneeName: string) => void;
 }
 
@@ -39,6 +39,8 @@ export default function ProductBacklogSection({
   const [showCreateSprintBox, setShowCreateSprintBox] = useState(false);
   const [newTaskName, setNewTaskName] = useState('');
   const [newSprintName, setNewSprintName] = useState('');
+  const [newSprintStartDate, setNewSprintStartDate] = useState('');
+  const [newSprintEndDate, setNewSprintEndDate] = useState('');
   const [assignMenuTaskId, setAssignMenuTaskId] = useState<number | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMemberInfo[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
@@ -130,10 +132,12 @@ export default function ProductBacklogSection({
   };
 
  const handleCreateSprint = () => {
-  if (!newSprintName.trim()) return;
+  if (!newSprintName.trim() || !newSprintStartDate || !newSprintEndDate) return;
 
-  onCreateSprint(newSprintName);
+  onCreateSprint(newSprintName, newSprintStartDate, newSprintEndDate);
   setNewSprintName('');
+  setNewSprintStartDate('');
+  setNewSprintEndDate('');
   setShowCreateSprintBox(false);
 };
 
@@ -303,6 +307,28 @@ export default function ProductBacklogSection({
                 className="w-full rounded-md border border-[#D0D5DD] px-3 py-2 text-sm text-[#101828] outline-none"
               />
 
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-[#344054]">Start Date</label>
+                  <input
+                    type="date"
+                    value={newSprintStartDate}
+                    onChange={(e) => setNewSprintStartDate(e.target.value)}
+                    className="w-full rounded-md border border-[#D0D5DD] px-3 py-2 text-sm text-[#101828] outline-none focus:border-[#175CD3]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[12px] font-medium text-[#344054]">End Date</label>
+                  <input
+                    type="date"
+                    value={newSprintEndDate}
+                    min={newSprintStartDate}
+                    onChange={(e) => setNewSprintEndDate(e.target.value)}
+                    className="w-full rounded-md border border-[#D0D5DD] px-3 py-2 text-sm text-[#101828] outline-none focus:border-[#175CD3]"
+                  />
+                </div>
+              </div>
+
               <p className="mt-2 text-[12px] text-[#667085]">
                 Selected tasks will move into the new sprint.
               </p>
@@ -310,7 +336,8 @@ export default function ProductBacklogSection({
               <div className="mt-3 flex items-center gap-2">
                 <button
                   onClick={handleCreateSprint}
-                  className="rounded-md bg-[#175CD3] px-4 py-2 text-sm font-medium text-white hover:bg-[#1849A9]"
+                  className="rounded-md bg-[#175CD3] px-4 py-2 text-sm font-medium text-white hover:bg-[#1849A9] disabled:opacity-50"
+                  disabled={!newSprintName.trim() || !newSprintStartDate || !newSprintEndDate}
                 >
                   Create Sprint
                 </button>
@@ -319,6 +346,8 @@ export default function ProductBacklogSection({
                   onClick={() => {
                     setShowCreateSprintBox(false);
                     setNewSprintName('');
+                    setNewSprintStartDate('');
+                    setNewSprintEndDate('');
                   }}
                   className="rounded-md border border-[#D0D5DD] bg-white px-4 py-2 text-sm font-medium text-[#344054] hover:bg-[#F9FAFB]"
                 >

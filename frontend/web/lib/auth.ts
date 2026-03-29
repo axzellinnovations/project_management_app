@@ -1,6 +1,7 @@
 export interface User {
     email: string;
     username?: string;
+    fullName?: string;
 }
 
 interface JwtPayload {
@@ -41,10 +42,29 @@ export function getUserFromToken(): User | null {
             return null;
         }
 
-        return {
-            email: payload.sub, // 'sub' is standard for subject (email in this case)
-            username: payload.username // Custom claim
+        const decodedUser: User = {
+            email: payload.sub,
+            username: payload.username,
         };
+
+        // Keep sidebar/profile displays in sync after profile edits without requiring re-login.
+        const cachedProfile = localStorage.getItem('userProfile');
+        if (cachedProfile) {
+            try {
+                const parsedProfile = JSON.parse(cachedProfile) as User;
+                if (parsedProfile.email?.toLowerCase() === decodedUser.email?.toLowerCase()) {
+                    return {
+                        ...decodedUser,
+                        username: parsedProfile.username || decodedUser.username,
+                        fullName: parsedProfile.fullName,
+                    };
+                }
+            } catch {
+                localStorage.removeItem('userProfile');
+            }
+        }
+
+        return decodedUser;
     } catch (error) {
         console.error("Failed to decode token:", error);
         return null;

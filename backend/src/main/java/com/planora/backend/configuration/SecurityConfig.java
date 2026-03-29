@@ -37,7 +37,10 @@ public class SecurityConfig {
             "/api/auth/resend",
             "/api/auth/forgot",
             "/api/auth/reset",
-            "/ws/**"
+            "/ws/**",
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html"
         );
 
     @Bean
