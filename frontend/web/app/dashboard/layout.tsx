@@ -35,7 +35,7 @@ export default function DashboardLayout({
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Main Content Area */}
-                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-white p-8">
+                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-white px-8 pt-4 pb-8">
                     {children}
                 </main>
             </div>
