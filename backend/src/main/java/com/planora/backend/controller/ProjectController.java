@@ -64,10 +64,11 @@ public class ProjectController {
 
     // ---------------- READ PROJECT BY ID ----------------
     @GetMapping("/{projectId}")
-    public ResponseEntity<ProjectResponseDTO> getProjectById(@PathVariable Long projectId) {
-        return new ResponseEntity<>(
-                projectService.getProjectById(projectId),
-                HttpStatus.OK);
+    public ResponseEntity<ProjectResponseDTO> getProjectById(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
+        return ResponseEntity.ok(
+                projectService.getProjectByIdForUser(projectId, principal.getUserId()));
     }
 
     // ---------------- UPDATE PROJECT ----------------

@@ -50,6 +50,17 @@ export default function DashboardPage() {
         };
 
         fetchProjects();
+
+        // Re-fetch when a project favourite is toggled from anywhere (e.g., TopBar)
+        const handleFavToggled = () => { void fetchProjects(); };
+        // Re-fetch when user returns from a project (summary page records access and fires this)
+        const handleProjectAccessed = () => { void fetchProjects(); };
+        window.addEventListener('planora:favorite-toggled', handleFavToggled);
+        window.addEventListener('planora:project-accessed', handleProjectAccessed);
+        return () => {
+            window.removeEventListener('planora:favorite-toggled', handleFavToggled);
+            window.removeEventListener('planora:project-accessed', handleProjectAccessed);
+        };
     }, [router]);
 
     const checkScroll = () => {
@@ -130,7 +141,7 @@ export default function DashboardPage() {
                                     : 'text-[#4A5565] border-transparent hover:bg-gray-50'
                                 }`}
                             >
-                                Starred
+                                Favourites
                             </button>
                         </div>
                         <Link href="/spaces" className="font-arimo text-[16px] text-[#0052CC] hover:underline">View all spaces</Link>
