@@ -2,443 +2,734 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useEffect, useState, useMemo, useSyncExternalStore, useCallback } from 'react';
+import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef } from 'react';
 import { getUserFromToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import api from '@/lib/axios';
 
-interface NavItemProps {
-    label: string;
-    href: string;
-    icon: React.ReactNode;
-    active?: boolean;
-    badge?: number;
-}
+/* ─────────────────────────────────────────────
+   Types
+───────────────────────────────────────────── */
+interface UserSummary { email: string; profilePicUrl?: string; }
+interface Project { id: number; name: string; projectKey?: string; isFavorite?: boolean; }
 
-interface UserSummary {
-    email: string;
-    profilePicUrl?: string;
-}
-
-const subscribeToBrowserStorage = (onStoreChange: () => void) => {
-    if (typeof window === 'undefined') {
-        return () => {};
-    }
-
-    const handler = () => onStoreChange();
-    window.addEventListener('storage', handler);
-    window.addEventListener('focus', handler);
-
+/* storage sync helper */
+const subscribeToBrowserStorage = (onChange: () => void) => {
+    if (typeof window === 'undefined') return () => {};
+    window.addEventListener('storage', onChange);
+    window.addEventListener('focus', onChange);
     return () => {
-        window.removeEventListener('storage', handler);
-        window.removeEventListener('focus', handler);
+        window.removeEventListener('storage', onChange);
+        window.removeEventListener('focus', onChange);
     };
 };
 
+/* stable colour per project id */
+const PROJECT_COLOURS = [
+    'bg-blue-500', 'bg-violet-500', 'bg-emerald-500',
+    'bg-amber-500', 'bg-rose-500', 'bg-indigo-500', 'bg-teal-500',
+];
+function projectColour(id: number) {
+    return PROJECT_COLOURS[Math.abs(id) % PROJECT_COLOURS.length];
+}
+
+/* ─────────────────────────────────────────────
+   Main Sidebar
+───────────────────────────────────────────── */
 export default function Sidebar() {
     const router = useRouter();
     const pathname = usePathname();
+
     const token = useSyncExternalStore<string | null>(
         subscribeToBrowserStorage,
         () => localStorage.getItem('token'),
-        () => null
+        () => null,
     );
     const user = useMemo<User | null>(() => {
         if (!token) return null;
         return getUserFromToken();
     }, [token]);
+
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
-    const [recentProjects, setRecentProjects] = useState<any[]>([]);
-    const [favoriteProjects, setFavoriteProjects] = useState<any[]>([]);
-    const [loadingProjects, setLoadingProjects] = useState(true);
-    const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
-    const [folderStats, setFolderStats] = useState({
-        viewAll: 0,
-        recent: 0,
-        favorites: 0,
-        shared: 0,
-        trash: 0,
-    });
-    const [togglingFavoriteId, setTogglingFavoriteId] = useState<number | null>(null);
-
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
-
     const resolvedProfilePicUrl = useMemo(() => {
         if (!profilePicUrl) return '';
-        if (profilePicUrl.startsWith('http://') || profilePicUrl.startsWith('https://')) {
-            return profilePicUrl;
-        }
+        if (profilePicUrl.startsWith('http://') || profilePicUrl.startsWith('https://')) return profilePicUrl;
         return `${API_BASE_URL}${profilePicUrl}`;
     }, [profilePicUrl, API_BASE_URL]);
 
-    // Fetch recent and favorite projects from dedicated endpoints
+    const [recentProjects, setRecentProjects] = useState<Project[]>([]);
+    const [favoriteProjects, setFavoriteProjects] = useState<Project[]>([]);
+    const [loadingProjects, setLoadingProjects] = useState(true);
+    const [togglingFavoriteId, setTogglingFavoriteId] = useState<number | null>(null);
+
+    /* collapse */
+    const [collapsed, setCollapsed] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return false;
+        return localStorage.getItem('planora:sidebar:collapsed') === 'true';
+    });
+
+    /* dropdown open state */
+    const [favOpen, setFavOpen] = useState(false);
+    const [recentOpen, setRecentOpen] = useState(false);
+    const [favSearch, setFavSearch] = useState('');
+    const [recentSearch, setRecentSearch] = useState('');
+
+    /* folders */
+    const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
+    const [folderStats, setFolderStats] = useState({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 });
+
+    /* refs for click-outside + anchor position */
+    const favRef    = useRef<HTMLDivElement>(null);
+    const recentRef = useRef<HTMLDivElement>(null);
+    const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+    /* ── fetch projects ── */
     const fetchProjects = useCallback(async () => {
         try {
             const [recentRes, favRes] = await Promise.all([
-                api.get('/api/projects/recent?limit=5'),
+                api.get('/api/projects/recent?limit=10'),
                 api.get('/api/projects/favorites'),
             ]);
             setRecentProjects(recentRes.data);
             setFavoriteProjects(favRes.data);
         } catch (error: any) {
-            console.error('Failed to fetch sidebar projects:', error.response?.data?.message || error.message);
+            console.error('Sidebar: failed to fetch projects', error?.response?.data?.message || error.message);
         } finally {
             setLoadingProjects(false);
         }
     }, []);
 
+    /* ── effects ── */
     useEffect(() => {
-        const userData = user;
+        if (!user?.email) return;
+        api.get('/api/auth/users').then(res => {
+            const found = res.data.find((u: UserSummary) => u.email.toLowerCase() === user.email.toLowerCase());
+            if (found?.profilePicUrl) setProfilePicUrl(found.profilePicUrl);
+        }).catch(() => {});
+    }, [user]);
 
-        if (userData?.email) {
-            const loadProfilePic = async () => {
-                try {
-                    const response = await api.get('/api/auth/users');
-                    const currentUser = response.data.find(
-                        (u: UserSummary) => u.email.toLowerCase() === userData.email.toLowerCase()
-                    );
-                    if (currentUser?.profilePicUrl) {
-                        setProfilePicUrl(currentUser.profilePicUrl);
-                    }
-                } catch {
-                    // Silently fail - just show initials
-                }
-            };
-            loadProfilePic();
-        }
+    useEffect(() => { void fetchProjects(); }, [fetchProjects]); // fetch once on mount
 
-        void fetchProjects();
+    // Re-fetch with debounce when pathname changes (e.g. returning from a project to dashboard).
+    // 600ms debounce ensures any in-flight DB writes complete before we read.
+    useEffect(() => {
+        const timer = setTimeout(() => void fetchProjects(), 600);
+        return () => clearTimeout(timer);
+    }, [pathname, fetchProjects]);
 
-        const loadFolderStats = async () => {
-            if (typeof window === 'undefined') {
-                setFolderStats({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 });
-                return;
-            }
-
-            const projectId = new URLSearchParams(window.location.search).get('projectId')
-                || localStorage.getItem('currentProjectId');
-
-            if (!projectId) {
-                setFolderStats({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 });
-                return;
-            }
-
-            try {
-                const docsRes = await api.get(`/api/projects/${projectId}/documents?includeDeleted=false`);
-                const trashRes = await api.get(`/api/projects/${projectId}/documents?includeDeleted=true`);
-                const docs = Array.isArray(docsRes.data) ? docsRes.data : [];
-                const allDocs = Array.isArray(trashRes.data) ? trashRes.data : [];
-                const now = Date.now();
-                const recentWindow = 14 * 24 * 60 * 60 * 1000;
-                const recentCount = docs.filter((doc: { createdAt: string }) => now - new Date(doc.createdAt).getTime() <= recentWindow).length;
-                const trashCount = allDocs.filter((doc: { status?: string }) => doc.status === 'SOFT_DELETED').length;
-
-                let favoriteIds: number[] = [];
-                const raw = localStorage.getItem('dmsFavoriteDocumentIds');
-                if (raw) {
-                    try {
-                        const parsed = JSON.parse(raw) as number[];
-                        favoriteIds = Array.isArray(parsed) ? parsed : [];
-                    } catch {
-                        favoriteIds = [];
-                    }
-                }
-
-                const favoritesCount = docs.filter((doc: { id: number }) => favoriteIds.includes(doc.id)).length;
-                const sharedCount = userData?.username
-                    ? docs.filter((doc: { uploadedByName: string }) => doc.uploadedByName !== userData.username).length
-                    : 0;
-
-                setFolderStats({
-                    viewAll: docs.length,
-                    recent: recentCount,
-                    favorites: favoritesCount,
-                    shared: sharedCount,
-                    trash: trashCount,
-                });
-            } catch {
-                setFolderStats({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 });
-            }
-        };
-
-        void loadFolderStats();
-    }, [pathname, user, fetchProjects]);
-
-    // Listen for custom events from TopBar (favourite toggle) or any project navigation
     useEffect(() => {
         if (typeof window === 'undefined') return;
-
-        const handleFavoriteToggled = () => {
-            void fetchProjects();
-        };
-
+        let debounceTimer: ReturnType<typeof setTimeout>;
+        const handleFavToggled = () => void fetchProjects();
         const handleProjectAccessed = () => {
-            void fetchProjects();
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => void fetchProjects(), 400);
         };
-
-        window.addEventListener('planora:favorite-toggled', handleFavoriteToggled);
+        window.addEventListener('planora:favorite-toggled', handleFavToggled);
         window.addEventListener('planora:project-accessed', handleProjectAccessed);
-
         return () => {
-            window.removeEventListener('planora:favorite-toggled', handleFavoriteToggled);
+            clearTimeout(debounceTimer);
+            window.removeEventListener('planora:favorite-toggled', handleFavToggled);
             window.removeEventListener('planora:project-accessed', handleProjectAccessed);
         };
     }, [fetchProjects]);
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        router.push('/login');
+    useEffect(() => {
+        const projectId =
+            (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('projectId'))
+            || localStorage.getItem('currentProjectId');
+        if (!projectId) { setFolderStats({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 }); return; }
+        Promise.all([
+            api.get(`/api/projects/${projectId}/documents?includeDeleted=false`),
+            api.get(`/api/projects/${projectId}/documents?includeDeleted=true`),
+        ]).then(([docsRes, trashRes]) => {
+            const docs = Array.isArray(docsRes.data) ? docsRes.data : [];
+            const allDocs = Array.isArray(trashRes.data) ? trashRes.data : [];
+            const recentWindow = 14 * 24 * 60 * 60 * 1000;
+            const now = Date.now();
+            const raw = typeof window !== 'undefined' ? localStorage.getItem('dmsFavoriteDocumentIds') : null;
+            let favoriteIds: number[] = [];
+            if (raw) { try { favoriteIds = JSON.parse(raw); } catch {} }
+            setFolderStats({
+                viewAll: docs.length,
+                recent: docs.filter((d: { createdAt: string }) => now - new Date(d.createdAt).getTime() <= recentWindow).length,
+                favorites: docs.filter((d: { id: number }) => favoriteIds.includes(d.id)).length,
+                shared: user?.username ? docs.filter((d: { uploadedByName: string }) => d.uploadedByName !== user.username).length : 0,
+                trash: allDocs.filter((d: { status?: string }) => d.status === 'SOFT_DELETED').length,
+            });
+        }).catch(() => setFolderStats({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 }));
+    }, [pathname, user]);
+
+    /* click-outside to close dropdowns */
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as Node;
+            // check if click is inside either anchor OR inside a fixed dropdown
+            const inFav    = favRef.current?.contains(target);
+            const inRecent = recentRef.current?.contains(target);
+            // also check if click is inside a fixed dropdown portal (data attribute)
+            const inDropdown = (target as Element)?.closest?.('[data-sidebar-dropdown]');
+            if (!inFav && !inDropdown)    setFavOpen(false);
+            if (!inRecent && !inDropdown) setRecentOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    /* measure anchor position before opening dropdown */
+    const openFavDropdown = () => {
+        setRecentOpen(false);
+        if (favRef.current) {
+            const rect = favRef.current.getBoundingClientRect();
+            setDropdownPos({ top: rect.top, left: rect.right + 8 });
+        }
+        setFavOpen(p => !p);
+        setFavSearch('');
+    };
+    const openRecentDropdown = () => {
+        setFavOpen(false);
+        if (recentRef.current) {
+            const rect = recentRef.current.getBoundingClientRect();
+            setDropdownPos({ top: rect.top, left: rect.right + 8 });
+        }
+        setRecentOpen(p => !p);
+        setRecentSearch('');
     };
 
-    const handleProjectClick = async (project: any) => {
-        try {
-            await api.post(`/api/projects/${project.id}/access`);
-            window.dispatchEvent(new CustomEvent('planora:project-accessed'));
-        } catch (e) {}
+    /* ── handlers ── */
+    const handleLogout = () => { localStorage.removeItem('token'); router.push('/login'); };
+
+    const handleProjectClick = async (project: Project) => {
         localStorage.setItem('currentProjectName', project.name);
         localStorage.setItem('currentProjectId', project.id.toString());
+        try { await api.post(`/api/projects/${project.id}/access`); } catch {}
+        window.dispatchEvent(new CustomEvent('planora:project-accessed'));
+        setFavOpen(false);
+        setRecentOpen(false);
     };
 
-    const handleToggleFavoriteFromSidebar = async (e: React.MouseEvent, project: any) => {
-        e.preventDefault();
-        e.stopPropagation();
+    const handleToggleFavourite = async (e: React.MouseEvent, project: Project) => {
+        e.preventDefault(); e.stopPropagation();
         if (togglingFavoriteId === project.id) return;
-
         setTogglingFavoriteId(project.id);
-        // Optimistic update
         setFavoriteProjects(prev => prev.filter(p => p.id !== project.id));
         try {
             await api.post(`/api/projects/${project.id}/favorite`);
             window.dispatchEvent(new CustomEvent('planora:favorite-toggled'));
-            // Re-fetch to get accurate state
-            const [recentRes, favRes] = await Promise.all([
-                api.get('/api/projects/recent?limit=5'),
-                api.get('/api/projects/favorites'),
-            ]);
-            setRecentProjects(recentRes.data);
-            setFavoriteProjects(favRes.data);
-        } catch (e) {
-            // Revert on error
-            void fetchProjects();
-        } finally {
-            setTogglingFavoriteId(null);
-        }
+            await fetchProjects();
+        } catch { await fetchProjects(); }
+        finally { setTogglingFavoriteId(null); }
     };
 
+    const toggleCollapsed = () => {
+        setCollapsed(prev => {
+            const next = !prev;
+            localStorage.setItem('planora:sidebar:collapsed', String(next));
+            window.dispatchEvent(new CustomEvent('planora:sidebar:collapsed', { detail: { collapsed: next } }));
+            return next;
+        });
+    };
+
+    /* filtered lists (max 4 shown in dropdown) */
+    const filteredFavs = favoriteProjects.filter(p =>
+        p.name.toLowerCase().includes(favSearch.toLowerCase()) ||
+        (p.projectKey || '').toLowerCase().includes(favSearch.toLowerCase())
+    );
+    const filteredRecent = recentProjects.filter(p =>
+        p.name.toLowerCase().includes(recentSearch.toLowerCase()) ||
+        (p.projectKey || '').toLowerCase().includes(recentSearch.toLowerCase())
+    );
+
+    /* ── render ── */
     return (
-        <div className="w-[260px] h-screen bg-white border-r border-[#E3E8EF] flex flex-col flex-shrink-0">
-            {/* Workspace Switcher */}
-            <div className="h-[70px] flex items-center px-6 border-b border-[#F2F4F7]">
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-[#0052CC] to-[#0747A6] rounded-lg shadow-sm flex items-center justify-center">
-                        <span className="text-white font-bold text-sm">W</span>
+        <div
+            className="relative h-screen flex-shrink-0"
+            style={{ width: collapsed ? '64px' : '240px', transition: 'width 300ms cubic-bezier(0.4,0,0.2,1)' }}
+        >
+            <div className="h-full bg-white border-r border-[#E3E8EF] flex flex-col overflow-hidden">
+
+                {/* ── Header: Planora logo + wordmark ── */}
+                <div className="h-[56px] flex items-center border-b border-[#F2F4F7] flex-shrink-0"
+                    style={{ justifyContent: collapsed ? 'center' : 'flex-start', paddingLeft: collapsed ? '0' : '12px' }}
+                >
+                    <div className="flex items-center gap-2 min-w-0">
+                        {/* Logo */}
+                        <div className="w-8 h-8 flex-shrink-0 rounded-lg bg-gradient-to-br from-[#155DFC] to-[#0052CC] flex items-center justify-center shadow-sm shadow-blue-200">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                                <path d="M12 2L20 7V17L12 22L4 17V7L12 2Z" fill="white" fillOpacity="0.9" />
+                                <path d="M12 6L16 8.5V13.5L12 16L8 13.5V8.5L12 6Z" fill="white" fillOpacity="0.45" />
+                            </svg>
+                        </div>
+                        {/* Wordmark — fades out when collapsed */}
+                        <span
+                            className="font-arimo font-bold text-[16px] bg-gradient-to-r from-[#155DFC] to-[#0052CC] bg-clip-text text-transparent whitespace-nowrap overflow-hidden"
+                            style={{
+                                maxWidth: collapsed ? '0px' : '120px',
+                                opacity: collapsed ? 0 : 1,
+                                transition: 'max-width 280ms cubic-bezier(0.4,0,0.2,1), opacity 180ms',
+                            }}
+                        >
+                            Planora
+                        </span>
                     </div>
-                    <div className="flex flex-col">
-                        <span className="font-arimo text-[14px] font-semibold text-[#101828] leading-tight">Workspace</span>
-                    </div>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-auto text-[#6A7282]">
-                        <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </div>
+
+                {/* ── Floating collapse button — always on the right edge, vertically centred in header ── */}
+                <button
+                    onClick={toggleCollapsed}
+                    title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                    className="absolute top-[14px] right-[-13px] z-50 w-[26px] h-[26px] flex items-center justify-center rounded-full bg-white border border-[#E3E8EF] shadow-md text-[#9AA3AE] hover:text-[#155DFC] hover:border-[#155DFC]/30 hover:shadow-blue-100 transition-all duration-150"
+                >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="1" y="1.5" width="14" height="13" rx="2" stroke="currentColor" strokeWidth="1.4" />
+                        <line x1="5" y1="1.5" x2="5" y2="14.5" stroke="currentColor" strokeWidth="1.4" />
+                        <path
+                            d={collapsed ? 'M8.5 10L11 8L8.5 6' : 'M10.5 10L8 8L10.5 6'}
+                            stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"
+                        />
                     </svg>
-                </div>
-            </div>
+                </button>
 
-            {/* Main Navigation */}
-            <div className="px-4 py-6 flex flex-col gap-1 overflow-y-auto flex-1">
-                <NavItem label="For you" href="#" icon={<InboxIcon />} />
-                <NavItem label="Dashboard" href="/dashboard" icon={<DashboardIcon />} />
-                <NavItem label="Profile" href="/profile" icon={<ProfileIcon />} />
+                {/* ── Nav body ── */}
+                <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 flex flex-col gap-0.5">
 
-                {/* ---- RECENT SPACES ---- */}
-                <div className="mt-6 mb-2">
-                    <div className="flex items-center justify-between px-2 mb-2 group cursor-pointer">
-                        <div className="flex items-center gap-1">
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-[#99A1AF] transform rotate-90">
-                                <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            <span className="font-arimo text-[11px] font-bold text-[#99A1AF] uppercase tracking-wider">Recent Spaces</span>
-                        </div>
-                        <button
-                            onClick={() => router.push('/createProject')}
-                            className="text-[#99A1AF] hover:text-[#0052CC] transition-colors p-1 rounded hover:bg-gray-100"
-                            title="Create new project"
-                        >
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M6 2.5V9.5M2.5 6H9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </button>
+                    {/* For You */}
+                    <NavRow
+                        icon={<HomeIcon />}
+                        label="For You"
+                        collapsed={collapsed}
+                        active={pathname === '/dashboard'}
+                        onClick={() => { setFavOpen(false); setRecentOpen(false); router.push('/dashboard'); }}
+                    />
+
+                    {/* Favourites row + dropdown */}
+                    <div ref={favRef} className="relative">
+                        <NavRow
+                            icon={<StarIcon className="text-amber-400" />}
+                            label="Favourites"
+                            collapsed={collapsed}
+                            active={favOpen}
+                            hasChevron
+                            chevronOpen={favOpen}
+                            onClick={openFavDropdown}
+                        />
                     </div>
-                    <div className="flex flex-col gap-1">
-                        {loadingProjects ? (
-                            <div className="px-3 py-2 animate-pulse flex flex-col gap-2">
-                                <div className="h-3 w-20 bg-gray-100 rounded" />
-                                <div className="h-3 w-24 bg-gray-100 rounded" />
-                            </div>
-                        ) : recentProjects.length > 0 ? (
-                            recentProjects.map((project) => (
-                                <Link
-                                    key={project.id}
-                                    href="/summary"
-                                    onClick={() => handleProjectClick(project)}
-                                >
-                                    <ProjectItem
-                                        label={`${project.projectKey || ''} - ${project.name}`}
-                                        color={Math.abs(project.id.toString().split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)) % 2 === 0 ? 'bg-blue-500' : 'bg-purple-500'}
-                                        active={false}
-                                    />
-                                </Link>
-                            ))
-                        ) : (
-                            <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No recent spaces</div>
-                        )}
-                    </div>
-                </div>
 
-                {/* ---- FOLDERS ---- */}
-                <div className="mt-4">
-                    <button
-                        type="button"
-                        onClick={() => setIsFoldersExpanded((prev) => !prev)}
-                        className="w-full flex items-center gap-1 px-2 mb-2 group cursor-pointer"
+                    {/* Recent Spaces row + dropdown */}
+                    <div ref={recentRef} className="relative">
+                        <NavRow
+                            icon={<ClockIcon />}
+                            label="Recent Spaces"
+                            collapsed={collapsed}
+                            active={recentOpen}
+                            hasChevron
+                            chevronOpen={recentOpen}
+                            onClick={openRecentDropdown}
+                        />
+                    </div>
+
+                    {/* Profile */}
+                    <NavRow
+                        icon={<ProfileIcon />}
+                        label="Profile"
+                        collapsed={collapsed}
+                        active={pathname === '/profile'}
+                        onClick={() => { setFavOpen(false); setRecentOpen(false); router.push('/profile'); }}
+                    />
+
+                    {/* Divider */}
+                    <div className="my-2 mx-1 border-t border-[#F2F4F7]" />
+
+                    {/* Folders section */}
+                    <SectionHeader
+                        label="FOLDERS"
+                        collapsed={collapsed}
+                        expanded={isFoldersExpanded}
+                        onToggle={() => setIsFoldersExpanded(p => !p)}
+                    />
+                    <div
+                        className="flex flex-col gap-0.5 overflow-hidden"
+                        style={{
+                            maxHeight: isFoldersExpanded ? '300px' : '0',
+                            transition: 'max-height 250ms cubic-bezier(0.4,0,0.2,1)',
+                        }}
                     >
-                        <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 12 12"
-                            fill="none"
-                            className={`text-[#99A1AF] transform transition-transform ${isFoldersExpanded ? 'rotate-90' : 'rotate-0'}`}
-                        >
-                            <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        <span className="font-arimo text-[11px] font-bold text-[#99A1AF] uppercase tracking-wider">FOLDERS</span>
-                    </button>
-                    {isFoldersExpanded && (
-                        <div className="flex flex-col gap-1">
-                            <NavItem label="View all" href="/folders/view-all" icon={<FolderIcon />} badge={folderStats.viewAll || undefined} active={pathname === '/folders/view-all'} />
-                            <NavItem label="Recent" href="/folders/recent" icon={<ClockIcon />} badge={folderStats.recent || undefined} active={pathname === '/folders/recent'} />
-                            <NavItem label="Favorites" href="/folders/favorites" icon={<StarIcon />} badge={folderStats.favorites || undefined} active={pathname === '/folders/favorites'} />
-                            <NavItem label="Shared" href="/folders/shared" icon={<UsersIcon />} badge={folderStats.shared || undefined} active={pathname === '/folders/shared'} />
-                            <NavItem label="Trash" href="/folders/trash" icon={<TrashIcon />} badge={folderStats.trash || undefined} active={pathname === '/folders/trash'} />
-                        </div>
-                    )}
+                        <FolderNavRow icon={<FolderIcon />} label="View all"   href="/folders/view-all"  badge={folderStats.viewAll || undefined}    active={pathname === '/folders/view-all'}    collapsed={collapsed} />
+                        <FolderNavRow icon={<ClockIcon />}  label="Recent"     href="/folders/recent"    badge={folderStats.recent || undefined}     active={pathname === '/folders/recent'}     collapsed={collapsed} />
+                        <FolderNavRow icon={<StarIcon />}   label="Favourites" href="/folders/favorites" badge={folderStats.favorites || undefined}  active={pathname === '/folders/favorites'}  collapsed={collapsed} />
+                        <FolderNavRow icon={<UsersIcon />}  label="Shared"     href="/folders/shared"    badge={folderStats.shared || undefined}     active={pathname === '/folders/shared'}     collapsed={collapsed} />
+                        <FolderNavRow icon={<TrashIcon />}  label="Trash"      href="/folders/trash"     badge={folderStats.trash || undefined}      active={pathname === '/folders/trash'}      collapsed={collapsed} />
+                    </div>
                 </div>
 
-                {/* ---- FAVOURITES ---- */}
-                <div className="mt-4">
-                    <div className="flex items-center gap-1 px-2 mb-2">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-[#99A1AF] transform rotate-90">
-                            <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        <span className="font-arimo text-[11px] font-bold text-[#99A1AF] uppercase tracking-wider">FAVOURITES</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        {loadingProjects ? (
-                            <div className="px-3 py-2 animate-pulse flex flex-col gap-2">
-                                <div className="h-3 w-20 bg-gray-100 rounded" />
+                {/* ── User section ── */}
+                <div className="px-2 pb-3 flex-shrink-0 border-t border-[#F2F4F7] pt-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Link
+                            href="/profile"
+                            onClick={() => { setFavOpen(false); setRecentOpen(false); }}
+                            className="flex items-center gap-2 min-w-0 flex-1 rounded-lg px-2 py-1.5 hover:bg-[#F9FAFB] transition-colors"
+                        >
+                            <div className="w-8 h-8 rounded-full bg-[#F2F4F7] flex items-center justify-center text-[#4A5565] font-semibold text-sm overflow-hidden border border-[#E3E8EF] flex-shrink-0">
+                                {resolvedProfilePicUrl ? (
+                                    <Image src={resolvedProfilePicUrl} alt="Profile" width={32} height={32} className="w-full h-full object-cover" unoptimized />
+                                ) : (
+                                    <span>{user?.username?.charAt(0).toUpperCase() || 'U'}</span>
+                                )}
                             </div>
-                        ) : favoriteProjects.length > 0 ? (
-                            favoriteProjects.map((project) => (
-                                <div key={project.id} className="group relative flex items-center">
-                                    <Link
-                                        href="/summary"
-                                        onClick={() => handleProjectClick(project)}
-                                        className="flex-1 min-w-0"
-                                    >
-                                        <FavoriteItem label={`${project.projectKey || ''} - ${project.name}`} />
-                                    </Link>
-                                    {/* Unfavourite button — appears on hover */}
-                                    <button
-                                        onClick={(e) => handleToggleFavoriteFromSidebar(e, project)}
-                                        disabled={togglingFavoriteId === project.id}
-                                        title="Remove from favourites"
-                                        className="absolute right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-100 text-[#F59E0B] hover:text-gray-400 disabled:cursor-not-allowed"
-                                    >
-                                        <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
-                                            <path d="m10 2.8 2.2 4.6 5 .7-3.6 3.5.9 5L10 14.7 5.5 16.6l.9-5L2.8 8.1l5-.7L10 2.8z" />
-                                        </svg>
-                                    </button>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No favourites yet</div>
+                            <div
+                                className="flex flex-col overflow-hidden"
+                                style={{
+                                    maxWidth: collapsed ? '0px' : '130px',
+                                    opacity: collapsed ? 0 : 1,
+                                    transition: 'max-width 280ms cubic-bezier(0.4,0,0.2,1), opacity 180ms',
+                                }}
+                            >
+                                <span className="text-[13px] font-medium text-[#101828] truncate">{user?.username || 'Guest'}</span>
+                                <span className="text-[11px] text-[#6A7282] truncate">{user?.email || ''}</span>
+                            </div>
+                        </Link>
+                        {!collapsed && (
+                            <button onClick={handleLogout} title="Logout" className="ml-auto text-[#9AA3AE] hover:text-red-500 transition-colors p-1.5 rounded-md hover:bg-red-50 flex-shrink-0">
+                                <LogoutIcon />
+                            </button>
                         )}
                     </div>
                 </div>
             </div>
 
-            {/* Bottom User Section */}
-            <div className="mt-auto p-4 border-t border-[#F2F4F7]">
-                <div className="flex items-center gap-3">
-                    <Link href="/profile" className="flex items-center gap-3 min-w-0 flex-1 rounded-md px-1 py-1 hover:bg-[#F9FAFB] transition-colors">
-                        <div className="w-9 h-9 rounded-full bg-[#F2F4F7] flex items-center justify-center text-[#4A5565] font-semibold text-sm overflow-hidden border border-[#E3E8EF]">
-                            {resolvedProfilePicUrl ? (
-                                <Image
-                                    src={resolvedProfilePicUrl}
-                                    alt="Profile"
-                                    width={36}
-                                    height={36}
-                                    className="w-full h-full object-cover"
-                                    unoptimized
-                                />
-                            ) : (
-                                <span>{user?.username?.charAt(0).toUpperCase() || 'U'}</span>
-                            )}
-                        </div>
-                        <div className="flex flex-col overflow-hidden">
-                            <span className="text-[14px] font-medium text-[#101828] truncate">{user?.username || 'Guest'}</span>
-                            <span className="text-[12px] text-[#6A7282] truncate" title={user?.email}>{user?.email || 'Please login'}</span>
-                        </div>
-                    </Link>
-                    <button onClick={handleLogout} className="ml-auto text-[#6A7282] hover:text-red-500 transition-colors" title="Logout">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M10 17l5-5-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M15 12H3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            {/* ── Fixed dropdowns rendered OUTSIDE the sidebar body to escape overflow:hidden ── */}
+            {favOpen && (
+                <ProjectDropdown
+                    fixedTop={dropdownPos.top}
+                    fixedLeft={dropdownPos.left}
+                    items={filteredFavs}
+                    loading={loadingProjects}
+                    search={favSearch}
+                    onSearch={setFavSearch}
+                    emptyMsg="No favourites yet"
+                    placeholder="Search favourites…"
+                    viewAllHref="/spaces?filter=favorites"
+                    viewAllLabel="View all favourites"
+                    onProjectClick={handleProjectClick}
+                    onToggleFav={handleToggleFavourite}
+                    togglingId={togglingFavoriteId}
+                />
+            )}
+            {recentOpen && (
+                <ProjectDropdown
+                    fixedTop={dropdownPos.top}
+                    fixedLeft={dropdownPos.left}
+                    items={filteredRecent}
+                    loading={loadingProjects}
+                    search={recentSearch}
+                    onSearch={setRecentSearch}
+                    emptyMsg="No recent spaces"
+                    placeholder="Search recent…"
+                    viewAllHref="/spaces?filter=recent"
+                    viewAllLabel="View all recent spaces"
+                    onProjectClick={handleProjectClick}
+                />
+            )}
+        </div>
+    );
+}
+
+/* ─────────────────────────────────────────────
+   Project Dropdown Box
+───────────────────────────────────────────── */
+function ProjectDropdown({
+    fixedTop, fixedLeft,
+    items, loading, search, onSearch, emptyMsg, placeholder,
+    viewAllHref, viewAllLabel, onProjectClick, onToggleFav, togglingId,
+}: {
+    fixedTop: number;
+    fixedLeft: number;
+    items: Project[];
+    loading: boolean;
+    search: string;
+    onSearch: (v: string) => void;
+    emptyMsg: string;
+    placeholder: string;
+    viewAllHref: string;
+    viewAllLabel: string;
+    onProjectClick: (p: Project) => void;
+    onToggleFav?: (e: React.MouseEvent, p: Project) => void;
+    togglingId?: number | null;
+}) {
+    const router = useRouter();
+    const visible = items.slice(0, 4);
+
+    return (
+        <div
+            data-sidebar-dropdown
+            className="bg-white rounded-xl border border-[#E8ECF0] shadow-2xl shadow-black/10 overflow-hidden"
+            style={{
+                position: 'fixed',
+                top: fixedTop,
+                left: fixedLeft,
+                width: '248px',
+                zIndex: 9999,
+                animation: 'dropdownIn 180ms cubic-bezier(0.4,0,0.2,1)',
+            }}
+        >
+            {/* Search bar */}
+            <div className="px-3 pt-3 pb-2 border-b border-[#F2F4F7]">
+                <div className="relative">
+                    <div className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#B0B8C4" strokeWidth="2" strokeLinecap="round">
+                            <circle cx="7" cy="7" r="5" /><path d="M11 11L14 14" />
                         </svg>
-                    </button>
+                    </div>
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={e => onSearch(e.target.value)}
+                        placeholder={placeholder}
+                        autoFocus
+                        className="w-full pl-7 pr-3 py-1.5 text-[12px] bg-[#F7F8FA] border border-[#E8ECF0] rounded-lg placeholder-[#B0B8C4] text-[#1D293D] focus:outline-none focus:ring-1 focus:ring-[#155DFC]/30 focus:border-[#155DFC]/40 font-arimo transition-all"
+                    />
                 </div>
+            </div>
+
+            {/* Items list */}
+            <div className="py-1">
+                {loading ? (
+                    <div className="px-3 py-3 flex flex-col gap-2 animate-pulse">
+                        <div className="h-2 w-32 bg-gray-100 rounded" />
+                        <div className="h-2 w-24 bg-gray-100 rounded" />
+                    </div>
+                ) : visible.length > 0 ? (
+                    visible.map(project => (
+                        <DropdownItem
+                            key={project.id}
+                            project={project}
+                            onProjectClick={() => { onProjectClick(project); router.push(`/summary/${project.id}`); }}
+                            onToggleFav={onToggleFav}
+                            isToggling={(togglingId ?? -1) === project.id}
+                        />
+                    ))
+                ) : (
+                    <div className="px-3 py-3 text-[12px] text-[#B0B8C4] italic">{emptyMsg}</div>
+                )}
+            </div>
+
+            {/* View all footer */}
+            <div className="border-t border-[#F2F4F7] px-3 py-2">
+                <Link
+                    href={viewAllHref}
+                    className="flex items-center gap-1.5 text-[12px] font-medium text-[#155DFC] hover:text-[#0040C4] transition-colors font-arimo"
+                >
+                    <span>{viewAllLabel}</span>
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                        <path d="M3 6h6M7 4l2 2-2 2" />
+                    </svg>
+                </Link>
             </div>
         </div>
     );
 }
 
-function NavItem({ label, href, icon, active, badge }: NavItemProps) {
+/* ─────────────────────────────────────────────
+   Dropdown Item
+───────────────────────────────────────────── */
+function DropdownItem({
+    project, onProjectClick, onToggleFav, isToggling,
+}: {
+    project: Project;
+    onProjectClick: () => void;
+    onToggleFav?: (e: React.MouseEvent, p: Project) => void;
+    isToggling: boolean;
+}) {
+    const colour = projectColour(project.id);
     return (
-        <Link href={href} className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-200 ${active ? 'bg-[#EFF6FF] text-[#0052CC]' : 'text-[#4A5565] hover:bg-[#F9FAFB] hover:text-[#101828]'}`}>
-            {icon}
-            <span className="font-arimo text-[14px] font-medium">{label}</span>
-            {badge !== undefined && badge > 0 && (
-                <span className="ml-auto bg-[#F2F4F7] text-[#4A5565] text-[11px] px-2 py-0.5 rounded text-center min-w-[24px] font-medium">{badge}</span>
+        <div
+            className="group flex items-center gap-2.5 px-3 py-2 hover:bg-[#F5F7FA] transition-colors cursor-pointer"
+            onClick={onProjectClick}
+        >
+            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${colour}`} />
+            <div className="flex flex-col flex-1 min-w-0">
+                <span className="font-arimo text-[12.5px] font-medium text-[#1D293D] truncate leading-tight">{project.name}</span>
+                {project.projectKey && (
+                    <span className="font-arimo text-[10.5px] text-[#99A1AF] truncate">{project.projectKey}</span>
+                )}
+            </div>
+            {onToggleFav && (
+                <button
+                    onClick={e => onToggleFav(e, project)}
+                    disabled={isToggling}
+                    title="Remove from favourites"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 p-0.5 rounded text-amber-400 hover:text-gray-400 disabled:cursor-not-allowed"
+                >
+                    <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="m10 2.8 2.2 4.6 5 .7-3.6 3.5.9 5L10 14.7 5.5 16.6l.9-5L2.8 8.1l5-.7L10 2.8z" />
+                    </svg>
+                </button>
+            )}
+        </div>
+    );
+}
+
+/* ─────────────────────────────────────────────
+   Nav Row
+───────────────────────────────────────────── */
+function NavRow({
+    icon, label, collapsed, active = false, hasChevron = false, chevronOpen = false, onClick,
+}: {
+    icon: React.ReactNode;
+    label: string;
+    collapsed: boolean;
+    active?: boolean;
+    hasChevron?: boolean;
+    chevronOpen?: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 text-left ${
+                active ? 'bg-[#EFF6FF] text-[#155DFC]' : 'text-[#4A5565] hover:bg-[#F5F7FA] hover:text-[#101828]'
+            }`}
+        >
+            <span className="flex-shrink-0 w-[18px] flex items-center justify-center">{icon}</span>
+            <span
+                className="font-arimo text-[13.5px] font-medium flex-1 whitespace-nowrap overflow-hidden text-left"
+                style={{
+                    maxWidth: collapsed ? '0px' : '150px',
+                    opacity: collapsed ? 0 : 1,
+                    transition: 'max-width 280ms cubic-bezier(0.4,0,0.2,1), opacity 200ms',
+                }}
+            >
+                {label}
+            </span>
+            {hasChevron && !collapsed && (
+                <svg
+                    width="13" height="13" viewBox="0 0 13 13" fill="none"
+                    className="flex-shrink-0 transition-transform duration-200"
+                    style={{ transform: chevronOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                >
+                    <path d="M4.5 3L8 6.5L4.5 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            )}
+        </button>
+    );
+}
+
+/* ─────────────────────────────────────────────
+   Folder Nav Row
+───────────────────────────────────────────── */
+function FolderNavRow({
+    icon, label, href, badge, active, collapsed,
+}: {
+    icon: React.ReactNode; label: string; href: string;
+    badge?: number; active: boolean; collapsed: boolean;
+}) {
+    return (
+        <Link
+            href={href}
+            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 ${
+                active ? 'bg-[#EFF6FF] text-[#155DFC]' : 'text-[#4A5565] hover:bg-[#F5F7FA] hover:text-[#101828]'
+            }`}
+        >
+            <span className="flex-shrink-0 w-[18px] flex items-center justify-center">{icon}</span>
+            <span
+                className="font-arimo text-[13.5px] font-medium flex-1 whitespace-nowrap overflow-hidden"
+                style={{
+                    maxWidth: collapsed ? '0px' : '130px',
+                    opacity: collapsed ? 0 : 1,
+                    transition: 'max-width 280ms cubic-bezier(0.4,0,0.2,1), opacity 200ms',
+                }}
+            >
+                {label}
+            </span>
+            {badge !== undefined && badge > 0 && !collapsed && (
+                <span className="ml-auto bg-[#F2F4F7] text-[#4A5565] text-[11px] px-1.5 py-0.5 rounded min-w-[20px] text-center font-medium">
+                    {badge}
+                </span>
             )}
         </Link>
-    )
-}
-
-function ProjectItem({ label, color, active = false }: { label: string; color: string; active?: boolean }) {
-    return (
-        <div className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-200 ${active ? 'bg-[#EFF6FF]' : 'hover:bg-[#F9FAFB]'}`}>
-            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${color}`} />
-            <span className="font-arimo text-[13px] text-[#4A5565] truncate">{label}</span>
-        </div>
     );
 }
 
-function FavoriteItem({ label }: { label: string }) {
+/* ─────────────────────────────────────────────
+   Section Header
+───────────────────────────────────────────── */
+function SectionHeader({ label, collapsed, expanded, onToggle }: {
+    label: string; collapsed: boolean; expanded: boolean; onToggle: () => void;
+}) {
     return (
-        <div className="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-200 hover:bg-[#F9FAFB]">
-            <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor" className="text-[#F59E0B] flex-shrink-0">
-                <path d="m10 2.8 2.2 4.6 5 .7-3.6 3.5.9 5L10 14.7 5.5 16.6l.9-5L2.8 8.1l5-.7L10 2.8z" />
+        <button onClick={onToggle} className="w-full flex items-center gap-2 px-2.5 py-1.5 mb-0.5 group">
+            <svg
+                width="9" height="9" viewBox="0 0 10 10" fill="none"
+                className="text-[#B0B8C4] flex-shrink-0 transition-transform duration-200"
+                style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+            >
+                <path d="M3.5 2L6.5 5L3.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span className="font-arimo text-[13px] text-[#4A5565] truncate">{label}</span>
-        </div>
+            <span
+                className="font-arimo text-[10.5px] font-bold text-[#B0B8C4] uppercase tracking-widest whitespace-nowrap overflow-hidden"
+                style={{
+                    maxWidth: collapsed ? '0px' : '150px',
+                    opacity: collapsed ? 0 : 1,
+                    transition: 'max-width 280ms cubic-bezier(0.4,0,0.2,1), opacity 200ms',
+                }}
+            >
+                {label}
+            </span>
+        </button>
     );
 }
 
-// Icons
-const DashboardIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="6" height="6" rx="1" /><rect x="11" y="3" width="6" height="6" rx="1" /><rect x="3" y="11" width="6" height="6" rx="1" /><rect x="11" y="11" width="6" height="6" rx="1" /></svg>;
-const InboxIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h12v12H4z" /><path d="M4 8l8 5 8-5" /></svg>;
-const ProfileIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6" r="3" /><path d="M4 16c1.2-2.7 3.5-4 6-4s4.8 1.3 6 4" /></svg>;
-const FolderIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 6.5A1.5 1.5 0 0 1 4 5h4l1.5 2h6.5A1.5 1.5 0 0 1 17.5 8.5v6A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5v-8z" /></svg>;
-const ClockIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="10" r="7" /><path d="M10 6.5v4l2.5 1.5" /></svg>;
-const StarIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m10 2.8 2.2 4.6 5 .7-3.6 3.5.9 5L10 14.7 5.5 16.6l.9-5L2.8 8.1l5-.7L10 2.8z" /></svg>;
-const UsersIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="7" r="2.5" /><circle cx="13.5" cy="8" r="2" /><path d="M3.5 15c.8-2 2.5-3 4.7-3s3.9 1 4.7 3" /><path d="M12.2 14.5c.5-1.2 1.5-1.9 2.9-1.9 1.4 0 2.4.7 2.9 1.9" /></svg>;
-const TrashIcon = () => <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 5.5h13" /><path d="M7.5 5.5V4a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5" /><path d="M6 5.5v10a1.5 1.5 0 0 0 1.5 1.5h5A1.5 1.5 0 0 0 14 15.5v-10" /><path d="M8.5 8.5v5" /><path d="M11.5 8.5v5" /></svg>;
+/* ─────────────────────────────────────────────
+   Icons
+───────────────────────────────────────────── */
+const HomeIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9.5L10 3L17 9.5V17H13V13H7V17H3V9.5Z" />
+    </svg>
+);
+function StarIcon({ className = '', size = 16 }: { className?: string; size?: number }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className}>
+            <path d="m10 2.8 2.2 4.6 5 .7-3.6 3.5.9 5L10 14.7 5.5 16.6l.9-5L2.8 8.1l5-.7L10 2.8z" />
+        </svg>
+    );
+}
+function ClockIcon({ className = '', size = 16 }: { className?: string; size?: number }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className}>
+            <circle cx="10" cy="10" r="7" /><path d="M10 6.5v4l2.5 1.5" />
+        </svg>
+    );
+}
+const ProfileIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="10" cy="6" r="3" /><path d="M4 16c1.2-2.7 3.5-4 6-4s4.8 1.3 6 4" />
+    </svg>
+);
+const FolderIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2.5 6.5A1.5 1.5 0 0 1 4 5h4l1.5 2h6.5A1.5 1.5 0 0 1 17.5 8.5v6A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5v-8z" />
+    </svg>
+);
+const UsersIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="7" cy="7" r="2.5" /><circle cx="13.5" cy="8" r="2" />
+        <path d="M3.5 15c.8-2 2.5-3 4.7-3s3.9 1 4.7 3" />
+        <path d="M12.2 14.5c.5-1.2 1.5-1.9 2.9-1.9 1.4 0 2.4.7 2.9 1.9" />
+    </svg>
+);
+const TrashIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3.5 5.5h13" /><path d="M7.5 5.5V4a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5" />
+        <path d="M6 5.5v10a1.5 1.5 0 0 0 1.5 1.5h5A1.5 1.5 0 0 0 14 15.5v-10" />
+        <path d="M8.5 8.5v5M11.5 8.5v5" />
+    </svg>
+);
+const LogoutIcon = () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4" />
+        <path d="M10 17l5-5-5-5" /><path d="M15 12H3" />
+    </svg>
+);

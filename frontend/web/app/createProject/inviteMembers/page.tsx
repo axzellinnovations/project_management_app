@@ -203,7 +203,7 @@ export default function InviteMembersPage() {
                     <Link href="/createProject" className="w-[120px] h-[44px] bg-white/50 border border-white/60 rounded-[14px] flex items-center justify-center font-inter font-medium text-[15px] text-[#1D1D1F] hover:bg-white hover:shadow-sm transition-all md:w-auto md:flex-1">
                         Back
                     </Link>
-                    <Link href="/summary" className="flex-1 h-[44px] bg-[#1D56D5] rounded-[14px] flex items-center justify-center font-inter font-medium text-[15px] text-white shadow-md hover:bg-[#1642B5] hover:shadow-lg transition-all">
+                    <Link href={projectId ? `/summary/${projectId}` : '/dashboard'} className="flex-1 h-[44px] bg-[#1D56D5] rounded-[14px] flex items-center justify-center font-inter font-medium text-[15px] text-white shadow-md hover:bg-[#1642B5] hover:shadow-lg transition-all">
                         Start Project
                     </Link>
                 </div>

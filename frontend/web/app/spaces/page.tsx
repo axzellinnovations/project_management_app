@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { getUserFromToken, User } from '@/lib/auth';
 import api from '@/lib/axios';
 import RecentProjectCard from '../dashboard/components/RecentProjectCard';
@@ -10,8 +11,17 @@ export default function SpacesPage() {
     const [projects, setProjects] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortBy, setSortBy] = useState<'recent' | 'alphabetical' | 'starred'>('recent');
+    const searchParams = useSearchParams();
+    const [sortBy, setSortBy] = useState<'recent' | 'alphabetical' | 'favorites'>('recent');
     const [user, setUser] = useState<User | null>(null);
+
+    // Set initial filter from URL param
+    useEffect(() => {
+        const filter = searchParams.get('filter');
+        if (filter === 'favorites') setSortBy('favorites');
+        else if (filter === 'recent') setSortBy('recent');
+    }, [searchParams]);
+
 
     useEffect(() => {
         const userData = getUserFromToken();
@@ -36,7 +46,7 @@ export default function SpacesPage() {
             const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (project.projectKey && project.projectKey.toLowerCase().includes(searchQuery.toLowerCase()));
             
-            if (sortBy === 'starred') {
+            if (sortBy === 'favorites') {
                 return matchesSearch && project.isFavorite;
             }
             return matchesSearch;
@@ -98,14 +108,14 @@ export default function SpacesPage() {
                         Alphabetical
                     </button>
                     <button
-                        onClick={() => setSortBy('starred')}
+                        onClick={() => setSortBy('favorites')}
                         className={`px-4 py-1.5 rounded-[6px] text-[14px] font-medium transition-all ${
-                            sortBy === 'starred' 
+                            sortBy === 'favorites' 
                             ? 'bg-white text-[#0052CC] shadow-sm' 
                             : 'text-[#4A5565] hover:text-[#101828]'
                         }`}
                     >
-                        Starred
+                        Favourites
                     </button>
                 </div>
             </div>

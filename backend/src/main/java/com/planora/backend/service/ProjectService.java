@@ -142,7 +142,8 @@ public class ProjectService {
         
         access.setProject(project);
         access.setUser(user);
-        // lastAccessedAt will be set by @PreUpdate/@PrePersist
+        // Explicitly update lastAccessedAt to mark entity as dirty, so Hibernate executes an UPDATE.
+        access.setLastAccessedAt(LocalDateTime.now());
         projectAccessRepository.save(access);
     }
 
@@ -166,15 +167,18 @@ public class ProjectService {
 
     // ---------------- READ RECENT (TOP N FOR AUTH USER) ----------------
     public List<ProjectResponseDTO> getRecentProjectsForUser(Long userId, int limit) {
+        // Get the teams the user currently belongs to
+        List<Team> userTeams = teamMemberRepository.findByUserUserId(userId)
+                .stream().map(TeamMember::getTeam).collect(Collectors.toList());
+
+        if (userTeams.isEmpty()) return java.util.Collections.emptyList();
+
         // Fetch the top-N most recently accessed project IDs
         List<ProjectAccess> recentAccesses = projectAccessRepository
-                .findByUser_UserIdOrderByLastAccessedAtDesc(userId, PageRequest.of(0, limit));
+                .findByUser_UserIdOrderByLastAccessedAtDesc(userId, PageRequest.of(0, limit * 3)); // fetch extra to allow for filtering
 
         if (recentAccesses.isEmpty()) {
-            // Fall back to most recently created projects if no access history
-            List<Team> userTeams = teamMemberRepository.findByUserUserId(userId)
-                    .stream().map(TeamMember::getTeam).collect(Collectors.toList());
-            if (userTeams.isEmpty()) return java.util.Collections.emptyList();
+            // Fall back to most recently created projects in user's teams
             return projectRepository.findByTeamIn(userTeams).stream()
                     .sorted((a, b) -> {
                         LocalDateTime ca = a.getCreatedAt() != null ? a.getCreatedAt() : LocalDateTime.MIN;
@@ -186,7 +190,13 @@ public class ProjectService {
                     .collect(Collectors.toList());
         }
 
+        // Filter: only include projects the user is still a team member of
+        java.util.Set<Long> memberProjectIds = projectRepository.findByTeamIn(userTeams)
+                .stream().map(Project::getId).collect(java.util.stream.Collectors.toSet());
+
         return recentAccesses.stream()
+                .filter(access -> memberProjectIds.contains(access.getProject().getId()))
+                .limit(limit)
                 .map(access -> convertToResponseDTO(access.getProject(), userId))
                 .collect(Collectors.toList());
     }
@@ -195,7 +205,17 @@ public class ProjectService {
     public List<ProjectResponseDTO> getFavoriteProjectsForUser(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        return projectFavoriteRepository.findByUser(user).stream()
+
+        // Only return favourites from projects the user is still a team member of
+        List<Team> userTeams = teamMemberRepository.findByUserUserId(userId)
+                .stream().map(TeamMember::getTeam).collect(Collectors.toList());
+        java.util.Set<Long> memberProjectIds = userTeams.isEmpty()
+                ? java.util.Collections.emptySet()
+                : projectRepository.findByTeamIn(userTeams).stream()
+                        .map(Project::getId).collect(java.util.stream.Collectors.toSet());
+
+        return projectFavoriteRepository.findByUserOrderByCreatedAtDesc(user).stream()
+                .filter(fav -> memberProjectIds.contains(fav.getProject().getId()))
                 .map(fav -> convertToResponseDTO(fav.getProject(), userId))
                 .collect(Collectors.toList());
     }
@@ -212,6 +232,12 @@ public class ProjectService {
     public ProjectResponseDTO getProjectById(Long id) {
         Project project = findProjectById(id);
         return convertToResponseDTO(project, null);
+    }
+
+    // ---------------- READ BY ID (with user context for isFavorite) ----------------
+    public ProjectResponseDTO getProjectByIdForUser(Long id, Long userId) {
+        Project project = findProjectById(id);
+        return convertToResponseDTO(project, userId);
     }
 
     // ---------------- UPDATE ----------------

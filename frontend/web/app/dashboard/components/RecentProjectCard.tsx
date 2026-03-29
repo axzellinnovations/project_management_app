@@ -117,8 +117,7 @@ export default function RecentProjectCard({
         await recordProjectAccess();
         window.dispatchEvent(new CustomEvent('planora:project-accessed'));
         localStorage.setItem('currentProjectName', name);
-        localStorage.setItem('currentProjectId', id);
-        router.push(`/summary`);
+        router.push(`/summary/${id}`);
     };
 
     return (
@@ -191,13 +190,12 @@ export default function RecentProjectCard({
                 {/* Links Section */}
                 <div className="flex items-center gap-6 mt-6">
                     <Link
-                        href={`/summary`}
+                        href={`/summary/${id}`}
                         onClick={async (e) => {
                             e.stopPropagation();
                             await recordProjectAccess();
                             window.dispatchEvent(new CustomEvent('planora:project-accessed'));
                             localStorage.setItem('currentProjectName', name);
-                            localStorage.setItem('currentProjectId', id);
                         }}
                         className="font-arimo text-[14px] font-semibold text-[#0052CC] hover:underline flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/40 hover:bg-white/60 transition-all border border-black/5"
                     >

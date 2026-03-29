@@ -165,7 +165,7 @@ export default function TopBar() {
     const getTabHref = (tabId: string) => {
         switch (tabId) {
             case 'summary':
-                return withProjectId('/summary');
+                return projectId ? `/summary/${projectId}` : '/dashboard';
             case 'timeline':
                 return withProjectId('/timeline');
             case 'backlog':
@@ -173,17 +173,17 @@ export default function TopBar() {
             case 'board':
                 return withProjectId('/kanban');
             case 'calendar':
-                return withProjectId('/summary');
+                return projectId ? `/summary/${projectId}` : '/dashboard';
             case 'chats':
-                return projectId ? `/project/${projectId}/chat` : '/summary';
+                return projectId ? `/project/${projectId}/chat` : '/dashboard';
             case 'members':
-                return withProjectId('/summary');
+                return projectId ? `/summary/${projectId}` : '/dashboard';
             case 'pages':
                 return withProjectId('/pages');
             case 'list':
                 return '/spaces';
             default:
-                return withProjectId('/summary');
+                return projectId ? `/summary/${projectId}` : '/dashboard';
         }
     };
 
