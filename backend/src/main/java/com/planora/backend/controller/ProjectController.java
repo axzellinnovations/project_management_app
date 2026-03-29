@@ -1,7 +1,7 @@
 package com.planora.backend.controller;
 
 import com.planora.backend.dto.ProjectDTO;
-import com.planora.backend.dto.ProjectResponseDTO; // Import the new DTO
+import com.planora.backend.dto.ProjectResponseDTO;
 import com.planora.backend.dto.UpdateProjectDTO;
 import com.planora.backend.service.ProjectService;
 import lombok.RequiredArgsConstructor;
@@ -38,12 +38,28 @@ public class ProjectController {
         return ResponseEntity.ok(!exists);
     }
 
-    // ---------------- READ ALL PROJECTS ----------------
+    // ---------------- READ PROJECTS (FOR AUTH USER) ----------------
     @GetMapping
-    public ResponseEntity<List<ProjectResponseDTO>> getAllProjects() {
+    public ResponseEntity<List<ProjectResponseDTO>> getProjectsForUser(
+            @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
         return new ResponseEntity<>(
-                projectService.getAllProjects(),
+                projectService.getProjectsForUser(principal.getUserId()),
                 HttpStatus.OK);
+    }
+
+    // ---------------- READ RECENT (FOR AUTH USER) ----------------
+    @GetMapping("/recent")
+    public ResponseEntity<List<ProjectResponseDTO>> getRecentProjects(
+            @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal,
+            @RequestParam(defaultValue = "5") int limit) {
+        return ResponseEntity.ok(projectService.getRecentProjectsForUser(principal.getUserId(), limit));
+    }
+
+    // ---------------- READ FAVORITES (FOR AUTH USER) ----------------
+    @GetMapping("/favorites")
+    public ResponseEntity<List<ProjectResponseDTO>> getFavoriteProjects(
+            @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
+        return ResponseEntity.ok(projectService.getFavoriteProjectsForUser(principal.getUserId()));
     }
 
     // ---------------- READ PROJECT BY ID ----------------
@@ -62,6 +78,23 @@ public class ProjectController {
         return new ResponseEntity<>(
                 projectService.updateProject(projectId, dto),
                 HttpStatus.OK);
+    }
+
+    // ---------------- RECORD PROJECT ACCESS ----------------
+    @PostMapping("/{projectId}/access")
+    public ResponseEntity<Void> recordAccess(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
+        projectService.recordProjectAccess(projectId, principal.getUserId());
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{projectId}/favorite")
+    public ResponseEntity<Void> toggleFavorite(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
+        projectService.toggleFavorite(projectId, principal.getUserId());
+        return ResponseEntity.ok().build();
     }
 
     // ---------------- DELETE PROJECT (OWNER ONLY) ----------------

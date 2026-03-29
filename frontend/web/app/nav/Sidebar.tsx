@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useEffect, useState, useMemo, useSyncExternalStore } from 'react';
+import { useEffect, useState, useMemo, useSyncExternalStore, useCallback } from 'react';
 import { getUserFromToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import api from '@/lib/axios';
@@ -59,6 +59,7 @@ export default function Sidebar() {
         shared: 0,
         trash: 0,
     });
+    const [togglingFavoriteId, setTogglingFavoriteId] = useState<number | null>(null);
 
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
@@ -69,6 +70,22 @@ export default function Sidebar() {
         }
         return `${API_BASE_URL}${profilePicUrl}`;
     }, [profilePicUrl, API_BASE_URL]);
+
+    // Fetch recent and favorite projects from dedicated endpoints
+    const fetchProjects = useCallback(async () => {
+        try {
+            const [recentRes, favRes] = await Promise.all([
+                api.get('/api/projects/recent?limit=5'),
+                api.get('/api/projects/favorites'),
+            ]);
+            setRecentProjects(recentRes.data);
+            setFavoriteProjects(favRes.data);
+        } catch (error: any) {
+            console.error('Failed to fetch sidebar projects:', error.response?.data?.message || error.message);
+        } finally {
+            setLoadingProjects(false);
+        }
+    }, []);
 
     useEffect(() => {
         const userData = user;
@@ -90,20 +107,7 @@ export default function Sidebar() {
             loadProfilePic();
         }
 
-        const fetchRecentProjects = async () => {
-            try {
-                const response = await api.get('/api/projects');
-                const allProjects = response.data;
-                setRecentProjects(allProjects.slice(0, 3));
-                setFavoriteProjects(allProjects.filter((p: any) => p.isFavorite).slice(0, 3));
-            } catch (error: any) {
-                console.error("Failed to fetch recent projects for sidebar:", error.response?.data?.message || error.message);
-            } finally {
-                setLoadingProjects(false);
-            }
-        };
-
-        void fetchRecentProjects();
+        void fetchProjects();
 
         const loadFolderStats = async () => {
             if (typeof window === 'undefined') {
@@ -158,11 +162,67 @@ export default function Sidebar() {
         };
 
         void loadFolderStats();
-    }, [pathname, user]);
+    }, [pathname, user, fetchProjects]);
+
+    // Listen for custom events from TopBar (favourite toggle) or any project navigation
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const handleFavoriteToggled = () => {
+            void fetchProjects();
+        };
+
+        const handleProjectAccessed = () => {
+            void fetchProjects();
+        };
+
+        window.addEventListener('planora:favorite-toggled', handleFavoriteToggled);
+        window.addEventListener('planora:project-accessed', handleProjectAccessed);
+
+        return () => {
+            window.removeEventListener('planora:favorite-toggled', handleFavoriteToggled);
+            window.removeEventListener('planora:project-accessed', handleProjectAccessed);
+        };
+    }, [fetchProjects]);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
         router.push('/login');
+    };
+
+    const handleProjectClick = async (project: any) => {
+        try {
+            await api.post(`/api/projects/${project.id}/access`);
+            window.dispatchEvent(new CustomEvent('planora:project-accessed'));
+        } catch (e) {}
+        localStorage.setItem('currentProjectName', project.name);
+        localStorage.setItem('currentProjectId', project.id.toString());
+    };
+
+    const handleToggleFavoriteFromSidebar = async (e: React.MouseEvent, project: any) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (togglingFavoriteId === project.id) return;
+
+        setTogglingFavoriteId(project.id);
+        // Optimistic update
+        setFavoriteProjects(prev => prev.filter(p => p.id !== project.id));
+        try {
+            await api.post(`/api/projects/${project.id}/favorite`);
+            window.dispatchEvent(new CustomEvent('planora:favorite-toggled'));
+            // Re-fetch to get accurate state
+            const [recentRes, favRes] = await Promise.all([
+                api.get('/api/projects/recent?limit=5'),
+                api.get('/api/projects/favorites'),
+            ]);
+            setRecentProjects(recentRes.data);
+            setFavoriteProjects(favRes.data);
+        } catch (e) {
+            // Revert on error
+            void fetchProjects();
+        } finally {
+            setTogglingFavoriteId(null);
+        }
     };
 
     return (
@@ -188,17 +248,19 @@ export default function Sidebar() {
                 <NavItem label="Dashboard" href="/dashboard" icon={<DashboardIcon />} />
                 <NavItem label="Profile" href="/profile" icon={<ProfileIcon />} />
 
+                {/* ---- RECENT SPACES ---- */}
                 <div className="mt-6 mb-2">
                     <div className="flex items-center justify-between px-2 mb-2 group cursor-pointer">
                         <div className="flex items-center gap-1">
                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-[#99A1AF] transform rotate-90">
                                 <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
-                            <span className="font-arimo text-[11px] font-bold text-[#99A1AF] uppercase tracking-wider">PROJECTS</span>
+                            <span className="font-arimo text-[11px] font-bold text-[#99A1AF] uppercase tracking-wider">Recent Spaces</span>
                         </div>
-                        <button 
+                        <button
                             onClick={() => router.push('/createProject')}
                             className="text-[#99A1AF] hover:text-[#0052CC] transition-colors p-1 rounded hover:bg-gray-100"
+                            title="Create new project"
                         >
                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M6 2.5V9.5M2.5 6H9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -213,30 +275,25 @@ export default function Sidebar() {
                             </div>
                         ) : recentProjects.length > 0 ? (
                             recentProjects.map((project) => (
-                                <Link 
-                                    key={project.id} 
+                                <Link
+                                    key={project.id}
                                     href="/summary"
-                                    onClick={async () => {
-                                        try {
-                                            await api.post(`/api/projects/${project.id}/access`);
-                                        } catch (e) {}
-                                        localStorage.setItem('currentProjectName', project.name);
-                                        localStorage.setItem('currentProjectId', project.id.toString());
-                                    }}
+                                    onClick={() => handleProjectClick(project)}
                                 >
-                                    <ProjectItem 
+                                    <ProjectItem
                                         label={`${project.projectKey || ''} - ${project.name}`}
                                         color={Math.abs(project.id.toString().split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)) % 2 === 0 ? 'bg-blue-500' : 'bg-purple-500'}
-                                        active={false} 
+                                        active={false}
                                     />
                                 </Link>
                             ))
                         ) : (
-                            <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No projects</div>
+                            <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No recent spaces</div>
                         )}
                     </div>
                 </div>
 
+                {/* ---- FOLDERS ---- */}
                 <div className="mt-4">
                     <button
                         type="button"
@@ -256,21 +313,22 @@ export default function Sidebar() {
                     </button>
                     {isFoldersExpanded && (
                         <div className="flex flex-col gap-1">
-                            <NavItem label="View all" href="/folders/view-all" icon={<FolderIcon />} badge={folderStats.viewAll} active={pathname === '/folders/view-all'} />
-                            <NavItem label="Recent" href="/folders/recent" icon={<ClockIcon />} badge={folderStats.recent} active={pathname === '/folders/recent'} />
-                            <NavItem label="Favorites" href="/folders/favorites" icon={<StarIcon />} badge={folderStats.favorites} active={pathname === '/folders/favorites'} />
-                            <NavItem label="Shared" href="/folders/shared" icon={<UsersIcon />} badge={folderStats.shared} active={pathname === '/folders/shared'} />
-                            <NavItem label="Trash" href="/folders/trash" icon={<TrashIcon />} badge={folderStats.trash} active={pathname === '/folders/trash'} />
+                            <NavItem label="View all" href="/folders/view-all" icon={<FolderIcon />} badge={folderStats.viewAll || undefined} active={pathname === '/folders/view-all'} />
+                            <NavItem label="Recent" href="/folders/recent" icon={<ClockIcon />} badge={folderStats.recent || undefined} active={pathname === '/folders/recent'} />
+                            <NavItem label="Favorites" href="/folders/favorites" icon={<StarIcon />} badge={folderStats.favorites || undefined} active={pathname === '/folders/favorites'} />
+                            <NavItem label="Shared" href="/folders/shared" icon={<UsersIcon />} badge={folderStats.shared || undefined} active={pathname === '/folders/shared'} />
+                            <NavItem label="Trash" href="/folders/trash" icon={<TrashIcon />} badge={folderStats.trash || undefined} active={pathname === '/folders/trash'} />
                         </div>
                     )}
                 </div>
 
+                {/* ---- FAVOURITES ---- */}
                 <div className="mt-4">
-                    <div className="flex items-center gap-1 px-2 mb-2 group cursor-pointer">
+                    <div className="flex items-center gap-1 px-2 mb-2">
                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-[#99A1AF] transform rotate-90">
                             <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        <span className="font-arimo text-[11px] font-bold text-[#99A1AF] uppercase tracking-wider">FAVORITES</span>
+                        <span className="font-arimo text-[11px] font-bold text-[#99A1AF] uppercase tracking-wider">FAVOURITES</span>
                     </div>
                     <div className="flex flex-col gap-1">
                         {loadingProjects ? (
@@ -279,22 +337,29 @@ export default function Sidebar() {
                             </div>
                         ) : favoriteProjects.length > 0 ? (
                             favoriteProjects.map((project) => (
-                                <Link 
-                                    key={project.id} 
-                                    href="/summary"
-                                    onClick={async () => {
-                                        try {
-                                            await api.post(`/api/projects/${project.id}/access`);
-                                        } catch (e) {}
-                                        localStorage.setItem('currentProjectName', project.name);
-                                        localStorage.setItem('currentProjectId', project.id.toString());
-                                    }}
-                                >
-                                    <FavoriteItem label={`${project.projectKey || ''} - ${project.name}`} />
-                                </Link>
+                                <div key={project.id} className="group relative flex items-center">
+                                    <Link
+                                        href="/summary"
+                                        onClick={() => handleProjectClick(project)}
+                                        className="flex-1 min-w-0"
+                                    >
+                                        <FavoriteItem label={`${project.projectKey || ''} - ${project.name}`} />
+                                    </Link>
+                                    {/* Unfavourite button — appears on hover */}
+                                    <button
+                                        onClick={(e) => handleToggleFavoriteFromSidebar(e, project)}
+                                        disabled={togglingFavoriteId === project.id}
+                                        title="Remove from favourites"
+                                        className="absolute right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-100 text-[#F59E0B] hover:text-gray-400 disabled:cursor-not-allowed"
+                                    >
+                                        <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="m10 2.8 2.2 4.6 5 .7-3.6 3.5.9 5L10 14.7 5.5 16.6l.9-5L2.8 8.1l5-.7L10 2.8z" />
+                                        </svg>
+                                    </button>
+                                </div>
                             ))
                         ) : (
-                            <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No favorites</div>
+                            <div className="px-2 py-1 text-[12px] text-[#99A1AF] italic">No favourites yet</div>
                         )}
                     </div>
                 </div>
@@ -341,7 +406,7 @@ function NavItem({ label, href, icon, active, badge }: NavItemProps) {
         <Link href={href} className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-200 ${active ? 'bg-[#EFF6FF] text-[#0052CC]' : 'text-[#4A5565] hover:bg-[#F9FAFB] hover:text-[#101828]'}`}>
             {icon}
             <span className="font-arimo text-[14px] font-medium">{label}</span>
-            {badge && (
+            {badge !== undefined && badge > 0 && (
                 <span className="ml-auto bg-[#F2F4F7] text-[#4A5565] text-[11px] px-2 py-0.5 rounded text-center min-w-[24px] font-medium">{badge}</span>
             )}
         </Link>
@@ -351,7 +416,7 @@ function NavItem({ label, href, icon, active, badge }: NavItemProps) {
 function ProjectItem({ label, color, active = false }: { label: string; color: string; active?: boolean }) {
     return (
         <div className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-200 ${active ? 'bg-[#EFF6FF]' : 'hover:bg-[#F9FAFB]'}`}>
-            <div className={`w-2 h-2 rounded-full ${color}`} />
+            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${color}`} />
             <span className="font-arimo text-[13px] text-[#4A5565] truncate">{label}</span>
         </div>
     );

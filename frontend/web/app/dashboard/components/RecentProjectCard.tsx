@@ -56,6 +56,7 @@ export default function RecentProjectCard({
         setIsFavorite(nextState);
         try {
             await api.post(`/api/projects/${id}/favorite`);
+            window.dispatchEvent(new CustomEvent('planora:favorite-toggled'));
             if (onFavoriteToggle) onFavoriteToggle(nextState);
         } catch (error) {
             console.error("Failed to toggle favorite:", error);
@@ -114,6 +115,7 @@ export default function RecentProjectCard({
 
     const handleCardClick = async () => {
         await recordProjectAccess();
+        window.dispatchEvent(new CustomEvent('planora:project-accessed'));
         localStorage.setItem('currentProjectName', name);
         localStorage.setItem('currentProjectId', id);
         router.push(`/summary`);
@@ -193,6 +195,7 @@ export default function RecentProjectCard({
                         onClick={async (e) => {
                             e.stopPropagation();
                             await recordProjectAccess();
+                            window.dispatchEvent(new CustomEvent('planora:project-accessed'));
                             localStorage.setItem('currentProjectName', name);
                             localStorage.setItem('currentProjectId', id);
                         }}
