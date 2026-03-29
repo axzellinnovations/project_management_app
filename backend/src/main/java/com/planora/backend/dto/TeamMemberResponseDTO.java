@@ -14,6 +14,11 @@ public class TeamMemberResponseDTO {
     private String role;
     private UserInfo user;
 
+    private Long taskCount;
+    private java.time.LocalDateTime lastActive;
+
+    private String status; // "Active" or "Pending"
+
     @Data
     @Builder
     @NoArgsConstructor
