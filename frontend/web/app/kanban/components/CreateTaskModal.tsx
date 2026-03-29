@@ -44,15 +44,16 @@ export default function CreateTaskModal({
       return;
     }
 
-        const todayIso = new Date().toISOString().split('T')[0];
+    const todayIso = new Date().toISOString().split('T')[0];
 
-        const taskData: Partial<Task> = {
-          title: title.trim(),
-          status: columnStatus,
-          projectId,
-          startDate: todayIso,
-          dueDate: dueDate ? dueDate.toISOString().split('T')[0] : todayIso,
-        };
+    const taskData: Partial<Task> = {
+      title: title.trim(),
+      status: columnStatus,
+      projectId,
+      startDate: todayIso,
+      dueDate: dueDate ? dueDate.toISOString().split('T')[0] : todayIso,
+      assigneeId: assignee || undefined,
+    };
 
         try {
           await onCreateTask(taskData);

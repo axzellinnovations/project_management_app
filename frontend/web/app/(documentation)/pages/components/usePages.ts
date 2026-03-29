@@ -3,14 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import axiosInstance from '../../../../lib/axios';
 
-export interface PageItem {
-  id: string | number;
-  title: string;
-  content?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  isStarred?: boolean;
-}
+import { PageItem } from './types';
+export type { PageItem };
 
 interface PageSummaryDto {
   id: number;

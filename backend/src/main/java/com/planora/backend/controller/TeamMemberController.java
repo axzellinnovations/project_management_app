@@ -1,9 +1,12 @@
 package com.planora.backend.controller;
 
+import com.planora.backend.dto.TeamMemberResponseDTO;
 import com.planora.backend.model.TeamMember;
 import com.planora.backend.model.TeamRole;
 import com.planora.backend.model.UserPrincipal;
 import com.planora.backend.service.TeamMemberService;
+import com.planora.backend.repository.TaskRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +21,9 @@ import java.util.List;
 public class TeamMemberController {
 
     private final TeamMemberService teamMemberService;
+
+        @Autowired
+        private TaskRepository taskRepository;
 
     // ---------------- ADD MEMBER TO TEAM (OWNER ONLY) ----------------
     @PostMapping("/{teamId}/members/{userId}")
@@ -42,7 +48,7 @@ public class TeamMemberController {
 
     // ---------------- GET ALL MEMBERS OF A TEAM ----------------
     @GetMapping("/{teamId}/members")
-    public ResponseEntity<List<TeamMember>> getTeamMembers(
+    public ResponseEntity<List<TeamMemberResponseDTO>> getTeamMembers(
             @PathVariable Long teamId,
             @AuthenticationPrincipal UserPrincipal principal
     ) {
@@ -51,10 +57,27 @@ public class TeamMemberController {
         // Only team members can view members
         teamMemberService.validateMembership(teamId, currentUserId);
 
-        return new ResponseEntity<>(
-                teamMemberService.getTeamMembers(teamId),
-                HttpStatus.OK
-        );
+
+
+        List<TeamMember> members = teamMemberService.getTeamMembers(teamId);
+        List<TeamMemberResponseDTO> dtos = members.stream()
+                .map(member -> TeamMemberResponseDTO.builder()
+                        .id(member.getId())
+                        .role(member.getRole().name())
+                        .user(TeamMemberResponseDTO.UserInfo.builder()
+                                .userId(member.getUser().getUserId())
+                                .username(member.getUser().getUsername())
+                                .fullName(member.getUser().getFullName())
+                                .email(member.getUser().getEmail())
+                                .profilePicUrl(member.getUser().getProfilePicUrl())
+                                .build())
+                        .lastActive(member.getUser().getLastActive())
+                        .taskCount(taskRepository.countByAssigneeAndProject_TeamId(member, teamId))
+                        .status("Active")
+                        .build())
+                .toList();
+
+        return new ResponseEntity<>(dtos, HttpStatus.OK);
     }
 
     // ---------------- UPDATE MEMBER ROLE (OWNER ONLY) ----------------
