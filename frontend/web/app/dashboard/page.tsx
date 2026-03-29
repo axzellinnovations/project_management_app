@@ -110,55 +110,72 @@ export default function DashboardPage() {
     return (
         <div className="flex flex-col gap-4 w-full max-w-[1200px] mx-auto pb-12 mt-2">
             {/* Header */}
-            <div className="w-full">
-                <h1 className="font-arimo text-[16px] leading-[24px] text-[#101828] font-semibold">
+            <div className="w-full mt-2 lg:mt-0 flex items-center gap-3">
+                <button 
+                    onClick={() => window.dispatchEvent(new CustomEvent('planora:sidebar:toggle'))}
+                    className="md:hidden p-1.5 -ml-1.5 text-[#4B5563] rounded-md hover:bg-gray-100 transition-colors"
+                >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+                <h1 className="font-arimo text-[16px] xl:text-[20px] leading-[24px] text-[#101828] font-semibold">
                     Welcome Back, {user?.username || 'User'}.
                 </h1>
             </div>
 
             {/* Recent Spaces Section */}
             <div className="flex flex-col gap-4 pb-[0.8px] bg-white relative">
-                <div className="flex justify-between items-center w-full mt-2">
-                    <h2 className="font-arimo text-[15px] font-semibold text-[#101828]">Recent spaces</h2>
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2.5">
-                            <div className="relative w-[220px]">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 w-full mt-2">
+                    <div className="flex justify-between items-center w-full md:w-auto">
+                        <h2 className="font-arimo text-[15px] font-semibold text-[#101828]">Recent spaces</h2>
+                        <Link href="/spaces" className="md:hidden font-arimo text-[13px] font-medium text-[#0052CC] hover:text-[#0042a3]">View all</Link>
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                            <div className="relative w-full sm:w-[220px]">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
                                 </div>
                                 <input
                                     type="text"
-                                    placeholder="Search recent spaces"
+                                    placeholder="Search..."
                                     value={recentSpacesSearch}
                                     onChange={(e) => setRecentSpacesSearch(e.target.value)}
                                     className="block w-full pl-9 pr-3 py-1.5 border border-[#E5E7EB] rounded-[4px] leading-5 bg-white placeholder-[#9CA3AF] focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-[13px] font-arimo"
                                 />
                             </div>
-                            <button
-                                onClick={() => setRecentFilter('recent')}
-                                className={`px-3 py-1.5 rounded-[4px] font-arimo text-[13px] font-semibold transition-all ${recentFilter === 'recent'
-                                        ? 'bg-[#EAF2FF] text-[#0052CC]'
-                                        : 'text-[#4B5563] hover:bg-gray-50'
-                                    }`}
-                            >
-                                Recent
-                            </button>
-                            <button
-                                onClick={() => setRecentFilter('favorites')}
-                                className={`px-3 py-1.5 rounded-[4px] font-arimo text-[13px] font-semibold transition-all ${recentFilter === 'favorites'
-                                        ? 'bg-[#EAF2FF] text-[#0052CC]'
-                                        : 'text-[#4B5563] hover:bg-gray-50'
-                                    }`}
-                            >
-                                Favourites
-                            </button>
+                            <div className="flex items-center bg-gray-100/80 p-1 rounded-md sm:bg-transparent sm:p-0 gap-1 w-full sm:w-auto mt-2 sm:mt-0">
+                                <button
+                                    onClick={() => setRecentFilter('recent')}
+                                    className={`flex-1 sm:flex-none px-3 py-1.5 rounded-[4px] font-arimo text-[13px] font-semibold transition-all ${recentFilter === 'recent'
+                                            ? 'bg-white sm:bg-[#EAF2FF] text-[#0052CC] shadow-sm sm:shadow-none border border-gray-200/60 sm:border-transparent'
+                                            : 'text-[#4B5563] hover:text-[#0052CC] border border-transparent'
+                                        }`}
+                                >
+                                    Recent
+                                </button>
+                                <button
+                                    onClick={() => setRecentFilter('favorites')}
+                                    className={`flex-1 sm:flex-none px-3 py-1.5 rounded-[4px] font-arimo text-[13px] font-semibold transition-all ${recentFilter === 'favorites'
+                                            ? 'bg-white sm:bg-[#EAF2FF] text-[#0052CC] shadow-sm sm:shadow-none border border-gray-200/60 sm:border-transparent'
+                                            : 'text-[#4B5563] hover:text-[#0052CC] border border-transparent'
+                                        }`}
+                                >
+                                    Favourites
+                                </button>
+                            </div>
                         </div>
-                        <Link href="/spaces" className="font-arimo text-[14px] font-medium text-[#0052CC] hover:text-[#0042a3] ml-2">View all spaces</Link>
+                        <Link href="/spaces" className="hidden md:block font-arimo text-[14px] font-medium text-[#0052CC] hover:text-[#0042a3] ml-2 shrink-0">View all spaces</Link>
                     </div>
                 </div>
 
                 {/* Spaces Cards - Horizontal Scroll Container */}
-                <div className="relative group/nav">
+                <div className="relative w-full -mx-4 group mt-1">
+                    
                     {/* Scroll Buttons - Centered on cards */}
                     <div className="absolute inset-x-0 h-[160px] pointer-events-none z-30">
                         {/* Left Scroll Button */}
@@ -189,7 +206,7 @@ export default function DashboardPage() {
                     <div
                         ref={scrollContainerRef}
                         onScroll={checkScroll}
-                        className="flex gap-6 overflow-x-auto px-4 pt-2 pb-6 scrollbar-hide scroll-smooth no-scrollbar"
+                        className="flex gap-6 overflow-x-auto px-4 pt-2 pb-6 custom-scrollbar scroll-smooth"
                     >
                         {loading ? (
                             // Skeleton Loading UI - Shows 3 fake cards pulsing
@@ -265,14 +282,14 @@ export default function DashboardPage() {
             </div>
 
             {/* Boards Section */}
-            <div className="flex flex-col gap-6">
-                <div className="flex justify-between items-center border-b-[0.8px] border-[#E5E7EB] pb-0">
-                    <div className="flex items-center gap-6">
+            <div className="flex flex-col gap-4 md:gap-6 mt-2 md:mt-0">
+                <div className="flex flex-col md:flex-row md:justify-between items-start md:items-end border-b-[0.8px] border-[#E5E7EB] pb-0 gap-4 md:gap-0">
+                    <div className="flex items-center gap-4 md:gap-6 w-full md:w-auto overflow-x-auto custom-scrollbar pb-1 md:pb-0 whitespace-nowrap">
                         {['Worked on', 'Viewed', 'Assigned to me', 'Starred'].map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab.toLowerCase().replaceAll(' ', '-'))}
-                                className={`pb-2 relative font-arimo text-[16px] transition-colors ${activeTab === tab.toLowerCase().replaceAll(' ', '-')
+                                className={`pb-2 relative font-arimo text-[15px] md:text-[16px] transition-colors ${activeTab === tab.toLowerCase().replaceAll(' ', '-')
                                     ? 'text-[#0052CC] font-medium'
                                     : 'text-[#4A5565] hover:text-[#101828]'
                                     }`}
@@ -287,11 +304,11 @@ export default function DashboardPage() {
                             </button>
                         ))}
                     </div>
-                    <Link href="/createProject" className="text-[#0052CC] font-arimo text-[16px] hover:underline mb-2">+ Create new project</Link>
+                    <Link href="/createProject" className="text-[#0052CC] font-arimo text-[15px] md:text-[16px] font-medium hover:underline mb-2 shrink-0">+ Create new project</Link>
                 </div>
 
                 {/* Sub-header: Search */}
-                <div className="relative w-[320px]">
+                <div className="relative w-full sm:w-[320px] shrink-0">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#99A1AF" strokeWidth="1.5"><circle cx="7" cy="7" r="5" /><path d="M11 11L14 14" /></svg>
                     </div>
