@@ -1,10 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
+import { getUserFromToken, User } from '@/lib/auth';
+import { useParams, usePathname, useSearchParams } from 'next/navigation';
+import api from '@/lib/axios';
 
-const tabs = [
+const baseTabs = [
     { id: 'summary', label: 'Summary' },
     { id: 'timeline', label: 'Timeline' },
     { id: 'backlog', label: 'Backlog' },
@@ -16,16 +20,172 @@ const tabs = [
     { id: 'list', label: 'List' },
 ];
 
+const subscribeToBrowserStorage = (onStoreChange: () => void) => {
+    if (typeof window === 'undefined') {
+        return () => {};
+    }
+
+    const handler = () => onStoreChange();
+    window.addEventListener('storage', handler);
+    window.addEventListener('focus', handler);
+
+    return () => {
+        window.removeEventListener('storage', handler);
+        window.removeEventListener('focus', handler);
+    };
+};
+
 export default function TopBar() {
-    const [activeTab, setActiveTab] = useState('summary');
-    const [projectName, setProjectName] = useState('Project Name');
+    const projectName = useSyncExternalStore(
+        subscribeToBrowserStorage,
+        () => localStorage.getItem('currentProjectName') || 'Project Name',
+        () => 'Project Name'
+    );
+    const storedProjectId = useSyncExternalStore(
+        subscribeToBrowserStorage,
+        () => localStorage.getItem('currentProjectId'),
+        () => null
+    );
+    const token = useSyncExternalStore<string | null>(
+        subscribeToBrowserStorage,
+        () => localStorage.getItem('token'),
+        () => null
+    );
+        const user = useMemo<User | null>(() => {
+            if (!token) return null;
+            return getUserFromToken();
+        }, [token]);
+
+    const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+    const [isFavorite, setIsFavorite] = useState(false);
+    const params = useParams();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+
+    const resolvedProfilePicUrl = useMemo(() => {
+        if (!profilePicUrl) return '';
+        if (profilePicUrl.startsWith('http://') || profilePicUrl.startsWith('https://')) {
+            return profilePicUrl;
+        }
+        return `${API_BASE_URL}${profilePicUrl}`;
+    }, [profilePicUrl, API_BASE_URL]);
+
+    const projectId = useMemo(() => {
+        const queryProjectId = searchParams.get('projectId');
+        const routeProjectId = typeof params?.id === 'string' ? params.id : null;
+
+        return queryProjectId || routeProjectId || storedProjectId;
+    }, [params, searchParams, storedProjectId]);
+
+    const activeTab = useMemo(() => {
+        if (pathname.startsWith('/kanban') || pathname.startsWith('/sprint-board')) {
+            return 'board';
+        }
+
+        if (pathname.startsWith('/timeline')) {
+            return 'timeline';
+        }
+
+        if (pathname.startsWith('/sprint-backlog')) {
+            return 'backlog';
+        }
+
+        if (pathname.startsWith('/project/') && pathname.includes('/chat')) {
+            return 'chats';
+        }
+
+        if (pathname.startsWith('/pages')) {
+            return 'pages';
+        }
+
+        if (pathname.startsWith('/spaces') || pathname.startsWith('/folders')) {
+            return 'list';
+        }
+
+        if (pathname.startsWith('/summary')) {
+            return 'summary';
+        }
+
+        return 'summary';
+    }, [pathname]);
 
     useEffect(() => {
-        const storedName = localStorage.getItem('currentProjectName');
-        if (storedName) {
-            setProjectName(storedName);
+        if (projectId && localStorage.getItem('currentProjectId') !== projectId) {
+            localStorage.setItem('currentProjectId', projectId);
         }
-    }, []);
+
+        const fetchProjectStatus = async () => {
+            if (!projectId) {
+                setIsFavorite(false);
+                return;
+            }
+
+            try {
+                const response = await api.get(`/api/projects/${projectId}`);
+                setIsFavorite(Boolean(response.data?.isFavorite));
+            } catch {
+                setIsFavorite(false);
+            }
+        };
+
+        void fetchProjectStatus();
+    }, [projectId]);
+
+    useEffect(() => {
+        if (user?.email) {
+            const loadProfilePic = async () => {
+                try {
+                    const response = await api.get('/api/auth/users');
+                    interface UserSummary {
+                        email: string;
+                        profilePicUrl?: string;
+                    }
+
+                    const currentUser = response.data.find(
+                        (u: UserSummary) => u.email.toLowerCase() === user.email.toLowerCase()
+                    );
+                    if (currentUser?.profilePicUrl) {
+                        setProfilePicUrl(currentUser.profilePicUrl);
+                    }
+                } catch {
+                    // Silently fail
+                }
+            };
+            void loadProfilePic();
+        }
+    }, [user]);
+
+    const withProjectId = (basePath: string) => {
+        if (!projectId) return basePath;
+        return `${basePath}?projectId=${projectId}`;
+    };
+
+    const getTabHref = (tabId: string) => {
+        switch (tabId) {
+            case 'summary':
+                return withProjectId('/summary');
+            case 'timeline':
+                return withProjectId('/timeline');
+            case 'backlog':
+                return '/sprint-backlog';
+            case 'board':
+                return withProjectId('/kanban');
+            case 'calendar':
+                return withProjectId('/summary');
+            case 'chats':
+                return projectId ? `/project/${projectId}/chat` : '/summary';
+            case 'members':
+                return withProjectId('/summary');
+            case 'pages':
+                return withProjectId('/pages');
+            case 'list':
+                return '/spaces';
+            default:
+                return withProjectId('/summary');
+        }
+    };
 
     return (
         <div className="w-full h-[119px] relative flex flex-col">
@@ -43,30 +203,75 @@ export default function TopBar() {
                         <span className="font-arimo text-[12px] uppercase tracking-[0.3px] text-[#6A7282] mb-0.5">Projects</span>
                         <div className="flex items-center gap-2">
                             <span className="font-arimo text-[19px] text-[#1D293D] whitespace-nowrap">{projectName}</span>
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            
+                            {/* Favorite Toggle Icon */}
+                            <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={async () => {
+                                    if (!projectId) return;
+                                    const nextState = !isFavorite;
+                                    setIsFavorite(nextState);
+                                    try {
+                                        await api.post(`/api/projects/${projectId}/favorite`);
+                                        // Notify sidebar to re-fetch favourites immediately
+                                        window.dispatchEvent(new CustomEvent('planora:favorite-toggled'));
+                                    } catch (e) {
+                                        setIsFavorite(!nextState);
+                                    }
+                                }}
+                                className="ml-1"
+                            >
+                                <motion.svg
+                                    animate={{ 
+                                        fill: isFavorite ? "#FFD700" : "transparent",
+                                        stroke: isFavorite ? "#FFD700" : "#6A7282",
+                                        scale: isFavorite ? [1, 1.3, 1] : 1
+                                    }}
+                                    transition={{ duration: 0.3 }}
+                                    width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                                >
+                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                                </motion.svg>
+                            </motion.button>
+
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-1">
                                 <path d="M4 6L8 10L12 6" stroke="#1D293D" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                         </div>
                     </div>
                 </div>
 
-                {/* Right Side Actions (Placeholder) */}
+                {/* Right Side Actions */}
                 <div className="flex items-center gap-3">
                     <div className="flex -space-x-2">
-                        <div className="w-8 h-8 rounded-full bg-blue-500 border-2 border-white"></div>
-                        <div className="w-8 h-8 rounded-full bg-purple-500 border-2 border-white"></div>
+                        {resolvedProfilePicUrl ? (
+                            <div className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-white">
+                                <Image
+                                    src={resolvedProfilePicUrl}
+                                    alt="Profile"
+                                    width={32}
+                                    height={32}
+                                    className="w-full h-full object-cover"
+                                    unoptimized
+                                />
+                            </div>
+                        ) : (
+                            <div className="w-8 h-8 rounded-full bg-blue-500 border-2 border-white flex items-center justify-center text-white text-[12px] font-bold">
+                                {user?.username?.charAt(0).toUpperCase() || 'U'}
+                            </div>
+                        )}
                         <div className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[10px] text-gray-600 font-bold">+2</div>
                     </div>
-                    <button className="bg-[#0052CC] text-white px-3 py-1.5 rounded-md font-arimo text-[13px] font-semibold">Share</button>
                 </div>
             </div>
 
             {/* Bottom Nav Section (45px) */}
             <div className="h-[45px] bg-white border-b border-[#E3E8EF] px-8 flex items-end gap-8">
-                {tabs.map((tab) => (
-                    <button
+                {baseTabs.map((tab) => (
+                    <Link
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
+                        href={getTabHref(tab.id)}
                         className="relative pb-3 px-1"
                     >
                         <span
@@ -84,7 +289,7 @@ export default function TopBar() {
                                 transition={{ type: "spring", stiffness: 500, damping: 30 }}
                             />
                         )}
-                    </button>
+                    </Link>
                 ))}
             </div>
         </div>

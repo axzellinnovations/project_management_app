@@ -24,6 +24,10 @@ public class Project {
 
     @Column(nullable = false)
     private String name;
+
+    @Column(unique = true)
+    private String projectKey;
+
     @Column(length = 1500)
     private String description;
 
@@ -50,6 +54,7 @@ public class Project {
 
     @PreUpdate
     public void setLastUpdate() {
-        this.updatedAt = LocalDateTime.now(); }
+        this.updatedAt = LocalDateTime.now();
+    }
 
 }

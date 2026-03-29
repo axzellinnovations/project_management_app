@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 @Data
 @Builder
@@ -15,6 +16,7 @@ import java.time.LocalDateTime;
 public class ProjectResponseDTO {
     private Long id;
     private String name;
+    private String projectKey;
     private String description;
     private ProjectType type;
     private LocalDateTime createdAt;
@@ -23,4 +25,7 @@ public class ProjectResponseDTO {
     private String ownerName;
     private Long teamId;
     private String teamName;
+    private Boolean isFavorite;
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private LocalDateTime lastAccessedAt;
 }

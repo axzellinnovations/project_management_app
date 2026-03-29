@@ -1,5 +1,6 @@
 package com.planora.backend.controller;
 
+import com.planora.backend.dto.UserResponseDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,7 +14,6 @@ import com.planora.backend.model.User;
 import com.planora.backend.service.UserService;
 
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -81,15 +81,19 @@ public class UserController {
             // Filter out the current user if excludeEmail is provided
             if (excludeEmail != null && !excludeEmail.isEmpty()) {
                 allUsers = allUsers.stream()
-                        .filter(user -> !user.getEmail().equals(excludeEmail))
+                        .filter(user -> !user.getEmail().equalsIgnoreCase(excludeEmail))
                         .collect(Collectors.toList());
             }
 
-            // Return only username and email (no password)
-            List<Map<String, String>> userList = allUsers.stream()
-                    .map(user -> Map.of(
-                            "username", user.getUsername() != null ? user.getUsername() : user.getEmail(),
-                            "email", user.getEmail()
+            // Return UserResponseDTO with complete user information
+            List<UserResponseDTO> userList = allUsers.stream()
+                    .map(user -> new UserResponseDTO(
+                            user.getUserId(),
+                            user.getUsername(),
+                            user.getFullName(),
+                            user.getEmail(),
+                            user.isVerified(),
+                            service.generatePresignedUrl(user.getProfilePicUrl())
                     ))
                     .collect(Collectors.toList());
 

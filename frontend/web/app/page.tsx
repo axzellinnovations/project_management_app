@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 import { ReactNode } from 'react';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { getUserFromToken } from '@/lib/auth';
 import styles from './page.module.css';
 
 // --- ICONS ---
@@ -210,6 +213,14 @@ function FeaturesGrid() {
 }
 
 export default function Page() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (getUserFromToken()) {
+      router.replace('/dashboard');
+    }
+  }, [router]);
+
   return (
     <div className={styles.mainContainer}>
       <Navigation />
