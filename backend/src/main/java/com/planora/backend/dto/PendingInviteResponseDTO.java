@@ -16,4 +16,5 @@ public class PendingInviteResponseDTO {
     private String email;
     private LocalDateTime invitedAt;
     private String status; // Always "Pending"
+    private String role; // Invited role (OWNER, ADMIN, MEMBER, VIEWER)
 }

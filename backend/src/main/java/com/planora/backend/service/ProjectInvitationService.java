@@ -41,14 +41,20 @@ public class ProjectInvitationService {
 
         String inviteeEmail = request.getEmail().trim().toLowerCase();
         String roleStr = request.getRole().trim().toUpperCase();
+        // Validate role is a valid TeamRole
+        try {
+            TeamRole.valueOf(roleStr);
+        } catch (Exception e) {
+            throw new RuntimeException("Invalid role: " + roleStr);
+        }
 
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
 
         Long teamId = project.getTeam().getId();
 
-        // Only TEAM OWNER can invite
-        teamMemberService.validateOwner(teamId, inviterUserId);
+        // Allow TEAM OWNER and ADMIN to invite
+        teamMemberService.validateOwnerOrAdmin(teamId, inviterUserId);
 
         // If already invited and not expired -> block
         teamInvitationRepository.findByTeamIdAndEmail(teamId, inviteeEmail).ifPresent(existing -> {
@@ -67,10 +73,8 @@ public class ProjectInvitationService {
         invitation.setToken(UUID.randomUUID().toString());
         invitation.setInvitedAt(LocalDateTime.now());
         invitation.setExpiresAt(LocalDateTime.now().plusDays(7));
-        // Store role as a string property (if you want to persist it, add a field to TeamInvitation)
-        // For now, we will use the role when accepting the invitation
         invitation.setStatus("PENDING");
-        // Optionally: invitation.setRole(roleStr); // if you add a field
+        invitation.setRole(roleStr); // Save the invited role
 
         teamInvitationRepository.save(invitation);
 
@@ -113,11 +117,29 @@ public class ProjectInvitationService {
                     throw new RuntimeException("You are already a member of this team");
                 });
 
+        // Debug logging for investigation
+        System.out.println("[DEBUG] Accepting invitation:");
+        System.out.println("  Token: " + token);
+        System.out.println("  Invitation ID: " + invitation.getId());
+        System.out.println("  Invitation Role: '" + invitation.getRole() + "'");
+
         TeamMember member = new TeamMember();
         member.setTeam(invitation.getTeam());
         member.setUser(user);
-        member.setRole(TeamRole.MEMBER); // Assign default role
-
+        // Use the invited role, robust to case/whitespace
+        TeamRole invitedRole;
+        try {
+            String roleStr = invitation.getRole();
+            if (roleStr != null) {
+                roleStr = roleStr.trim().toUpperCase();
+            }
+            invitedRole = TeamRole.valueOf(roleStr);
+        } catch (Exception e) {
+            System.out.println("[DEBUG] Invalid role, defaulting to MEMBER");
+            invitedRole = TeamRole.MEMBER; // fallback
+        }
+        member.setRole(invitedRole);
+        System.out.println("  Assigned TeamMember Role: '" + invitedRole + "'");
         teamMemberRepository.save(member);
 
         invitation.setStatus("ACCEPTED");

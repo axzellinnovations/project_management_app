@@ -77,12 +77,13 @@ public class ProjectMemberController {
         teamMemberService.validateMembership(teamId, currentUserId);
         List<TeamInvitation> invites = teamInvitationRepository.findByTeamIdAndStatus(teamId, "PENDING");
         List<PendingInviteResponseDTO> dtos = invites.stream()
-                .map(invite -> PendingInviteResponseDTO.builder()
-                        .id(invite.getId())
-                        .email(invite.getEmail())
-                        .invitedAt(invite.getInvitedAt())
-                        .status("Pending")
-                        .build())
+                .map(invite -> new PendingInviteResponseDTO(
+                        invite.getId(),
+                        invite.getEmail(),
+                        invite.getInvitedAt(),
+                        "Pending",
+                        invite.getRole()
+                ))
                 .collect(Collectors.toList());
         return new ResponseEntity<>(dtos, HttpStatus.OK);
     }

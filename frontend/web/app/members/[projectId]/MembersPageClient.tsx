@@ -23,6 +23,7 @@ interface PendingInvite {
   email: string;
   invitedAt: string;
   status: string;
+  role: string;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -71,6 +72,10 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
       ]);
       setMembers(membersRes.data);
       setPending(pendingRes.data);
+      // Debug: log pending invites to verify role
+      if (pendingRes.data && Array.isArray(pendingRes.data)) {
+        console.log('Pending invites:', pendingRes.data.map((p: any) => ({ email: p.email, role: p.role })));
+      }
       setLoading(false);
     }
     if (projectId) fetchData();
@@ -78,21 +83,25 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
 
   const allMembers = useMemo(() => [
     ...members,
-    ...pending.map((p) => ({
-      id: p.id,
-      role: "MEMBER",
-      user: {
-        userId: 0,
-        username: "",
-        fullName: "",
-        email: p.email,
-        profilePicUrl: undefined,
-      },
-      lastActive: undefined,
-      taskCount: 0,
-      status: "Pending",
-      invitedAt: p.invitedAt,
-    })),
+    ...pending.map((p: PendingInvite) => {
+      // Use the role from backend directly, fallback only if missing
+      const role = (typeof p.role === "string" && p.role.length > 0) ? p.role.toUpperCase() : "MEMBER";
+      return {
+        id: p.id,
+        role,
+        user: {
+          userId: 0,
+          username: "",
+          fullName: "",
+          email: p.email,
+          profilePicUrl: undefined,
+        },
+        lastActive: undefined,
+        taskCount: 0,
+        status: "Pending",
+        invitedAt: p.invitedAt,
+      };
+    }),
   ], [members, pending]);
 
   const filteredMembers = useMemo(() => {
@@ -120,7 +129,7 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
     try {
       await axios.post(`/api/projects/${projectId}/invitations`, {
         email: inviteEmail,
-        role: inviteRole,
+        role: inviteRole.toUpperCase(),
       });
       setInviteSuccess("Invitation sent!");
       setInviteEmail("");
