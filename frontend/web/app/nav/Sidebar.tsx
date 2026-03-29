@@ -63,6 +63,30 @@ export default function Sidebar() {
     const [loadingProjects, setLoadingProjects] = useState(true);
     const [togglingFavoriteId, setTogglingFavoriteId] = useState<number | null>(null);
 
+    const [isMobile, setIsMobile] = useState(false);
+    useEffect(() => {
+        let isCurrentlyMobile = window.innerWidth < 768;
+        setIsMobile(isCurrentlyMobile);
+        if (isCurrentlyMobile) {
+            setCollapsed(true);
+        }
+
+        const handleResize = () => {
+            const mobile = window.innerWidth < 768;
+            if (mobile && !isCurrentlyMobile) {
+                // Just crossed into mobile breakpoint
+                setCollapsed(true);
+            }
+            if (mobile !== isCurrentlyMobile) {
+                setIsMobile(mobile);
+                isCurrentlyMobile = mobile;
+            }
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     /* collapse */
     const [collapsed, setCollapsed] = useState<boolean>(() => {
         if (typeof window === 'undefined') return false;
@@ -174,7 +198,14 @@ export default function Sidebar() {
             if (!inRecent && !inDropdown) setRecentOpen(false);
         };
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        
+        const handleToggle = () => setCollapsed(prev => !prev);
+        window.addEventListener('planora:sidebar:toggle', handleToggle);
+        
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('planora:sidebar:toggle', handleToggle);
+        };
     }, []);
 
     /* measure anchor position before opening dropdown */
@@ -243,13 +274,25 @@ export default function Sidebar() {
 
     /* ── render ── */
     return (
-        <div
-            className="relative h-screen flex-shrink-0"
-            style={{ width: collapsed ? '64px' : '240px', transition: 'width 300ms cubic-bezier(0.4,0,0.2,1)' }}
-        >
-            <div className="h-full bg-white border-r border-[#E3E8EF] flex flex-col overflow-hidden">
+        <>
+            {/* Mobile Backdrop Overlay */}
+            {isMobile && !collapsed && (
+                <div 
+                    className="fixed inset-0 bg-black/40 z-[90] md:hidden transition-opacity" 
+                    onClick={() => setCollapsed(true)} 
+                />
+            )}
+            
+            <div
+                className={`h-screen flex-shrink-0 z-[100] bg-white transition-all duration-300 ease-in-out ${isMobile ? 'fixed left-0 top-0' : 'relative'} ${isMobile && collapsed ? 'pointer-events-none' : ''}`}
+                style={{ 
+                    width: isMobile ? (collapsed ? '0px' : '260px') : (collapsed ? '64px' : '240px'),
+                    opacity: isMobile && collapsed ? 0 : 1
+                }}
+            >
+                <div className="h-full bg-white border-r border-[#E3E8EF] flex flex-col overflow-x-hidden w-[240px] md:w-[inherit]">
 
-                {/* ── Header: Planora logo + wordmark ── */}
+                    {/* ── Header: Planora logo + wordmark ── */}
                 <div className="h-[56px] flex items-center border-b border-[#F2F4F7] flex-shrink-0"
                     style={{ justifyContent: collapsed ? 'center' : 'flex-start', paddingLeft: collapsed ? '0' : '12px' }}
                 >
@@ -279,7 +322,7 @@ export default function Sidebar() {
                 <button
                     onClick={toggleCollapsed}
                     title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                    className="absolute top-[14px] right-[-13px] z-50 w-[26px] h-[26px] flex items-center justify-center rounded-full bg-white border border-[#E3E8EF] shadow-md text-[#9AA3AE] hover:text-[#155DFC] hover:border-[#155DFC]/30 hover:shadow-blue-100 transition-all duration-150"
+                    className="hidden md:flex absolute top-[14px] right-[-13px] z-50 w-[26px] h-[26px] items-center justify-center rounded-full bg-white border border-[#E3E8EF] shadow-md text-[#9AA3AE] hover:text-[#155DFC] hover:border-[#155DFC]/30 hover:shadow-blue-100 transition-all duration-150"
                 >
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <rect x="1" y="1.5" width="14" height="13" rx="2" stroke="currentColor" strokeWidth="1.4" />
@@ -433,6 +476,7 @@ export default function Sidebar() {
                 />
             )}
         </div>
+        </>
     );
 }
 
