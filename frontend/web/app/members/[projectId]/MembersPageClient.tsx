@@ -13,6 +13,7 @@ const ICONS = {
   viewer: <svg className="w-4 h-4 inline text-gray-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M2.05 12a9.94 9.94 0 0 1 19.9 0 9.94 9.94 0 0 1-19.9 0z" /></svg>,
 };
 import axios from "@/lib/axios";
+import { getUserFromToken } from "@/lib/auth";
 
 interface Member {
   id: number;
@@ -74,6 +75,20 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState("");
 
+  // Role management state
+  const [roleChangeError, setRoleChangeError] = useState("");
+  const [roleChangeSuccess, setRoleChangeSuccess] = useState("");
+  const [changingRoleId, setChangingRoleId] = useState<number | null>(null);
+
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const user = getUserFromToken();
+    if (user?.email) {
+      setCurrentUserEmail(user.email.toLowerCase());
+    }
+  }, []);
+
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
@@ -132,6 +147,65 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
   const adminCount = allMembers.filter((m) => m.role === "ADMIN").length;
   const pendingCount = allMembers.filter((m) => m.status === "Pending").length;
 
+  const currentUserRole = useMemo(() => {
+    let found = null;
+    const tokenUser = getUserFromToken() as any;
+    if (tokenUser?.userId) {
+       found = members.find(m => String(m.user.userId) === String(tokenUser.userId));
+    }
+    if (!found && currentUserEmail) {
+       found = members.find(m => m.user.email?.toLowerCase() === currentUserEmail);
+    }
+    return found?.role || null;
+  }, [members, currentUserEmail]);
+
+  const canChangeRole = (targetMember: typeof allMembers[0]) => {
+    if (!currentUserRole) return false;
+    
+    const currentRole = String(currentUserRole).toUpperCase().trim();
+    const targetRole = String(targetMember.role).toUpperCase().trim();
+
+    // Cannot edit pending invites
+    if (targetMember.status === "Pending") return false;
+    
+    // Cannot edit self
+    if (currentUserEmail && targetMember.user.email?.toLowerCase() === currentUserEmail) return false;
+
+    if (currentRole === "OWNER") return true;
+    if (currentRole === "ADMIN") {
+      return targetRole === "MEMBER" || targetRole === "VIEWER";
+    }
+    return false;
+  };
+
+  const getAvailableOptions = () => {
+    if (currentUserRole?.toUpperCase() === "ADMIN") {
+      return ["MEMBER", "VIEWER"];
+    }
+    return ROLE_OPTIONS;
+  };
+
+  const handleRoleChange = async (userId: number, newRole: string) => {
+    setRoleChangeError("");
+    setRoleChangeSuccess("");
+    setChangingRoleId(userId);
+    try {
+      await axios.patch(`/api/projects/${projectId}/members/${userId}/role`, {
+        role: newRole,
+        userId: userId
+      });
+      // Optionally refetch members, or simply update local state
+      setMembers(prev => prev.map(m => m.user.userId === userId ? { ...m, role: newRole } : m));
+      setRoleChangeSuccess("Role updated successfully!");
+      setTimeout(() => setRoleChangeSuccess(""), 3000);
+    } catch (err: any) {
+      setRoleChangeError(err?.response?.data?.message || err?.response?.data?.error || "Failed to update role");
+      setTimeout(() => setRoleChangeError(""), 4000);
+    } finally {
+      setChangingRoleId(null);
+    }
+  };
+
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setInviteLoading(true);
@@ -179,6 +253,17 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
           Invite Member
         </button>
       </div>
+
+      {roleChangeSuccess && (
+         <div className="mb-4 p-3 bg-green-50 text-green-700 border border-green-200 rounded-md shadow-sm">
+           {roleChangeSuccess}
+         </div>
+      )}
+      {roleChangeError && (
+         <div className="mb-4 p-3 bg-red-50 text-red-700 border border-red-200 rounded-md shadow-sm">
+           {roleChangeError}
+         </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -313,13 +398,41 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`px-2 py-1 rounded text-xs font-medium flex items-center gap-1 ${ROLE_COLORS[m.role] || "bg-gray-100 text-gray-700"}`}>
-                    {m.role === "OWNER" && ICONS.owner}
-                    {m.role === "ADMIN" && ICONS.adminRole}
-                    {m.role === "MEMBER" && ICONS.member}
-                    {m.role === "VIEWER" && ICONS.viewer}
-                    {ROLE_LABELS[m.role] || m.role}
-                  </span>
+                  {canChangeRole(m) && m.user.userId ? (
+                    <div className="relative">
+                      <select 
+                        value={m.role}
+                        onChange={(e) => handleRoleChange(m.user.userId, e.target.value)}
+                        disabled={changingRoleId === m.user.userId}
+                        className={`appearance-none outline-none cursor-pointer pl-7 pr-4 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider ${ROLE_COLORS[m.role] || "bg-gray-100 text-gray-700"}`}
+                      >
+                        {getAvailableOptions().map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                      <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                        {m.role === "OWNER" && ICONS.owner}
+                        {m.role === "ADMIN" && ICONS.adminRole}
+                        {m.role === "MEMBER" && ICONS.member}
+                        {m.role === "VIEWER" && ICONS.viewer}
+                      </div>
+                      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60">
+                         {changingRoleId === m.user.userId ? (
+                           <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                         ) : (
+                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                         )}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className={`px-2 py-1 rounded text-xs font-medium flex items-center gap-1 w-max ${ROLE_COLORS[m.role] || "bg-gray-100 text-gray-700"}`}>
+                      {m.role === "OWNER" && ICONS.owner}
+                      {m.role === "ADMIN" && ICONS.adminRole}
+                      {m.role === "MEMBER" && ICONS.member}
+                      {m.role === "VIEWER" && ICONS.viewer}
+                      {ROLE_LABELS[m.role] || m.role}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-1 rounded text-xs font-medium ${STATUS_COLORS[m.status] || "bg-gray-100 text-gray-700"}`}>{m.status}</span>

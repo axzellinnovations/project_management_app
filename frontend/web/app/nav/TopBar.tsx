@@ -184,7 +184,7 @@ function TopBarContent() {
             case 'chats':
                 return projectId ? `/project/${projectId}/chat` : '/dashboard';
             case 'members':
-                return projectId ? `/summary/${projectId}` : '/dashboard';
+                return projectId ? `/members/${projectId}` : '/members';
             case 'pages':
                 return withProjectId('/pages');
             case 'list':
