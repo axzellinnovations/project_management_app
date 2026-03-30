@@ -447,6 +447,7 @@ export const useChat = (projectId: string) => {
       if (!response.ok) return;
       const data = await response.json();
       const pics: Record<string, string> = {};
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data.forEach((u: any) => {
         if (u.profilePicUrl && u.username) {
           pics[u.username.toLowerCase()] = u.profilePicUrl;

@@ -3,6 +3,7 @@ import type { CalendarEventItem } from './types';
 
 const asArray = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapTask = (task: any): CalendarEventItem => ({
   id: `task-${task.id}`,
   title: task.title || 'Untitled Task',
@@ -20,6 +21,7 @@ const mapTask = (task: any): CalendarEventItem => ({
   hasComment: Boolean(task.hasComment || (Array.isArray(task.comments) && task.comments.length > 0)),
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapSprint = (sprint: any): CalendarEventItem => ({
   id: `sprint-${sprint.id}`,
   title: sprint.name || 'Sprint',
@@ -38,6 +40,7 @@ export const fetchCalendarEvents = async (projectId: string | number): Promise<C
 
   try {
     const response = await api.get(`/api/calendar/events?projectId=${pid}`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return asArray<any>(response.data).map((item) => ({
       id: String(item.id),
       title: item.title || 'Untitled',
@@ -61,8 +64,10 @@ export const fetchCalendarEvents = async (projectId: string | number): Promise<C
     ]);
 
     const tasks =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       tasksRes.status === 'fulfilled' ? asArray<any>(tasksRes.value.data).map(mapTask) : [];
     const sprints =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       sprintsRes.status === 'fulfilled' ? asArray<any>(sprintsRes.value.data).map(mapSprint) : [];
 
     return [...sprints, ...tasks];

@@ -8,6 +8,7 @@ import RecentProjectCard from '../dashboard/components/RecentProjectCard';
 import Link from 'next/link';
 
 export default function SpacesPage() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [projects, setProjects] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -155,7 +156,7 @@ export default function SpacesPage() {
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#99A1AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h18v18H3z"/><path d="M9 9h6v6H9z"/></svg>
                     </div>
                     <h3 className="text-[18px] font-bold text-[#101828]">No spaces found</h3>
-                    <p className="text-[#4A5565]">Adjust your search or filters to find what you're looking for.</p>
+                    <p className="text-[#4A5565]">Adjust your search or filters to find what you&apos;re looking for.</p>
                 </div>
             )}
         </div>

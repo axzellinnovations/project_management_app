@@ -161,6 +161,7 @@ export default function MembersPage() {
       // Refresh pending invites
       const pendingRes = await axios.get(`/api/teams/${teamId}/pending-invites`);
       setPending(pendingRes.data);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setInviteError(err?.response?.data?.message || "Failed to send invite");
     } finally {

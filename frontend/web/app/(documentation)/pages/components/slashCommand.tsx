@@ -13,6 +13,7 @@ interface CommandItem {
   title: string;
   description: string;
   icon: React.ReactNode;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   command: (props: { editor: any; range: any }) => void;
 }
 
@@ -22,6 +23,7 @@ const getSuggestionItems = ({ query }: { query: string }): CommandItem[] => {
       title: 'Heading 1',
       description: 'Big section heading.',
       icon: <Heading1 size={18} />,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       command: ({ editor, range }: { editor: any; range: any }) => {
         editor.chain().focus().deleteRange(range).setNode('heading', { level: 1 }).run();
       },
@@ -30,6 +32,7 @@ const getSuggestionItems = ({ query }: { query: string }): CommandItem[] => {
       title: 'Heading 2',
       description: 'Medium section heading.',
       icon: <Heading2 size={18} />,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       command: ({ editor, range }: { editor: any; range: any }) => {
         editor.chain().focus().deleteRange(range).setNode('heading', { level: 2 }).run();
       },
@@ -38,6 +41,7 @@ const getSuggestionItems = ({ query }: { query: string }): CommandItem[] => {
       title: 'Heading 3',
       description: 'Small section heading.',
       icon: <Heading3 size={18} />,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       command: ({ editor, range }: { editor: any; range: any }) => {
         editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run();
       },
@@ -46,6 +50,7 @@ const getSuggestionItems = ({ query }: { query: string }): CommandItem[] => {
       title: 'Bullet List',
       description: 'Create a simple bulleted list.',
       icon: <List size={18} />,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       command: ({ editor, range }: { editor: any; range: any }) => {
         editor.chain().focus().deleteRange(range).toggleBulletList().run();
       },
@@ -54,6 +59,7 @@ const getSuggestionItems = ({ query }: { query: string }): CommandItem[] => {
       title: 'Numbered List',
       description: 'Create a list with numbering.',
       icon: <ListOrdered size={18} />,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       command: ({ editor, range }: { editor: any; range: any }) => {
         editor.chain().focus().deleteRange(range).toggleOrderedList().run();
       },
@@ -62,6 +68,7 @@ const getSuggestionItems = ({ query }: { query: string }): CommandItem[] => {
       title: 'To-do List',
       description: 'Track tasks with a to-do list.',
       icon: <CheckSquare size={18} />,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       command: ({ editor, range }: { editor: any; range: any }) => {
         editor.chain().focus().deleteRange(range).toggleTaskList().run();
       },
@@ -70,6 +77,7 @@ const getSuggestionItems = ({ query }: { query: string }): CommandItem[] => {
       title: 'Quote',
       description: 'Capture a quote.',
       icon: <Quote size={18} />,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       command: ({ editor, range }: { editor: any; range: any }) => {
         editor.chain().focus().deleteRange(range).toggleBlockquote().run();
       },
@@ -78,6 +86,7 @@ const getSuggestionItems = ({ query }: { query: string }): CommandItem[] => {
       title: 'Code',
       description: 'Capture a code snippet.',
       icon: <Code size={18} />,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       command: ({ editor, range }: { editor: any; range: any }) => {
         editor.chain().focus().deleteRange(range).toggleCodeBlock().run();
       },
@@ -86,6 +95,7 @@ const getSuggestionItems = ({ query }: { query: string }): CommandItem[] => {
       title: 'Table',
       description: 'Insert a 3x3 table.',
       icon: <Table size={18} />,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       command: ({ editor, range }: { editor: any; range: any }) => {
         editor.chain().focus().deleteRange(range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
       },
@@ -94,6 +104,7 @@ const getSuggestionItems = ({ query }: { query: string }): CommandItem[] => {
 };
 
 // The React Component for the Menu UI
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CommandList = forwardRef((props: any, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -108,6 +119,7 @@ const CommandList = forwardRef((props: any, ref) => {
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedIndex(0);
   }, [props.items]);
 
@@ -173,6 +185,7 @@ export default Extension.create({
     return {
       suggestion: {
         char: '/',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         command: ({ editor, range, props }: any) => {
           props.command({ editor, range });
         },
@@ -193,10 +206,12 @@ export default Extension.create({
 export const slashSuggestion = {
   items: getSuggestionItems,
   render: () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let component: ReactRenderer<any>;
     let popup: TippyInstance[];
 
     return {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onStart: (props: any) => {
         component = new ReactRenderer(CommandList, {
           props,
@@ -218,6 +233,7 @@ export const slashSuggestion = {
         });
       },
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onUpdate(props: any) {
         component.updateProps(props);
 
@@ -230,6 +246,7 @@ export const slashSuggestion = {
         });
       },
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onKeyDown(props: any) {
         if (props.event.key === 'Escape') {
           popup[0].hide();

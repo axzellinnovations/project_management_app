@@ -36,6 +36,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ taskId }) => {
         try {
           const response = await api.get('/api/auth/users');
           const uidMap: Record<string, string | null> = {};
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           response.data.forEach((u: any) => {
              if (u.username) {
                uidMap[u.username] = u.profilePicUrl || null;

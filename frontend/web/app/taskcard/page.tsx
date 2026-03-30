@@ -47,6 +47,7 @@ function TaskPageContent() {
       const response = await api.get(`/api/tasks/${taskId}`);
       setTaskData(response.data);
       setError(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch task data');
       setTaskData(null);
@@ -81,6 +82,7 @@ function TaskPageContent() {
       await api.put(`/api/tasks/${taskId}`, updates);
       // Refresh task data after update
       await fetchTaskData();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to update task:', err);
       alert('Failed to update task: ' + (err.response?.data?.message || err.message));

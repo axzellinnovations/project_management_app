@@ -93,6 +93,7 @@ export function CreateChannelModal({ isOpen, onClose, users, onCreate }: {
   // Reset when opened
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName('');
       setSelectedUsers(new Set());
       setMemberSearch('');
@@ -199,7 +200,7 @@ export function CreateChannelModal({ isOpen, onClose, users, onCreate }: {
             {users.length === 0 ? (
               <p className="text-[13px] text-gray-500 italic px-1 py-2">No other team members found.</p>
             ) : filteredUsers.length === 0 ? (
-              <p className="text-[13px] text-gray-400 italic px-2 py-2">No members match "{memberSearch}"</p>
+              <p className="text-[13px] text-gray-400 italic px-2 py-2">No members match &quot;{memberSearch}&quot;</p>
             ) : (
               filteredUsers.map(u => {
                 const isSelected = selectedUsers.has(u);
@@ -252,6 +253,7 @@ export function EditChannelModal({ isOpen, onClose, initialName, initialTopic, i
 
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(initialName);
       setTopic(initialTopic);
       setDesc(initialDescription);
@@ -317,6 +319,7 @@ export function EditMessageModal({ isOpen, onClose, initialContent, onSave }: {
   const [content, setContent] = useState(initialContent);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isOpen) setContent(initialContent);
   }, [isOpen, initialContent]);
 

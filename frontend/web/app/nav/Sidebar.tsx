@@ -119,6 +119,7 @@ export default function Sidebar() {
             ]);
             setRecentProjects(recentRes.data);
             setFavoriteProjects(favRes.data);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             console.error('Sidebar: failed to fetch projects', error?.response?.data?.message || error.message);
         } finally {

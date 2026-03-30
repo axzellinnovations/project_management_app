@@ -8,7 +8,6 @@ export default function AgileLayout({
 	return (
 		<div className="flex h-screen bg-[#F1F6F9]">
 			<Sidebar />
-
 			<div className="flex flex-1 flex-col overflow-hidden">
 				<Suspense fallback={<div className="h-[119px] bg-[#F1F6F9]" />}>
 					<TopBar />

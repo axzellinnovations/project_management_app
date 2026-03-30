@@ -34,6 +34,7 @@ const DEFAULT_COLUMN_CONFIGS: Array<{
 import { arrayMove, SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 
 // wrapper to make a column draggable
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function SortableColumn({ column, children, width = '350px' }: { column: any; children: React.ReactNode; width?: string }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: column.status,

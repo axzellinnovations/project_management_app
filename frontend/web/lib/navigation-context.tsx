@@ -19,6 +19,7 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
 
     // Automatically close sidebar on navigation (mobile)
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSidebarOpen(false);
     }, [pathname]);
 

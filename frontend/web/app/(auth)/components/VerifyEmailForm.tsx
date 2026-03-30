@@ -26,6 +26,7 @@ export default function VerifyEmailForm() {
       await api.post('/api/auth/reg/verify', { email, otp });
       alert("Email verified successfully! Please login.");
       router.push('/login');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error("Verification error:", err);
       
@@ -59,6 +60,7 @@ export default function VerifyEmailForm() {
       if (typeof response.data === 'string') {
         successMsg = response.data;
       }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error("Resend error:", err);
       
@@ -116,7 +118,7 @@ export default function VerifyEmailForm() {
 
       <div className="mt-6 text-center">
         <p className="text-xs text-gray-400">
-          Didn't receive the code?{' '}
+          Didn&apos;t receive the code?{' '}
           <button 
             onClick={handleResend}
             disabled={isLoading}

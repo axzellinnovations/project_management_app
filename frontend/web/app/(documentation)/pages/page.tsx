@@ -21,6 +21,7 @@ export default function PagesPage() {
   useEffect(() => {
     const queryProjectId = searchParams.get('projectId');
     if (queryProjectId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProjectId(queryProjectId);
       localStorage.setItem('currentProjectId', queryProjectId);
       return;

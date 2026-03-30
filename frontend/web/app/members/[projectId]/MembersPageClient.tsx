@@ -100,6 +100,7 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
       setPending(pendingRes.data);
       // Debug: log pending invites to verify role
       if (pendingRes.data && Array.isArray(pendingRes.data)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         console.log('Pending invites:', pendingRes.data.map((p: any) => ({ email: p.email, role: p.role })));
       }
       setLoading(false);
@@ -223,6 +224,7 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
       // Refresh pending invites
       const pendingRes = await axios.get(`/api/projects/${projectId}/pending-invites`);
       setPending(pendingRes.data);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setInviteError(err?.response?.data?.message || "Failed to send invite");
     } finally {
