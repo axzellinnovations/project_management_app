@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { Inter, Outfit, Arimo } from 'next/font/google'
 import "./globals.css";
