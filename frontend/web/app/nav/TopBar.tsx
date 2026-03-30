@@ -6,8 +6,101 @@ import Image from 'next/image';
 import { getUserFromToken, User } from '@/lib/auth';
 import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import { useNavigation } from '@/lib/navigation-context';
-import { Menu } from 'lucide-react';
+import { Menu, Bell } from 'lucide-react';
 import api from '@/lib/axios';
+
+function NotificationBell() {
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [showDropdown, setShowDropdown] = useState(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [notifications, setNotifications] = useState<any[]>([]);
+
+    const fetchNotifications = async () => {
+        try {
+            const response = await api.get('/api/notifications');
+            setNotifications(response.data);
+            const countRes = await api.get('/api/notifications/unread-count');
+            setUnreadCount(countRes.data.count);
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (token) fetchNotifications();
+    }, []);
+
+    const markAsRead = async (id: number) => {
+        try {
+            await api.patch(`/api/notifications/${id}/read`);
+            void fetchNotifications();
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const markAllAsRead = async () => {
+        try {
+            await api.patch('/api/notifications/read-all');
+            void fetchNotifications();
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    return (
+        <div className="relative">
+            <button 
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="relative p-2 rounded-full hover:bg-black/5 transition-colors"
+            >
+                <Bell size={20} className="text-[#6A7282]" />
+                {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border border-white">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                )}
+            </button>
+
+            {showDropdown && (
+                <div className="absolute right-0 mt-3 w-80 bg-white/80 backdrop-blur-xl border border-white/50 shadow-2xl rounded-2xl overflow-hidden z-50 transform origin-top-right transition-all duration-300 ease-out">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100/50 bg-white/50">
+                        <span className="font-semibold text-gray-800 text-sm">Notifications</span>
+                        <button onClick={markAllAsRead} className="text-xs font-medium text-blue-600 hover:text-blue-700 transition">Mark all as read</button>
+                    </div>
+                    <div className="max-h-[320px] overflow-y-auto no-scrollbar">
+                        {notifications.length === 0 ? (
+                            <div className="p-6 text-center text-gray-400 text-sm">You have no notifications</div>
+                        ) : (
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            notifications.map((notif: any) => (
+                                <Link 
+                                    href={notif.link}
+                                    key={notif.id}
+                                    onClick={() => markAsRead(notif.id)}
+                                    className={`block p-4 border-b last:border-0 border-gray-50 hover:bg-white/60 transition-colors ${!notif.isRead ? 'bg-blue-50/40' : ''}`}
+                                >
+                                    <div className="flex gap-3">
+                                        <div className={`w-2 h-2 mt-1.5 rounded-full shrink-0 ${!notif.isRead ? 'bg-blue-500' : 'bg-transparent'}`} />
+                                        <div>
+                                            <p className={`text-sm ${!notif.isRead ? 'text-gray-900 font-medium' : 'text-gray-600'}`}>
+                                                {notif.message}
+                                            </p>
+                                            <span className="text-xs text-gray-400 mt-1 block">
+                                                {new Date(notif.createdAt).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 const baseTabs = [
     { id: 'summary', label: 'Summary' },
@@ -225,6 +318,7 @@ function TopBarContent() {
 
                 {/* Right Side Actions */}
                 <div className="flex items-center gap-3">
+                    <NotificationBell />
                     <div className="flex -space-x-2">
                         {resolvedProfilePicUrl ? (
                             <div className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-white">
@@ -315,6 +409,7 @@ function TopBarContent() {
 
                 {/* Right Side Actions */}
                 <div className="flex items-center gap-3">
+                    <NotificationBell />
                     <div className="flex -space-x-2">
                         {resolvedProfilePicUrl ? (
                             <div className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-white">

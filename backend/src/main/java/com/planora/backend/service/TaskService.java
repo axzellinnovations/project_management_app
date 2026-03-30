@@ -38,6 +38,9 @@ public class TaskService {
     @Autowired
     private SprintRepository sprintRepository;
 
+    @Autowired
+    private NotificationService notificationService;
+
 
     // 1. CREATE TASK
     @Transactional
@@ -83,7 +86,16 @@ public class TaskService {
         //deafult reporter is the creator
         task.setReporter(validateTeamMember(teamId, currentUserId));
 
-        return mapToDTO(taskRepository.save(task));
+        Task savedTask = taskRepository.save(task);
+
+        // Notify assignee if set and is not the creator
+        if (task.getAssignee() != null && !task.getAssignee().getUser().getUserId().equals(currentUserId)) {
+            String message = "You were assigned to a new task: " + task.getTitle();
+            String link = "/project/" + project.getId() + "/task/" + savedTask.getId();
+            notificationService.createNotification(task.getAssignee().getUser(), message, link);
+        }
+
+        return mapToDTO(savedTask);
 
     }
 
@@ -246,6 +258,27 @@ public class TaskService {
         comment.setAuthor(author);
 
         commentRepository.save(comment);
+
+        // Notify assignee if the comment author is not the assignee
+        if (task.getAssignee() != null && !task.getAssignee().getUser().getUserId().equals(currentUserId)) {
+            String message = author.getUsername() + " commented on task: " + task.getTitle();
+            String link = "/project/" + task.getProject().getId() + "/task/" + task.getId();
+            notificationService.createNotification(task.getAssignee().getUser(), message, link);
+        }
+    }
+
+    public List<com.planora.backend.dto.CommentResponseDTO> getComments(Long taskId, Long currentUserId) {
+        Task task = taskRepository.findById(taskId).orElseThrow();
+        validatePermission(task.getProject().getTeam().getId(), currentUserId, null);
+        
+        return commentRepository.findByTaskOrderByCreatedAtAsc(task).stream()
+                .map(c -> com.planora.backend.dto.CommentResponseDTO.builder()
+                        .id(c.getId())
+                        .text(c.getContent())
+                        .authorName(c.getAuthor().getUsername())
+                        .createdAt(c.getCreatedAt())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     //12. ASSIGN MEMBER
@@ -260,6 +293,11 @@ public class TaskService {
         task.setAssignee(assignee);
         taskRepository.save(task);
 
+        if (!userId.equals(currentUserId)) {
+            String message = "You were assigned to task: " + task.getTitle();
+            String link = "/project/" + task.getProject().getId() + "/task/" + task.getId();
+            notificationService.createNotification(assignee.getUser(), message, link);
+        }
     }
 
     //---HELPER-01--- : For Permission Checking ---
