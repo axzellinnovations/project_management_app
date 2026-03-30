@@ -43,9 +43,13 @@ export function getUserFromToken(): User | null {
         }
 
         // Try to extract userId from JWT (commonly as 'userId' or 'id')
+
+        // Extend JwtPayload to include userId and id as possible number fields
+        type ExtendedJwtPayload = JwtPayload & { userId?: number; id?: number };
+        const extPayload = payload as ExtendedJwtPayload;
         let userId: number | undefined = undefined;
-        if (typeof (payload as any).userId === 'number') userId = (payload as any).userId;
-        else if (typeof (payload as any).id === 'number') userId = (payload as any).id;
+        if (typeof extPayload.userId === 'number') userId = extPayload.userId;
+        else if (typeof extPayload.id === 'number') userId = extPayload.id;
 
         const decodedUser: User = {
             email: payload.sub,
