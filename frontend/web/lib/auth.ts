@@ -2,6 +2,7 @@ export interface User {
     email: string;
     username?: string;
     fullName?: string;
+    userId?: number;
 }
 
 interface JwtPayload {

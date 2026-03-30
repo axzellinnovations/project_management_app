@@ -1,15 +1,9 @@
-  // Debug logging to help diagnose role dropdown issues
-  useEffect(() => {
-    console.log('currentUser', currentUser);
-    console.log('currentMember', currentMember);
-    console.log('currentUserRole', currentUserRole);
-    console.log('members', members);
-  }, [currentUser, currentMember, currentUserRole, members]);
 "use client";
 import { useEffect, useState } from "react";
 import axios from "@/lib/axios";
 import { useParams } from "next/navigation";
 import { getUserFromToken } from "@/lib/auth";
+
 
 interface Member {
   id: number;
@@ -37,8 +31,9 @@ const ROLE_OPTIONS = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
 
 
 export default function MembersPage() {
+
   const params = useParams();
-  const projectId = Number(params.projectId);
+  const projectId = Number((params as any).projectId ?? (params as any).id ?? "0");
   const [members, setMembers] = useState<Member[]>([]);
   const [pending, setPending] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,9 +49,9 @@ export default function MembersPage() {
   // Get current user info
   const currentUser = getUserFromToken();
   // Robustly determine current member and role
-  let currentMember = undefined;
-  let currentUserRole = undefined;
-  let currentUserId = undefined;
+  let currentMember: Member | undefined = undefined;
+  let currentUserRole: string | undefined = undefined;
+  let currentUserId: number | undefined = undefined;
   if (currentUser) {
     // Try userId match
     if (currentUser.userId) {
@@ -83,6 +78,14 @@ export default function MembersPage() {
     currentUserRole = currentMember?.role;
     currentUserId = currentMember?.user?.userId;
   }
+
+  // Debug logging to help diagnose role dropdown issues
+  useEffect(() => {
+    console.log('currentUser', currentUser);
+    console.log('currentMember', currentMember);
+    console.log('currentUserRole', currentUserRole);
+    console.log('members', members);
+  }, [currentUser, currentMember, currentUserRole, members]);
 
   useEffect(() => {
     async function fetchData() {
@@ -149,8 +152,7 @@ export default function MembersPage() {
     setInviteError("");
     setInviteSuccess("");
     try {
-      // You may need to get projectId from context/route; here we assume teamId == projectId for demo
-      await axios.post(`/api/projects/${teamId}/invitations`, {
+      await axios.post(`/api/projects/${projectId}/invitations`, {
         email: inviteEmail,
         role: inviteRole,
       });
@@ -159,9 +161,8 @@ export default function MembersPage() {
       setInviteRole("");
       setShowModal(false);
       // Refresh pending invites
-      const pendingRes = await axios.get(`/api/teams/${teamId}/pending-invites`);
+      const pendingRes = await axios.get(`/api/projects/${projectId}/pending-invites`);
       setPending(pendingRes.data);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setInviteError(err?.response?.data?.message || "Failed to send invite");
     } finally {
