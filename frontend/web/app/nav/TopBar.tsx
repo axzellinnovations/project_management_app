@@ -180,7 +180,7 @@ function TopBarContent() {
             case 'board':
                 return withProjectId('/kanban');
             case 'calendar':
-                return projectId ? `/summary/${projectId}` : '/dashboard';
+                return withProjectId('/calendar');
             case 'chats':
                 return projectId ? `/project/${projectId}/chat` : '/dashboard';
             case 'members':
