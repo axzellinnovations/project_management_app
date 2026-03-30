@@ -142,6 +142,36 @@ public class TeamMemberService {
         }
 
         // =====================================================
+        // REMOVE MEMBER FROM TEAM WITH PERMISSIONS
+        // =====================================================
+        public void removeMemberWithPermissions(
+                        Long teamId,
+                        Long targetUserId,
+                        Long currentUserId) {
+                TeamMember currentMember = validateMembership(teamId, currentUserId);
+                TeamMember targetMember = teamMemberRepository
+                                .findByTeamIdAndUserUserId(teamId, targetUserId)
+                                .orElseThrow(() -> new RuntimeException("User is not a member of this team"));
+
+                if (currentMember.getRole() == TeamRole.OWNER) {
+                        // Owner can remove anyone except themselves
+                        if (targetMember.getUser().getUserId().equals(currentUserId)) {
+                                throw new IllegalArgumentException("Owner cannot remove themselves");
+                        }
+                } else if (currentMember.getRole() == TeamRole.ADMIN) {
+                        // Admin can only remove MEMBER or VIEWER
+                        if (targetMember.getRole() == TeamRole.OWNER || targetMember.getRole() == TeamRole.ADMIN) {
+                                throw new AccessDeniedException("Admin can only remove MEMBER or VIEWER");
+                        }
+                } else {
+                        // MEMBER and VIEWER cannot remove anyone
+                        throw new AccessDeniedException("Only OWNER or ADMIN can remove members");
+                }
+
+                teamMemberRepository.delete(targetMember);
+        }
+
+        // =====================================================
         // HELPER : VALIDATE MEMBERSHIP (GENERIC)
         // =====================================================
         public TeamMember validateMembership(Long teamId, Long userId) {

@@ -80,6 +80,13 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
   const [roleChangeSuccess, setRoleChangeSuccess] = useState("");
   const [changingRoleId, setChangingRoleId] = useState<number | null>(null);
 
+  // Removal state
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<typeof allMembers[0] | null>(null);
+  const [removeLoading, setRemoveLoading] = useState(false);
+  const [removeError, setRemoveError] = useState("");
+  const [removeSuccess, setRemoveSuccess] = useState("");
+
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
@@ -179,6 +186,25 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
     return false;
   };
 
+  const canRemoveMember = (targetMember: typeof allMembers[0]) => {
+    if (!currentUserRole) return false;
+    
+    const currentRole = String(currentUserRole).toUpperCase().trim();
+    const targetRole = String(targetMember.role).toUpperCase().trim();
+
+    // Cannot edit pending invites
+    if (targetMember.status === "Pending") return false;
+    
+    // Cannot edit self
+    if (currentUserEmail && targetMember.user.email?.toLowerCase() === currentUserEmail) return false;
+
+    if (currentRole === "OWNER") return true;
+    if (currentRole === "ADMIN") {
+      return targetRole === "MEMBER" || targetRole === "VIEWER";
+    }
+    return false;
+  };
+
   const getAvailableOptions = () => {
     if (currentUserRole?.toUpperCase() === "ADMIN") {
       return ["MEMBER", "VIEWER"];
@@ -204,6 +230,24 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
       setTimeout(() => setRoleChangeError(""), 4000);
     } finally {
       setChangingRoleId(null);
+    }
+  };
+
+  const handleRemoveMemberConfirm = async () => {
+    if (!memberToRemove || !memberToRemove.user.userId) return;
+    setRemoveLoading(true);
+    setRemoveError("");
+    try {
+      await axios.delete(`/api/projects/${projectId}/members/${memberToRemove.user.userId}`);
+      setMembers(prev => prev.filter(m => m.user.userId !== memberToRemove.user.userId));
+      setRemoveSuccess("Member removed successfully!");
+      setShowRemoveModal(false);
+      setMemberToRemove(null);
+      setTimeout(() => setRemoveSuccess(""), 3000);
+    } catch (err: any) {
+      setRemoveError(err?.response?.data?.message || err?.response?.data?.error || "Failed to remove member");
+    } finally {
+      setRemoveLoading(false);
     }
   };
 
@@ -264,6 +308,11 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
       {roleChangeError && (
          <div className="mb-4 p-3 bg-red-50 text-red-700 border border-red-200 rounded-md shadow-sm">
            {roleChangeError}
+         </div>
+      )}
+      {removeSuccess && (
+         <div className="mb-4 p-3 bg-green-50 text-green-700 border border-green-200 rounded-md shadow-sm">
+           {removeSuccess}
          </div>
       )}
 
@@ -448,9 +497,15 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
                 </td>
                 <td className="px-4 py-3 font-semibold text-blue-700">{m.taskCount}</td>
                 <td className="px-4 py-3 text-right">
-                  <button className="p-2 rounded hover:bg-gray-100">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg>
-                  </button>
+                  {canRemoveMember(m) && (
+                    <button 
+                      onClick={() => { setMemberToRemove(m); setShowRemoveModal(true); setRemoveError(""); }}
+                      className="p-1 px-3 rounded text-red-600 hover:bg-red-50 font-medium text-sm transition-colors border border-transparent hover:border-red-200"
+                      title="Remove Member"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -519,6 +574,43 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Confirmation Modal */}
+      {showRemoveModal && memberToRemove && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-sm relative">
+            <button
+              className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+              onClick={() => { setShowRemoveModal(false); setMemberToRemove(null); }}
+            >
+              &times;
+            </button>
+            <h2 className="text-xl font-bold mb-4 text-gray-900">Remove Member</h2>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to remove <strong>{memberToRemove.user.fullName || memberToRemove.user.email}</strong> from this project? This action cannot be undone.
+            </p>
+            {removeError && <div className="text-red-600 text-sm mb-4">{removeError}</div>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="flex-1 py-2 rounded border border-gray-300 bg-gray-100 hover:bg-gray-200 font-medium"
+                onClick={() => { setShowRemoveModal(false); setMemberToRemove(null); setRemoveError(""); }}
+                disabled={removeLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="flex-1 py-2 rounded bg-red-600 text-white hover:bg-red-700 font-medium flex items-center justify-center"
+                onClick={handleRemoveMemberConfirm}
+                disabled={removeLoading}
+              >
+                {removeLoading ? "Removing..." : "Remove"}
+              </button>
+            </div>
           </div>
         </div>
       )}

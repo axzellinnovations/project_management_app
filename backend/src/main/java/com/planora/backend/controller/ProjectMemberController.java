@@ -111,4 +111,20 @@ public class ProjectMemberController {
         );
         return ResponseEntity.ok().build();
     }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/{projectId}/members/{userId}")
+    public ResponseEntity<?> removeMember(
+            @PathVariable Long projectId,
+            @PathVariable Long userId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Project not found"));
+        Long teamId = project.getTeam().getId();
+        Long currentUserId = principal.getUserId();
+        teamMemberService.removeMemberWithPermissions(
+                teamId, userId, currentUserId
+        );
+        return ResponseEntity.ok().build();
+    }
 }
