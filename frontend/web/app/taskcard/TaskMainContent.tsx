@@ -13,6 +13,7 @@ interface Dependency {
 interface TaskMainContentProps {
   title: string;
   description: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   subtasks: any[];
   dependencies: Dependency[];
   taskId?: number;

@@ -113,6 +113,7 @@ export default function AgileProjectPage() {
             } else {
                 router.push(`/createProject/inviteMembers?projectId=${res.data.id}&projectKey=${projectKey}`);
             }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
             const msg = err.response?.data?.message || err.response?.data || 'Failed to create project';
             setServerError(String(msg));

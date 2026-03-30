@@ -39,6 +39,7 @@ export default function LoginPage() {
                 // Show error message from backend
                 setError(response.data.message || 'Login failed. Please try again.');
             }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             console.error("Login failed:", error);
             

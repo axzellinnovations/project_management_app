@@ -27,6 +27,7 @@ export default function ForgotPasswordPage() {
       setSuccess(response.data);
       setSubmitted(true);
       setEmail('');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error("Forgot password error:", err);
       
@@ -81,7 +82,7 @@ export default function ForgotPasswordPage() {
             </div>
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Check your email</h2>
             <p className="text-gray-500 text-sm mb-6">
-              We've sent a password reset code to <br />
+              We&apos;ve sent a password reset code to <br />
               <span className="font-semibold text-gray-900">{email}</span>
             </p>
             <p className="text-xs text-gray-400 mb-6">

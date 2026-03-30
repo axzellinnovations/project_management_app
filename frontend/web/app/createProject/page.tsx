@@ -17,7 +17,7 @@ export default function CreateProjectSelectionPage() {
                         Select Project Type
                     </h1>
                     <p className="font-inter text-[16px] leading-[24px] text-[#86868B] max-w-[482px] mx-auto">
-                        Choose the methodology that best fits your team's workflow.
+                        Choose the methodology that best fits your team&apos;s workflow.
                     </p>
                 </div>
 
