@@ -1,7 +1,15 @@
+  // Debug logging to help diagnose role dropdown issues
+  useEffect(() => {
+    console.log('currentUser', currentUser);
+    console.log('currentMember', currentMember);
+    console.log('currentUserRole', currentUserRole);
+    console.log('members', members);
+  }, [currentUser, currentMember, currentUserRole, members]);
 "use client";
 import { useEffect, useState } from "react";
 import axios from "@/lib/axios";
 import { useParams } from "next/navigation";
+import { getUserFromToken } from "@/lib/auth";
 
 interface Member {
   id: number;
@@ -27,9 +35,10 @@ interface PendingInvite {
 
 const ROLE_OPTIONS = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
 
+
 export default function MembersPage() {
   const params = useParams();
-  const teamId = Number(params.projectId);
+  const projectId = Number(params.projectId);
   const [members, setMembers] = useState<Member[]>([]);
   const [pending, setPending] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,20 +48,100 @@ export default function MembersPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState("");
+  const [roleChangeLoading, setRoleChangeLoading] = useState<number | null>(null);
+  const [roleChangeError, setRoleChangeError] = useState<string>("");
+
+  // Get current user info
+  const currentUser = getUserFromToken();
+  // Robustly determine current member and role
+  let currentMember = undefined;
+  let currentUserRole = undefined;
+  let currentUserId = undefined;
+  if (currentUser) {
+    // Try userId match
+    if (currentUser.userId) {
+      currentMember = members.find(m => m.user.userId === currentUser.userId);
+    }
+    // Fallback to email match
+    if (!currentMember && currentUser.email) {
+      currentMember = members.find(m => m.user.email?.toLowerCase() === currentUser.email.toLowerCase());
+    }
+    // If still not found, but there is only one OWNER or ADMIN and email matches, assume that's the user
+    if (!currentMember && currentUser.email) {
+      const privileged = members.filter(m => m.role === 'OWNER' || m.role === 'ADMIN');
+      if (privileged.length === 1 && privileged[0].user.email?.toLowerCase() === currentUser.email.toLowerCase()) {
+        currentMember = privileged[0];
+      }
+    }
+    // If still not found, but JWT email matches any OWNER/ADMIN email, allow dropdown for all users
+    if (!currentMember && currentUser.email) {
+      const privileged = members.find(m => (m.role === 'OWNER' || m.role === 'ADMIN') && m.user.email?.toLowerCase() === currentUser.email.toLowerCase());
+      if (privileged) {
+        currentMember = privileged;
+      }
+    }
+    currentUserRole = currentMember?.role;
+    currentUserId = currentMember?.user?.userId;
+  }
 
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
       const [membersRes, pendingRes] = await Promise.all([
-        axios.get(`/api/teams/${teamId}/members`),
-        axios.get(`/api/teams/${teamId}/pending-invites`),
+        axios.get(`/api/projects/${projectId}/members`),
+        axios.get(`/api/projects/${projectId}/pending-invites`),
       ]);
       setMembers(membersRes.data);
       setPending(pendingRes.data);
       setLoading(false);
     }
     fetchData();
-  }, [teamId]);
+  }, [projectId]);
+  // Permission logic for showing role dropdown
+  function canChangeRole(target: Member): boolean {
+    // If current user is detected as OWNER or ADMIN by email or userId, allow dropdown for all except self
+    if (!currentUser) return false;
+    // Don't allow changing own role
+    if (currentUser.userId && target.user.userId === currentUser.userId) return false;
+    if (!currentUser.userId && currentUser.email && target.user.email?.toLowerCase() === currentUser.email.toLowerCase()) return false;
+    // If current user is OWNER or ADMIN by email or userId, allow dropdown for all others
+    const isPrivileged = members.some(m => (m.role === 'OWNER' || m.role === 'ADMIN') && (
+      (currentUser.userId && m.user.userId === currentUser.userId) ||
+      (currentUser.email && m.user.email?.toLowerCase() === currentUser.email.toLowerCase())
+    ));
+    return isPrivileged;
+  }
+
+  // Allowed roles to set for a target, based on current user's role
+  function allowedRoleOptions(target: Member): string[] {
+    if (currentUserRole === "OWNER") {
+      return ROLE_OPTIONS.filter(r => r !== "OWNER" || target.role === "OWNER"); // Owner can't demote self
+    }
+    if (currentUserRole === "ADMIN") {
+      return ["MEMBER", "VIEWER"];
+    }
+    return [];
+  }
+
+  async function handleRoleChange(target: Member, newRole: string) {
+    setRoleChangeLoading(target.id);
+    setRoleChangeError("");
+    try {
+      await axios.patch(`/api/projects/${projectId}/members/${target.user.userId}/role`, {
+        role: newRole,
+        userId: target.user.userId,
+      });
+      // Refresh members
+      const membersRes = await axios.get(`/api/projects/${projectId}/members`);
+      setMembers(membersRes.data);
+    } catch (err: any) {
+      setRoleChangeError(err?.response?.data?.message || "Failed to change role");
+      console.log('MembersPage loaded');
+      console.log('Rendering MembersPage');
+    } finally {
+      setRoleChangeLoading(null);
+    }
+  }
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,10 +187,25 @@ export default function MembersPage() {
               <div>
                 <div className="font-semibold">{m.user.fullName || m.user.email}</div>
                 <div className="text-xs text-gray-500">{m.user.email}</div>
-                <div className="text-xs mt-1">
-                  <span className={`px-2 py-1 rounded text-xs ${m.role === "ADMIN" ? "bg-purple-100 text-purple-700" : m.role === "OWNER" ? "bg-yellow-100 text-yellow-700" : m.role === "MEMBER" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700"}`}>{m.role}</span>
-                  <span className={`ml-2 px-2 py-1 rounded text-xs ${m.status === "Active" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>{m.status}</span>
+                <div className="text-xs mt-1 flex items-center gap-2">
+                  {canChangeRole(m) ? (
+                    <select
+                      className="px-2 py-1 rounded text-xs border focus:outline-none focus:ring"
+                      value={m.role}
+                      disabled={roleChangeLoading === m.id}
+                      onChange={e => handleRoleChange(m, e.target.value)}
+                    >
+                      {allowedRoleOptions(m).map(role => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className={`px-2 py-1 rounded text-xs ${m.role === "ADMIN" ? "bg-purple-100 text-purple-700" : m.role === "OWNER" ? "bg-yellow-100 text-yellow-700" : m.role === "MEMBER" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700"}`}>{m.role}</span>
+                  )}
+                  <span className={`px-2 py-1 rounded text-xs ${m.status === "Active" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>{m.status}</span>
                 </div>
+                {roleChangeLoading === m.id && <div className="text-xs text-blue-500 mt-1">Updating role...</div>}
+                {roleChangeError && roleChangeLoading === m.id && <div className="text-xs text-red-500 mt-1">{roleChangeError}</div>}
               </div>
               <div className="ml-auto text-right">
                 <div className="text-xs text-gray-400">Last Active</div>

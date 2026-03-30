@@ -42,9 +42,15 @@ export function getUserFromToken(): User | null {
             return null;
         }
 
+        // Try to extract userId from JWT (commonly as 'userId' or 'id')
+        let userId: number | undefined = undefined;
+        if (typeof (payload as any).userId === 'number') userId = (payload as any).userId;
+        else if (typeof (payload as any).id === 'number') userId = (payload as any).id;
+
         const decodedUser: User = {
             email: payload.sub,
             username: payload.username,
+            userId,
         };
 
         // Keep sidebar/profile displays in sync after profile edits without requiring re-login.

@@ -7,7 +7,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -34,6 +36,11 @@ public class ProjectMemberController {
     private final TeamInvitationRepository teamInvitationRepository;
     private final TaskRepository taskRepository;
     private final TeamMemberService teamMemberService;
+
+        public static class ChangeRoleRequest {
+                public String role;
+                public Long userId;
+        }
 
     @GetMapping("/{projectId}/members")
     public ResponseEntity<List<TeamMemberResponseDTO>> getProjectMembers(
@@ -86,5 +93,22 @@ public class ProjectMemberController {
                 ))
                 .collect(Collectors.toList());
         return new ResponseEntity<>(dtos, HttpStatus.OK);
+    }
+
+    @PatchMapping("/{projectId}/members/{userId}/role")
+    public ResponseEntity<?> changeMemberRole(
+            @PathVariable Long projectId,
+            @PathVariable Long userId,
+            @RequestBody ChangeRoleRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Project not found"));
+        Long teamId = project.getTeam().getId();
+        Long currentUserId = principal.getUserId();
+        TeamMember updated = teamMemberService.changeMemberRoleWithPermissions(
+                teamId, userId, request.role, currentUserId
+        );
+        return ResponseEntity.ok().build();
     }
 }

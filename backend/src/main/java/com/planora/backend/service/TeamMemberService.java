@@ -17,6 +17,40 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class TeamMemberService {
+    // Change member role with owner/admin permission logic
+    public TeamMember changeMemberRoleWithPermissions(Long teamId, Long targetUserId, String newRoleStr, Long currentUserId) {
+        TeamMember currentMember = validateMembership(teamId, currentUserId);
+        TeamMember targetMember = teamMemberRepository
+                .findByTeamIdAndUserUserId(teamId, targetUserId)
+                .orElseThrow(() -> new RuntimeException("User is not a member of this team"));
+
+        TeamRole newRole;
+        try {
+            newRole = TeamRole.valueOf(newRoleStr.toUpperCase());
+        } catch (Exception e) {
+            throw new RuntimeException("Invalid role");
+        }
+
+        if (currentMember.getRole() == TeamRole.OWNER) {
+            // Owner can change anyone's role (except their own)
+            if (targetMember.getUser().getUserId().equals(currentUserId)) {
+                throw new RuntimeException("Owner cannot change their own role");
+            }
+        } else if (currentMember.getRole() == TeamRole.ADMIN) {
+            // Admin can only change MEMBER or VIEWER, and not promote to OWNER or ADMIN
+            if (targetMember.getRole() == TeamRole.OWNER || targetMember.getRole() == TeamRole.ADMIN) {
+                throw new RuntimeException("Admin can only change roles of MEMBER or VIEWER");
+            }
+            if (newRole == TeamRole.OWNER || newRole == TeamRole.ADMIN) {
+                throw new RuntimeException("Admin cannot promote to OWNER or ADMIN");
+            }
+        } else {
+            throw new RuntimeException("Only OWNER or ADMIN can change roles");
+        }
+
+        targetMember.setRole(newRole);
+        return teamMemberRepository.save(targetMember);
+    }
         // =====================================================
         // HELPER : VALIDATE OWNER OR ADMIN (STRICT)
         // =====================================================
