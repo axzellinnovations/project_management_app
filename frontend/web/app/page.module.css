@@ -17,5 +17,21 @@
 }
 
 .heroBadge {
-  @apply bg-white/20 px-4 py-2 rounded-full mb-6 backdrop-blur-sm;
+  @apply bg-white/15 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full mb-6 backdrop-blur-md border border-white/10 shadow-sm transition-all hover:bg-white/20;
+}
+
+/* Custom animation for the smart text on mobile */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.mainContainer h1 span {
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+@media (max-width: 640px) {
+  .glassCard {
+    @apply p-6;
+  }
 }

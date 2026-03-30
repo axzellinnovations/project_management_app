@@ -69,22 +69,34 @@ export default function FilterDropdown({
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="w-full rounded-md border border-[#D0D5DD] bg-white px-3 py-2 text-left text-sm text-[#344054] hover:border-[#98A2B3]"
+        className={`group flex h-10 w-full items-center justify-between rounded-md border px-3 text-left text-sm font-medium transition-all duration-150 ${
+          open
+            ? 'border-[#4C9AFF] bg-white text-[#172B4D] shadow-[0_0_0_2px_rgba(76,154,255,0.2)]'
+            : 'border-[#DFE1E6] bg-white text-[#344563] hover:border-[#C1C7D0] hover:bg-[#FAFBFC] hover:shadow-sm'
+        }`}
       >
         <span className="truncate">{buttonLabel}</span>
+        <svg
+          className={`ml-2 h-4 w-4 flex-shrink-0 text-[#6B778C] transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
 
       {open && (
-        <div className="absolute left-0 top-11 z-50 max-h-80 w-full overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-xl">
-          <div className="border-b border-[#F2F4F7] p-2">
+        <div className="absolute left-0 top-11 z-50 max-h-80 w-full overflow-hidden rounded-lg border border-[#DFE1E6] bg-white shadow-[0_12px_28px_rgba(9,30,66,0.22)]">
+          <div className="border-b border-[#EBECF0] bg-[#FAFBFC] p-2">
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={searchablePlaceholder}
-              className="w-full rounded-md border border-[#D0D5DD] px-2.5 py-1.5 text-sm outline-none focus:border-[#175CD3]"
+              className="h-9 w-full rounded-md border border-[#DFE1E6] bg-white px-3 text-sm text-[#172B4D] outline-none placeholder:text-[#7A869A] focus:border-[#4C9AFF] focus:shadow-[0_0_0_2px_rgba(76,154,255,0.2)]"
             />
           </div>
-          <div className="max-h-60 overflow-y-auto p-1">
+          <div className="max-h-60 overflow-y-auto p-1.5">
             {filtered.map((item) => {
               const checked = selected.includes(item);
               const isAll = SPECIAL_ALL_VALUES.has(item);
@@ -94,20 +106,22 @@ export default function FilterDropdown({
                   key={item}
                   type="button"
                   onClick={() => handleToggle(item)}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[#344054] hover:bg-[#F9FAFB]"
+                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+                    isAll ? 'font-medium text-[#253858]' : 'text-[#344563]'
+                  } hover:bg-[#F4F5F7]`}
                 >
                   <input
                     type="checkbox"
                     readOnly
                     checked={isAll ? selected.length === 0 : checked}
-                    className="h-4 w-4 rounded border-[#D0D5DD]"
+                    className="h-4 w-4 rounded border-[#C1C7D0]"
                   />
                   <span className="truncate">{item}</span>
                 </button>
               );
             })}
             {filtered.length === 0 && (
-              <div className="px-2 py-3 text-sm text-[#667085]">No options found</div>
+              <div className="px-2.5 py-3 text-sm text-[#6B778C]">No options found</div>
             )}
           </div>
         </div>

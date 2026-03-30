@@ -151,7 +151,7 @@ public class UserService {
 
             if (authentication.isAuthenticated()) {
                 User authenticatedUser = userRepository.findByEmailIgnoreCase(user.getEmail().toLowerCase()).orElse(null);
-                String token = jwtService.generateToken(user.getEmail(), authenticatedUser.getUsername());
+                String token = jwtService.generateToken(user.getEmail().toLowerCase(), authenticatedUser.getUsername());
                 LoginResponse response = new LoginResponse();
                 response.setSuccess(true);
                 response.setMessage("Login successful");
@@ -283,6 +283,15 @@ public class UserService {
 
     public java.util.List<User> getAllUsers() {
         return userRepository.findAll();
+    }
+
+    public User getUserByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new RuntimeException("User email is required");
+        }
+
+        return userRepository.findByEmailIgnoreCase(email.toLowerCase())
+                .orElseThrow(() -> new RuntimeException("User not found"));
     }
 
     @Transactional

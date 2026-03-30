@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { getUserFromToken, User } from '@/lib/auth';
 import api from '@/lib/axios';
 import RecentProjectCard from '../dashboard/components/RecentProjectCard';
@@ -10,8 +11,17 @@ export default function SpacesPage() {
     const [projects, setProjects] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [sortBy, setSortBy] = useState<'recent' | 'alphabetical'>('recent');
+    const searchParams = useSearchParams();
+    const [sortBy, setSortBy] = useState<'recent' | 'alphabetical' | 'favorites'>('recent');
     const [user, setUser] = useState<User | null>(null);
+
+    // Set initial filter from URL param
+    useEffect(() => {
+        const filter = searchParams.get('filter');
+        if (filter === 'favorites') setSortBy('favorites');
+        else if (filter === 'recent') setSortBy('recent');
+    }, [searchParams]);
+
 
     useEffect(() => {
         const userData = getUserFromToken();
@@ -32,16 +42,21 @@ export default function SpacesPage() {
     }, []);
 
     const filteredAndSortedProjects = [...projects]
-        .filter(project => 
-            project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (project.projectKey && project.projectKey.toLowerCase().includes(searchQuery.toLowerCase()))
-        )
+        .filter(project => {
+            const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (project.projectKey && project.projectKey.toLowerCase().includes(searchQuery.toLowerCase()));
+            
+            if (sortBy === 'favorites') {
+                return matchesSearch && project.isFavorite;
+            }
+            return matchesSearch;
+        })
         .sort((a, b) => {
             if (sortBy === 'alphabetical') {
                 return a.name.localeCompare(b.name);
             }
-            // 'recent' is the default order from the API
-            return 0; // Maintain API order
+            // 'recent' and 'starred' (when filtering) maintain API order
+            return 0;
         });
 
     return (
@@ -92,6 +107,16 @@ export default function SpacesPage() {
                     >
                         Alphabetical
                     </button>
+                    <button
+                        onClick={() => setSortBy('favorites')}
+                        className={`px-4 py-1.5 rounded-[6px] text-[14px] font-medium transition-all ${
+                            sortBy === 'favorites' 
+                            ? 'bg-white text-[#0052CC] shadow-sm' 
+                            : 'text-[#4A5565] hover:text-[#101828]'
+                        }`}
+                    >
+                        Favourites
+                    </button>
                 </div>
             </div>
 
@@ -110,6 +135,14 @@ export default function SpacesPage() {
                             id={project.id.toString()}
                             name={project.name}
                             projectKey={project.projectKey}
+                            isFavorite={project.isFavorite}
+                            onFavoriteToggle={() => {
+                                const fetchProjects = async () => {
+                                    const response = await api.get('/api/projects');
+                                    setProjects(response.data);
+                                };
+                                fetchProjects();
+                            }}
                             type={project.type === 'AGILE' ? 'Agile Scrum' : 'Kanban'}
                             boardCount={1}
                             width="w-full"

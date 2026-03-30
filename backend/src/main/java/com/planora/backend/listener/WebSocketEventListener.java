@@ -9,7 +9,8 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
-import com.planora.backend.service.ChatService;
+import com.planora.backend.controller.ChatController;
+import com.planora.backend.service.ChatPresenceService;
 
 @Component
 public class WebSocketEventListener {
@@ -21,7 +22,7 @@ public class WebSocketEventListener {
     private SimpMessageSendingOperations messagingTemplate;
 
     @Autowired
-    private ChatService chatService;
+    private ChatPresenceService chatPresenceService;
 
     // This method is called whenever a WebSocket connection is disconnected
     @EventListener
@@ -31,13 +32,21 @@ public class WebSocketEventListener {
 
         // Retrieve the username from the session attributes (we added it in
         // ChatController.addUser)
-        String username = (String) headerAccessor.getSessionAttributes().get("username");
+        var sessionAttributes = headerAccessor.getSessionAttributes();
+        if (sessionAttributes == null) {
+            return;
+        }
+
+        String username = (String) sessionAttributes.get("username");
+        String sessionId = headerAccessor.getSessionId();
 
         if (username != null) {
             logger.info("User Disconnected : " + username);
-
-            // Note: LEAVE messages are now project-specific, so no global broadcast on disconnect
-            // If needed, handle in client-side or per-project subscriptions
+            var presenceUpdates = chatPresenceService.markOfflineForSession(sessionId, username);
+            presenceUpdates.forEach((projectId, onlineUsers) ->
+                    messagingTemplate.convertAndSend(
+                            "/topic/project/" + projectId + "/presence",
+                            new ChatController.PresenceEvent("OFFLINE", username, onlineUsers)));
         }
     }
 }

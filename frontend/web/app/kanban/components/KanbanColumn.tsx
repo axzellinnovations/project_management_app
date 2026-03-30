@@ -13,12 +13,14 @@ interface KanbanColumnProps {
   column: KanbanColumnType;
   onDeleteTask?: (taskId: number) => void;
   onCreateTask?: (columnStatus: string) => void;
+  onEditTask?: (task: Task) => void;
 }
 
 export default function KanbanColumn({
   column,
   onDeleteTask,
   onCreateTask,
+  onEditTask,
 }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
     id: column.status,
@@ -44,7 +46,7 @@ export default function KanbanColumn({
   const taskIds = column.tasks.map((task) => task.id.toString());
 
   return (
-    <div className={`flex flex-col h-full min-w-80 rounded-lg border border-gray-200 ${getColumnBgColor(column.status)}`}>
+    <div className={`flex flex-col h-[calc(100%-38px)] min-w-80 rounded-lg border border-gray-200 ${getColumnBgColor(column.status)}`}>
       {/* Column Header */}
       <div className="px-4 py-3 border-b border-gray-200 bg-white rounded-t-lg">
         <div className="flex items-center justify-between">
@@ -70,6 +72,7 @@ export default function KanbanColumn({
                 key={task.id}
                 task={task}
                 onDelete={onDeleteTask}
+                onEdit={onEditTask}
               />
             ))
           ) : (
