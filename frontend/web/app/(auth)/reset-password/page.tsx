@@ -48,6 +48,7 @@ export default function ResetPasswordPage() {
       setOtp('');
       setNewPassword('');
       setConfirmPassword('');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error("Reset password error:", err);
       

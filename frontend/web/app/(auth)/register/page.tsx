@@ -38,6 +38,7 @@ export default function RegisterPage() {
         });
         console.log("Registration successful:", response.data);
         router.push(`/verify-email?email=${encodeURIComponent(email.toLowerCase())}`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
         console.error("Registration failed:", error);
         

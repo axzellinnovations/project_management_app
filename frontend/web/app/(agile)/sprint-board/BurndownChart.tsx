@@ -19,6 +19,7 @@ type BurndownPoint = {
 };
 
 export default function BurndownChart({ sprintId }: { sprintId: number }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {

@@ -48,6 +48,7 @@ function AcceptInviteContent() {
                 router.push('/dashboard');
             }, 2000);
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
             const serverMsg =
                 err?.response?.data?.message ||
@@ -73,7 +74,7 @@ function AcceptInviteContent() {
                 Project Invitation
             </h1>
             <p className="font-inter text-[16px] text-[#4A5565] mb-8">
-                You've been invited to join a project on Planora. Click below to accept and access your new workspace.
+                You&apos;ve been invited to join a project on Planora. Click below to accept and access your new workspace.
             </p>
 
             {msg && (
