@@ -1,0 +1,10 @@
+commit c3abe5d0036389e0c019d3b1c4b8438c15f23761
+Author: Pushmitha <vpushmitha20@gmail.com>
+Date:   Fri Mar 27 11:30:13 2026 +0530
+
+    backlog changes
+
+backend/src/main/java/com/planora/backend/service/SprintService.java
+frontend/web/app/(agile)/sprint-backlog/components/BacklogCard.tsx
+frontend/web/app/(agile)/sprint-backlog/components/ProductBacklogSection.tsx
+frontend/web/app/(agile)/sprint-backlog/page.tsx

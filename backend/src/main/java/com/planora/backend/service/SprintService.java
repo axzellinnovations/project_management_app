@@ -12,7 +12,6 @@ import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
 import com.planora.backend.repository.TaskRepository;
 import com.planora.backend.model.Task;
-import com.planora.backend.service.SprintboardService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;

@@ -148,11 +148,11 @@ export default function TopBar() {
             case 'timeline':
                 return withProjectId('/summary');
             case 'backlog':
-                return '/sprint-backlog';
+                return withProjectId('/sprint-backlog');
             case 'board':
                 return withProjectId('/kanban');
             case 'calendar':
-                return withProjectId('/summary');
+                return withProjectId('/calendar');
             case 'chats':
                 return projectId ? `/project/${projectId}/chat` : '/summary';
             case 'members':
