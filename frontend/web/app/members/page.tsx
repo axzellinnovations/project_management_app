@@ -79,13 +79,7 @@ export default function MembersPage() {
     currentUserId = currentMember?.user?.userId;
   }
 
-  // Debug logging to help diagnose role dropdown issues
-  useEffect(() => {
-    console.log('currentUser', currentUser);
-    console.log('currentMember', currentMember);
-    console.log('currentUserRole', currentUserRole);
-    console.log('members', members);
-  }, [currentUser, currentMember, currentUserRole, members]);
+
 
   useEffect(() => {
     async function fetchData() {
