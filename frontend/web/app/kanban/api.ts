@@ -9,6 +9,49 @@ export interface TeamMemberOption {
 }
 
 /**
+ * Fetch members directly by project id
+ */
+export async function fetchProjectMembers(projectId: number): Promise<TeamMemberOption[]> {
+  try {
+    const response = await axios.get(`/api/projects/${projectId}/members`);
+    const payload = response.data;
+
+    const rawMembers = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.members)
+        ? payload.members
+        : [];
+
+    return rawMembers
+      .map((member: any) => {
+        const id = Number(member?.userId ?? member?.id ?? member?.user?.userId);
+        const name =
+          member?.fullName ??
+          member?.name ??
+          member?.username ??
+          member?.user?.fullName ??
+          member?.user?.username ??
+          member?.email ??
+          member?.user?.email ??
+          '';
+
+        if (!Number.isFinite(id) || !name) return null;
+
+        return {
+          id,
+          name,
+          role: member?.role,
+          email: member?.email ?? member?.user?.email,
+        };
+      })
+      .filter((member: TeamMemberOption | null): member is TeamMemberOption => member !== null);
+  } catch (error) {
+    console.error('Error fetching project members:', error);
+    throw error;
+  }
+}
+
+/**
  * Fetch all tasks for a specific project
  * @param projectId - The project ID to fetch tasks for
  * @returns Promise with array of tasks

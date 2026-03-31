@@ -5,7 +5,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { X, Calendar, User, Edit2 } from 'lucide-react';
 import { Task } from '../types';
-import { fetchProject, fetchTeamMembers, TeamMemberOption } from '../api';
+import { fetchProjectMembers, TeamMemberOption } from '../api';
 
 interface EditTaskModalProps {
   isOpen: boolean;
@@ -79,13 +79,8 @@ export default function EditTaskModal({
     const loadMembers = async () => {
       setLoadingMembers(true);
       try {
-        const project = await fetchProject(task.projectId || 0);
-        if (project.teamId) {
-          const members = await fetchTeamMembers(project.teamId);
-          setTeamMembers(members || []);
-        } else {
-          setTeamMembers([]);
-        }
+        const members = await fetchProjectMembers(task.projectId || 0);
+        setTeamMembers(members || []);
       } catch (err) {
         console.error('Failed to load team members:', err);
         setTeamMembers([]);
