@@ -79,7 +79,7 @@ export default function SprintBacklogPage() {
           api.get(`/api/tasks/project/${projectId}`),
         ]);
 
-        const rawSprints = sprintsRes.data as { id: number; name: string }[];
+        const rawSprints = sprintsRes.data as { id: number; name: string; status: string; startDate?: string; endDate?: string }[];
         const rawTasks = tasksRes.data as RawTask[];
         const mappedTasks = rawTasks.map((t, i) => mapRawTask(t, i));
 
