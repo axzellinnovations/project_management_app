@@ -170,7 +170,11 @@ function TopBarContent() {
 
     const projectId = useMemo(() => {
         const queryProjectId = searchParams.get('projectId');
-        const routeProjectId = typeof params?.id === 'string' ? params.id : null;
+        const routeProjectId =
+            (typeof params?.id === 'string' ? params.id : null) ||
+            (typeof (params as Record<string, string | string[] | undefined>)?.projectId === 'string'
+                ? ((params as Record<string, string | string[] | undefined>).projectId as string)
+                : null);
 
         return queryProjectId || routeProjectId || storedProjectId;
     }, [params, searchParams, storedProjectId]);
@@ -206,6 +210,10 @@ function TopBarContent() {
 
         if (pathname.startsWith('/summary')) {
             return 'summary';
+        }
+
+        if (pathname.startsWith('/members')) {
+            return 'members';
         }
 
         return 'summary';
@@ -296,6 +304,7 @@ function TopBarContent() {
             '/calendar',
             '/burndown',
             '/pages',
+            '/members',
             '/project/',
         ];
         return projectPaths.some(path => pathname.startsWith(path));

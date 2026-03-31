@@ -38,6 +38,14 @@ interface PendingInvite {
   role: string;
 }
 
+interface AuthUserSummary {
+  userId?: number;
+  username?: string;
+  fullName?: string;
+  email?: string;
+  profilePicUrl?: string | null;
+}
+
 const ROLE_LABELS: Record<string, string> = {
   OWNER: "Owner",
   ADMIN: "Admin",
@@ -60,9 +68,13 @@ const STATUS_COLORS: Record<string, string> = {
 const ROLE_OPTIONS = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
 
 export default function MembersPageClient({ projectId }: { projectId: string }) {
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+
   const [members, setMembers] = useState<Member[]>([]);
   const [pending, setPending] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
+  const [brokenProfileImages, setBrokenProfileImages] = useState<Record<string, boolean>>({});
+  const [userProfilePics, setUserProfilePics] = useState<Record<string, string | null>>({});
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -97,22 +109,75 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchData() {
       setLoading(true);
-      const [membersRes, pendingRes] = await Promise.all([
-        axios.get(`/api/projects/${projectId}/members`),
-        axios.get(`/api/projects/${projectId}/pending-invites`),
-      ]);
-      setMembers(membersRes.data);
-      setPending(pendingRes.data);
-      // Debug: log pending invites to verify role
-      if (pendingRes.data && Array.isArray(pendingRes.data)) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        console.log('Pending invites:', pendingRes.data.map((p: any) => ({ email: p.email, role: p.role })));
+      try {
+        const [membersRes, pendingRes, usersRes] = await Promise.allSettled([
+          axios.get(`/api/projects/${projectId}/members`),
+          axios.get(`/api/projects/${projectId}/pending-invites`),
+          axios.get("/api/auth/users"),
+        ]);
+
+        if (cancelled) return;
+
+        if (membersRes.status === "fulfilled") {
+          setMembers(Array.isArray(membersRes.value.data) ? membersRes.value.data : []);
+        } else {
+          console.error("Failed to fetch members:", membersRes.reason);
+          setMembers([]);
+        }
+
+        if (pendingRes.status === "fulfilled") {
+          setPending(Array.isArray(pendingRes.value.data) ? pendingRes.value.data : []);
+          if (Array.isArray(pendingRes.value.data)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            console.log('Pending invites:', pendingRes.value.data.map((p: any) => ({ email: p.email, role: p.role })));
+          }
+        } else {
+          console.error("Failed to fetch pending invites:", pendingRes.reason);
+          setPending([]);
+        }
+
+        const pics: Record<string, string | null> = {};
+        if (usersRes.status === "fulfilled" && Array.isArray(usersRes.value.data)) {
+          usersRes.value.data.forEach((u: AuthUserSummary) => {
+            const pic = u.profilePicUrl ?? null;
+            if (typeof u.userId === "number") {
+              pics[`id:${u.userId}`] = pic;
+            }
+            if (u.email) {
+              pics[`email:${u.email.toLowerCase()}`] = pic;
+            }
+            if (u.username) {
+              pics[`username:${u.username.toLowerCase()}`] = pic;
+            }
+            if (u.fullName) {
+              pics[`fullname:${u.fullName.toLowerCase()}`] = pic;
+            }
+          });
+        } else if (usersRes.status === "rejected") {
+          console.warn("Profile picture lookup unavailable:", usersRes.reason);
+        }
+
+        setUserProfilePics(pics);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
+    }
+
+    if (projectId) {
+      void fetchData();
+    } else {
       setLoading(false);
     }
-    if (projectId) fetchData();
+
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
 
   const allMembers = useMemo(() => [
@@ -210,6 +275,47 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
       return ["MEMBER", "VIEWER"];
     }
     return ROLE_OPTIONS;
+  };
+
+  const resolveProfilePicUrl = (profilePicUrl?: string) => {
+    if (!profilePicUrl) return "";
+    if (
+      profilePicUrl.startsWith("http://") ||
+      profilePicUrl.startsWith("https://") ||
+      profilePicUrl.startsWith("data:") ||
+      profilePicUrl.startsWith("blob:")
+    ) {
+      return profilePicUrl;
+    }
+    return `${API_BASE_URL}${profilePicUrl.startsWith("/") ? "" : "/"}${profilePicUrl}`;
+  };
+
+  const getMemberProfilePicCandidates = (member: Member) => {
+    const candidates: string[] = [];
+    const add = (value?: string | null) => {
+      if (value && !candidates.includes(value)) {
+        candidates.push(value);
+      }
+    };
+
+    // Match chat/task behavior first: rely on auth users profile picture map.
+    if (typeof member.user.userId === "number") {
+      add(userProfilePics[`id:${member.user.userId}`]);
+    }
+    if (member.user.email) {
+      add(userProfilePics[`email:${member.user.email.toLowerCase()}`]);
+    }
+    if (member.user.username) {
+      add(userProfilePics[`username:${member.user.username.toLowerCase()}`]);
+    }
+    if (member.user.fullName) {
+      add(userProfilePics[`fullname:${member.user.fullName.toLowerCase()}`]);
+    }
+
+    // Fallback to member payload URL if present.
+    add(member.user.profilePicUrl);
+
+    return candidates;
   };
 
   const handleRoleChange = async (userId: number, newRole: string) => {
@@ -433,11 +539,25 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
             </tr>
           </thead>
           <tbody>
-            {filteredMembers.map((m, idx) => (
+            {filteredMembers.map((m) => {
+              const avatarKey = `${m.id}-${m.user.email}`;
+              const resolvedCandidates = getMemberProfilePicCandidates(m)
+                .map((url) => resolveProfilePicUrl(url))
+                .filter(Boolean);
+              const resolvedProfilePicUrl = resolvedCandidates.find(
+                (url) => !brokenProfileImages[`${avatarKey}:${url}`]
+              ) || "";
+
+              return (
               <tr key={m.id + m.user.email} className="border-b hover:bg-gray-50">
                 <td className="px-6 py-3 flex items-center gap-3">
-                  {m.user.profilePicUrl ? (
-                    <img src={m.user.profilePicUrl} alt={m.user.fullName} className="w-9 h-9 rounded-full" />
+                  {resolvedProfilePicUrl && !brokenProfileImages[avatarKey] ? (
+                    <img
+                      src={resolvedProfilePicUrl}
+                      alt={m.user.fullName || m.user.email}
+                      className="w-9 h-9 rounded-full object-cover"
+                      onError={() => setBrokenProfileImages(prev => ({ ...prev, [`${avatarKey}:${resolvedProfilePicUrl}`]: true }))}
+                    />
                   ) : (
                     <div className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-base">
                       {m.user.fullName ? m.user.fullName.split(" ").map(n => n[0]).join("") : m.user.email[0]?.toUpperCase()}
@@ -508,7 +628,8 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
                   )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {filteredMembers.length === 0 && (
               <tr>
                 <td colSpan={6} className="text-center py-8 text-gray-400">No members found.</td>

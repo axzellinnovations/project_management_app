@@ -1,5 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
+// Helper to get initials
+function getInitials(name: string, email: string) {
+  if (name) return name.split(" ").map(n => n[0]).join("").toUpperCase();
+  return email[0]?.toUpperCase() || "?";
+}
 import axios from "@/lib/axios";
 import { useParams } from "next/navigation";
 import { getUserFromToken } from "@/lib/auth";
@@ -27,15 +32,41 @@ interface PendingInvite {
   status: string;
 }
 
+interface AuthUserSummary {
+  userId?: number;
+  username?: string;
+  fullName?: string;
+  email?: string;
+  profilePicUrl?: string | null;
+}
+
 const ROLE_OPTIONS = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
 
 
 export default function MembersPage() {
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+
+  // Track which member images failed to load
+  const [imgError, setImgError] = useState<Record<string, boolean>>({});
+
+  const resolveProfilePicUrl = (profilePicUrl?: string) => {
+    if (!profilePicUrl) return "";
+    if (
+      profilePicUrl.startsWith("http://") ||
+      profilePicUrl.startsWith("https://") ||
+      profilePicUrl.startsWith("data:") ||
+      profilePicUrl.startsWith("blob:")
+    ) {
+      return profilePicUrl;
+    }
+    return `${API_BASE_URL}${profilePicUrl.startsWith("/") ? "" : "/"}${profilePicUrl}`;
+  };
 
   const params = useParams();
   const projectId = Number((params as any).projectId ?? (params as any).id ?? "0");
   const [members, setMembers] = useState<Member[]>([]);
   const [pending, setPending] = useState<PendingInvite[]>([]);
+  const [userProfilePics, setUserProfilePics] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -82,18 +113,98 @@ export default function MembersPage() {
 
 
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchData() {
       setLoading(true);
-      const [membersRes, pendingRes] = await Promise.all([
-        axios.get(`/api/projects/${projectId}/members`),
-        axios.get(`/api/projects/${projectId}/pending-invites`),
-      ]);
-      setMembers(membersRes.data);
-      setPending(pendingRes.data);
+      try {
+        const [membersRes, pendingRes, usersRes] = await Promise.allSettled([
+          axios.get(`/api/projects/${projectId}/members`),
+          axios.get(`/api/projects/${projectId}/pending-invites`),
+          axios.get("/api/auth/users"),
+        ]);
+
+        if (cancelled) return;
+
+        if (membersRes.status === "fulfilled") {
+          setMembers(Array.isArray(membersRes.value.data) ? membersRes.value.data : []);
+        } else {
+          console.error("Failed to fetch members:", membersRes.reason);
+          setMembers([]);
+        }
+
+        if (pendingRes.status === "fulfilled") {
+          setPending(Array.isArray(pendingRes.value.data) ? pendingRes.value.data : []);
+        } else {
+          console.error("Failed to fetch pending invites:", pendingRes.reason);
+          setPending([]);
+        }
+
+        const pics: Record<string, string | null> = {};
+        if (usersRes.status === "fulfilled" && Array.isArray(usersRes.value.data)) {
+          usersRes.value.data.forEach((u: AuthUserSummary) => {
+            const pic = u.profilePicUrl ?? null;
+            if (typeof u.userId === "number") {
+              pics[`id:${u.userId}`] = pic;
+            }
+            if (u.email) {
+              pics[`email:${u.email.toLowerCase()}`] = pic;
+            }
+            if (u.username) {
+              pics[`username:${u.username.toLowerCase()}`] = pic;
+            }
+            if (u.fullName) {
+              pics[`fullname:${u.fullName.toLowerCase()}`] = pic;
+            }
+          });
+        } else if (usersRes.status === "rejected") {
+          // /api/auth/users may be forbidden for some roles; keep page usable.
+          console.warn("Profile picture lookup unavailable:", usersRes.reason);
+        }
+
+        setUserProfilePics(pics);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    if (projectId) {
+      void fetchData();
+    } else {
       setLoading(false);
     }
-    fetchData();
+
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
+
+  const getMemberProfilePicCandidates = (member: Member) => {
+    const candidates: string[] = [];
+    const add = (value?: string | null) => {
+      if (value && !candidates.includes(value)) {
+        candidates.push(value);
+      }
+    };
+
+    if (typeof member.user.userId === "number") {
+      add(userProfilePics[`id:${member.user.userId}`]);
+    }
+    if (member.user.email) {
+      add(userProfilePics[`email:${member.user.email.toLowerCase()}`]);
+    }
+    if (member.user.username) {
+      add(userProfilePics[`username:${member.user.username.toLowerCase()}`]);
+    }
+    if (member.user.fullName) {
+      add(userProfilePics[`fullname:${member.user.fullName.toLowerCase()}`]);
+    }
+
+    add(member.user.profilePicUrl);
+    return candidates;
+  };
   // Permission logic for showing role dropdown
   function canChangeRole(target: Member): boolean {
     // If current user is detected as OWNER or ADMIN by email or userId, allow dropdown for all except self
@@ -145,6 +256,20 @@ export default function MembersPage() {
     setInviteLoading(true);
     setInviteError("");
     setInviteSuccess("");
+    // Check if email is already a member or pending
+    const emailLower = inviteEmail.trim().toLowerCase();
+    const alreadyMember = members.some(m => m.user.email?.toLowerCase() === emailLower);
+    const alreadyPending = pending.some(p => p.email?.toLowerCase() === emailLower);
+    if (alreadyMember) {
+      setInviteError("This user is already a member of the project.");
+      setInviteLoading(false);
+      return;
+    }
+    if (alreadyPending) {
+      setInviteError("An invitation has already been sent to this email.");
+      setInviteLoading(false);
+      return;
+    }
     try {
       await axios.post(`/api/projects/${projectId}/invitations`, {
         email: inviteEmail,
@@ -170,14 +295,28 @@ export default function MembersPage() {
     <div className="p-8 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Team Members</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {members.map((m) => (
+        {members.map((m) => {
+          const avatarKey = `${m.id}-${m.user.email}`;
+          const resolvedCandidates = getMemberProfilePicCandidates(m)
+            .map((url) => resolveProfilePicUrl(url))
+            .filter(Boolean);
+          const resolvedProfilePicUrl = resolvedCandidates.find(
+            (url) => !imgError[`${avatarKey}:${url}`]
+          ) || "";
+
+          return (
           <div key={m.id} className="bg-white rounded-lg shadow p-4 flex flex-col gap-2 border">
             <div className="flex items-center gap-4">
-              {m.user.profilePicUrl ? (
-                <img src={m.user.profilePicUrl} alt={m.user.fullName} className="w-12 h-12 rounded-full" />
+              {resolvedProfilePicUrl ? (
+                <img
+                  src={resolvedProfilePicUrl}
+                  alt={m.user.fullName}
+                  className="w-12 h-12 rounded-full object-cover"
+                  onError={() => setImgError(errs => ({ ...errs, [`${avatarKey}:${resolvedProfilePicUrl}`]: true }))}
+                />
               ) : (
                 <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-lg">
-                  {m.user.fullName ? m.user.fullName.split(" ").map(n => n[0]).join("") : m.user.email[0]}
+                  {getInitials(m.user.fullName, m.user.email)}
                 </div>
               )}
               <div>
@@ -213,7 +352,8 @@ export default function MembersPage() {
               <div className="font-semibold text-blue-700">{m.taskCount}</div>
             </div>
           </div>
-        ))}
+          );
+        })}
         {pending.map((p) => (
           <div key={"pending-" + p.id} className="bg-yellow-50 rounded-lg shadow p-4 flex flex-col gap-2 border border-yellow-200">
             <div className="flex items-center gap-4">

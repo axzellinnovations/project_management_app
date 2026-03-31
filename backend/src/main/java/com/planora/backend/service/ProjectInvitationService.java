@@ -56,9 +56,19 @@ public class ProjectInvitationService {
         // Allow TEAM OWNER and ADMIN to invite
         teamMemberService.validateOwnerOrAdmin(teamId, inviterUserId);
 
-        // If already invited and not expired -> block
+
+        // Block if user is already a member
+        userRepository.findByEmailIgnoreCase(inviteeEmail).ifPresent(existingUser -> {
+            teamMemberRepository.findByTeamIdAndUserUserId(teamId, existingUser.getUserId())
+                .ifPresent(member -> {
+                    throw new RuntimeException("This user is already a member of the project.");
+                });
+        });
+
+        // Block if already invited and not expired (pending)
         teamInvitationRepository.findByTeamIdAndEmail(teamId, inviteeEmail).ifPresent(existing -> {
-            if (existing.getExpiresAt() == null || existing.getExpiresAt().isAfter(LocalDateTime.now())) {
+            if ((existing.getStatus() == null || existing.getStatus().equalsIgnoreCase("PENDING")) &&
+                (existing.getExpiresAt() == null || existing.getExpiresAt().isAfter(LocalDateTime.now()))) {
                 throw new RuntimeException("Invitation already sent to this email");
             }
         });

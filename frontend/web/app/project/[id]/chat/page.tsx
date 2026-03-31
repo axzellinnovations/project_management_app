@@ -199,7 +199,7 @@ export default function ChatInterface() {
   /* ── Loading skeleton ── */
   if (isLoading) {
     return (
-      <div className="flex bg-[#F7F8FA] h-[calc(100vh-48px)]">
+      <div className="flex bg-[#F7F8FA] h-full min-h-0">
         {/* Sidebar skeleton */}
         <div className="w-72 h-full bg-white border-r border-gray-100 flex flex-col">
           <div className="px-4 pt-5 pb-3 border-b border-gray-100">
@@ -246,7 +246,7 @@ export default function ChatInterface() {
   }
 
   return (
-    <div className="flex bg-[#F7F8FA] overflow-hidden h-[calc(100vh-48px)]">
+    <div className="flex bg-[#F7F8FA] overflow-hidden h-full min-h-0">
 
       {/* ── Sidebar ── */}
       <ChatSidebar
