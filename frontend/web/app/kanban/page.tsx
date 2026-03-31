@@ -12,7 +12,7 @@ import Sidebar from '../nav/Sidebar';
 import TopBar from '../nav/TopBar';
 // removed DateRangeFilter import per requirements
 import { Task, KanbanColumn as KanbanColumnType } from './types';
-import { fetchTasksByProject, updateTaskStatus, deleteTask, createTask, updateTask, fetchProject, fetchTeamMembers, TeamMemberOption } from './api';
+import { fetchTasksByProject, updateTaskStatus, deleteTask, createTask, updateTask, fetchProjectMembers, TeamMemberOption } from './api';
 import { AlertCircle, Loader, CheckCircle2, Plus } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -165,13 +165,7 @@ export default function KanbanPage() {
 
     const loadTeamMembers = async () => {
       try {
-        const project = await fetchProject(parseInt(projectId, 10));
-        if (!project?.teamId) {
-          setTeamMembers([]);
-          return;
-        }
-
-        const members = await fetchTeamMembers(project.teamId);
+        const members = await fetchProjectMembers(parseInt(projectId, 10));
         setTeamMembers(members);
       } catch (err) {
         console.error('Failed to load team members:', err);
