@@ -10,6 +10,9 @@ import {
   Check,
   Trash2,
   UserPlus,
+  Rocket,
+  X,
+  Clock,
 } from 'lucide-react';
 import type { SprintItem } from '../page';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
@@ -60,6 +63,13 @@ interface LocalSprintTask {
   subtasks: string;
 }
 
+const DURATION_PRESETS = [
+  { label: '1 Week', days: 7 },
+  { label: '2 Weeks', days: 14 },
+  { label: '3 Weeks', days: 21 },
+  { label: '1 Month', days: 30 },
+];
+
 export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTask, onDeleteTask }: BacklogCardProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
@@ -72,6 +82,14 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
   const [statusMenuTaskId, setStatusMenuTaskId] = useState<number | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMemberInfo[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+
+  // Start Sprint Modal state
+  const [showStartSprintModal, setShowStartSprintModal] = useState(false);
+  const [selectedDuration, setSelectedDuration] = useState<number>(14);
+  const [customDuration, setCustomDuration] = useState<string>('');
+  const [useCustomDuration, setUseCustomDuration] = useState(false);
+  const [startingSprintLoading, setStartingSprintLoading] = useState(false);
+  const [startSprintError, setStartSprintError] = useState<string>('');
 
   const sprintMenuRef = useRef<HTMLDivElement | null>(null);
   const assignMenuRef = useRef<HTMLDivElement | null>(null);
@@ -244,15 +262,41 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
     setShowSprintMenu(false);
   };
 
-  const handleStartSprint = async () => {
-    const durationStr = window.prompt('Enter sprint duration in days (e.g., 14):', '14');
-    if (!durationStr) return;
+  const handleStartSprint = () => {
+    setSelectedDuration(14);
+    setCustomDuration('');
+    setUseCustomDuration(false);
+    setStartSprintError('');
+    setShowStartSprintModal(true);
+    setShowSprintMenu(false);
+  };
 
-    const duration = parseInt(durationStr);
-    if (isNaN(duration) || duration <= 0) {
-      alert('Invalid duration.');
+  const getEffectiveDuration = () => {
+    if (useCustomDuration) {
+      const val = parseInt(customDuration);
+      return isNaN(val) || val <= 0 ? 0 : val;
+    }
+    return selectedDuration;
+  };
+
+  const getPreviewDates = () => {
+    const duration = getEffectiveDuration();
+    const start = new Date();
+    const end = new Date();
+    end.setDate(start.getDate() + duration);
+    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return { start: fmt(start), end: fmt(end) };
+  };
+
+  const confirmStartSprint = async () => {
+    const duration = getEffectiveDuration();
+    if (!duration || duration <= 0) {
+      setStartSprintError('Please enter a valid duration greater than 0.');
       return;
     }
+
+    setStartingSprintLoading(true);
+    setStartSprintError('');
 
     const startDate = new Date();
     const endDate = new Date();
@@ -263,10 +307,13 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
         startDate: startDate.toISOString().split('T')[0],
         endDate: endDate.toISOString().split('T')[0],
       });
-      window.location.reload(); // Refresh to reflect status change
+      setShowStartSprintModal(false);
+      window.location.reload();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
-      alert(error.response?.data?.message || 'Failed to start sprint.');
+      setStartSprintError(error.response?.data?.message || 'Failed to start sprint. Please try again.');
+    } finally {
+      setStartingSprintLoading(false);
     }
   };
 
@@ -738,6 +785,166 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
         taskId={selectedTaskId}
         onClose={() => setSelectedTaskId(null)}
       />
+    )}
+
+    {/* ── Start Sprint Modal ── */}
+    {showStartSprintModal && (
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center"
+        style={{ backgroundColor: 'rgba(16, 24, 40, 0.55)', backdropFilter: 'blur(4px)' }}
+        onClick={(e) => { if (e.target === e.currentTarget) setShowStartSprintModal(false); }}
+      >
+        <div
+          className="relative w-full max-w-md mx-4 rounded-2xl border border-[#E4E7EC] bg-white shadow-2xl"
+          style={{ animation: 'modalSlideIn 0.22s cubic-bezier(0.34,1.56,0.64,1) both' }}
+        >
+          {/* Header */}
+          <div className="flex items-start justify-between p-6 border-b border-[#F2F4F7]">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#175CD3] to-[#2E90FA] shadow-md">
+                <Rocket size={20} className="text-white" />
+              </div>
+              <div>
+                <h2 className="text-[16px] font-bold text-[#101828] leading-tight">Start Sprint</h2>
+                <p className="text-[13px] text-[#667085] mt-0.5">{sprint.name}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowStartSprintModal(false)}
+              className="rounded-lg p-1.5 text-[#98A2B3] hover:text-[#344054] hover:bg-[#F2F4F7] transition-all duration-150"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="p-6 space-y-5">
+            {/* Description */}
+            <p className="text-[13.5px] text-[#475467] leading-relaxed">
+              Set the sprint duration. The sprint will start today and end based on your selection.
+            </p>
+
+            {/* Preset chips */}
+            <div>
+              <label className="block text-[12px] font-semibold text-[#344054] uppercase tracking-wider mb-2.5">
+                Quick Select
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {DURATION_PRESETS.map((preset) => (
+                  <button
+                    key={preset.days}
+                    type="button"
+                    onClick={() => { setSelectedDuration(preset.days); setUseCustomDuration(false); setStartSprintError(''); }}
+                    className={`rounded-lg border px-2 py-2.5 text-[12.5px] font-semibold transition-all duration-150 ${
+                      !useCustomDuration && selectedDuration === preset.days
+                        ? 'border-[#175CD3] bg-[#EFF8FF] text-[#175CD3] shadow-sm ring-1 ring-[#175CD3]/30'
+                        : 'border-[#D0D5DD] bg-white text-[#344054] hover:border-[#98A2B3] hover:bg-[#F9FAFB]'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom duration */}
+            <div>
+              <label className="block text-[12px] font-semibold text-[#344054] uppercase tracking-wider mb-2">
+                Custom Duration
+              </label>
+              <div className="relative flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Clock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    placeholder="Enter days..."
+                    value={customDuration}
+                    onChange={(e) => {
+                      setCustomDuration(e.target.value);
+                      setUseCustomDuration(true);
+                      setStartSprintError('');
+                    }}
+                    onFocus={() => setUseCustomDuration(true)}
+                    className={`w-full rounded-lg border pl-9 pr-14 py-2.5 text-[14px] text-[#101828] outline-none transition-all duration-150 ${
+                      useCustomDuration
+                        ? 'border-[#175CD3] ring-2 ring-[#175CD3]/20'
+                        : 'border-[#D0D5DD] hover:border-[#98A2B3]'
+                    }`}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#98A2B3] font-medium">days</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Date preview */}
+            {(() => {
+              const duration = getEffectiveDuration();
+              if (duration > 0) {
+                const { start, end } = getPreviewDates();
+                return (
+                  <div className="flex items-center gap-3 rounded-xl border border-[#E4E7EC] bg-[#F8F9FB] px-4 py-3">
+                    <CalendarDays size={16} className="text-[#667085] flex-shrink-0" />
+                    <div className="text-[13px] text-[#475467]">
+                      <span className="font-semibold text-[#101828]">{start}</span>
+                      <span className="mx-1.5 text-[#98A2B3]">→</span>
+                      <span className="font-semibold text-[#101828]">{end}</span>
+                      <span className="ml-2 text-[#667085]">({duration} {duration === 1 ? 'day' : 'days'})</span>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
+            {/* Error */}
+            {startSprintError && (
+              <div className="flex items-start gap-2.5 rounded-lg border border-[#FDA29B] bg-[#FEF3F2] px-3.5 py-3">
+                <span className="mt-0.5 shrink-0 text-[#D92D20]">⚠</span>
+                <p className="text-[13px] text-[#B42318] leading-snug">{startSprintError}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-2.5 border-t border-[#F2F4F7] px-6 py-4">
+            <button
+              type="button"
+              onClick={() => setShowStartSprintModal(false)}
+              disabled={startingSprintLoading}
+              className="rounded-lg border border-[#D0D5DD] bg-white px-4 py-2.5 text-[13.5px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-all duration-150 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmStartSprint}
+              disabled={startingSprintLoading || getEffectiveDuration() <= 0}
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#175CD3] to-[#2E90FA] px-5 py-2.5 text-[13.5px] font-semibold text-white shadow-sm hover:from-[#1849A9] hover:to-[#1570EF] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {startingSprintLoading ? (
+                <>
+                  <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                <>
+                  <Rocket size={15} />
+                  Start Sprint
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <style>{`
+          @keyframes modalSlideIn {
+            from { opacity: 0; transform: scale(0.92) translateY(12px); }
+            to   { opacity: 1; transform: scale(1)   translateY(0); }
+          }
+        `}</style>
+      </div>
     )}
   </>
   );
