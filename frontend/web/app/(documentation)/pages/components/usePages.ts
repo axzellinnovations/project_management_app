@@ -58,6 +58,7 @@ export function usePages(projectId: string | number | null): UsePagesReturn {
         isStarred: false, // TODO: sync with backend when implemented
       }));
       setPages(pagesData);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const message = err.response?.data?.message || 'Failed to fetch pages';
       setError(message);
@@ -105,6 +106,7 @@ export function usePages(projectId: string | number | null): UsePagesReturn {
       };
       setPages((prev) => [...prev, newPage]);
       return newPage;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const message = err.response?.data?.message || 'Failed to create page';
       setError(message);
@@ -128,6 +130,7 @@ export function usePages(projectId: string | number | null): UsePagesReturn {
       };
       setPages((prev) => prev.map((p) => (p.id === pageId ? updatedPage : p)));
       return updatedPage;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const message = err.response?.data?.message || 'Failed to update page';
       setError(message);
@@ -140,6 +143,7 @@ export function usePages(projectId: string | number | null): UsePagesReturn {
     try {
       await axiosInstance.delete(`/api/pages/${pageId}`);
       setPages((prev) => prev.filter((p) => p.id !== pageId));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const message = err.response?.data?.message || 'Failed to delete page';
       setError(message);

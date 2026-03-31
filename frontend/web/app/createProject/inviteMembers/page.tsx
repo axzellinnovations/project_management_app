@@ -70,6 +70,7 @@ export default function InviteMembersPage() {
 
             setMsg({ type: 'success', text: 'Invitation email sent successfully.' });
             setEmail('');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
             const serverMsg =
                 err?.response?.data?.message ||

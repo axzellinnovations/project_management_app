@@ -80,6 +80,7 @@ export async function deleteTask(taskId: number): Promise<void> {
  * @param taskData - Object with task details (title, description, status, etc.)
  * @returns Promise with newly created task
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function createTask(taskData: any): Promise<Task> {
   try {
     // Validate required fields
@@ -111,6 +112,7 @@ export async function createTask(taskData: any): Promise<Task> {
     return response.data;
   } catch (error) {
     console.error('Error creating task:', error);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const axiosError = error as any;
     
     // Provide more detailed error messages
@@ -134,6 +136,7 @@ export async function createTask(taskData: any): Promise<Task> {
 /**
  * Fetch project details by ID
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function fetchProject(projectId: number): Promise<any> {
   try {
     const response = await axios.get(`/api/projects/${projectId}`);
@@ -164,6 +167,7 @@ export async function fetchTeamMembers(teamId: number): Promise<TeamMemberOption
             : [];
 
     return rawMembers
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((member: any) => {
         const id = Number(member?.id);
         const name =

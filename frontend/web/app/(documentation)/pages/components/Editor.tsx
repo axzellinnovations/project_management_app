@@ -61,12 +61,15 @@ function Divider() {
 export default function Editor({ content, onUpdate, editable = true }: EditorProps) {
   const [isMounted, setIsMounted] = useState(false);
 
-  const handleUpdate = useMemo(
+  const handleUpdate = React.useMemo(
     () => debounce((html: string) => { onUpdate(html); }, 800),
     [onUpdate]
   );
 
-  useEffect(() => { setIsMounted(true); }, []);
+  useEffect(() => { 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsMounted(true); 
+  }, []);
 
   const editor = useEditor({
     immediatelyRender: false,
