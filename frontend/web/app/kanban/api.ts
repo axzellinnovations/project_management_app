@@ -8,6 +8,31 @@ export interface TeamMemberOption {
   email?: string;
 }
 
+interface ApiErrorShape {
+  response?: {
+    status?: number;
+    data?: {
+      message?: string;
+    };
+  };
+}
+
+interface RawTeamMember {
+  id?: number | string;
+  userId?: number | string;
+  name?: string;
+  fullName?: string;
+  username?: string;
+  email?: string;
+  role?: string;
+  user?: {
+    userId?: number | string;
+    username?: string;
+    fullName?: string;
+    email?: string;
+  };
+}
+
 /**
  * Fetch members directly by project id
  */
@@ -23,8 +48,8 @@ export async function fetchProjectMembers(projectId: number): Promise<TeamMember
         : [];
 
     return rawMembers
-      .map((member: any) => {
-        const id = Number(member?.userId ?? member?.id ?? member?.user?.userId);
+      .map((member: RawTeamMember) => {
+        const id = Number(member?.user?.userId ?? member?.userId ?? member?.id);
         const name =
           member?.fullName ??
           member?.name ??
@@ -62,8 +87,8 @@ export async function fetchTasksByProject(projectId: number): Promise<Task[]> {
     return response.data || [];
   } catch (error) {
     console.error('Error fetching tasks:', error);
-    const axiosError = error as any;
-    
+    const axiosError = error as ApiErrorShape;
+
     // Handle network errors
     if (!axiosError.response) {
       throw new Error('Network error. Please check if the server is running and try again.');
@@ -179,9 +204,8 @@ export async function createTask(taskData: any): Promise<Task> {
     return response.data;
   } catch (error) {
     console.error('Error creating task:', error);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const axiosError = error as any;
-    
+    const axiosError = error as ApiErrorShape;
+
     // Provide more detailed error messages
     let errorMessage = 'Failed to create task';
     if (axiosError.response?.data?.message) {
@@ -203,14 +227,13 @@ export async function createTask(taskData: any): Promise<Task> {
 /**
  * Fetch project details by ID
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function fetchProject(projectId: number): Promise<any> {
+export async function fetchProject(projectId: number): Promise<Record<string, unknown>> {
   try {
     const response = await axios.get(`/api/projects/${projectId}`);
     return response.data;
   } catch (error) {
     console.error('Error fetching project:', error);
-    const axiosError = error as any;
+    const axiosError = error as ApiErrorShape;
     
     // Handle network errors
     if (!axiosError.response) {
@@ -257,8 +280,7 @@ export async function fetchTeamMembers(teamId: number): Promise<TeamMemberOption
             : [];
 
     return rawMembers
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((member: any) => {
+      .map((member: RawTeamMember) => {
         const id = Number(member?.user?.userId ?? member?.userId ?? member?.id);
         const name =
           member?.name ??
@@ -280,8 +302,8 @@ export async function fetchTeamMembers(teamId: number): Promise<TeamMemberOption
       .filter((member: TeamMemberOption | null): member is TeamMemberOption => member !== null);
   } catch (error) {
     console.error('Error fetching team members:', error);
-    const axiosError = error as any;
-    
+    const axiosError = error as ApiErrorShape;
+
     // Handle network errors
     if (!axiosError.response) {
       throw new Error('Network error. Please check if the server is running and try again.');

@@ -51,13 +51,13 @@ public class ProjectInvitationService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
 
+        if (project.getTeam() == null || project.getTeam().getId() == null) {
+            throw new RuntimeException("Project team not found");
+        }
+
         Long teamId = project.getTeam().getId();
 
-<<<<<<< HEAD
-        // Allow TEAM OWNER and ADMIN to invite
-=======
         // TEAM OWNER or ADMIN can invite
->>>>>>> ddf0232 (fixed error:create task)
         teamMemberService.validateOwnerOrAdmin(teamId, inviterUserId);
 
         // If already invited and not expired -> block

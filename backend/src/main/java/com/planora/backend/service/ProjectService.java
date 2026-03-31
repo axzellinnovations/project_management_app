@@ -15,11 +15,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-<<<<<<< HEAD
 import java.time.LocalDateTime;
-=======
-import java.util.LinkedHashSet;
->>>>>>> ddf0232 (fixed error:create task)
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -109,7 +105,6 @@ public class ProjectService {
         return convertToResponseDTO(savedProject, dto.getOwnerId());
     }
 
-<<<<<<< HEAD
     // ---------------- READ ALL (FOR AUTH USER) ----------------
     public List<ProjectResponseDTO> getProjectsForUser(Long userId) {
         List<Team> userTeams = teamMemberRepository.findByUserUserId(userId)
@@ -232,25 +227,12 @@ public class ProjectService {
         return projectRepository.findAll()
                 .stream()
                 .map(p -> convertToResponseDTO(p, null))
-=======
-    // ---------------- READ ALL ----------------
-    public List<ProjectResponseDTO> getAllProjects(Long currentUserId) {
-        Set<Long> projectIds = new LinkedHashSet<>();
-
-        teamMemberRepository.findByUserUserId(currentUserId)
-                .forEach(member -> member.getTeam().getProjects().forEach(project -> projectIds.add(project.getId())));
-
-        return projectIds.stream()
-                .map(this::findProjectById)
-                .map(this::convertToResponseDTO)
->>>>>>> ddf0232 (fixed error:create task)
                 .collect(Collectors.toList());
     }
 
     // ---------------- READ BY ID ----------------
     public ProjectResponseDTO getProjectById(Long id, Long currentUserId) {
         Project project = findProjectById(id);
-<<<<<<< HEAD
         return convertToResponseDTO(project, null);
     }
 
@@ -258,10 +240,6 @@ public class ProjectService {
     public ProjectResponseDTO getProjectByIdForUser(Long id, Long userId) {
         Project project = findProjectById(id);
         return convertToResponseDTO(project, userId);
-=======
-        validateMembership(project.getTeam().getId(), currentUserId);
-        return convertToResponseDTO(project);
->>>>>>> ddf0232 (fixed error:create task)
     }
 
     // ---------------- UPDATE ----------------

@@ -11,28 +11,13 @@ import com.planora.backend.model.User;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.TeamRepository;
 import com.planora.backend.repository.UserRepository;
-<<<<<<< HEAD
-=======
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
->>>>>>> ddf0232 (fixed error:create task)
-
-import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 public class TeamMemberService {
-        // =====================================================
-        // HELPER : VALIDATE OWNER OR ADMIN (STRICT)
-        // =====================================================
-        public TeamMember validateOwnerOrAdmin(Long teamId, Long userId) {
-                TeamMember member = validateMembership(teamId, userId);
-                if (member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN) {
-                        throw new RuntimeException("Only TEAM OWNER or ADMIN can perform this action");
-                }
-                return member;
-        }
 
         private final TeamMemberRepository teamMemberRepository;
         private final TeamRepository teamRepository;

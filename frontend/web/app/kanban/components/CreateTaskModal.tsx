@@ -46,7 +46,6 @@ export default function CreateTaskModal({
 
     const todayIso = new Date().toISOString().split('T')[0];
 
-<<<<<<< HEAD
     const taskData: Partial<Task> = {
       title: title.trim(),
       status: columnStatus,
@@ -55,16 +54,6 @@ export default function CreateTaskModal({
       dueDate: dueDate ? dueDate.toISOString().split('T')[0] : todayIso,
       assigneeId: assignee || undefined,
     };
-=======
-        const taskData: Partial<Task> = {
-          title: title.trim(),
-          status: columnStatus,
-          projectId,
-          startDate: todayIso,
-          dueDate: dueDate ? dueDate.toISOString().split('T')[0] : todayIso,
-          assigneeId: assignee || undefined,
-        };
->>>>>>> f64fa7e (updated backlog for kanban)
 
         try {
           await onCreateTask(taskData);

@@ -40,18 +40,9 @@ public class ProjectController {
 
     // ---------------- READ PROJECTS (FOR AUTH USER) ----------------
     @GetMapping
-<<<<<<< HEAD
-    public ResponseEntity<List<ProjectResponseDTO>> getProjectsForUser(
+    public ResponseEntity<List<ProjectResponseDTO>> getProjects(
             @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
-        return new ResponseEntity<>(
-                projectService.getProjectsForUser(principal.getUserId()),
-=======
-    public ResponseEntity<List<ProjectResponseDTO>> getAllProjects(
-            @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
-        return new ResponseEntity<>(
-                projectService.getAllProjects(principal.getUserId()),
->>>>>>> ddf0232 (fixed error:create task)
-                HttpStatus.OK);
+        return ResponseEntity.ok(projectService.getProjectsForUser(principal.getUserId()));
     }
 
     // ---------------- READ RECENT (FOR AUTH USER) ----------------
@@ -74,14 +65,8 @@ public class ProjectController {
     public ResponseEntity<ProjectResponseDTO> getProjectById(
             @PathVariable Long projectId,
             @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
-<<<<<<< HEAD
         return ResponseEntity.ok(
                 projectService.getProjectByIdForUser(projectId, principal.getUserId()));
-=======
-        return new ResponseEntity<>(
-                projectService.getProjectById(projectId, principal.getUserId()),
-                HttpStatus.OK);
->>>>>>> ddf0232 (fixed error:create task)
     }
 
     // ---------------- UPDATE PROJECT ----------------
