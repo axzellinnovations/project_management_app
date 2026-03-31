@@ -2,7 +2,6 @@ package com.planora.backend.service;
 
 import java.util.List;
 
-import org.springframework.stereotype.Service;
 
 import com.planora.backend.model.Team;
 import com.planora.backend.model.TeamMember;
