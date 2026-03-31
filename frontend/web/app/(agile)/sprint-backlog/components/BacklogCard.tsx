@@ -9,6 +9,7 @@ import {
   Pencil,
   Check,
   Trash2,
+  UserPlus,
 } from 'lucide-react';
 import type { SprintItem } from '../page';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
@@ -51,6 +52,7 @@ interface LocalSprintTask {
   storyPoints: number;
   selected: boolean;
   assigneeName?: string;
+  assigneePhotoUrl?: string | null;
   status: SprintStatus;
   startDate: string;
   endDate: string;
@@ -68,6 +70,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
   const [renamingTaskId, setRenamingTaskId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [assignMenuTaskId, setAssignMenuTaskId] = useState<number | null>(null);
+  const [statusMenuTaskId, setStatusMenuTaskId] = useState<number | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMemberInfo[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
@@ -114,6 +117,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
           storyPoints: existing?.storyPoints ?? task.storyPoints,
           selected: task.selected, 
           assigneeName: existing?.assigneeName ?? task.assigneeName ?? 'Unassigned',
+          assigneePhotoUrl: existing?.assigneePhotoUrl ?? task.assigneePhotoUrl ?? null,
           status: existing?.status ?? (task.status as SprintStatus) ?? 'TODO',       
           startDate: existing?.startDate ?? task.startDate ?? '',  
           endDate: existing?.endDate ?? task.dueDate ?? '',   
@@ -241,13 +245,48 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
     setShowSprintMenu(false);
   };
 
-  const handleCompleteSprint = () => {
-    alert(`Complete ${sprint.name}`);
+  const handleCompleteSprint = async () => {
+    if (window.confirm(`Are you sure you want to complete ${sprint.name}?`)) {
+      try {
+        await api.put(`/api/sprints/${sprint.id}`, { status: 'COMPLETED' });
+        window.location.reload();
+      } catch (err: any) {
+        alert(err.response?.data?.message || 'Failed to complete sprint.');
+      }
+    }
     setShowSprintMenu(false);
   };
 
+  const handleStartSprint = async () => {
+    const durationStr = window.prompt('Enter sprint duration in days (e.g., 14):', '14');
+    if (!durationStr) return;
+
+    const duration = parseInt(durationStr);
+    if (isNaN(duration) || duration <= 0) {
+      alert('Invalid duration.');
+      return;
+    }
+
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setDate(startDate.getDate() + duration);
+
+    try {
+      await api.put(`/api/sprints/${sprint.id}/start`, {
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+      });
+      window.location.reload(); // Refresh to reflect status change
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to start sprint.');
+    }
+  };
+
   const handleDeleteSprint = () => {
-    alert(`Delete ${sprint.name}`);
+    if (window.confirm(`Are you sure you want to delete ${sprint.name}?`)) {
+       // Logic for delete sprint
+       api.delete(`/api/sprints/${sprint.id}`).then(() => window.location.reload());
+    }
     setShowSprintMenu(false);
   };
 
@@ -355,12 +394,25 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
             </div>
           </div>
 
-          <button
-            onClick={handleCompleteSprint}
-            className="rounded-lg border border-[#175CD3] bg-[#175CD3] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#1849A9] transition-colors duration-150"
-          >
-            Complete Sprint
-          </button>
+          {sprint.status === 'NOT_STARTED' ? (
+            <button
+              onClick={handleStartSprint}
+              className="rounded-lg border border-[#175CD3] bg-[#175CD3] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#1849A9] transition-colors duration-150"
+            >
+              Start Sprint
+            </button>
+          ) : sprint.status === 'ACTIVE' ? (
+            <button
+              onClick={handleCompleteSprint}
+              className="rounded-lg border border-[#175CD3] bg-[#175CD3] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#1849A9] transition-colors duration-150"
+            >
+              Complete Sprint
+            </button>
+          ) : (
+            <span className="rounded-lg border border-[#EAECF0] bg-[#F2F4F7] px-4 py-1.5 text-[13px] font-semibold text-[#667085]">
+              Completed
+            </span>
+          )}
 
           <button
             type="button"
@@ -380,13 +432,25 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
                 <span>Edit Sprint</span>
               </button>
 
-              <button
-                onClick={handleCompleteSprint}
-                className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] text-[#101828] hover:bg-[#F9FAFB]"
-              >
-                <Check size={18} />
-                <span>Complete Sprint</span>
-              </button>
+              {sprint.status === 'NOT_STARTED' && (
+                <button
+                  onClick={handleStartSprint}
+                  className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] text-[#101828] hover:bg-[#F9FAFB]"
+                >
+                  <Check size={18} className="text-[#027A48]" />
+                  <span>Start Sprint</span>
+                </button>
+              )}
+
+              {sprint.status === 'ACTIVE' && (
+                <button
+                  onClick={handleCompleteSprint}
+                  className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] text-[#101828] hover:bg-[#F9FAFB]"
+                >
+                  <Check size={18} />
+                  <span>Complete Sprint</span>
+                </button>
+              )}
 
               <div className="border-t border-[#EAECF0]" />
 
@@ -409,8 +473,12 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
               localTasks.map((task) => (
                 <div
                   key={task.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', String(task.id));
+                  }}
                   onClick={() => setSelectedTaskId(task.id)}
-                  className="group relative flex items-center gap-4 rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 cursor-pointer hover:border-[#175CD3]/30 hover:shadow-md transition-all duration-200 ease-in-out"
+                  className="group relative flex items-center gap-4 rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 cursor-grab hover:border-[#175CD3]/30 hover:shadow-md transition-all duration-200 ease-in-out"
                 >
                   {/* Task type indicator */}
                   <div className="h-6 w-6 flex-shrink-0 rounded border-2 border-[#175CD3] bg-[#EFF8FF] transition-colors duration-150" />
@@ -443,16 +511,33 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
 
                   {/* Status dropdown */}
                   <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <select
-                      value={task.status}
-                      onChange={(e) => handleStatusChange(task.id, e.target.value as SprintStatus)}
-                      className={`appearance-none rounded-full border px-3 py-1 pr-7 text-[12px] font-semibold outline-none cursor-pointer transition-colors duration-150 ${STATUS_COLORS[task.status]}`}
+                    <button
+                      type="button"
+                      onClick={() => setStatusMenuTaskId(statusMenuTaskId === task.id ? null : task.id)}
+                      className={`flex w-[110px] items-center justify-between gap-1.5 rounded-lg border border-[#EAECF0] px-3 py-1.5 text-[12px] font-semibold transition-all duration-200 hover:border-[#175CD3]/30 hover:shadow-sm ${STATUS_COLORS[task.status]}`}
                     >
-                      {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-current opacity-60" />
+                      <span>{STATUS_LABELS[task.status]}</span>
+                      <ChevronDown size={12} className="opacity-50" />
+                    </button>
+
+                    {statusMenuTaskId === task.id && (
+                      <div className="absolute left-0 top-9 z-50 w-36 overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-lg animate-in fade-in slide-in-from-top-1 duration-150">
+                        {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                          <button
+                            key={value}
+                            onClick={() => {
+                              handleStatusChange(task.id, value as SprintStatus);
+                              setStatusMenuTaskId(null);
+                            }}
+                            className={`flex w-full items-center px-3 py-2 text-left text-[12px] font-medium transition-colors duration-100 hover:bg-[#F9FAFB] ${
+                              task.status === value ? 'text-[#175CD3] bg-[#EFF8FF]' : 'text-[#344054]'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Due date */}
@@ -525,14 +610,9 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
                             }
                           }
                         }}
-                        className="rounded-md p-1 hover:bg-[#EFF8FF] transition-all duration-150"
+                        className="rounded-md p-1.5 text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF] transition-all duration-150"
                       >
-                        <AssigneeAvatar
-                          name={task.assigneeName}
-                          profilePicUrl={getAssigneeProfilePic(task.assigneeName)}
-                          size={22}
-                          fallbackClassName="bg-[#F2F4F7]"
-                        />
+                        <UserPlus size={16} />
                       </button>
 
                       {assignMenuTaskId === task.id && (
@@ -583,15 +663,23 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
                     </button>
                   </div>
 
-                  {/* Assignee badge - always visible */}
-                  <div className="flex-shrink-0 flex items-center gap-1.5 rounded-full bg-[#F2F4F7] px-2 py-1 text-[11px] font-medium text-[#475467]">
-                    <AssigneeAvatar
-                      name={task.assigneeName}
-                      profilePicUrl={getAssigneeProfilePic(task.assigneeName)}
-                      size={16}
-                      fallbackClassName="bg-transparent"
-                    />
-                    <span className="max-w-[80px] truncate">{task.assigneeName || 'Unassigned'}</span>
+                  {/* Assignee badge - photo only with hover name */}
+                  <div 
+                    className="flex-shrink-0 flex items-center justify-center"
+                    title={task.assigneeName || 'Unassigned'}
+                  >
+                    {task.assigneeName && task.assigneeName !== 'Unassigned' ? (
+                      <AssigneeAvatar
+                        name={task.assigneeName}
+                        profilePicUrl={task.assigneePhotoUrl}
+                        size={24}
+                        className="border border-white ring-2 ring-[#F2F4F7]"
+                      />
+                    ) : (
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F9FAFB] border border-dashed border-[#EAECF0]" title="Unassigned">
+                        <span className="text-[10px] text-[#98A2B3]">?</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
