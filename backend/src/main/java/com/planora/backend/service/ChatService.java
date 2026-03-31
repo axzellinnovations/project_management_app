@@ -222,14 +222,14 @@ public class ChatService {
      * Retrieve all group messages for a project (no recipient, no room).
      */
     public List<ChatMessage> getGroupMessages(Long projectId) {
-        return chatMessageRepository.findByProjectIdAndRecipientIsNullAndRoomIdIsNullOrderByIdAsc(projectId);
+        return chatMessageRepository.findByProjectIdAndRecipientIsNullAndRoomIdIsNullAndParentMessageIdIsNullOrderByIdAsc(projectId);
     }
 
     /**
      * Retrieve room messages for a given room.
      */
     public List<ChatMessage> getRoomMessages(Long projectId, Long roomId) {
-        return chatMessageRepository.findByProjectIdAndRoomIdOrderByIdAsc(projectId, roomId);
+        return chatMessageRepository.findByProjectIdAndRoomIdAndParentMessageIdIsNullOrderByIdAsc(projectId, roomId);
     }
 
     /**
@@ -252,7 +252,7 @@ public class ChatService {
             return;
         }
 
-        var latestMessage = chatMessageRepository.findTopByProjectIdAndRoomIdOrderByIdDesc(projectId, roomId);
+        var latestMessage = chatMessageRepository.findTopByProjectIdAndRoomIdAndParentMessageIdIsNullOrderByIdDesc(projectId, roomId);
         if (latestMessage.isEmpty()) {
             return;
         }
@@ -298,7 +298,7 @@ public class ChatService {
             return;
         }
 
-        var latestMessage = chatMessageRepository.findTopByProjectIdAndRecipientIsNullAndRoomIdIsNullOrderByIdDesc(projectId);
+        var latestMessage = chatMessageRepository.findTopByProjectIdAndRecipientIsNullAndRoomIdIsNullAndParentMessageIdIsNullOrderByIdDesc(projectId);
         if (latestMessage.isEmpty()) {
             return;
         }
@@ -321,7 +321,7 @@ public class ChatService {
             return new TeamChatSummary(null, null, null, 0);
         }
 
-        var latestMessage = chatMessageRepository.findTopByProjectIdAndRecipientIsNullAndRoomIdIsNullOrderByIdDesc(projectId).orElse(null);
+        var latestMessage = chatMessageRepository.findTopByProjectIdAndRecipientIsNullAndRoomIdIsNullAndParentMessageIdIsNullOrderByIdDesc(projectId).orElse(null);
         var readState = chatReadStateRepository
                 .findByProjectIdAndUserUserIdAndOtherParticipantIgnoreCase(projectId, currentUserEntity.getUserId(), TEAM_CHAT_READ_KEY)
                 .orElse(null);
@@ -395,7 +395,7 @@ public class ChatService {
 
         return rooms.stream()
                 .map(room -> {
-                    var latestMessage = chatMessageRepository.findTopByProjectIdAndRoomIdOrderByIdDesc(projectId, room.getId()).orElse(null);
+                    var latestMessage = chatMessageRepository.findTopByProjectIdAndRoomIdAndParentMessageIdIsNullOrderByIdDesc(projectId, room.getId()).orElse(null);
                     var readState = chatReadStateRepository.findByProjectIdAndUserUserIdAndRoomId(projectId, currentUserEntity.getUserId(), room.getId()).orElse(null);
                     var unseenCount = chatMessageRepository.countUnreadRoomMessagesByAliases(
                             projectId,
