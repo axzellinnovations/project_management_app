@@ -87,7 +87,7 @@ export default function TopBar() {
             return 'timeline';
         }
 
-        if (pathname.startsWith('/sprint-backlog')) {
+        if (pathname.startsWith('/backlog') || pathname.startsWith('/sprint-backlog')) {
             return 'backlog';
         }
 
@@ -152,7 +152,7 @@ export default function TopBar() {
             case 'timeline':
                 return withProjectId('/timeline');
             case 'backlog':
-                return '/sprint-backlog';
+                return withProjectId('/backlog');
             case 'board':
                 return withProjectId('/kanban');
             case 'calendar':
