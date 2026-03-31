@@ -53,7 +53,11 @@ public class ProjectInvitationService {
 
         Long teamId = project.getTeam().getId();
 
+<<<<<<< HEAD
         // Allow TEAM OWNER and ADMIN to invite
+=======
+        // TEAM OWNER or ADMIN can invite
+>>>>>>> ddf0232 (fixed error:create task)
         teamMemberService.validateOwnerOrAdmin(teamId, inviterUserId);
 
         // If already invited and not expired -> block
