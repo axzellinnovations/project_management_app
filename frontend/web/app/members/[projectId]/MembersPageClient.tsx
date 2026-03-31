@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Image from "next/image";
 // Heroicons and custom SVGs for UI icons
 const ICONS = {
   members: <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 20h5v-2a4 4 0 0 0-3-3.87M9 20H4v-2a4 4 0 0 1 3-3.87M16 3.13a4 4 0 1 1-8 0M12 7a4 4 0 0 1 4-4" /></svg>,
@@ -222,7 +223,7 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
 
   const currentUserRole = useMemo(() => {
     let found = null;
-    const tokenUser = getUserFromToken() as any;
+    const tokenUser = getUserFromToken() as { userId?: number; email?: string } | null;
     if (tokenUser?.userId) {
        found = members.find(m => String(m.user.userId) === String(tokenUser.userId));
     }
@@ -331,8 +332,9 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
       setMembers(prev => prev.map(m => m.user.userId === userId ? { ...m, role: newRole } : m));
       setRoleChangeSuccess("Role updated successfully!");
       setTimeout(() => setRoleChangeSuccess(""), 3000);
-    } catch (err: any) {
-      setRoleChangeError(err?.response?.data?.message || err?.response?.data?.error || "Failed to update role");
+    } catch (err) {
+      const error = err as {response?: {data?: {message?: string; error?: string}}};
+      setRoleChangeError(error?.response?.data?.message || error?.response?.data?.error || "Failed to update role");
       setTimeout(() => setRoleChangeError(""), 4000);
     } finally {
       setChangingRoleId(null);
@@ -350,8 +352,9 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
       setShowRemoveModal(false);
       setMemberToRemove(null);
       setTimeout(() => setRemoveSuccess(""), 3000);
-    } catch (err: any) {
-      setRemoveError(err?.response?.data?.message || err?.response?.data?.error || "Failed to remove member");
+    } catch (err) {
+      const error = err as {response?: {data?: {message?: string; error?: string}}};
+      setRemoveError(error?.response?.data?.message || error?.response?.data?.error || "Failed to remove member");
     } finally {
       setRemoveLoading(false);
     }
@@ -552,9 +555,12 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
               <tr key={m.id + m.user.email} className="border-b hover:bg-gray-50">
                 <td className="px-6 py-3 flex items-center gap-3">
                   {resolvedProfilePicUrl && !brokenProfileImages[avatarKey] ? (
-                    <img
+                    <Image
                       src={resolvedProfilePicUrl}
                       alt={m.user.fullName || m.user.email}
+                      width={36}
+                      height={36}
+                      unoptimized
                       className="w-9 h-9 rounded-full object-cover"
                       onError={() => setBrokenProfileImages(prev => ({ ...prev, [`${avatarKey}:${resolvedProfilePicUrl}`]: true }))}
                     />

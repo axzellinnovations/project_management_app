@@ -391,7 +391,7 @@ function TopBarContent() {
                                         await api.post(`/api/projects/${projectId}/favorite`);
                                         // Notify sidebar to re-fetch favourites immediately
                                         window.dispatchEvent(new CustomEvent('planora:favorite-toggled'));
-                                    } catch (e) {
+                                    } catch (_) {
                                         setIsFavorite(!nextState);
                                     }
                                 }}

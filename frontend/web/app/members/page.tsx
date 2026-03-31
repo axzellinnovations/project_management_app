@@ -5,6 +5,7 @@ function getInitials(name: string, email: string) {
   if (name) return name.split(" ").map(n => n[0]).join("").toUpperCase();
   return email[0]?.toUpperCase() || "?";
 }
+import Image from "next/image";
 import axios from "@/lib/axios";
 import { useParams } from "next/navigation";
 import { getUserFromToken } from "@/lib/auth";
@@ -63,7 +64,7 @@ export default function MembersPage() {
   };
 
   const params = useParams();
-  const projectId = Number((params as any).projectId ?? (params as any).id ?? "0");
+  const projectId = Number((params as { projectId?: string, id?: string }).projectId ?? (params as { projectId?: string, id?: string }).id ?? "0");
   const [members, setMembers] = useState<Member[]>([]);
   const [pending, setPending] = useState<PendingInvite[]>([]);
   const [userProfilePics, setUserProfilePics] = useState<Record<string, string | null>>({});
@@ -82,7 +83,6 @@ export default function MembersPage() {
   // Robustly determine current member and role
   let currentMember: Member | undefined = undefined;
   let currentUserRole: string | undefined = undefined;
-  let currentUserId: number | undefined = undefined;
   if (currentUser) {
     // Try userId match
     if (currentUser.userId) {
@@ -107,7 +107,6 @@ export default function MembersPage() {
       }
     }
     currentUserRole = currentMember?.role;
-    currentUserId = currentMember?.user?.userId;
   }
 
 
@@ -242,8 +241,9 @@ export default function MembersPage() {
       // Refresh members
       const membersRes = await axios.get(`/api/projects/${projectId}/members`);
       setMembers(membersRes.data);
-    } catch (err: any) {
-      setRoleChangeError(err?.response?.data?.message || "Failed to change role");
+    } catch (err) {
+      const error = err as {response?: {data?: {message?: string}}};
+      setRoleChangeError(error?.response?.data?.message || "Failed to change role");
       console.log('MembersPage loaded');
       console.log('Rendering MembersPage');
     } finally {
@@ -282,8 +282,9 @@ export default function MembersPage() {
       // Refresh pending invites
       const pendingRes = await axios.get(`/api/projects/${projectId}/pending-invites`);
       setPending(pendingRes.data);
-    } catch (err: any) {
-      setInviteError(err?.response?.data?.message || "Failed to send invite");
+    } catch (err) {
+      const error = err as {response?: {data?: {message?: string}}};
+      setInviteError(error?.response?.data?.message || "Failed to send invite");
     } finally {
       setInviteLoading(false);
     }
@@ -308,9 +309,12 @@ export default function MembersPage() {
           <div key={m.id} className="bg-white rounded-lg shadow p-4 flex flex-col gap-2 border">
             <div className="flex items-center gap-4">
               {resolvedProfilePicUrl ? (
-                <img
+                <Image
                   src={resolvedProfilePicUrl}
-                  alt={m.user.fullName}
+                  alt={m.user.fullName || m.user.email}
+                  width={48}
+                  height={48}
+                  unoptimized
                   className="w-12 h-12 rounded-full object-cover"
                   onError={() => setImgError(errs => ({ ...errs, [`${avatarKey}:${resolvedProfilePicUrl}`]: true }))}
                 />
