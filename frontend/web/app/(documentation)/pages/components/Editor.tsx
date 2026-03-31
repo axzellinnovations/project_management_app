@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import { StarterKit } from '@tiptap/starter-kit';
@@ -61,8 +61,8 @@ function Divider() {
 export default function Editor({ content, onUpdate, editable = true }: EditorProps) {
   const [isMounted, setIsMounted] = useState(false);
 
-  const handleUpdate = useCallback(
-    debounce((html: string) => { onUpdate(html); }, 800),
+  const handleUpdate = useMemo(
+    () => debounce((html: string) => { onUpdate(html); }, 800),
     [onUpdate]
   );
 

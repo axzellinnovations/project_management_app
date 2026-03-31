@@ -94,7 +94,7 @@ export default function SprintBacklogPage() {
             sprintTaskMap.get(sid)!.push(t);
           });
 
-        setSprints(rawSprints.map((s: any) => ({
+        setSprints(rawSprints.map((s: { id: number; name: string; status: string; startDate?: string; endDate?: string }) => ({
           id: s.id,
           name: s.name,
           status: s.status,
@@ -113,7 +113,6 @@ export default function SprintBacklogPage() {
     };
 
     fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   const toggleTaskSelection = (id: number) => {

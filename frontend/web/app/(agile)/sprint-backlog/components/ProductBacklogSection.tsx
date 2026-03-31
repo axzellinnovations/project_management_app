@@ -78,12 +78,6 @@ export default function ProductBacklogSection({
     return avatarMap;
   }, [teamMembers]);
 
-  const getAssigneeProfilePic = (assigneeName?: string) => {
-    const normalizedName = assigneeName?.trim().toLowerCase();
-    if (!normalizedName || normalizedName === 'unassigned') return null;
-    return assigneeAvatarMap.get(normalizedName) ?? null;
-  };
-
   const getMemberDisplayName = (member: TeamMemberInfo) => member.user.fullName || member.user.username;
 
   useEffect(() => {
@@ -91,9 +85,7 @@ export default function ProductBacklogSection({
       if (assignMenuRef.current && !assignMenuRef.current.contains(event.target as Node)) {
         setAssignMenuTaskId(null);
       }
-      if (statusMenuTaskId !== null) {
-        setStatusMenuTaskId(null);
-      }
+      setStatusMenuTaskId(prev => prev !== null ? null : prev);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);

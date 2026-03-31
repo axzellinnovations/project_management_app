@@ -66,7 +66,6 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
   const [showSprintMenu, setShowSprintMenu] = useState(false);
   const [showCreateTaskBox, setShowCreateTaskBox] = useState(false);
   const [newTaskName, setNewTaskName] = useState('');
-  const [openTaskMenuId, setOpenTaskMenuId] = useState<number | null>(null);
   const [renamingTaskId, setRenamingTaskId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [assignMenuTaskId, setAssignMenuTaskId] = useState<number | null>(null);
@@ -75,7 +74,6 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
   const [loadingMembers, setLoadingMembers] = useState(false);
 
   const sprintMenuRef = useRef<HTMLDivElement | null>(null);
-  const taskMenuRef = useRef<HTMLDivElement | null>(null);
   const assignMenuRef = useRef<HTMLDivElement | null>(null);
   const dateInputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
 
@@ -94,12 +92,6 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
 
     return avatarMap;
   }, [teamMembers]);
-
-  const getAssigneeProfilePic = (assigneeName?: string) => {
-    const normalizedName = assigneeName?.trim().toLowerCase();
-    if (!normalizedName || normalizedName === 'unassigned') return null;
-    return assigneeAvatarMap.get(normalizedName) ?? null;
-  };
 
   const getMemberDisplayName = (member: TeamMemberInfo) => member.user.fullName || member.user.username;
 
@@ -140,12 +132,6 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
         !sprintMenuRef.current.contains(event.target as Node)
       ) {
         setShowSprintMenu(false);
-      }
-      if (
-        taskMenuRef.current &&
-        !taskMenuRef.current.contains(event.target as Node)
-      ) {
-        setOpenTaskMenuId(null);
       }
       if (
         assignMenuRef.current &&
@@ -250,8 +236,9 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
       try {
         await api.put(`/api/sprints/${sprint.id}`, { status: 'COMPLETED' });
         window.location.reload();
-      } catch (err: any) {
-        alert(err.response?.data?.message || 'Failed to complete sprint.');
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { message?: string } } };
+        alert(error.response?.data?.message || 'Failed to complete sprint.');
       }
     }
     setShowSprintMenu(false);
@@ -277,8 +264,9 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
         endDate: endDate.toISOString().split('T')[0],
       });
       window.location.reload(); // Refresh to reflect status change
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to start sprint.');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      alert(error.response?.data?.message || 'Failed to start sprint.');
     }
   };
 

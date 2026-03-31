@@ -99,10 +99,8 @@ public class SprintService {
     public Sprint createSprint(Sprint sprint) {
         requireConfigureBoard(sprint.getProId());
 
-        if (sprint.getStartDate() == null || sprint.getEndDate() == null) {
-            throw new RuntimeException("Start date and end date are required");
-        }
-        if (sprint.getStartDate().isAfter(sprint.getEndDate())) {
+        if (sprint.getStartDate() != null && sprint.getEndDate() != null
+                && sprint.getStartDate().isAfter(sprint.getEndDate())) {
             throw new RuntimeException("Start date cannot be after end date");
         }
 
@@ -191,10 +189,7 @@ public class SprintService {
             throw new RuntimeException("Start date cannot be after end date");
         }
 
-        boolean activeExists = sprintRepository.existsByProIdAndStatus(sprint.getProId(), SprintStatus.ACTIVE);
-        if (activeExists) {
-            throw new RuntimeException("Another sprint is already ACTIVE for this project");
-        }
+
 
         sprint.setStartDate(startDate);
         sprint.setEndDate(endDate);
