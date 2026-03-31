@@ -8,6 +8,7 @@ import ProjectTeam from "../components/ProjectTeam";
 
 export default function SummaryPage() {
     const params = useParams();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const projectId = params?.projectId as string | undefined;
 
     return (

@@ -1,6 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import api from '@/lib/axios';
 import { getUserFromToken } from '@/lib/auth';
@@ -60,16 +59,33 @@ const CommentSection: React.FC<CommentSectionProps> = ({ taskId }) => {
     return `${API_BASE_URL}${url}`;
   };
 
+  const fetchComments = async () => {
+    if (!taskId) return;
+    try {
+      const response = await api.get(`/api/tasks/${taskId}/comments`);
+      setComments(response.data);
+    } catch (error) {
+      console.error('Failed to fetch comments:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (taskId) {
+      void fetchComments();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId]);
+
   const handleAddComment = async () => {
     if (!newComment.trim() || !taskId) return;
 
     try {
       setLoading(true);
       await api.post(`/api/tasks/${taskId}/comments`, {
-        text: newComment
+        content: newComment
       });
       setNewComment('');
-      // Optionally refresh comments, but for now just clear the input
+      await fetchComments();
     } catch (error) {
       console.error('Failed to add comment:', error);
     } finally {

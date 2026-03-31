@@ -134,6 +134,14 @@ public class TaskController {
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
+    @GetMapping("/{taskId}/comments")
+    public ResponseEntity<List<com.planora.backend.dto.CommentResponseDTO>> getComments(
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ){
+        return new ResponseEntity<>(service.getComments(taskId, currentUser.getUserId()), HttpStatus.OK);
+    }
+
     //ASSIGNMENT
 
     @PatchMapping("{taskID}/assign/{userId}")

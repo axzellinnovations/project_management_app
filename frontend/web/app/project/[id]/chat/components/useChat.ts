@@ -1105,7 +1105,7 @@ export const useChat = (projectId: string) => {
         stompClientRef.current.disconnect();
       }
     };
-  }, [router, fetchAllUsers, fetchCanonicalUsernameAlias, loadRooms, loadFeatureFlags, loadSummaries, loadPresence, loadUnreadBadge, restoreSelection, connectToChat, loadHistory]);
+  }, [router, fetchAllUsers, fetchCanonicalUsernameAlias, fetchUserProfilePics, loadRooms, loadFeatureFlags, loadSummaries, loadPresence, loadUnreadBadge, restoreSelection, connectToChat, loadHistory]);
 
   useEffect(() => {
     if (!isSocketConnected || !stompClientRef.current) {

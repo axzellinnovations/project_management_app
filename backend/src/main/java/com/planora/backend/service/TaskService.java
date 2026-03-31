@@ -1,18 +1,34 @@
 package com.planora.backend.service;
 
-import com.planora.backend.dto.CommentRequestDTO;
-import com.planora.backend.dto.TaskRequestDTO;
-import com.planora.backend.dto.TaskResponseDTO;
-import com.planora.backend.model.*;
-import com.planora.backend.repository.*;
-import jakarta.persistence.EntityNotFoundException;
-import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
 import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.planora.backend.dto.CommentRequestDTO;
+import com.planora.backend.dto.TaskRequestDTO;
+import com.planora.backend.dto.TaskResponseDTO;
+import com.planora.backend.model.Comment;
+import com.planora.backend.model.Label;
+import com.planora.backend.model.Priority;
+import com.planora.backend.model.Project;
+import com.planora.backend.model.Sprint;
+import com.planora.backend.model.Task;
+import com.planora.backend.model.TeamMember;
+import com.planora.backend.model.TeamRole;
+import com.planora.backend.model.User;
+import com.planora.backend.repository.CommentRepository;
+import com.planora.backend.repository.LabelRepository;
+import com.planora.backend.repository.ProjectRepository;
+import com.planora.backend.repository.SprintRepository;
+import com.planora.backend.repository.TaskRepository;
+import com.planora.backend.repository.TeamMemberRepository;
+import com.planora.backend.repository.UserRepository;
+
+import jakarta.persistence.EntityNotFoundException;
+import jakarta.transaction.Transactional;
 
 @Service
 public class TaskService {
@@ -37,6 +53,9 @@ public class TaskService {
 
     @Autowired
     private SprintRepository sprintRepository;
+
+    @Autowired
+    private NotificationService notificationService;
 
 
     // 1. CREATE TASK
@@ -83,7 +102,16 @@ public class TaskService {
         //deafult reporter is the creator
         task.setReporter(validateTeamMember(teamId, currentUserId));
 
-        return mapToDTO(taskRepository.save(task));
+        Task savedTask = taskRepository.save(task);
+
+        // Notify assignee if set and is not the creator
+        if (task.getAssignee() != null && !task.getAssignee().getUser().getUserId().equals(currentUserId)) {
+            String message = "You were assigned to a new task: " + task.getTitle();
+            String link = "/taskcard?taskId=" + savedTask.getId();
+            notificationService.createNotification(task.getAssignee().getUser(), message, link);
+        }
+
+        return mapToDTO(savedTask);
 
     }
 
@@ -246,6 +274,27 @@ public class TaskService {
         comment.setAuthor(author);
 
         commentRepository.save(comment);
+
+        // Notify assignee if the comment author is not the assignee
+        if (task.getAssignee() != null && !task.getAssignee().getUser().getUserId().equals(currentUserId)) {
+            String message = author.getUsername() + " commented on task: " + task.getTitle();
+            String link = "/taskcard?taskId=" + task.getId();
+            notificationService.createNotification(task.getAssignee().getUser(), message, link);
+        }
+    }
+
+    public List<com.planora.backend.dto.CommentResponseDTO> getComments(Long taskId, Long currentUserId) {
+        Task task = taskRepository.findById(taskId).orElseThrow();
+        validatePermission(task.getProject().getTeam().getId(), currentUserId, null);
+        
+        return commentRepository.findByTaskOrderByCreatedAtAsc(task).stream()
+                .map(c -> com.planora.backend.dto.CommentResponseDTO.builder()
+                        .id(c.getId())
+                        .text(c.getContent())
+                        .authorName(c.getAuthor().getUsername())
+                        .createdAt(c.getCreatedAt())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     //12. ASSIGN MEMBER
@@ -260,6 +309,11 @@ public class TaskService {
         task.setAssignee(assignee);
         taskRepository.save(task);
 
+        if (!userId.equals(currentUserId)) {
+            String message = "You were assigned to task: " + task.getTitle();
+            String link = "/taskcard?taskId=" + task.getId();
+            notificationService.createNotification(assignee.getUser(), message, link);
+        }
     }
 
     //---HELPER-01--- : For Permission Checking ---
