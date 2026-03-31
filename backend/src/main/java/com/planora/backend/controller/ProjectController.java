@@ -40,17 +40,20 @@ public class ProjectController {
 
     // ---------------- READ ALL PROJECTS ----------------
     @GetMapping
-    public ResponseEntity<List<ProjectResponseDTO>> getAllProjects() {
+    public ResponseEntity<List<ProjectResponseDTO>> getAllProjects(
+            @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
         return new ResponseEntity<>(
-                projectService.getAllProjects(),
+                projectService.getAllProjects(principal.getUserId()),
                 HttpStatus.OK);
     }
 
     // ---------------- READ PROJECT BY ID ----------------
     @GetMapping("/{projectId}")
-    public ResponseEntity<ProjectResponseDTO> getProjectById(@PathVariable Long projectId) {
+    public ResponseEntity<ProjectResponseDTO> getProjectById(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
         return new ResponseEntity<>(
-                projectService.getProjectById(projectId),
+                projectService.getProjectById(projectId, principal.getUserId()),
                 HttpStatus.OK);
     }
 

@@ -7,6 +7,7 @@ import com.planora.backend.model.*;
 import com.planora.backend.repository.*;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -122,6 +123,12 @@ public class TaskService {
             Sprint sprint = sprintRepository.findById(request.getSprintId())
                     .orElseThrow(()->new EntityNotFoundException("Sprint not found"));
             task.setSprint(sprint);
+        }
+
+        // update assignee
+        if(request.getAssigneeId() != null){
+            TeamMember newAssignee = validateTeamMember(teamId, request.getAssigneeId());
+            task.setAssignee(newAssignee);
         }
 
         //update reporter
@@ -265,11 +272,11 @@ public class TaskService {
     //---HELPER-01--- : For Permission Checking ---
     private void validatePermission(Long teamId, Long userId, TeamRole forbiddenRole){
         TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId,userId)
-                .orElseThrow(()-> new RuntimeException("User is not a member of this Team"));
+                .orElseThrow(()-> new AccessDeniedException("User is not a member of this team"));
 
         // If forbiddenRole is specified, check that user doesn't have that role
         if(forbiddenRole != null && member.getRole() == forbiddenRole){
-            throw new RuntimeException("Insufficient Permissions: " + forbiddenRole + " cannot perform this action.");
+            throw new AccessDeniedException("Insufficient permissions for this action");
         }
     }
 
@@ -298,13 +305,21 @@ public class TaskService {
         }
 
         if(task.getAssignee() != null){
-            dto.setAssigneeId(task.getAssignee().getId());
-            dto.setAssigneeName(task.getAssignee().getUser().getUsername());
+            dto.setAssigneeId(task.getAssignee().getUser().getUserId());
+            String assigneeName = task.getAssignee().getUser().getFullName();
+            if (assigneeName == null || assigneeName.isBlank()) {
+                assigneeName = task.getAssignee().getUser().getUsername();
+            }
+            dto.setAssigneeName(assigneeName);
         }
 
         if(task.getReporter() != null){
-            dto.setReporterId(task.getReporter().getId());
-            dto.setReporterName(task.getReporter().getUser().getUsername());
+            dto.setReporterId(task.getReporter().getUser().getUserId());
+            String reporterName = task.getReporter().getUser().getFullName();
+            if (reporterName == null || reporterName.isBlank()) {
+                reporterName = task.getReporter().getUser().getUsername();
+            }
+            dto.setReporterName(reporterName);
         }
         return dto;
     }

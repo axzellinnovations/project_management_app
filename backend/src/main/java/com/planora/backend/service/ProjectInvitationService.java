@@ -42,8 +42,8 @@ public class ProjectInvitationService {
 
         Long teamId = project.getTeam().getId();
 
-        // Only TEAM OWNER can invite
-        teamMemberService.validateOwner(teamId, inviterUserId);
+        // TEAM OWNER or ADMIN can invite
+        teamMemberService.validateOwnerOrAdmin(teamId, inviterUserId);
 
         // If already invited and not expired -> block
         teamInvitationRepository.findByTeamIdAndEmail(teamId, inviteeEmail).ifPresent(existing -> {

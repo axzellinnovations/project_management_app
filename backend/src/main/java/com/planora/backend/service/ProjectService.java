@@ -9,10 +9,13 @@ import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.TeamRepository;
 import com.planora.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -98,16 +101,22 @@ public class ProjectService {
     }
 
     // ---------------- READ ALL ----------------
-    public List<ProjectResponseDTO> getAllProjects() {
-        return projectRepository.findAll()
-                .stream()
+    public List<ProjectResponseDTO> getAllProjects(Long currentUserId) {
+        Set<Long> projectIds = new LinkedHashSet<>();
+
+        teamMemberRepository.findByUserUserId(currentUserId)
+                .forEach(member -> member.getTeam().getProjects().forEach(project -> projectIds.add(project.getId())));
+
+        return projectIds.stream()
+                .map(this::findProjectById)
                 .map(this::convertToResponseDTO)
                 .collect(Collectors.toList());
     }
 
     // ---------------- READ BY ID ----------------
-    public ProjectResponseDTO getProjectById(Long id) {
+    public ProjectResponseDTO getProjectById(Long id, Long currentUserId) {
         Project project = findProjectById(id);
+        validateMembership(project.getTeam().getId(), currentUserId);
         return convertToResponseDTO(project);
     }
 
@@ -170,5 +179,10 @@ public class ProjectService {
         if (member.getRole() != TeamRole.OWNER) {
             throw new RuntimeException("Only PROJECT OWNER can delete this project");
         }
+    }
+
+    private void validateMembership(Long teamId, Long userId) {
+        teamMemberRepository.findByTeamIdAndUserUserId(teamId, userId)
+                .orElseThrow(() -> new AccessDeniedException("Access denied: You are not a member of this team"));
     }
 }
