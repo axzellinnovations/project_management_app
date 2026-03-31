@@ -23,6 +23,7 @@ public class TaskResponseDTO {
 
     private Long assigneeId;
     private String assigneeName;
+    private String assigneePhotoUrl;
 
     private Long sprintId;
     private String sprintName;

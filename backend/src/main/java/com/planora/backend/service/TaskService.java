@@ -354,6 +354,7 @@ public class TaskService {
         if(task.getAssignee() != null){
             dto.setAssigneeId(task.getAssignee().getId());
             dto.setAssigneeName(task.getAssignee().getUser().getUsername());
+            dto.setAssigneePhotoUrl(task.getAssignee().getUser().getProfilePicUrl());
         }
 
         if(task.getReporter() != null){

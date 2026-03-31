@@ -25,10 +25,10 @@ public class Sprint {
     @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private LocalDate startDate;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private LocalDate endDate;
 
     @Column(nullable = false)

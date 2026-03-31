@@ -48,7 +48,7 @@ export default function BurndownChart({ sprintName, dataPoints, totalStoryPoints
   useEffect(() => {
     if (actualRef.current) setActualPathLen(actualRef.current.getTotalLength());
     if (idealRef.current)  setIdealPathLen(idealRef.current.getTotalLength());
-  });
+  }, []);
 
   if (!dataPoints.length) {
     return (
