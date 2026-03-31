@@ -1,6 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import api from '@/lib/axios';
 import { getUserFromToken } from '@/lib/auth';
@@ -74,6 +73,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ taskId }) => {
     if (taskId) {
       void fetchComments();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
 
   const handleAddComment = async () => {

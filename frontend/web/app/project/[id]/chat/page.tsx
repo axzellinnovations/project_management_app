@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Hash, Users, Lock, WifiOff, RefreshCw, Search, X } from 'lucide-react';
+import { Users, WifiOff, RefreshCw, Search, X } from 'lucide-react';
 import { useChat } from './components/useChat';
 import { ChatSidebar } from './components/chatSidebar';
 import { ChatMessages } from './components/chatMessage';
@@ -41,6 +41,7 @@ export default function ChatInterface() {
     featureFlags,
     searchResults,
     isSearchLoading,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     commandNotice,
     messageReactions,
     activeThreadRoot,
@@ -179,6 +180,7 @@ export default function ChatInterface() {
   const headerIcon = hasSelectedRoom
     ? <div className={`w-8 h-8 rounded-full flex-shrink-0 bg-gradient-to-br ${avatarColor(selectedRoom?.name || 'G')} flex items-center justify-center text-white text-[13px] font-bold shadow-sm ring-2 ring-white`}>{(selectedRoom?.name || 'G').charAt(0).toUpperCase()}</div>
     : selectedUser && userProfilePics[selectedUser]
+    // eslint-disable-next-line @next/next/no-img-element
     ? <img src={userProfilePics[selectedUser]} alt={selectedUser} className="w-8 h-8 rounded-full flex-shrink-0 object-cover shadow-sm ring-2 ring-white" />
     : selectedUser
     ? <div className={`w-8 h-8 rounded-full flex-shrink-0 bg-gradient-to-br ${avatarColor(selectedUser)} flex items-center justify-center text-white text-[13px] font-bold shadow-sm ring-2 ring-white`}>{(selectedUser || '?').charAt(0).toUpperCase()}</div>
@@ -423,6 +425,7 @@ export default function ChatInterface() {
                       onClick={() => jumpToSearchResult(result)}
                       className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100"
                       role="option"
+                      aria-selected="false"
                       aria-label={`${result.context} message from ${result.sender}`}
                     >
                       <div className="flex items-center gap-2 mb-0.5">

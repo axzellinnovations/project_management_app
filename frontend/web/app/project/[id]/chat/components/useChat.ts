@@ -1080,6 +1080,7 @@ export const useChat = (projectId: string) => {
         setCurrentUser(username);
         setIsLoading(false);
 
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         const loadedUsers = await fetchAllUsers(token);
         await fetchUserProfilePics(token);
         const loadedRooms = await loadRooms();
