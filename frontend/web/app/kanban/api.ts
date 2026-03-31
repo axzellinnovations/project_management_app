@@ -4,6 +4,8 @@ import { Task } from './types';
 export interface TeamMemberOption {
   id: number;
   name: string;
+  role?: string;
+  email?: string;
 }
 
 /**
@@ -17,7 +19,29 @@ export async function fetchTasksByProject(projectId: number): Promise<Task[]> {
     return response.data || [];
   } catch (error) {
     console.error('Error fetching tasks:', error);
-    throw error;
+    const axiosError = error as any;
+    
+    // Handle network errors
+    if (!axiosError.response) {
+      throw new Error('Network error. Please check if the server is running and try again.');
+    }
+    
+    let errorMessage = 'Failed to fetch tasks';
+    if (axiosError.response?.data?.message) {
+      errorMessage = axiosError.response.data.message;
+    } else if (axiosError.response?.status === 400) {
+      errorMessage = 'Invalid project ID. Please check and try again.';
+    } else if (axiosError.response?.status === 401) {
+      errorMessage = 'Authentication required. Please log in again.';
+    } else if (axiosError.response?.status === 403) {
+      errorMessage = 'You do not have permission to view tasks in this project.';
+    } else if (axiosError.response?.status === 404) {
+      errorMessage = 'Project not found.';
+    } else if (axiosError.response?.status === 500) {
+      errorMessage = 'Server error. Please try again later.';
+    }
+    
+    throw new Error(errorMessage);
   }
 }
 
@@ -143,7 +167,30 @@ export async function fetchProject(projectId: number): Promise<any> {
     return response.data;
   } catch (error) {
     console.error('Error fetching project:', error);
-    throw error;
+    const axiosError = error as any;
+    
+    // Handle network errors
+    if (!axiosError.response) {
+      throw new Error('Network error. Please check if the server is running and try again.');
+    }
+    
+    // Provide detailed error messages based on response status
+    let errorMessage = 'Failed to fetch project';
+    if (axiosError.response?.data?.message) {
+      errorMessage = axiosError.response.data.message;
+    } else if (axiosError.response?.status === 400) {
+      errorMessage = 'Invalid project ID. Please check and try again.';
+    } else if (axiosError.response?.status === 401) {
+      errorMessage = 'Authentication required. Please log in again.';
+    } else if (axiosError.response?.status === 403) {
+      errorMessage = 'You are no longer a member of this project. Please contact the project admin for access.';
+    } else if (axiosError.response?.status === 404) {
+      errorMessage = 'Project not found. It may have been deleted.';
+    } else if (axiosError.response?.status === 500) {
+      errorMessage = 'Server error. Please try again later.';
+    }
+    
+    throw new Error(errorMessage);
   }
 }
 
@@ -169,25 +216,49 @@ export async function fetchTeamMembers(teamId: number): Promise<TeamMemberOption
     return rawMembers
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((member: any) => {
-        const id = Number(member?.id);
+        const id = Number(member?.user?.userId ?? member?.userId ?? member?.id);
         const name =
           member?.name ??
-          member?.username ??
           member?.fullName ??
+          member?.username ??
           member?.user?.username ??
           member?.user?.fullName ??
           member?.user?.email ??
           '';
+        const role = member?.role;
+        const email = member?.email ?? member?.user?.email;
 
         if (!Number.isFinite(id) || !name) {
           return null;
         }
 
-        return { id, name };
+        return { id, name, role, email };
       })
       .filter((member: TeamMemberOption | null): member is TeamMemberOption => member !== null);
   } catch (error) {
     console.error('Error fetching team members:', error);
-    throw error;
+    const axiosError = error as any;
+    
+    // Handle network errors
+    if (!axiosError.response) {
+      throw new Error('Network error. Please check if the server is running and try again.');
+    }
+    
+    let errorMessage = 'Failed to fetch team members';
+    if (axiosError.response?.data?.message) {
+      errorMessage = axiosError.response.data.message;
+    } else if (axiosError.response?.status === 400) {
+      errorMessage = 'Invalid team ID. Please check and try again.';
+    } else if (axiosError.response?.status === 401) {
+      errorMessage = 'Authentication required. Please log in again.';
+    } else if (axiosError.response?.status === 403) {
+      errorMessage = 'You do not have permission to view team members.';
+    } else if (axiosError.response?.status === 404) {
+      errorMessage = 'Team not found.';
+    } else if (axiosError.response?.status === 500) {
+      errorMessage = 'Server error. Please try again later.';
+    }
+    
+    throw new Error(errorMessage);
   }
 }

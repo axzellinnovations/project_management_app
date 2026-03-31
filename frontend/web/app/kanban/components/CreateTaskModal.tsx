@@ -5,7 +5,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { X, Calendar, User, Plus } from 'lucide-react';
 import { Task } from '../types';
-import { fetchProject, fetchTeamMembers } from '../api';
+import { fetchProject, fetchTeamMembers, TeamMemberOption } from '../api';
 
 interface CreateTaskModalProps {
   isOpen: boolean;
@@ -27,7 +27,7 @@ export default function CreateTaskModal({
   const [title, setTitle] = useState('');
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [assignee, setAssignee] = useState<number | ''>('');
-  const [teamMembers, setTeamMembers] = useState<{ id: number; name: string }[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMemberOption[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -46,6 +46,7 @@ export default function CreateTaskModal({
 
     const todayIso = new Date().toISOString().split('T')[0];
 
+<<<<<<< HEAD
     const taskData: Partial<Task> = {
       title: title.trim(),
       status: columnStatus,
@@ -54,6 +55,16 @@ export default function CreateTaskModal({
       dueDate: dueDate ? dueDate.toISOString().split('T')[0] : todayIso,
       assigneeId: assignee || undefined,
     };
+=======
+        const taskData: Partial<Task> = {
+          title: title.trim(),
+          status: columnStatus,
+          projectId,
+          startDate: todayIso,
+          dueDate: dueDate ? dueDate.toISOString().split('T')[0] : todayIso,
+          assigneeId: assignee || undefined,
+        };
+>>>>>>> f64fa7e (updated backlog for kanban)
 
         try {
           await onCreateTask(taskData);
@@ -227,10 +238,10 @@ export default function CreateTaskModal({
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-sm bg-white transition-all duration-200 appearance-none"
                 disabled={loading || loadingMembers}
               >
-                <option value="">👤 Unassigned</option>
+                <option value="">Unassigned</option>
                 {safeTeamMembers.map((member) => (
                   <option key={member.id} value={member.id}>
-                    👤 {member.name}
+                    {member.name}{member.role ? ` (${member.role})` : ''}
                   </option>
                 ))}
               </select>

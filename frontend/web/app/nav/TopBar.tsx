@@ -95,7 +95,7 @@ function TopBarContent() {
             return 'timeline';
         }
 
-        if (pathname.startsWith('/sprint-backlog')) {
+        if (pathname.startsWith('/backlog') || pathname.startsWith('/sprint-backlog')) {
             return 'backlog';
         }
 
@@ -176,7 +176,11 @@ function TopBarContent() {
             case 'timeline':
                 return withProjectId('/timeline');
             case 'backlog':
+<<<<<<< HEAD
                 return withProjectId('/sprint-backlog');
+=======
+                return withProjectId('/backlog');
+>>>>>>> f64fa7e (updated backlog for kanban)
             case 'board':
                 return withProjectId('/kanban');
             case 'calendar':
