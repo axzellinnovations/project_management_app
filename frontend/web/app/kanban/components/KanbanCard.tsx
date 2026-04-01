@@ -4,7 +4,7 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task } from '../types';
-import { Calendar, Trash2, Edit2 } from 'lucide-react';
+import { Flag, User, Calendar, Trash2, Edit2 } from 'lucide-react';
 
 interface KanbanCardProps {
   task: Task;
@@ -45,6 +45,33 @@ export default function KanbanCard({ task, onDelete, onEdit }: KanbanCardProps) 
     }
   };
 
+  // Get priority color
+  const getPriorityColor = (priority?: string) => {
+    switch (priority?.toUpperCase()) {
+      case 'URGENT':
+        return 'bg-red-100 text-red-700 border-red-300';
+      case 'HIGH':
+        return 'bg-orange-100 text-orange-700 border-orange-300';
+      case 'MEDIUM':
+        return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+      case 'LOW':
+        return 'bg-green-100 text-green-700 border-green-300';
+      default:
+        return 'bg-gray-100 text-gray-700 border-gray-300';
+    }
+  };
+
+  // Get initials from assignee name
+  const getInitials = (name?: string) => {
+    if (!name) return '?';
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   const dueDateFormatted = formatDate(task.dueDate);
   const isOverdue =
     task.dueDate &&
@@ -75,6 +102,13 @@ export default function KanbanCard({ task, onDelete, onEdit }: KanbanCardProps) 
           <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
             {dueDateFormatted}
           </span>
+        </div>
+      )}
+
+      {/* Story Points Badge */}
+      {task.storyPoint && task.storyPoint > 0 && (
+        <div className="inline-block px-2 py-1 rounded text-xs font-semibold bg-blue-100 text-blue-700 mb-2">
+          {task.storyPoint}
         </div>
       )}
 

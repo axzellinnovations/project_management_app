@@ -12,9 +12,8 @@ import com.planora.backend.model.User;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.TeamRepository;
 import com.planora.backend.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -69,15 +68,15 @@ public class TeamMemberService {
         private final UserRepository userRepository;
 
         // =====================================================
-        // ADD MEMBER TO TEAM (OWNER OR ADMIN)
+        // ADD MEMBER TO TEAM (OWNER ONLY)
         // =====================================================
         public TeamMember addMember(
                         Long teamId,
                         Long targetUserId,
                         TeamRole role,
                         Long currentUserId) {
-                // OWNER and ADMIN can add members
-                validateOwnerOrAdmin(teamId, currentUserId);
+                // Only OWNER can add members
+                validateOwner(teamId, currentUserId);
 
                 Team team = teamRepository.findById(teamId)
                                 .orElseThrow(() -> new RuntimeException("Team not found"));
@@ -107,15 +106,15 @@ public class TeamMemberService {
         }
 
         // =====================================================
-        // UPDATE MEMBER ROLE (OWNER OR ADMIN)
+        // UPDATE MEMBER ROLE (OWNER ONLY)
         // =====================================================
         public TeamMember updateMemberRole(
                         Long teamId,
                         Long targetUserId,
                         TeamRole newRole,
                         Long currentUserId) {
-                // OWNER and ADMIN can change roles
-                validateOwnerOrAdmin(teamId, currentUserId);
+                // Only OWNER can change roles
+                validateOwner(teamId, currentUserId);
 
                 TeamMember member = teamMemberRepository
                                 .findByTeamIdAndUserUserId(teamId, targetUserId)
@@ -126,14 +125,14 @@ public class TeamMemberService {
         }
 
         // =====================================================
-        // REMOVE MEMBER FROM TEAM (OWNER OR ADMIN)
+        // REMOVE MEMBER FROM TEAM (OWNER ONLY)
         // =====================================================
         public void removeMember(
                         Long teamId,
                         Long targetUserId,
                         Long currentUserId) {
-                // OWNER and ADMIN can remove members
-                validateOwnerOrAdmin(teamId, currentUserId);
+                // Only OWNER can remove members
+                validateOwner(teamId, currentUserId);
 
                 TeamMember member = teamMemberRepository
                                 .findByTeamIdAndUserUserId(teamId, targetUserId)
@@ -179,7 +178,7 @@ public class TeamMemberService {
 
                 return teamMemberRepository
                                 .findByTeamIdAndUserUserId(teamId, userId)
-                                .orElseThrow(() -> new AccessDeniedException("User is not a member of this team"));
+                                .orElseThrow(() -> new RuntimeException("User is not a member of this team"));
         }
 
         // =====================================================
@@ -191,19 +190,6 @@ public class TeamMemberService {
 
                 if (member.getRole() != TeamRole.OWNER) {
                         throw new AccessDeniedException("Only TEAM OWNER can perform this action");
-                }
-
-                return member;
-        }
-
-        // =====================================================
-        // HELPER : VALIDATE OWNER OR ADMIN
-        // =====================================================
-        public TeamMember validateOwnerOrAdmin(Long teamId, Long userId) {
-                TeamMember member = validateMembership(teamId, userId);
-
-                if (member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN) {
-                        throw new RuntimeException("Only TEAM OWNER or ADMIN can perform this action");
                 }
 
                 return member;

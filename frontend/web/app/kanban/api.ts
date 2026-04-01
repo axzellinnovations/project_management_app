@@ -4,76 +4,6 @@ import { Task } from './types';
 export interface TeamMemberOption {
   id: number;
   name: string;
-  role?: string;
-  email?: string;
-}
-
-interface ApiErrorShape {
-  response?: {
-    status?: number;
-    data?: {
-      message?: string;
-    };
-  };
-}
-
-interface RawTeamMember {
-  id?: number | string;
-  userId?: number | string;
-  name?: string;
-  fullName?: string;
-  username?: string;
-  email?: string;
-  role?: string;
-  user?: {
-    userId?: number | string;
-    username?: string;
-    fullName?: string;
-    email?: string;
-  };
-}
-
-/**
- * Fetch members directly by project id
- */
-export async function fetchProjectMembers(projectId: number): Promise<TeamMemberOption[]> {
-  try {
-    const response = await axios.get(`/api/projects/${projectId}/members`);
-    const payload = response.data;
-
-    const rawMembers = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.members)
-        ? payload.members
-        : [];
-
-    return rawMembers
-      .map((member: RawTeamMember) => {
-        const id = Number(member?.user?.userId ?? member?.userId ?? member?.id);
-        const name =
-          member?.fullName ??
-          member?.name ??
-          member?.username ??
-          member?.user?.fullName ??
-          member?.user?.username ??
-          member?.email ??
-          member?.user?.email ??
-          '';
-
-        if (!Number.isFinite(id) || !name) return null;
-
-        return {
-          id,
-          name,
-          role: member?.role,
-          email: member?.email ?? member?.user?.email,
-        };
-      })
-      .filter((member: TeamMemberOption | null): member is TeamMemberOption => member !== null);
-  } catch (error) {
-    console.error('Error fetching project members:', error);
-    throw error;
-  }
 }
 
 /**
@@ -87,29 +17,7 @@ export async function fetchTasksByProject(projectId: number): Promise<Task[]> {
     return response.data || [];
   } catch (error) {
     console.error('Error fetching tasks:', error);
-    const axiosError = error as ApiErrorShape;
-
-    // Handle network errors
-    if (!axiosError.response) {
-      throw new Error('Network error. Please check if the server is running and try again.');
-    }
-    
-    let errorMessage = 'Failed to fetch tasks';
-    if (axiosError.response?.data?.message) {
-      errorMessage = axiosError.response.data.message;
-    } else if (axiosError.response?.status === 400) {
-      errorMessage = 'Invalid project ID. Please check and try again.';
-    } else if (axiosError.response?.status === 401) {
-      errorMessage = 'Authentication required. Please log in again.';
-    } else if (axiosError.response?.status === 403) {
-      errorMessage = 'You do not have permission to view tasks in this project.';
-    } else if (axiosError.response?.status === 404) {
-      errorMessage = 'Project not found.';
-    } else if (axiosError.response?.status === 500) {
-      errorMessage = 'Server error. Please try again later.';
-    }
-    
-    throw new Error(errorMessage);
+    throw error;
   }
 }
 
@@ -204,8 +112,9 @@ export async function createTask(taskData: any): Promise<Task> {
     return response.data;
   } catch (error) {
     console.error('Error creating task:', error);
-    const axiosError = error as ApiErrorShape;
-
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const axiosError = error as any;
+    
     // Provide more detailed error messages
     let errorMessage = 'Failed to create task';
     if (axiosError.response?.data?.message) {
@@ -227,36 +136,14 @@ export async function createTask(taskData: any): Promise<Task> {
 /**
  * Fetch project details by ID
  */
-export async function fetchProject(projectId: number): Promise<Record<string, unknown>> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetchProject(projectId: number): Promise<any> {
   try {
     const response = await axios.get(`/api/projects/${projectId}`);
     return response.data;
   } catch (error) {
     console.error('Error fetching project:', error);
-    const axiosError = error as ApiErrorShape;
-    
-    // Handle network errors
-    if (!axiosError.response) {
-      throw new Error('Network error. Please check if the server is running and try again.');
-    }
-    
-    // Provide detailed error messages based on response status
-    let errorMessage = 'Failed to fetch project';
-    if (axiosError.response?.data?.message) {
-      errorMessage = axiosError.response.data.message;
-    } else if (axiosError.response?.status === 400) {
-      errorMessage = 'Invalid project ID. Please check and try again.';
-    } else if (axiosError.response?.status === 401) {
-      errorMessage = 'Authentication required. Please log in again.';
-    } else if (axiosError.response?.status === 403) {
-      errorMessage = 'You are no longer a member of this project. Please contact the project admin for access.';
-    } else if (axiosError.response?.status === 404) {
-      errorMessage = 'Project not found. It may have been deleted.';
-    } else if (axiosError.response?.status === 500) {
-      errorMessage = 'Server error. Please try again later.';
-    }
-    
-    throw new Error(errorMessage);
+    throw error;
   }
 }
 
@@ -280,50 +167,27 @@ export async function fetchTeamMembers(teamId: number): Promise<TeamMemberOption
             : [];
 
     return rawMembers
-      .map((member: RawTeamMember) => {
-        const id = Number(member?.user?.userId ?? member?.userId ?? member?.id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((member: any) => {
+        const id = Number(member?.id);
         const name =
           member?.name ??
-          member?.fullName ??
           member?.username ??
+          member?.fullName ??
           member?.user?.username ??
           member?.user?.fullName ??
           member?.user?.email ??
           '';
-        const role = member?.role;
-        const email = member?.email ?? member?.user?.email;
 
         if (!Number.isFinite(id) || !name) {
           return null;
         }
 
-        return { id, name, role, email };
+        return { id, name };
       })
       .filter((member: TeamMemberOption | null): member is TeamMemberOption => member !== null);
   } catch (error) {
     console.error('Error fetching team members:', error);
-    const axiosError = error as ApiErrorShape;
-
-    // Handle network errors
-    if (!axiosError.response) {
-      throw new Error('Network error. Please check if the server is running and try again.');
-    }
-    
-    let errorMessage = 'Failed to fetch team members';
-    if (axiosError.response?.data?.message) {
-      errorMessage = axiosError.response.data.message;
-    } else if (axiosError.response?.status === 400) {
-      errorMessage = 'Invalid team ID. Please check and try again.';
-    } else if (axiosError.response?.status === 401) {
-      errorMessage = 'Authentication required. Please log in again.';
-    } else if (axiosError.response?.status === 403) {
-      errorMessage = 'You do not have permission to view team members.';
-    } else if (axiosError.response?.status === 404) {
-      errorMessage = 'Team not found.';
-    } else if (axiosError.response?.status === 500) {
-      errorMessage = 'Server error. Please try again later.';
-    }
-    
-    throw new Error(errorMessage);
+    throw error;
   }
 }
