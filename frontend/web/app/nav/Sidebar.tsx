@@ -87,8 +87,8 @@ export default function Sidebar() {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    /* collapse */
-    const [collapsed, setCollapsed] = useState(false);
+    /* collapse — default true (hidden) to prevent flash on first render; hydrated below */
+    const [collapsed, setCollapsed] = useState(true);
 
     /* dropdown open state */
     const [favOpen, setFavOpen] = useState(false);
@@ -131,9 +131,14 @@ export default function Sidebar() {
         }).catch(() => {});
     }, [user]);
 
-    // Hydrate persisted collapse preference after mount so SSR and first client render stay in sync.
+    // Hydrate persisted collapse preference.
+    // On mobile: always start collapsed regardless of stored value to prevent sidebar flashing open.
+    // On desktop: restore the user's saved preference.
     useEffect(() => {
-        setCollapsed(localStorage.getItem('planora:sidebar:collapsed') === 'true');
+        if (window.innerWidth >= 768) {
+            setCollapsed(localStorage.getItem('planora:sidebar:collapsed') === 'true');
+        }
+        // On mobile: keep collapsed=true (initial state) — don't override with localStorage
     }, []);
 
     useEffect(() => { void fetchProjects(); }, [fetchProjects]); // fetch once on mount
@@ -203,11 +208,15 @@ export default function Sidebar() {
         document.addEventListener('mousedown', handleClickOutside);
         
         const handleToggle = () => setCollapsed(prev => !prev);
+        // Close sidebar on mobile when navigation happens (dispatched by NavigationContext)
+        const handleClose = () => { if (window.innerWidth < 768) setCollapsed(true); };
         window.addEventListener('planora:sidebar:toggle', handleToggle);
+        window.addEventListener('planora:sidebar:close', handleClose);
         
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
             window.removeEventListener('planora:sidebar:toggle', handleToggle);
+            window.removeEventListener('planora:sidebar:close', handleClose);
         };
     }, []);
 

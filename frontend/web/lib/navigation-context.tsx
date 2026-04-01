@@ -19,8 +19,11 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
 
     // Automatically close sidebar on navigation (mobile)
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSidebarOpen(false);
+        // Dispatch event so the Sidebar component's own collapsed state also closes
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('planora:sidebar:close'));
+        }
     }, [pathname]);
 
     return (
