@@ -11,8 +11,8 @@ import EditTaskModal from './components/EditTaskModal';
 import Sidebar from '../nav/Sidebar';
 import TopBar from '../nav/TopBar';
 // removed DateRangeFilter import per requirements
-import { Task, KanbanColumn as KanbanColumnType } from './types';
-import { fetchTasksByProject, updateTaskStatus, deleteTask, createTask, updateTask, fetchProjectMembers, TeamMemberOption } from './api';
+import { Task, KanbanColumn as KanbanColumnType, TaskStatus } from './types';
+import { fetchTasksByProject, updateTaskStatus, deleteTask, createTask, updateTask } from './api';
 import { AlertCircle, Loader, CheckCircle2, Plus } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -102,7 +102,6 @@ export default function KanbanPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isUpdatingTask, setIsUpdatingTask] = useState(false);
-  const [teamMembers, setTeamMembers] = useState<TeamMemberOption[]>([]);
 
   // handlers for column interactions
   const handleAddColumn = () => {
@@ -156,25 +155,6 @@ export default function KanbanPage() {
   useEffect(() => {
     loadTasks();
   }, [loadTasks]);
-
-  useEffect(() => {
-    if (!projectId) {
-      setTeamMembers([]);
-      return;
-    }
-
-    const loadTeamMembers = async () => {
-      try {
-        const members = await fetchProjectMembers(parseInt(projectId, 10));
-        setTeamMembers(members);
-      } catch (err) {
-        console.error('Failed to load team members:', err);
-        setTeamMembers([]);
-      }
-    };
-
-    loadTeamMembers();
-  }, [projectId]);
 
   // Filter tasks by date range
   const filteredTasks = useCallback(() => {
@@ -350,18 +330,6 @@ export default function KanbanPage() {
             <div>
               <h1 className="text-2xl font-bold text-gray-800">Kanban Board</h1>
               <p className="text-sm text-gray-600 mt-1">Organize and track your project tasks</p>
-              {teamMembers.length > 0 && (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {teamMembers.map((member) => (
-                    <span
-                      key={member.id}
-                      className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-700 border border-blue-100"
-                    >
-                      {member.name}
-                    </span>
-                  ))}
-                </div>
-              )}
               {createSuccess && (
                 <div className="mt-2 text-green-600 text-sm">
                   {createSuccess}

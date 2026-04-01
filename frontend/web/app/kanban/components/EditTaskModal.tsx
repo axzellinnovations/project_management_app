@@ -5,7 +5,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { X, Calendar, User, Edit2 } from 'lucide-react';
 import { Task } from '../types';
-import { fetchProjectMembers, TeamMemberOption } from '../api';
+import { fetchProject, fetchTeamMembers } from '../api';
 
 interface EditTaskModalProps {
   isOpen: boolean;
@@ -25,7 +25,7 @@ export default function EditTaskModal({
   const [title, setTitle] = useState('');
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [assignee, setAssignee] = useState<number | ''>('');
-  const [teamMembers, setTeamMembers] = useState<TeamMemberOption[]>([]);
+  const [teamMembers, setTeamMembers] = useState<{ id: number; name: string }[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -79,8 +79,13 @@ export default function EditTaskModal({
     const loadMembers = async () => {
       setLoadingMembers(true);
       try {
-        const members = await fetchProjectMembers(task.projectId || 0);
-        setTeamMembers(members || []);
+        const project = await fetchProject(task.projectId || 0);
+        if (project.teamId) {
+          const members = await fetchTeamMembers(project.teamId);
+          setTeamMembers(members || []);
+        } else {
+          setTeamMembers([]);
+        }
       } catch (err) {
         console.error('Failed to load team members:', err);
         setTeamMembers([]);
@@ -208,10 +213,10 @@ export default function EditTaskModal({
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-sm bg-white transition-all duration-200 appearance-none"
                 disabled={loading || loadingMembers}
               >
-                <option value="">Unassigned</option>
+                <option value="">👤 Unassigned</option>
                 {safeTeamMembers.map((member) => (
                   <option key={member.id} value={member.id}>
-                    {member.name}{member.role ? ` (${member.role})` : ''}
+                    👤 {member.name}
                   </option>
                 ))}
               </select>
