@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo, useSyncExternalStore, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, useSyncExternalStore, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -130,6 +130,119 @@ const subscribeToBrowserStorage = (onStoreChange: () => void) => {
         window.removeEventListener('focus', handler);
     };
 };
+
+/* ── Responsive Tab Bar ────────────────────────────────
+   Shows all tabs on desktop (scroll if needed).
+   On small screens (<= sm) collapses tabs > 5 into a "More (…)" dropdown.
+──────────────────────────────────────────────────────── */
+const VISIBLE_TABS_SM = 5;
+
+function TabBar({
+    tabs,
+    activeTab,
+    getTabHref,
+}: {
+    tabs: { id: string; label: string }[];
+    activeTab: string;
+    getTabHref: (id: string) => string;
+}) {
+    const [isSm, setIsSm] = useState(false);
+    const [moreOpen, setMoreOpen] = useState(false);
+    const moreRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const check = () => setIsSm(window.innerWidth < 640);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
+
+    useEffect(() => {
+        if (!moreOpen) return;
+        const handler = (e: MouseEvent) => {
+            if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+                setMoreOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [moreOpen]);
+
+    const visibleTabs = isSm ? tabs.slice(0, VISIBLE_TABS_SM) : tabs;
+    const overflowTabs = isSm ? tabs.slice(VISIBLE_TABS_SM) : [];
+    const activeInOverflow = overflowTabs.some(t => t.id === activeTab);
+
+    return (
+        <div className="h-[45px] bg-white border-b border-[#E3E8EF] px-4 sm:px-8 flex items-end overflow-x-auto no-scrollbar scroll-smooth">
+            <div className="flex items-end gap-4 sm:gap-8 min-w-max">
+                {visibleTabs.map((tab) => (
+                    <Link
+                        key={tab.id}
+                        href={getTabHref(tab.id)}
+                        className="relative pb-3 px-1 shrink-0"
+                    >
+                        <span
+                            className={`font-inter text-[13px] sm:text-[14px] leading-[20px] transition-colors duration-200 ${
+                                activeTab === tab.id
+                                    ? 'text-[#101828] font-semibold'
+                                    : 'text-[#667085] font-medium hover:text-[#101828]'
+                            }`}
+                        >
+                            {tab.label}
+                        </span>
+                        {activeTab === tab.id && (
+                            <motion.div
+                                layoutId="activeTab"
+                                className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#155DFC] rounded-t-[2px]"
+                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                            />
+                        )}
+                    </Link>
+                ))}
+
+                {/* More (…) overflow menu — only on sm screens when tabs overflow */}
+                {overflowTabs.length > 0 && (
+                    <div ref={moreRef} className="relative pb-3 shrink-0">
+                        <button
+                            onClick={() => setMoreOpen(p => !p)}
+                            className={`flex items-center gap-1 font-inter text-[13px] font-medium transition-colors duration-200 ${
+                                activeInOverflow || moreOpen ? 'text-[#101828] font-semibold' : 'text-[#667085] hover:text-[#101828]'
+                            }`}
+                        >
+                            More
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                        </button>
+                        {activeInOverflow && (
+                            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#155DFC] rounded-t-[2px]" />
+                        )}
+                        {moreOpen && (
+                            <div className="absolute bottom-[46px] left-0 z-50 bg-white/90 backdrop-blur-xl border border-[#E3E8EF] rounded-xl shadow-xl py-1 min-w-[140px] origin-bottom"
+                                style={{ animation: 'dropdownIn 150ms ease forwards' }}
+                            >
+                                {overflowTabs.map((tab) => (
+                                    <Link
+                                        key={tab.id}
+                                        href={getTabHref(tab.id)}
+                                        onClick={() => setMoreOpen(false)}
+                                        className={`block px-4 py-2 text-[13px] transition-colors ${
+                                            activeTab === tab.id
+                                                ? 'text-[#155DFC] font-semibold bg-[#EAF2FF]'
+                                                : 'text-[#4B5563] hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
 
 function TopBarContent() {
     const projectName = useSyncExternalStore(
@@ -442,32 +555,8 @@ function TopBarContent() {
                 </div>
             </div>
 
-            {/* Bottom Nav Section (45px) */}
-            <div className="h-[45px] bg-white border-b border-[#E3E8EF] px-8 flex items-end gap-8 overflow-x-auto no-scrollbar">
-                {baseTabs.map((tab) => (
-                    <Link
-                        key={tab.id}
-                        href={getTabHref(tab.id)}
-                        className="relative pb-3 px-1 shrink-0"
-                    >
-                        <span
-                            className={`font-inter text-[14px] leading-[20px] transition-colors duration-200 ${activeTab === tab.id
-                                ? 'text-[#101828] font-semibold'
-                                : 'text-[#667085] font-medium hover:text-[#101828]'
-                                }`}
-                        >
-                            {tab.label}
-                        </span>
-                        {activeTab === tab.id && (
-                            <motion.div
-                                layoutId="activeTab"
-                                className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#155DFC] rounded-t-[2px]"
-                                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                            />
-                        )}
-                    </Link>
-                ))}
-            </div>
+            {/* Bottom Nav Section (45px) — scrollable with "More" overflow on small screens */}
+            <TabBar tabs={baseTabs} activeTab={activeTab} getTabHref={getTabHref} />
         </div>
     );
 

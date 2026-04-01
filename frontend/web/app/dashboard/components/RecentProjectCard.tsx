@@ -87,7 +87,7 @@ export default function RecentProjectCard({
     return (
         <div 
             onClick={handleCardClick}
-            className={`group flex flex-row ${width || 'min-w-[260px] max-w-[260px]'} h-[160px] shrink-0 bg-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 cursor-pointer overflow-hidden transition-all duration-200 hover:shadow-[0_6px_16px_rgba(0,82,204,0.08)] hover:border-[#0052CC]/20 hover:-translate-y-[2px]`}
+            className={`group flex flex-row ${width ? width : 'min-w-[260px] max-w-[260px] shrink-0'} h-[160px] bg-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 cursor-pointer overflow-hidden transition-all duration-200 hover:shadow-[0_6px_16px_rgba(0,82,204,0.08)] hover:border-[#0052CC]/20 hover:-translate-y-[2px]`}
         >
             {/* Colored Left Stripe */}
             <div className={`w-[16px] h-full shrink-0 ${stripeColor}`} />

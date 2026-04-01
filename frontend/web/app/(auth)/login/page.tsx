@@ -70,7 +70,7 @@ export default function LoginPage() {
 
     return (
 
-        <div className='min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] p-4'>
+        <div className='min-h-screen flex flex-col items-center justify-center p-4'>
 
             {/* 1. Back to Home Link */}
             <div className="w-full max-w-[420px] mb-4">
@@ -95,7 +95,7 @@ export default function LoginPage() {
             </div>
 
             {/* 3. Main Card Container */}
-            <div className='w-full max-w-[420px] bg-white rounded-[24px] shadow-sm p-8'>
+            <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-8'>
                 {/* The Tab Switcher */}
                 <div className='flex bg-gray-100 p-1.5 rounded-xl mb-8'>
 

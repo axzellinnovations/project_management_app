@@ -58,7 +58,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] p-4 font-sans">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans">
       
       {/* Back Link */}
       <div className="w-full max-w-[420px] mb-4">

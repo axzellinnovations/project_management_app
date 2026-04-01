@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { getUserFromToken, User } from '@/lib/auth';
 import Link from 'next/link';
 import api from '@/lib/axios';
@@ -22,9 +22,6 @@ export default function DashboardPage() {
     const [activeTab, setActiveTab] = useState('worked-on');
     const [projects, setProjects] = useState<{ recent: ProjectSummary[], favorites: ProjectSummary[] }>({ recent: [], favorites: [] });
     const [loading, setLoading] = useState(true);
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const [showLeftArrow, setShowLeftArrow] = useState(false);
-    const [showRightArrow, setShowRightArrow] = useState(false);
 
     useEffect(() => {
         const userData = getUserFromToken();
@@ -70,30 +67,6 @@ export default function DashboardPage() {
             window.removeEventListener('planora:project-accessed', handleProjectAccessed);
         };
     }, [router]);
-
-    const checkScroll = () => {
-        if (scrollContainerRef.current) {
-            const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
-            setShowLeftArrow(scrollLeft > 0);
-            setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 5);
-        }
-    };
-
-    useEffect(() => {
-        checkScroll();
-        window.addEventListener('resize', checkScroll);
-        return () => window.removeEventListener('resize', checkScroll);
-    }, [projects]);
-
-    const scroll = (direction: 'left' | 'right') => {
-        if (scrollContainerRef.current) {
-            const scrollAmount = 284; // Card width (260) + Gap (24)
-            scrollContainerRef.current.scrollBy({
-                left: direction === 'left' ? -scrollAmount : scrollAmount,
-                behavior: 'smooth'
-            });
-        }
-    };
 
     const [recentSpacesSearch, setRecentSpacesSearch] = useState('');
     const [recentFilter, setRecentFilter] = useState<'recent' | 'favorites'>('recent');
@@ -174,69 +147,17 @@ export default function DashboardPage() {
                     </div>
                 </div>
 
-                {/* Spaces Cards - Horizontal Scroll Container */}
-                <div className="relative w-full -mx-4 group mt-1">
-                    
-                    {/* Scroll Buttons - Centered on cards */}
-                    <div className="absolute inset-x-0 h-[160px] pointer-events-none z-30">
-                        {/* Left Scroll Button */}
-                        {showLeftArrow && (
-                            <button
-                                onClick={() => scroll('left')}
-                                className="absolute left-[-20px] top-1/2 -translate-y-1/2 pointer-events-auto w-10 h-10 bg-white border border-[#E5E7EB] rounded-full shadow-lg flex items-center justify-center text-[#4A5565] hover:text-[#0052CC] transition-all"
-                            >
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M12.5 15L7.5 10L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </button>
-                        )}
-
-                        {/* Right Scroll Button */}
-                        {showRightArrow && (
-                            <button
-                                onClick={() => scroll('right')}
-                                className="absolute right-[-20px] top-1/2 -translate-y-1/2 pointer-events-auto w-10 h-10 bg-white border border-[#E5E7EB] rounded-full shadow-lg flex items-center justify-center text-[#4A5565] hover:text-[#0052CC] transition-all"
-                            >
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M7.5 15L12.5 10L7.5 5" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </button>
-                        )}
-                    </div>
-
-                    <div
-                        ref={scrollContainerRef}
-                        onScroll={checkScroll}
-                        className="flex gap-6 overflow-x-auto px-4 pt-2 pb-6 custom-scrollbar scroll-smooth"
-                    >
+                {/* Spaces Cards — Adaptive Grid: 1-col mobile → 2-col tablet → 3-col lg → 4-col xl */}
+                <div className="w-full mt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-2 pb-4">
                         {loading ? (
-                            // Skeleton Loading UI - Shows 3 fake cards pulsing
-                            Array.from({ length: 3 }).map((_, i) => (
-                                <div key={i} className="flex flex-col min-w-[260px] max-w-[260px] h-[160px] shrink-0 bg-white rounded-[8px] shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 overflow-hidden animate-pulse hidden md:flex p-5">
-                                    {/* Top Bar Skeleton */}
-                                    <div className="flex justify-between items-start w-full">
-                                        <div className="h-3 w-20 bg-gray-200 rounded" />
-                                        <div className="h-4 w-4 bg-gray-200 rounded-full" />
-                                    </div>
-                                    {/* Title Skeleton */}
-                                    <div className="h-5 w-40 bg-gray-200 rounded mt-3" />
-                                    {/* Footer Skeleton */}
-                                    <div className="mt-auto">
-                                        <div className="w-full h-[1px] bg-gray-100 mb-4" />
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex gap-4">
-                                                <div className="w-[18px] h-[18px] bg-gray-200 rounded" />
-                                                <div className="w-[18px] h-[18px] bg-gray-200 rounded" />
-                                                <div className="w-[18px] h-[18px] bg-gray-200 rounded" />
-                                            </div>
-                                            <div className="h-3 w-12 bg-gray-200 rounded" />
-                                        </div>
-                                    </div>
-                                </div>
+                            // Skeleton shimmer tiles
+                            Array.from({ length: 4 }).map((_, i) => (
+                                <div key={i} className="skeleton h-[160px] w-full rounded-[8px]" />
                             ))
                         ) : filteredRecentProjects.length > 0 ? (
                             <>
-                                {filteredRecentProjects.slice(0, 5).map((project) => (
+                                {filteredRecentProjects.slice(0, 8).map((project) => (
                                     <RecentProjectCard
                                         key={project.id}
                                         id={project.id.toString()}
@@ -244,17 +165,17 @@ export default function DashboardPage() {
                                         projectKey={project.projectKey}
                                         isFavorite={project.isFavorite}
                                         onFavoriteToggle={() => {
-                                            // Emit event to trigger the main effect's handleFavToggled which refetches optimized lists
                                             window.dispatchEvent(new CustomEvent('planora:favorite-toggled'));
                                         }}
                                         type={project.type === 'AGILE' ? 'Agile Scrum' : 'Kanban'}
                                         boardCount={1}
+                                        width="w-full"
                                     />
                                 ))}
-                                {filteredRecentProjects.length > 5 && (
-                                    <div 
+                                {filteredRecentProjects.length > 8 && (
+                                    <div
                                         onClick={() => router.push('/spaces')}
-                                        className="group flex flex-col justify-center items-center min-w-[260px] max-w-[260px] h-[160px] shrink-0 bg-gray-50/50 hover:bg-white rounded-[8px] border border-dashed border-gray-300 hover:border-[#0052CC]/30 hover:shadow-[0_4px_16px_rgba(0,82,204,0.06)] cursor-pointer transition-all duration-200 hover:-translate-y-[2px]"
+                                        className="group flex flex-col justify-center items-center h-[160px] bg-gray-50/50 hover:bg-white rounded-[8px] border border-dashed border-gray-300 hover:border-[#0052CC]/30 hover:shadow-[0_4px_16px_rgba(0,82,204,0.06)] cursor-pointer transition-all duration-200 hover:-translate-y-[2px]"
                                     >
                                         <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-gray-100 mb-3 group-hover:bg-[#EAF2FF] group-hover:border-transparent transition-all duration-200">
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0052CC" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -262,17 +183,13 @@ export default function DashboardPage() {
                                                 <path d="M12 5l7 7-7 7" />
                                             </svg>
                                         </div>
-                                        <span className="font-arimo text-[15px] font-semibold text-[#4B5563] group-hover:text-[#0052CC] transition-colors">
-                                            View all spaces
-                                        </span>
-                                        <span className="font-arimo text-[12px] text-[#9CA3AF] mt-1 font-medium">
-                                            +{filteredRecentProjects.length - 5} more
-                                        </span>
+                                        <span className="font-arimo text-[15px] font-semibold text-[#4B5563] group-hover:text-[#0052CC] transition-colors">View all spaces</span>
+                                        <span className="font-arimo text-[12px] text-[#9CA3AF] mt-1 font-medium">+{filteredRecentProjects.length - 8} more</span>
                                     </div>
                                 )}
                             </>
                         ) : (
-                            <div className="flex-1 py-8 text-center bg-gray-50 rounded border border-dashed border-gray-300">
+                            <div className="col-span-full py-8 text-center bg-gray-50 rounded border border-dashed border-gray-300">
                                 <p className="font-arimo text-[14px] text-[#6A7282]">
                                     {recentSpacesSearch ? `No results for "${recentSpacesSearch}"` : 'No spaces found for this tab'}
                                 </p>
