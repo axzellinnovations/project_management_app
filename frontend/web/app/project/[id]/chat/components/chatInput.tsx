@@ -129,7 +129,10 @@ export const ChatInput = ({
   const canSend = input.trim().length > 0 && !disabled && !uploading;
 
   return (
-    <div className="relative border-t border-gray-100/80 bg-white px-4 py-3">
+    <div
+      className="relative border-t border-gray-100/80 bg-white/95 px-3 sm:px-4 py-3 sticky bottom-0 inset-x-0 z-30 shadow-[0_-6px_18px_rgba(0,0,0,0.04)] supports-[backdrop-filter]:backdrop-blur"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    >
       {/* Mention dropdown */}
       {showMentionList && filteredMentionCandidates.length > 0 && (
         <div className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-gray-100 rounded-2xl shadow-lg overflow-hidden z-20">
@@ -155,9 +158,9 @@ export const ChatInput = ({
       )}
 
       {/* Input row */}
-      <div className={`flex items-end gap-2 bg-gray-50 border rounded-2xl px-3 py-2 transition-all
+      <div className={`flex items-end gap-2 bg-gray-50 border rounded-2xl px-3 py-2.5 sm:py-2 transition-all min-h-[56px]
         ${disabled ? 'opacity-60 cursor-not-allowed' : 'focus-within:bg-white focus-within:border-blue-200 focus-within:ring-2 focus-within:ring-blue-50'}
-        border-gray-200`}>
+        border-gray-200 shadow-[0_6px_22px_rgba(0,0,0,0.03)]`}>
 
         {/* Emoji Picker Dropdown */}
         {showEmojiPicker && !disabled && (
@@ -185,7 +188,7 @@ export const ChatInput = ({
           type="button"
           onClick={() => setShowEmojiPicker((prev) => !prev)}
           disabled={disabled}
-          className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all flex-shrink-0 mb-0.5
+          className={`w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center rounded-xl transition-all flex-shrink-0 mb-0.5
             ${showEmojiPicker ? 'text-blue-500 bg-blue-50' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-200'}`}
           title="Emoji Picker"
           aria-label="Toggle emoji picker"
@@ -208,7 +211,7 @@ export const ChatInput = ({
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled || uploading}
-          className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-all flex-shrink-0 mb-0.5"
+          className="w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-all flex-shrink-0 mb-0.5"
           title="Attach file"
           aria-label="Attach file"
         >
@@ -234,7 +237,7 @@ export const ChatInput = ({
           placeholder={placeholder || 'Type a message…'}
           disabled={disabled}
           rows={1}
-          className="flex-1 bg-transparent text-[13.5px] text-gray-800 placeholder:text-gray-400 outline-none resize-none leading-relaxed py-1 max-h-32 overflow-y-auto"
+          className="flex-1 bg-transparent text-[14px] sm:text-[13.5px] text-gray-800 placeholder:text-gray-400 outline-none resize-none leading-relaxed py-1 max-h-32 overflow-y-auto"
           aria-label="Message input"
           aria-multiline="true"
           aria-autocomplete="list"
@@ -246,7 +249,7 @@ export const ChatInput = ({
           id="chat-send-btn"
           onClick={handleSend}
           disabled={!canSend}
-          className={`w-8 h-8 flex items-center justify-center rounded-xl flex-shrink-0 mb-0.5 transition-all duration-150
+          className={`w-11 h-11 sm:w-10 sm:h-10 flex items-center justify-center rounded-xl flex-shrink-0 mb-0.5 transition-all duration-150
             ${canSend
               ? 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm shadow-blue-200 active:scale-95'
               : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}

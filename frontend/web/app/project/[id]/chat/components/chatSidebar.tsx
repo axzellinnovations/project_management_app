@@ -144,7 +144,7 @@ export const ChatSidebar = ({
   };
 
   return (
-    <aside className="w-72 h-full bg-white border-r border-gray-100/80 flex flex-col flex-shrink-0 overflow-hidden">
+    <aside className="w-full lg:w-72 h-full bg-white border-r border-gray-100/80 flex flex-col flex-shrink-0 overflow-hidden">
 
       {/* Header */}
       <div className="px-4 pt-5 pb-3 flex items-center justify-between border-b border-gray-100/80">
@@ -254,67 +254,74 @@ export const ChatSidebar = ({
                   const unseen = roomUnseenCounts[room.id] || 0;
 
                   return (
-                    <div key={room.id} className="flex items-center gap-1 group/room">
-                      <button
-                        onClick={() => onSelectRoom(room.id)}
-                        className={`flex-1 flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all duration-150
-                          ${isRoomSelected
-                            ? 'bg-blue-50 border border-blue-100'
-                            : 'hover:bg-gray-50 border border-transparent'}`}
-                        aria-label={`Open #${room.name}`}
-                      >
-                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors
-                          ${isRoomSelected ? 'bg-blue-500' : 'bg-gray-100 group-hover/room:bg-gray-200'}`}>
-                          <Hash size={13} className={isRoomSelected ? 'text-white' : 'text-gray-500'} strokeWidth={2.5} />
-                        </div>
-                        <div className="flex-1 min-w-0 text-left">
-                          <div className="flex items-center gap-1">
-                            <span className={`text-[13px] font-medium truncate ${isRoomSelected ? 'text-blue-700 font-semibold' : 'text-gray-700'}`}>
-                              {room.name}
-                            </span>
+                    <button
+                      key={room.id}
+                      onClick={() => onSelectRoom(room.id)}
+                      className={`group/room w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 text-left
+                        ${isRoomSelected
+                          ? 'bg-blue-50 border border-blue-100'
+                          : 'hover:bg-gray-50 border border-transparent'}`}
+                      aria-label={`Open #${room.name}`}
+                    >
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors
+                        ${isRoomSelected ? 'bg-blue-500 shadow-sm shadow-blue-200' : 'bg-gray-100 group-hover/room:bg-gray-200'}`}>
+                        <Hash size={14} className={isRoomSelected ? 'text-white' : 'text-gray-500'} strokeWidth={2.5} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1">
+                          <span className={`flex-1 text-[13px] font-semibold truncate ${isRoomSelected ? 'text-blue-700' : 'text-gray-700'}`}>
+                            {room.name}
+                          </span>
+                          <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+                            {/* Room owner actions */}
+                            {isCreator && (
+                              <div className="opacity-0 group-hover/room:opacity-100 transition-opacity flex items-center gap-0.5">
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setEditRoomData(room);
+                                  }}
+                                  className="w-6 h-6 rounded-lg hover:bg-gray-200 flex items-center justify-center text-gray-400 hover:text-gray-600 text-xs cursor-pointer"
+                                  aria-label={`Edit ${room.name}`}
+                                  title="Edit channel"
+                                >
+                                  ✏️
+                                </div>
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setRoomToDelete(room.id);
+                                  }}
+                                  className="w-6 h-6 rounded-lg hover:bg-red-50 flex items-center justify-center text-gray-400 hover:text-red-500 text-xs cursor-pointer"
+                                  aria-label={`Delete ${room.name}`}
+                                  title="Delete channel"
+                                >
+                                  🗑️
+                                </div>
+                              </div>
+                            )}
+
+                            <MentionBadge count={roomMentionCounts[room.id] || 0} />
+                            <UnreadBadge count={unseen} />
+
                             {lastMsg?.timestamp && (
-                              <span className="text-[10px] text-gray-400 flex-shrink-0 ml-auto">
+                              <span className="text-[10px] text-gray-400">
                                 {formatTime(lastMsg.timestamp)}
                               </span>
                             )}
                           </div>
-                          {showTyping ? (
-                            <p className="text-[11px] text-blue-500 font-medium truncate">{roomTypers[0]} is typing…</p>
-                          ) : (
-                            <p className="text-[11px] text-gray-400 truncate">
-                              {room.topic || getMessagePreview(lastMsg?.content) || `Created by ${room.createdBy}`}
-                            </p>
-                          )}
                         </div>
-                        <UnreadBadge count={unseen} />
-                        <MentionBadge count={roomMentionCounts[room.id] || 0} />
-                      </button>
-
-                      {/* Room owner actions */}
-                      {isCreator && (
-                        <div className="opacity-0 group-hover/room:opacity-100 transition-opacity flex gap-0.5">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditRoomData(room);
-                            }}
-                            className="w-6 h-6 rounded-lg hover:bg-gray-200 flex items-center justify-center text-gray-400 hover:text-gray-600 text-xs"
-                            aria-label={`Edit ${room.name}`}
-                            title="Edit channel"
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            onClick={() => setRoomToDelete(room.id)}
-                            className="w-6 h-6 rounded-lg hover:bg-red-50 flex items-center justify-center text-gray-400 hover:text-red-500 text-xs"
-                            aria-label={`Delete ${room.name}`}
-                            title="Delete channel"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                        {showTyping ? (
+                          <p className="text-[11px] text-blue-500 font-medium truncate">{roomTypers[0]} is typing…</p>
+                        ) : (
+                          <p className="text-[11px] text-gray-400 truncate">
+                            {room.topic || getMessagePreview(lastMsg?.content) || `Created by ${room.createdBy}`}
+                          </p>
+                        )}
+                      </div>
+                    </button>
                   );
                 })}
               </div>
