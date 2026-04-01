@@ -102,7 +102,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
         {isEditingDescription ? (
           <div>
             <textarea
-              value={editedDescription}
+              value={editedDescription ?? ''}
               onChange={(e) => setEditedDescription(e.target.value)}
               onBlur={handleDescriptionSave}
               onKeyDown={(e) => {

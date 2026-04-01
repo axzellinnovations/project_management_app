@@ -34,7 +34,7 @@ export default function DocumentSidebar({
   // Since currently all pages likely have no parentId, they will be flat until API supports it.
   const rootPages = pages.filter(p => !p.parentId);
 
-  const renderTree = (items: PageItem[], parentId: string | number | null = null, depth = 0) => {
+  const renderTree = (items: PageItem[], depth = 0) => {
     return items.map(item => {
       const children = pages.filter(p => p.parentId === item.id);
       const isExpanded = !!expandedFolders[item.id];
@@ -77,7 +77,7 @@ export default function DocumentSidebar({
           {/* Render children if expanded */}
           {hasChildren && isExpanded && (
             <div className="flex flex-col">
-              {renderTree(children, item.id, depth + 1)}
+              {renderTree(children, depth + 1)}
             </div>
           )}
         </div>

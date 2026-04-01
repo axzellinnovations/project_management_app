@@ -3,15 +3,6 @@ import React from "react";
 import Header from "./components/Header";
 import Column from "./components/Column";
 // import { motion } from "./components/motionShim";
-import type { Task } from "./components/types";
-
-const tasks: Task[] = [
-  { id: "1", title: "Implement feedback collector", assignees: ["Sarah Chen"], due: "Nov 17, 2025", subtasks: 5 },
-  { id: "2", title: "Design user onboarding flow", assignees: ["Michael Rodriguez"], due: "Nov 18, 2025", subtasks: 8 },
-  { id: "3", title: "Update API documentation", assignees: ["Emma Watson"], due: "Nov 19, 2025", subtasks: 3 },
-  { id: "4", title: "Build authentication module", assignees: ["James Park"], due: "Nov 15, 2025", subtasks: 13 },
-];
-
 export default function SprintBoardPage() {
   return (
     <main className="w-full bg-[#F1F6F9] min-h-screen px-[10px] py-2">

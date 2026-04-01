@@ -9,6 +9,10 @@ import {
   Pencil,
   Check,
   Trash2,
+  UserPlus,
+  Rocket,
+  X,
+  Clock,
 } from 'lucide-react';
 import type { SprintItem } from '../page';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
@@ -51,6 +55,7 @@ interface LocalSprintTask {
   storyPoints: number;
   selected: boolean;
   assigneeName?: string;
+  assigneePhotoUrl?: string | null;
   status: SprintStatus;
   startDate: string;
   endDate: string;
@@ -58,21 +63,35 @@ interface LocalSprintTask {
   subtasks: string;
 }
 
+const DURATION_PRESETS = [
+  { label: '1 Week', days: 7 },
+  { label: '2 Weeks', days: 14 },
+  { label: '3 Weeks', days: 21 },
+  { label: '1 Month', days: 30 },
+];
+
 export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTask, onDeleteTask }: BacklogCardProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [showSprintMenu, setShowSprintMenu] = useState(false);
   const [showCreateTaskBox, setShowCreateTaskBox] = useState(false);
   const [newTaskName, setNewTaskName] = useState('');
-  const [openTaskMenuId, setOpenTaskMenuId] = useState<number | null>(null);
   const [renamingTaskId, setRenamingTaskId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [assignMenuTaskId, setAssignMenuTaskId] = useState<number | null>(null);
+  const [statusMenuTaskId, setStatusMenuTaskId] = useState<number | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMemberInfo[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
+  // Start Sprint Modal state
+  const [showStartSprintModal, setShowStartSprintModal] = useState(false);
+  const [selectedDuration, setSelectedDuration] = useState<number>(14);
+  const [customDuration, setCustomDuration] = useState<string>('');
+  const [useCustomDuration, setUseCustomDuration] = useState(false);
+  const [startingSprintLoading, setStartingSprintLoading] = useState(false);
+  const [startSprintError, setStartSprintError] = useState<string>('');
+
   const sprintMenuRef = useRef<HTMLDivElement | null>(null);
-  const taskMenuRef = useRef<HTMLDivElement | null>(null);
   const assignMenuRef = useRef<HTMLDivElement | null>(null);
   const dateInputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
 
@@ -92,12 +111,6 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
     return avatarMap;
   }, [teamMembers]);
 
-  const getAssigneeProfilePic = (assigneeName?: string) => {
-    const normalizedName = assigneeName?.trim().toLowerCase();
-    if (!normalizedName || normalizedName === 'unassigned') return null;
-    return assigneeAvatarMap.get(normalizedName) ?? null;
-  };
-
   const getMemberDisplayName = (member: TeamMemberInfo) => member.user.fullName || member.user.username;
 
   useEffect(() => {
@@ -114,6 +127,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
           storyPoints: existing?.storyPoints ?? task.storyPoints,
           selected: task.selected, 
           assigneeName: existing?.assigneeName ?? task.assigneeName ?? 'Unassigned',
+          assigneePhotoUrl: existing?.assigneePhotoUrl ?? task.assigneePhotoUrl ?? null,
           status: existing?.status ?? (task.status as SprintStatus) ?? 'TODO',       
           startDate: existing?.startDate ?? task.startDate ?? '',  
           endDate: existing?.endDate ?? task.dueDate ?? '',   
@@ -136,12 +150,6 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
         !sprintMenuRef.current.contains(event.target as Node)
       ) {
         setShowSprintMenu(false);
-      }
-      if (
-        taskMenuRef.current &&
-        !taskMenuRef.current.contains(event.target as Node)
-      ) {
-        setOpenTaskMenuId(null);
       }
       if (
         assignMenuRef.current &&
@@ -241,13 +249,79 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
     setShowSprintMenu(false);
   };
 
-  const handleCompleteSprint = () => {
-    alert(`Complete ${sprint.name}`);
+  const handleCompleteSprint = async () => {
+    if (window.confirm(`Are you sure you want to complete ${sprint.name}?`)) {
+      try {
+        await api.put(`/api/sprints/${sprint.id}`, { status: 'COMPLETED' });
+        window.location.reload();
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { message?: string } } };
+        alert(error.response?.data?.message || 'Failed to complete sprint.');
+      }
+    }
     setShowSprintMenu(false);
   };
 
+  const handleStartSprint = () => {
+    setSelectedDuration(14);
+    setCustomDuration('');
+    setUseCustomDuration(false);
+    setStartSprintError('');
+    setShowStartSprintModal(true);
+    setShowSprintMenu(false);
+  };
+
+  const getEffectiveDuration = () => {
+    if (useCustomDuration) {
+      const val = parseInt(customDuration);
+      return isNaN(val) || val <= 0 ? 0 : val;
+    }
+    return selectedDuration;
+  };
+
+  const getPreviewDates = () => {
+    const duration = getEffectiveDuration();
+    const start = new Date();
+    const end = new Date();
+    end.setDate(start.getDate() + duration);
+    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return { start: fmt(start), end: fmt(end) };
+  };
+
+  const confirmStartSprint = async () => {
+    const duration = getEffectiveDuration();
+    if (!duration || duration <= 0) {
+      setStartSprintError('Please enter a valid duration greater than 0.');
+      return;
+    }
+
+    setStartingSprintLoading(true);
+    setStartSprintError('');
+
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setDate(startDate.getDate() + duration);
+
+    try {
+      await api.put(`/api/sprints/${sprint.id}/start`, {
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+      });
+      setShowStartSprintModal(false);
+      window.location.reload();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      setStartSprintError(error.response?.data?.message || 'Failed to start sprint. Please try again.');
+    } finally {
+      setStartingSprintLoading(false);
+    }
+  };
+
   const handleDeleteSprint = () => {
-    alert(`Delete ${sprint.name}`);
+    if (window.confirm(`Are you sure you want to delete ${sprint.name}?`)) {
+       // Logic for delete sprint
+       api.delete(`/api/sprints/${sprint.id}`).then(() => window.location.reload());
+    }
     setShowSprintMenu(false);
   };
 
@@ -355,12 +429,25 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
             </div>
           </div>
 
-          <button
-            onClick={handleCompleteSprint}
-            className="rounded-lg border border-[#175CD3] bg-[#175CD3] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#1849A9] transition-colors duration-150"
-          >
-            Complete Sprint
-          </button>
+          {sprint.status === 'NOT_STARTED' ? (
+            <button
+              onClick={handleStartSprint}
+              className="rounded-lg border border-[#175CD3] bg-[#175CD3] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#1849A9] transition-colors duration-150"
+            >
+              Start Sprint
+            </button>
+          ) : sprint.status === 'ACTIVE' ? (
+            <button
+              onClick={handleCompleteSprint}
+              className="rounded-lg border border-[#175CD3] bg-[#175CD3] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#1849A9] transition-colors duration-150"
+            >
+              Complete Sprint
+            </button>
+          ) : (
+            <span className="rounded-lg border border-[#EAECF0] bg-[#F2F4F7] px-4 py-1.5 text-[13px] font-semibold text-[#667085]">
+              Completed
+            </span>
+          )}
 
           <button
             type="button"
@@ -380,13 +467,25 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
                 <span>Edit Sprint</span>
               </button>
 
-              <button
-                onClick={handleCompleteSprint}
-                className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] text-[#101828] hover:bg-[#F9FAFB]"
-              >
-                <Check size={18} />
-                <span>Complete Sprint</span>
-              </button>
+              {sprint.status === 'NOT_STARTED' && (
+                <button
+                  onClick={handleStartSprint}
+                  className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] text-[#101828] hover:bg-[#F9FAFB]"
+                >
+                  <Check size={18} className="text-[#027A48]" />
+                  <span>Start Sprint</span>
+                </button>
+              )}
+
+              {sprint.status === 'ACTIVE' && (
+                <button
+                  onClick={handleCompleteSprint}
+                  className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] text-[#101828] hover:bg-[#F9FAFB]"
+                >
+                  <Check size={18} />
+                  <span>Complete Sprint</span>
+                </button>
+              )}
 
               <div className="border-t border-[#EAECF0]" />
 
@@ -409,8 +508,12 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
               localTasks.map((task) => (
                 <div
                   key={task.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', String(task.id));
+                  }}
                   onClick={() => setSelectedTaskId(task.id)}
-                  className="group relative flex items-center gap-4 rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 cursor-pointer hover:border-[#175CD3]/30 hover:shadow-md transition-all duration-200 ease-in-out"
+                  className="group relative flex items-center gap-4 rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 cursor-grab hover:border-[#175CD3]/30 hover:shadow-md transition-all duration-200 ease-in-out"
                 >
                   {/* Task type indicator */}
                   <div className="h-6 w-6 flex-shrink-0 rounded border-2 border-[#175CD3] bg-[#EFF8FF] transition-colors duration-150" />
@@ -443,16 +546,33 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
 
                   {/* Status dropdown */}
                   <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <select
-                      value={task.status}
-                      onChange={(e) => handleStatusChange(task.id, e.target.value as SprintStatus)}
-                      className={`appearance-none rounded-full border px-3 py-1 pr-7 text-[12px] font-semibold outline-none cursor-pointer transition-colors duration-150 ${STATUS_COLORS[task.status]}`}
+                    <button
+                      type="button"
+                      onClick={() => setStatusMenuTaskId(statusMenuTaskId === task.id ? null : task.id)}
+                      className={`flex w-[110px] items-center justify-between gap-1.5 rounded-lg border border-[#EAECF0] px-3 py-1.5 text-[12px] font-semibold transition-all duration-200 hover:border-[#175CD3]/30 hover:shadow-sm ${STATUS_COLORS[task.status]}`}
                     >
-                      {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-current opacity-60" />
+                      <span>{STATUS_LABELS[task.status]}</span>
+                      <ChevronDown size={12} className="opacity-50" />
+                    </button>
+
+                    {statusMenuTaskId === task.id && (
+                      <div className="absolute left-0 top-9 z-50 w-36 overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-lg animate-in fade-in slide-in-from-top-1 duration-150">
+                        {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                          <button
+                            key={value}
+                            onClick={() => {
+                              handleStatusChange(task.id, value as SprintStatus);
+                              setStatusMenuTaskId(null);
+                            }}
+                            className={`flex w-full items-center px-3 py-2 text-left text-[12px] font-medium transition-colors duration-100 hover:bg-[#F9FAFB] ${
+                              task.status === value ? 'text-[#175CD3] bg-[#EFF8FF]' : 'text-[#344054]'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Due date */}
@@ -525,14 +645,9 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
                             }
                           }
                         }}
-                        className="rounded-md p-1 hover:bg-[#EFF8FF] transition-all duration-150"
+                        className="rounded-md p-1.5 text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF] transition-all duration-150"
                       >
-                        <AssigneeAvatar
-                          name={task.assigneeName}
-                          profilePicUrl={getAssigneeProfilePic(task.assigneeName)}
-                          size={22}
-                          fallbackClassName="bg-[#F2F4F7]"
-                        />
+                        <UserPlus size={16} />
                       </button>
 
                       {assignMenuTaskId === task.id && (
@@ -583,15 +698,23 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
                     </button>
                   </div>
 
-                  {/* Assignee badge - always visible */}
-                  <div className="flex-shrink-0 flex items-center gap-1.5 rounded-full bg-[#F2F4F7] px-2 py-1 text-[11px] font-medium text-[#475467]">
-                    <AssigneeAvatar
-                      name={task.assigneeName}
-                      profilePicUrl={getAssigneeProfilePic(task.assigneeName)}
-                      size={16}
-                      fallbackClassName="bg-transparent"
-                    />
-                    <span className="max-w-[80px] truncate">{task.assigneeName || 'Unassigned'}</span>
+                  {/* Assignee badge - photo only with hover name */}
+                  <div 
+                    className="flex-shrink-0 flex items-center justify-center"
+                    title={task.assigneeName || 'Unassigned'}
+                  >
+                    {task.assigneeName && task.assigneeName !== 'Unassigned' ? (
+                      <AssigneeAvatar
+                        name={task.assigneeName}
+                        profilePicUrl={task.assigneePhotoUrl}
+                        size={24}
+                        className="border border-white ring-2 ring-[#F2F4F7]"
+                      />
+                    ) : (
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F9FAFB] border border-dashed border-[#EAECF0]" title="Unassigned">
+                        <span className="text-[10px] text-[#98A2B3]">?</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
@@ -662,6 +785,166 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
         taskId={selectedTaskId}
         onClose={() => setSelectedTaskId(null)}
       />
+    )}
+
+    {/* ── Start Sprint Modal ── */}
+    {showStartSprintModal && (
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center"
+        style={{ backgroundColor: 'rgba(16, 24, 40, 0.55)', backdropFilter: 'blur(4px)' }}
+        onClick={(e) => { if (e.target === e.currentTarget) setShowStartSprintModal(false); }}
+      >
+        <div
+          className="relative w-full max-w-md mx-4 rounded-2xl border border-[#E4E7EC] bg-white shadow-2xl"
+          style={{ animation: 'modalSlideIn 0.22s cubic-bezier(0.34,1.56,0.64,1) both' }}
+        >
+          {/* Header */}
+          <div className="flex items-start justify-between p-6 border-b border-[#F2F4F7]">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#175CD3] to-[#2E90FA] shadow-md">
+                <Rocket size={20} className="text-white" />
+              </div>
+              <div>
+                <h2 className="text-[16px] font-bold text-[#101828] leading-tight">Start Sprint</h2>
+                <p className="text-[13px] text-[#667085] mt-0.5">{sprint.name}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowStartSprintModal(false)}
+              className="rounded-lg p-1.5 text-[#98A2B3] hover:text-[#344054] hover:bg-[#F2F4F7] transition-all duration-150"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="p-6 space-y-5">
+            {/* Description */}
+            <p className="text-[13.5px] text-[#475467] leading-relaxed">
+              Set the sprint duration. The sprint will start today and end based on your selection.
+            </p>
+
+            {/* Preset chips */}
+            <div>
+              <label className="block text-[12px] font-semibold text-[#344054] uppercase tracking-wider mb-2.5">
+                Quick Select
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {DURATION_PRESETS.map((preset) => (
+                  <button
+                    key={preset.days}
+                    type="button"
+                    onClick={() => { setSelectedDuration(preset.days); setUseCustomDuration(false); setStartSprintError(''); }}
+                    className={`rounded-lg border px-2 py-2.5 text-[12.5px] font-semibold transition-all duration-150 ${
+                      !useCustomDuration && selectedDuration === preset.days
+                        ? 'border-[#175CD3] bg-[#EFF8FF] text-[#175CD3] shadow-sm ring-1 ring-[#175CD3]/30'
+                        : 'border-[#D0D5DD] bg-white text-[#344054] hover:border-[#98A2B3] hover:bg-[#F9FAFB]'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom duration */}
+            <div>
+              <label className="block text-[12px] font-semibold text-[#344054] uppercase tracking-wider mb-2">
+                Custom Duration
+              </label>
+              <div className="relative flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Clock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    placeholder="Enter days..."
+                    value={customDuration}
+                    onChange={(e) => {
+                      setCustomDuration(e.target.value);
+                      setUseCustomDuration(true);
+                      setStartSprintError('');
+                    }}
+                    onFocus={() => setUseCustomDuration(true)}
+                    className={`w-full rounded-lg border pl-9 pr-14 py-2.5 text-[14px] text-[#101828] outline-none transition-all duration-150 ${
+                      useCustomDuration
+                        ? 'border-[#175CD3] ring-2 ring-[#175CD3]/20'
+                        : 'border-[#D0D5DD] hover:border-[#98A2B3]'
+                    }`}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#98A2B3] font-medium">days</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Date preview */}
+            {(() => {
+              const duration = getEffectiveDuration();
+              if (duration > 0) {
+                const { start, end } = getPreviewDates();
+                return (
+                  <div className="flex items-center gap-3 rounded-xl border border-[#E4E7EC] bg-[#F8F9FB] px-4 py-3">
+                    <CalendarDays size={16} className="text-[#667085] flex-shrink-0" />
+                    <div className="text-[13px] text-[#475467]">
+                      <span className="font-semibold text-[#101828]">{start}</span>
+                      <span className="mx-1.5 text-[#98A2B3]">→</span>
+                      <span className="font-semibold text-[#101828]">{end}</span>
+                      <span className="ml-2 text-[#667085]">({duration} {duration === 1 ? 'day' : 'days'})</span>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
+            {/* Error */}
+            {startSprintError && (
+              <div className="flex items-start gap-2.5 rounded-lg border border-[#FDA29B] bg-[#FEF3F2] px-3.5 py-3">
+                <span className="mt-0.5 shrink-0 text-[#D92D20]">⚠</span>
+                <p className="text-[13px] text-[#B42318] leading-snug">{startSprintError}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-2.5 border-t border-[#F2F4F7] px-6 py-4">
+            <button
+              type="button"
+              onClick={() => setShowStartSprintModal(false)}
+              disabled={startingSprintLoading}
+              className="rounded-lg border border-[#D0D5DD] bg-white px-4 py-2.5 text-[13.5px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-all duration-150 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmStartSprint}
+              disabled={startingSprintLoading || getEffectiveDuration() <= 0}
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#175CD3] to-[#2E90FA] px-5 py-2.5 text-[13.5px] font-semibold text-white shadow-sm hover:from-[#1849A9] hover:to-[#1570EF] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {startingSprintLoading ? (
+                <>
+                  <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                <>
+                  <Rocket size={15} />
+                  Start Sprint
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <style>{`
+          @keyframes modalSlideIn {
+            from { opacity: 0; transform: scale(0.92) translateY(12px); }
+            to   { opacity: 1; transform: scale(1)   translateY(0); }
+          }
+        `}</style>
+      </div>
     )}
   </>
   );

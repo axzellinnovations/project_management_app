@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Users, Hash, MessageSquare, Search } from 'lucide-react';
+import { X, Hash, MessageSquare, Search } from 'lucide-react';
 
 interface ModalProps {
   isOpen: boolean;

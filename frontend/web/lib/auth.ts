@@ -2,6 +2,7 @@ export interface User {
     email: string;
     username?: string;
     fullName?: string;
+    userId?: number;
 }
 
 interface JwtPayload {
@@ -42,9 +43,19 @@ export function getUserFromToken(): User | null {
             return null;
         }
 
+        // Try to extract userId from JWT (commonly as 'userId' or 'id')
+
+        // Extend JwtPayload to include userId and id as possible number fields
+        type ExtendedJwtPayload = JwtPayload & { userId?: number; id?: number };
+        const extPayload = payload as ExtendedJwtPayload;
+        let userId: number | undefined = undefined;
+        if (typeof extPayload.userId === 'number') userId = extPayload.userId;
+        else if (typeof extPayload.id === 'number') userId = extPayload.id;
+
         const decodedUser: User = {
             email: payload.sub,
             username: payload.username,
+            userId,
         };
 
         // Keep sidebar/profile displays in sync after profile edits without requiring re-login.

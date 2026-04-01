@@ -2,6 +2,7 @@ package com.planora.backend.service;
 
 import java.util.List;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import com.planora.backend.model.Team;
@@ -17,13 +18,47 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class TeamMemberService {
+    // Change member role with owner/admin permission logic
+    public TeamMember changeMemberRoleWithPermissions(Long teamId, Long targetUserId, String newRoleStr, Long currentUserId) {
+        TeamMember currentMember = validateMembership(teamId, currentUserId);
+        TeamMember targetMember = teamMemberRepository
+                .findByTeamIdAndUserUserId(teamId, targetUserId)
+                .orElseThrow(() -> new RuntimeException("User is not a member of this team"));
+
+        TeamRole newRole;
+        try {
+            newRole = TeamRole.valueOf(newRoleStr.toUpperCase());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid role");
+        }
+
+        if (currentMember.getRole() == TeamRole.OWNER) {
+            // Owner can change anyone's role (except their own)
+            if (targetMember.getUser().getUserId().equals(currentUserId)) {
+                throw new IllegalArgumentException("Owner cannot change their own role");
+            }
+        } else if (currentMember.getRole() == TeamRole.ADMIN) {
+            // Admin can only change MEMBER or VIEWER, and not promote to OWNER or ADMIN
+            if (targetMember.getRole() == TeamRole.OWNER || targetMember.getRole() == TeamRole.ADMIN) {
+                throw new AccessDeniedException("Admin can only change roles of MEMBER or VIEWER");
+            }
+            if (newRole == TeamRole.OWNER || newRole == TeamRole.ADMIN) {
+                throw new AccessDeniedException("Admin cannot promote to OWNER or ADMIN");
+            }
+        } else {
+            throw new AccessDeniedException("Only OWNER or ADMIN can change roles");
+        }
+
+        targetMember.setRole(newRole);
+        return teamMemberRepository.save(targetMember);
+    }
         // =====================================================
         // HELPER : VALIDATE OWNER OR ADMIN (STRICT)
         // =====================================================
         public TeamMember validateOwnerOrAdmin(Long teamId, Long userId) {
                 TeamMember member = validateMembership(teamId, userId);
                 if (member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN) {
-                        throw new RuntimeException("Only TEAM OWNER or ADMIN can perform this action");
+                        throw new AccessDeniedException("Only TEAM OWNER or ADMIN can perform this action");
                 }
                 return member;
         }
@@ -107,6 +142,36 @@ public class TeamMemberService {
         }
 
         // =====================================================
+        // REMOVE MEMBER FROM TEAM WITH PERMISSIONS
+        // =====================================================
+        public void removeMemberWithPermissions(
+                        Long teamId,
+                        Long targetUserId,
+                        Long currentUserId) {
+                TeamMember currentMember = validateMembership(teamId, currentUserId);
+                TeamMember targetMember = teamMemberRepository
+                                .findByTeamIdAndUserUserId(teamId, targetUserId)
+                                .orElseThrow(() -> new RuntimeException("User is not a member of this team"));
+
+                if (currentMember.getRole() == TeamRole.OWNER) {
+                        // Owner can remove anyone except themselves
+                        if (targetMember.getUser().getUserId().equals(currentUserId)) {
+                                throw new IllegalArgumentException("Owner cannot remove themselves");
+                        }
+                } else if (currentMember.getRole() == TeamRole.ADMIN) {
+                        // Admin can only remove MEMBER or VIEWER
+                        if (targetMember.getRole() == TeamRole.OWNER || targetMember.getRole() == TeamRole.ADMIN) {
+                                throw new AccessDeniedException("Admin can only remove MEMBER or VIEWER");
+                        }
+                } else {
+                        // MEMBER and VIEWER cannot remove anyone
+                        throw new AccessDeniedException("Only OWNER or ADMIN can remove members");
+                }
+
+                teamMemberRepository.delete(targetMember);
+        }
+
+        // =====================================================
         // HELPER : VALIDATE MEMBERSHIP (GENERIC)
         // =====================================================
         public TeamMember validateMembership(Long teamId, Long userId) {
@@ -124,9 +189,10 @@ public class TeamMemberService {
                 TeamMember member = validateMembership(teamId, userId);
 
                 if (member.getRole() != TeamRole.OWNER) {
-                        throw new RuntimeException("Only TEAM OWNER can perform this action");
+                        throw new AccessDeniedException("Only TEAM OWNER can perform this action");
                 }
 
                 return member;
         }
+
 }

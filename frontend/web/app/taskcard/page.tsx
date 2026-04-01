@@ -66,6 +66,7 @@ function TaskPageContent() {
     }
 
     fetchTaskData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, mounted]);
 
   const updateTask = async (updates: Partial<{

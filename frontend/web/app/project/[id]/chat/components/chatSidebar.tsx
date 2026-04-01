@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Plus, Hash, MessageCircle, Users, X, Check } from 'lucide-react';
+import { Search, Plus, Hash, MessageCircle, Users, X } from 'lucide-react';
 import { ChatMessage, ChatRoom } from './chat';
 import { isFileDocument } from './chatMessage';
 import { CreateChannelModal, EditChannelModal, ConfirmDeleteModal } from './chatModals';
@@ -355,6 +355,7 @@ export const ChatSidebar = ({
                       {/* Avatar */}
                       <div className="relative flex-shrink-0">
                         {userProfilePics?.[user] ? (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img src={userProfilePics[user]} alt={user} className="w-9 h-9 rounded-full object-cover shadow-sm" />
                         ) : (
                           <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${avatarColor(user)} flex items-center justify-center text-white font-semibold text-[13px]`}>

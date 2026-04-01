@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, CornerDownLeft, Send } from 'lucide-react';
+import { X, Send } from 'lucide-react';
 import { ChatMessage, ChatReactionSummary } from './chat';
 import { isFileDocument } from './chatMessage';
 
@@ -115,6 +114,7 @@ export const ThreadPanel = ({
 
               <div className={`flex gap-3 group ${isRoot ? 'mb-2' : ''}`}>
                 {userProfilePics?.[message.sender] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={userProfilePics[message.sender]} alt={message.sender} className="w-8 h-8 rounded-full object-cover shadow-sm flex-shrink-0" />
                 ) : (
                   <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${avatarColor(message.sender || '')} flex items-center justify-center text-white text-[13px] font-bold flex-shrink-0`}>
