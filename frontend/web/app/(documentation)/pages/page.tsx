@@ -4,8 +4,7 @@ export const dynamic = 'force-dynamic';
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DocumentSidebar from './components/DocumentSidebar';
-import TemplateSelector, { predefinedTemplates } from './components/TemplateSelector';
-import Editor from './components/Editor';
+import TemplateSelector from './components/TemplateSelector';
 import { usePages } from './components/usePages';
 import { Template } from './components/types';
 
@@ -38,7 +37,6 @@ export default function PagesPage() {
     error,
     searchQuery,
     setSearchQuery,
-    createPage,
   } = usePages(projectId);
 
   const handleTemplateSelect = async (template: Template) => {
@@ -47,10 +45,6 @@ export default function PagesPage() {
     } catch (err) {
       console.error('Error selecting template:', err);
     }
-  };
-
-  const handleCancelTemplate = () => {
-    // If they cancel, they just stay here empty
   };
 
   if (!projectId) {
@@ -82,7 +76,6 @@ export default function PagesPage() {
         <div className="flex-1 overflow-y-auto">
           <TemplateSelector 
             onSelect={handleTemplateSelect} 
-            onCancel={handleCancelTemplate}
           />
         </div>
       </div>

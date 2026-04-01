@@ -238,7 +238,6 @@ export const ChatInput = ({
           aria-label="Message input"
           aria-multiline="true"
           aria-autocomplete="list"
-          aria-expanded={showMentionList && filteredMentionCandidates.length > 0}
           autoComplete="off"
         />
 

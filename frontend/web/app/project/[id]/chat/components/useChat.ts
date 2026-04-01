@@ -343,12 +343,26 @@ export const useChat = (projectId: string) => {
   }, [projectId]);
 
   const updateMessageEverywhere = useCallback((incoming: ChatMessage) => {
-    setMessages(prev => mergeMessage(prev, incoming));
+    const mergeTopLevel = (list: ChatMessage[], inc: ChatMessage) => {
+      if (!inc.id) return list;
+      const index = list.findIndex(item => item.id === inc.id);
+      if (index !== -1) {
+        const next = [...list];
+        next[index] = { ...next[index], ...inc };
+        return next;
+      }
+      if (inc.parentMessageId) {
+        return list;
+      }
+      return [...list, inc];
+    };
+
+    setMessages(prev => mergeTopLevel(prev, incoming));
 
     setPrivateMessages(prev => {
       const next = { ...prev };
       Object.keys(next).forEach(key => {
-        next[key] = mergeMessage(next[key], incoming);
+        next[key] = mergeTopLevel(next[key] || [], incoming);
       });
       return next;
     });
@@ -357,7 +371,7 @@ export const useChat = (projectId: string) => {
       const next = { ...prev };
       Object.keys(next).forEach(key => {
         const roomId = Number(key);
-        next[roomId] = mergeMessage(next[roomId], incoming);
+        next[roomId] = mergeTopLevel(next[roomId] || [], incoming);
       });
       return next;
     });
@@ -858,6 +872,8 @@ export const useChat = (projectId: string) => {
           }
 
           if (incoming.type !== 'JOIN' && !incoming.roomId && !incoming.recipient) {
+            if (incoming.parentMessageId) return;
+
             setMessages(prev => mergeMessage(prev, incoming));
             setTeamLastMessage(incoming);
             if (incoming.sender.toLowerCase() !== username
@@ -884,6 +900,8 @@ export const useChat = (projectId: string) => {
           if (!partner) {
             return;
           }
+          
+          if (incoming.parentMessageId) return;
 
           setPrivateMessages(prev => {
             const candidateKeys = new Set<string>([
@@ -1105,7 +1123,7 @@ export const useChat = (projectId: string) => {
         stompClientRef.current.disconnect();
       }
     };
-  }, [router, fetchAllUsers, fetchCanonicalUsernameAlias, loadRooms, loadFeatureFlags, loadSummaries, loadPresence, loadUnreadBadge, restoreSelection, connectToChat, loadHistory]);
+  }, [router, fetchAllUsers, fetchCanonicalUsernameAlias, fetchUserProfilePics, loadRooms, loadFeatureFlags, loadSummaries, loadPresence, loadUnreadBadge, restoreSelection, connectToChat, loadHistory]);
 
   useEffect(() => {
     if (!isSocketConnected || !stompClientRef.current) {
@@ -1128,7 +1146,7 @@ export const useChat = (projectId: string) => {
     const subscriptions = rooms.flatMap(room => {
       const messageSub = connectedClient.subscribe(`/topic/project/${projectId}/room/${room.id}`, payload => {
         const incoming: ChatMessage = JSON.parse(payload.body);
-        if (incoming.type === 'JOIN' || !incoming.roomId) {
+        if (incoming.type === 'JOIN' || !incoming.roomId || incoming.parentMessageId) {
           return;
         }
 
@@ -1299,16 +1317,14 @@ export const useChat = (projectId: string) => {
     if (recipient) {
       const message = { sender: currentUser, content: normalizedContent, recipient, type: 'CHAT', formatType: 'PLAIN' };
       stompClientRef.current?.send(`/app/project/${projectId}/chat.sendPrivateMessage`, {}, JSON.stringify(message));
-      scheduleHistorySync(recipient, null);
       trackTelemetry('chat_private_message_sent', 'private');
       return;
     }
 
     const message = { sender: currentUser, content: normalizedContent, type: 'CHAT', formatType: 'PLAIN' };
     stompClientRef.current?.send(`/app/project/${projectId}/chat.sendMessage`, {}, JSON.stringify(message));
-    scheduleHistorySync(null, null);
     trackTelemetry('chat_team_message_sent', 'team');
-  }, [currentUser, projectId, scheduleHistorySync, trackTelemetry]);
+  }, [currentUser, projectId, trackTelemetry]);
 
   const sendRoomMessage = useCallback((content: string, roomId: number) => {
     const normalizedContent = content.trim();
@@ -1323,9 +1339,8 @@ export const useChat = (projectId: string) => {
 
     const message = { sender: currentUser, content: normalizedContent, roomId, type: 'CHAT', formatType: 'PLAIN' };
     stompClientRef.current?.send(`/app/project/${projectId}/room/${roomId}/send`, {}, JSON.stringify(message));
-    scheduleHistorySync(null, roomId);
     trackTelemetry('chat_room_message_sent', 'room', `roomId=${roomId}`);
-  }, [currentUser, projectId, scheduleHistorySync, trackTelemetry]);
+  }, [currentUser, projectId, trackTelemetry]);
 
   const sendThreadReply = useCallback(async (content: string) => {
     if (!activeThreadRoot?.id) {

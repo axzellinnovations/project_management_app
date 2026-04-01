@@ -1,6 +1,18 @@
 package com.planora.backend.service;
 
-import com.planora.backend.dto.*;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.planora.backend.dto.MemberDTO;
+import com.planora.backend.dto.PendingInviteDTO;
+import com.planora.backend.dto.ProjectSummaryDTO;
+import com.planora.backend.dto.TeamCreationDTO;
+import com.planora.backend.dto.TeamDetailDTO;
+import com.planora.backend.dto.TeamSummaryDTO;
 import com.planora.backend.model.Team;
 import com.planora.backend.model.TeamMember;
 import com.planora.backend.model.TeamRole;
@@ -8,13 +20,8 @@ import com.planora.backend.model.User;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.TeamRepository;
 import com.planora.backend.repository.UserRepository;
-import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.stream.Collectors;
+import jakarta.transaction.Transactional;
 
 @Service
 public class TeamService {

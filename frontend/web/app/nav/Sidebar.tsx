@@ -5,8 +5,6 @@ import Image from 'next/image';
 import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef } from 'react';
 import { getUserFromToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigation } from '@/lib/navigation-context';
 import api from '@/lib/axios';
 
 /* ─────────────────────────────────────────────
@@ -90,10 +88,7 @@ export default function Sidebar() {
     }, []);
 
     /* collapse */
-    const [collapsed, setCollapsed] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return false;
-        return localStorage.getItem('planora:sidebar:collapsed') === 'true';
-    });
+    const [collapsed, setCollapsed] = useState(false);
 
     /* dropdown open state */
     const [favOpen, setFavOpen] = useState(false);
@@ -135,6 +130,11 @@ export default function Sidebar() {
             if (found?.profilePicUrl) setProfilePicUrl(found.profilePicUrl);
         }).catch(() => {});
     }, [user]);
+
+    // Hydrate persisted collapse preference after mount so SSR and first client render stay in sync.
+    useEffect(() => {
+        setCollapsed(localStorage.getItem('planora:sidebar:collapsed') === 'true');
+    }, []);
 
     useEffect(() => { void fetchProjects(); }, [fetchProjects]); // fetch once on mount
 

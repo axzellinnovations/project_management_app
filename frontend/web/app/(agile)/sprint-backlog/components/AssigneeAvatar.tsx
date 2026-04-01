@@ -1,5 +1,6 @@
 'use client';
 
+import React, { useState } from 'react';
 import Image from 'next/image';
 import { UserCircle2 } from 'lucide-react';
 
@@ -18,7 +19,9 @@ const joinClasses = (...values: Array<string | undefined>) => values.filter(Bool
 const resolveProfilePic = (url?: string | null) => {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return `${API_BASE_URL}${url}`;
+  const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  const path = url.startsWith('/') ? url : `/${url}`;
+  return `${baseUrl}${path}`;
 };
 
 const getInitials = (name?: string | null) => {
@@ -43,21 +46,22 @@ export default function AssigneeAvatar({
   className,
   fallbackClassName,
 }: AssigneeAvatarProps) {
+  const [imgError, setImgError] = useState(false);
   const resolvedProfilePic = resolveProfilePic(profilePicUrl);
   const initials = getInitials(name);
-  const showInitials = !resolvedProfilePic && !!initials && name !== 'Unassigned';
+  const showInitials = (!resolvedProfilePic || imgError) && !!initials && name !== 'Unassigned';
   const iconSize = Math.max(12, Math.round(size * 0.7));
 
   return (
     <span
       className={joinClasses(
-        'inline-flex flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#DCE8F8] text-[#175CD3]',
+        'inline-flex flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F2F4F7] text-[#175CD3]',
         fallbackClassName,
         className
       )}
       style={{ width: size, height: size }}
     >
-      {resolvedProfilePic ? (
+      {resolvedProfilePic && !imgError ? (
         <Image
           src={resolvedProfilePic}
           alt={name || 'Assignee avatar'}
@@ -65,6 +69,7 @@ export default function AssigneeAvatar({
           height={size}
           className="h-full w-full object-cover"
           unoptimized
+          onError={() => setImgError(true)}
         />
       ) : showInitials ? (
         <span

@@ -1,7 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
+// Helper to get initials
+function getInitials(name: string, email: string) {
+  if (name) return name.split(" ").map(n => n[0]).join("").toUpperCase();
+  return email[0]?.toUpperCase() || "?";
+}
+import Image from "next/image";
 import axios from "@/lib/axios";
 import { useParams } from "next/navigation";
+import { getUserFromToken } from "@/lib/auth";
+
 
 interface Member {
   id: number;
@@ -25,13 +33,41 @@ interface PendingInvite {
   status: string;
 }
 
+interface AuthUserSummary {
+  userId?: number;
+  username?: string;
+  fullName?: string;
+  email?: string;
+  profilePicUrl?: string | null;
+}
+
 const ROLE_OPTIONS = ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
 
+
 export default function MembersPage() {
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+
+  // Track which member images failed to load
+  const [imgError, setImgError] = useState<Record<string, boolean>>({});
+
+  const resolveProfilePicUrl = (profilePicUrl?: string) => {
+    if (!profilePicUrl) return "";
+    if (
+      profilePicUrl.startsWith("http://") ||
+      profilePicUrl.startsWith("https://") ||
+      profilePicUrl.startsWith("data:") ||
+      profilePicUrl.startsWith("blob:")
+    ) {
+      return profilePicUrl;
+    }
+    return `${API_BASE_URL}${profilePicUrl.startsWith("/") ? "" : "/"}${profilePicUrl}`;
+  };
+
   const params = useParams();
-  const teamId = Number(params.projectId);
+  const projectId = Number((params as { projectId?: string, id?: string }).projectId ?? (params as { projectId?: string, id?: string }).id ?? "0");
   const [members, setMembers] = useState<Member[]>([]);
   const [pending, setPending] = useState<PendingInvite[]>([]);
+  const [userProfilePics, setUserProfilePics] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -39,29 +75,203 @@ export default function MembersPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState("");
+  const [roleChangeLoading, setRoleChangeLoading] = useState<number | null>(null);
+  const [roleChangeError, setRoleChangeError] = useState<string>("");
+
+  // Get current user info
+  const currentUser = getUserFromToken();
+  // Robustly determine current member and role
+  let currentMember: Member | undefined = undefined;
+  let currentUserRole: string | undefined = undefined;
+  if (currentUser) {
+    // Try userId match
+    if (currentUser.userId) {
+      currentMember = members.find(m => m.user.userId === currentUser.userId);
+    }
+    // Fallback to email match
+    if (!currentMember && currentUser.email) {
+      currentMember = members.find(m => m.user.email?.toLowerCase() === currentUser.email.toLowerCase());
+    }
+    // If still not found, but there is only one OWNER or ADMIN and email matches, assume that's the user
+    if (!currentMember && currentUser.email) {
+      const privileged = members.filter(m => m.role === 'OWNER' || m.role === 'ADMIN');
+      if (privileged.length === 1 && privileged[0].user.email?.toLowerCase() === currentUser.email.toLowerCase()) {
+        currentMember = privileged[0];
+      }
+    }
+    // If still not found, but JWT email matches any OWNER/ADMIN email, allow dropdown for all users
+    if (!currentMember && currentUser.email) {
+      const privileged = members.find(m => (m.role === 'OWNER' || m.role === 'ADMIN') && m.user.email?.toLowerCase() === currentUser.email.toLowerCase());
+      if (privileged) {
+        currentMember = privileged;
+      }
+    }
+    currentUserRole = currentMember?.role;
+  }
+
+
 
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchData() {
       setLoading(true);
-      const [membersRes, pendingRes] = await Promise.all([
-        axios.get(`/api/teams/${teamId}/members`),
-        axios.get(`/api/teams/${teamId}/pending-invites`),
-      ]);
-      setMembers(membersRes.data);
-      setPending(pendingRes.data);
+      try {
+        const [membersRes, pendingRes, usersRes] = await Promise.allSettled([
+          axios.get(`/api/projects/${projectId}/members`),
+          axios.get(`/api/projects/${projectId}/pending-invites`),
+          axios.get("/api/auth/users"),
+        ]);
+
+        if (cancelled) return;
+
+        if (membersRes.status === "fulfilled") {
+          setMembers(Array.isArray(membersRes.value.data) ? membersRes.value.data : []);
+        } else {
+          console.error("Failed to fetch members:", membersRes.reason);
+          setMembers([]);
+        }
+
+        if (pendingRes.status === "fulfilled") {
+          setPending(Array.isArray(pendingRes.value.data) ? pendingRes.value.data : []);
+        } else {
+          console.error("Failed to fetch pending invites:", pendingRes.reason);
+          setPending([]);
+        }
+
+        const pics: Record<string, string | null> = {};
+        if (usersRes.status === "fulfilled" && Array.isArray(usersRes.value.data)) {
+          usersRes.value.data.forEach((u: AuthUserSummary) => {
+            const pic = u.profilePicUrl ?? null;
+            if (typeof u.userId === "number") {
+              pics[`id:${u.userId}`] = pic;
+            }
+            if (u.email) {
+              pics[`email:${u.email.toLowerCase()}`] = pic;
+            }
+            if (u.username) {
+              pics[`username:${u.username.toLowerCase()}`] = pic;
+            }
+            if (u.fullName) {
+              pics[`fullname:${u.fullName.toLowerCase()}`] = pic;
+            }
+          });
+        } else if (usersRes.status === "rejected") {
+          // /api/auth/users may be forbidden for some roles; keep page usable.
+          console.warn("Profile picture lookup unavailable:", usersRes.reason);
+        }
+
+        setUserProfilePics(pics);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    if (projectId) {
+      void fetchData();
+    } else {
       setLoading(false);
     }
-    fetchData();
-  }, [teamId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const getMemberProfilePicCandidates = (member: Member) => {
+    const candidates: string[] = [];
+    const add = (value?: string | null) => {
+      if (value && !candidates.includes(value)) {
+        candidates.push(value);
+      }
+    };
+
+    if (typeof member.user.userId === "number") {
+      add(userProfilePics[`id:${member.user.userId}`]);
+    }
+    if (member.user.email) {
+      add(userProfilePics[`email:${member.user.email.toLowerCase()}`]);
+    }
+    if (member.user.username) {
+      add(userProfilePics[`username:${member.user.username.toLowerCase()}`]);
+    }
+    if (member.user.fullName) {
+      add(userProfilePics[`fullname:${member.user.fullName.toLowerCase()}`]);
+    }
+
+    add(member.user.profilePicUrl);
+    return candidates;
+  };
+  // Permission logic for showing role dropdown
+  function canChangeRole(target: Member): boolean {
+    // If current user is detected as OWNER or ADMIN by email or userId, allow dropdown for all except self
+    if (!currentUser) return false;
+    // Don't allow changing own role
+    if (currentUser.userId && target.user.userId === currentUser.userId) return false;
+    if (!currentUser.userId && currentUser.email && target.user.email?.toLowerCase() === currentUser.email.toLowerCase()) return false;
+    // If current user is OWNER or ADMIN by email or userId, allow dropdown for all others
+    const isPrivileged = members.some(m => (m.role === 'OWNER' || m.role === 'ADMIN') && (
+      (currentUser.userId && m.user.userId === currentUser.userId) ||
+      (currentUser.email && m.user.email?.toLowerCase() === currentUser.email.toLowerCase())
+    ));
+    return isPrivileged;
+  }
+
+  // Allowed roles to set for a target, based on current user's role
+  function allowedRoleOptions(target: Member): string[] {
+    if (currentUserRole === "OWNER") {
+      return ROLE_OPTIONS.filter(r => r !== "OWNER" || target.role === "OWNER"); // Owner can't demote self
+    }
+    if (currentUserRole === "ADMIN") {
+      return ["MEMBER", "VIEWER"];
+    }
+    return [];
+  }
+
+  async function handleRoleChange(target: Member, newRole: string) {
+    setRoleChangeLoading(target.id);
+    setRoleChangeError("");
+    try {
+      await axios.patch(`/api/projects/${projectId}/members/${target.user.userId}/role`, {
+        role: newRole,
+        userId: target.user.userId,
+      });
+      // Refresh members
+      const membersRes = await axios.get(`/api/projects/${projectId}/members`);
+      setMembers(membersRes.data);
+    } catch (err) {
+      const error = err as {response?: {data?: {message?: string}}};
+      setRoleChangeError(error?.response?.data?.message || "Failed to change role");
+      console.log('MembersPage loaded');
+      console.log('Rendering MembersPage');
+    } finally {
+      setRoleChangeLoading(null);
+    }
+  }
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setInviteLoading(true);
     setInviteError("");
     setInviteSuccess("");
+    // Check if email is already a member or pending
+    const emailLower = inviteEmail.trim().toLowerCase();
+    const alreadyMember = members.some(m => m.user.email?.toLowerCase() === emailLower);
+    const alreadyPending = pending.some(p => p.email?.toLowerCase() === emailLower);
+    if (alreadyMember) {
+      setInviteError("This user is already a member of the project.");
+      setInviteLoading(false);
+      return;
+    }
+    if (alreadyPending) {
+      setInviteError("An invitation has already been sent to this email.");
+      setInviteLoading(false);
+      return;
+    }
     try {
-      // You may need to get projectId from context/route; here we assume teamId == projectId for demo
-      await axios.post(`/api/projects/${teamId}/invitations`, {
+      await axios.post(`/api/projects/${projectId}/invitations`, {
         email: inviteEmail,
         role: inviteRole,
       });
@@ -70,11 +280,11 @@ export default function MembersPage() {
       setInviteRole("");
       setShowModal(false);
       // Refresh pending invites
-      const pendingRes = await axios.get(`/api/teams/${teamId}/pending-invites`);
+      const pendingRes = await axios.get(`/api/projects/${projectId}/pending-invites`);
       setPending(pendingRes.data);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      setInviteError(err?.response?.data?.message || "Failed to send invite");
+    } catch (err) {
+      const error = err as {response?: {data?: {message?: string}}};
+      setInviteError(error?.response?.data?.message || "Failed to send invite");
     } finally {
       setInviteLoading(false);
     }
@@ -86,23 +296,55 @@ export default function MembersPage() {
     <div className="p-8 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Team Members</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {members.map((m) => (
+        {members.map((m) => {
+          const avatarKey = `${m.id}-${m.user.email}`;
+          const resolvedCandidates = getMemberProfilePicCandidates(m)
+            .map((url) => resolveProfilePicUrl(url))
+            .filter(Boolean);
+          const resolvedProfilePicUrl = resolvedCandidates.find(
+            (url) => !imgError[`${avatarKey}:${url}`]
+          ) || "";
+
+          return (
           <div key={m.id} className="bg-white rounded-lg shadow p-4 flex flex-col gap-2 border">
             <div className="flex items-center gap-4">
-              {m.user.profilePicUrl ? (
-                <img src={m.user.profilePicUrl} alt={m.user.fullName} className="w-12 h-12 rounded-full" />
+              {resolvedProfilePicUrl ? (
+                <Image
+                  src={resolvedProfilePicUrl}
+                  alt={m.user.fullName || m.user.email}
+                  width={48}
+                  height={48}
+                  unoptimized
+                  className="w-12 h-12 rounded-full object-cover"
+                  onError={() => setImgError(errs => ({ ...errs, [`${avatarKey}:${resolvedProfilePicUrl}`]: true }))}
+                />
               ) : (
                 <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-lg">
-                  {m.user.fullName ? m.user.fullName.split(" ").map(n => n[0]).join("") : m.user.email[0]}
+                  {getInitials(m.user.fullName, m.user.email)}
                 </div>
               )}
               <div>
                 <div className="font-semibold">{m.user.fullName || m.user.email}</div>
                 <div className="text-xs text-gray-500">{m.user.email}</div>
-                <div className="text-xs mt-1">
-                  <span className={`px-2 py-1 rounded text-xs ${m.role === "ADMIN" ? "bg-purple-100 text-purple-700" : m.role === "OWNER" ? "bg-yellow-100 text-yellow-700" : m.role === "MEMBER" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700"}`}>{m.role}</span>
-                  <span className={`ml-2 px-2 py-1 rounded text-xs ${m.status === "Active" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>{m.status}</span>
+                <div className="text-xs mt-1 flex items-center gap-2">
+                  {canChangeRole(m) ? (
+                    <select
+                      className="px-2 py-1 rounded text-xs border focus:outline-none focus:ring"
+                      value={m.role}
+                      disabled={roleChangeLoading === m.id}
+                      onChange={e => handleRoleChange(m, e.target.value)}
+                    >
+                      {allowedRoleOptions(m).map(role => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className={`px-2 py-1 rounded text-xs ${m.role === "ADMIN" ? "bg-purple-100 text-purple-700" : m.role === "OWNER" ? "bg-yellow-100 text-yellow-700" : m.role === "MEMBER" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700"}`}>{m.role}</span>
+                  )}
+                  <span className={`px-2 py-1 rounded text-xs ${m.status === "Active" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>{m.status}</span>
                 </div>
+                {roleChangeLoading === m.id && <div className="text-xs text-blue-500 mt-1">Updating role...</div>}
+                {roleChangeError && roleChangeLoading === m.id && <div className="text-xs text-red-500 mt-1">{roleChangeError}</div>}
               </div>
               <div className="ml-auto text-right">
                 <div className="text-xs text-gray-400">Last Active</div>
@@ -114,7 +356,8 @@ export default function MembersPage() {
               <div className="font-semibold text-blue-700">{m.taskCount}</div>
             </div>
           </div>
-        ))}
+          );
+        })}
         {pending.map((p) => (
           <div key={"pending-" + p.id} className="bg-yellow-50 rounded-lg shadow p-4 flex flex-col gap-2 border border-yellow-200">
             <div className="flex items-center gap-4">

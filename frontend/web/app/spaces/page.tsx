@@ -14,6 +14,7 @@ export default function SpacesPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const searchParams = useSearchParams();
     const [sortBy, setSortBy] = useState<'recent' | 'alphabetical' | 'favorites'>('recent');
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [user, setUser] = useState<User | null>(null);
 
     // Set initial filter from URL param

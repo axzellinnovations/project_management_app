@@ -13,6 +13,7 @@ export interface TaskItem {
   storyPoints: number;
   selected: boolean;
   assigneeName?: string;
+  assigneePhotoUrl?: string | null;
   sprintId?: number | null;
   status?: string;
   startDate?: string;
@@ -22,6 +23,9 @@ export interface TaskItem {
 export interface SprintItem {
   id: number;
   name: string;
+  status: string;
+  startDate?: string;
+  endDate?: string;
   tasks: TaskItem[];
 }
 
@@ -30,6 +34,7 @@ type RawTask = {
   title: string;
   storyPoint: number;
   assigneeName?: string;
+  assigneePhotoUrl?: string | null;
   sprintId?: number | null;
   status?: string;
   startDate?: string;
@@ -53,6 +58,7 @@ export default function SprintBacklogPage() {
     storyPoints: raw.storyPoint,
     selected: false,
     assigneeName: raw.assigneeName ?? 'Unassigned',
+    assigneePhotoUrl: raw.assigneePhotoUrl ?? null,
     sprintId: raw.sprintId ?? null,
     status: raw.status ?? 'TODO',
     startDate: raw.startDate ?? '',
@@ -73,7 +79,7 @@ export default function SprintBacklogPage() {
           api.get(`/api/tasks/project/${projectId}`),
         ]);
 
-        const rawSprints = sprintsRes.data as { id: number; name: string }[];
+        const rawSprints = sprintsRes.data as { id: number; name: string; status: string; startDate?: string; endDate?: string }[];
         const rawTasks = tasksRes.data as RawTask[];
         const mappedTasks = rawTasks.map((t, i) => mapRawTask(t, i));
 
@@ -88,7 +94,14 @@ export default function SprintBacklogPage() {
             sprintTaskMap.get(sid)!.push(t);
           });
 
-        setSprints(rawSprints.map((s) => ({ id: s.id, name: s.name, tasks: sprintTaskMap.get(s.id) ?? [] })));
+        setSprints(rawSprints.map((s: { id: number; name: string; status: string; startDate?: string; endDate?: string }) => ({
+          id: s.id,
+          name: s.name,
+          status: s.status,
+          startDate: s.startDate,
+          endDate: s.endDate,
+          tasks: sprintTaskMap.get(s.id) ?? []
+        })));
         setProductTasks(backlogTasks);
         setError(null);
       } catch (err: unknown) {
@@ -100,7 +113,6 @@ export default function SprintBacklogPage() {
     };
 
     fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   const toggleTaskSelection = (id: number) => {
@@ -184,7 +196,7 @@ export default function SprintBacklogPage() {
     }
   };
 
-  const createSprint = async (name: string, startDate: string, endDate: string) => {
+  const createSprint = async (name: string) => {
     const trimmed = name.trim();
     if (!trimmed || !projectId) return;
 
@@ -192,10 +204,10 @@ export default function SprintBacklogPage() {
       const response = await api.post('/api/sprints', {
         proId: Number(projectId),
         name: trimmed,
-        startDate,
-        endDate,
+        startDate: null,
+        endDate: null,
       });
-      const created = response.data as { id: number; name: string };
+      const created = response.data as { id: number; name: string; status: string; startDate?: string; endDate?: string };
 
       const selectedTasks = productTasks.filter((task) => task.selected);
       const remainingTasks = productTasks.filter((task) => !task.selected);
@@ -205,7 +217,14 @@ export default function SprintBacklogPage() {
       );
 
       const cleanedTasks = selectedTasks.map((task) => ({ ...task, selected: false, sprintId: created.id }));
-      setSprints((prev) => [...prev, { id: created.id, name: created.name, tasks: cleanedTasks }]);
+      setSprints((prev) => [...prev, {
+        id: created.id,
+        name: created.name,
+        status: created.status,
+        startDate: created.startDate,
+        endDate: created.endDate,
+        tasks: cleanedTasks
+      }]);
       if (selectedTasks.length > 0) setProductTasks(remainingTasks);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -214,22 +233,101 @@ export default function SprintBacklogPage() {
   };
 
   const moveTaskToSprint = async (taskId: number, sprintId: number) => {
-    const draggedTask = productTasks.find((task) => task.id === taskId);
+    // 1. Find the task in productTasks or any other sprint
+    let draggedTask = productTasks.find((task) => task.id === taskId);
+    let fromSprintId: number | null = null;
+
+    if (!draggedTask) {
+      for (const sprint of sprints) {
+        draggedTask = sprint.tasks.find((task) => task.id === taskId);
+        if (draggedTask) {
+          fromSprintId = sprint.id;
+          break;
+        }
+      }
+    }
+
     if (!draggedTask) return;
+    if (fromSprintId === sprintId) return; // Dropped in the same sprint
 
     try {
       await api.put(`/api/tasks/${taskId}`, { sprintId });
+      
+      // Update state locally
+      if (fromSprintId === null) {
+        // From backlog to sprint
+        setProductTasks((prev) => prev.filter((t) => t.id !== taskId));
+      } else {
+        // Between sprints
+        setSprints((prev) =>
+          prev.map((s) =>
+            s.id === fromSprintId
+              ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }
+              : s
+          )
+        );
+      }
+
       setSprints((prev) =>
         prev.map((sprint) =>
           sprint.id === sprintId
-            ? { ...sprint, tasks: [...sprint.tasks, { ...draggedTask, selected: false, sprintId }] }
+            ? { ...sprint, tasks: [...sprint.tasks, { ...draggedTask!, sprintId }] }
             : sprint
         )
       );
-      setProductTasks((prev) => prev.filter((task) => task.id !== taskId));
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
-      alert(axiosErr?.response?.data?.message || 'Failed to move task to sprint.');
+      alert(axiosErr?.response?.data?.message || 'Failed to move task.');
+    }
+  };
+
+  const moveTaskToBacklog = async (taskId: number) => {
+    // 1. Find task in sprints
+    let draggedTask: TaskItem | undefined;
+    let fromSprintId: number | undefined;
+
+    for (const sprint of sprints) {
+      draggedTask = sprint.tasks.find((task) => task.id === taskId);
+      if (draggedTask) {
+        fromSprintId = sprint.id;
+        break;
+      }
+    }
+
+    // If not found in sprints, it's already in the backlog or not found at all
+    if (!draggedTask || !fromSprintId) return;
+
+    try {
+      await api.put(`/api/tasks/${taskId}`, { sprintId: null });
+
+      // Update state locally
+      setSprints((prev) =>
+        prev.map((s) =>
+          s.id === fromSprintId
+            ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }
+            : s
+        )
+      );
+      setProductTasks((prev) => [...prev, { ...draggedTask!, sprintId: null }]);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      alert(axiosErr?.response?.data?.message || 'Failed to move task back to backlog.');
+    }
+  };
+
+  const handleTaskStatusChange = async (taskId: number, newStatus: string) => {
+    try {
+      await api.patch(`/api/tasks/${taskId}/status?status=${newStatus}`);
+      
+      // Update local state in both productTasks and sprints
+      setProductTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+      setSprints(prev => prev.map(s => ({
+        ...s,
+        tasks: s.tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t)
+      })));
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      alert(axiosErr?.response?.data?.message || 'Failed to update status.');
     }
   };
 
@@ -281,6 +379,8 @@ export default function SprintBacklogPage() {
             onStoryPointsChange={updateTaskStoryPoints}
             onCreateTask={createTask}
             onCreateSprint={createSprint}
+            onDropTask={moveTaskToBacklog}
+            onStatusChange={handleTaskStatusChange}
             onAssignTask={(taskId, assigneeName) => {
               setProductTasks((prev) =>
                 prev.map((t) => t.id === taskId ? { ...t, assigneeName } : t)

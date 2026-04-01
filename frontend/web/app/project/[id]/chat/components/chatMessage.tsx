@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Pencil, Trash2, MessageSquare, Pin, PinOff, FileText, Loader2, SmilePlus } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Pencil, Trash2, MessageSquare, Pin, PinOff, FileText, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatMessage, ChatReactionSummary } from './chat';
 import { EditMessageModal, ConfirmDeleteModal } from './chatModals';
@@ -124,6 +124,7 @@ function TypingIndicator({ user, userProfilePics = {} }: { user: string; userPro
       className="flex items-end gap-2.5 px-4 py-1"
     >
       {userProfilePics?.[user] ? (
+        // eslint-disable-next-line @next/next/no-img-element
         <img src={userProfilePics[user]} alt={user} className="w-7 h-7 rounded-full object-cover shadow-sm flex-shrink-0" />
       ) : (
         <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${avatarColor(user)} flex items-center justify-center text-white text-xs font-semibold flex-shrink-0`}>
@@ -240,6 +241,7 @@ export const ChatMessages = ({
                 {!isMe && (
                   <div className={`relative flex-shrink-0 ${grouped ? 'opacity-0' : 'opacity-100'}`}>
                     {userProfilePics?.[msg.sender] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={userProfilePics[msg.sender]} alt={msg.sender} className="w-7 h-7 rounded-full object-cover shadow-sm" />
                     ) : (
                       <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${avatarColor(msg.sender || '')} flex items-center justify-center text-white text-xs font-bold`}>

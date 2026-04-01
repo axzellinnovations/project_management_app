@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { FileText, Server, Calendar, Zap, LayoutTemplate, Bug, Target, BookOpen, Clock, Activity, MessageSquare } from 'lucide-react';
+import { FileText, Server, Zap, LayoutTemplate, Bug, Target, BookOpen, Clock, Activity, MessageSquare } from 'lucide-react';
 import { Template } from './types';
 
 export const predefinedTemplates: Template[] = [
@@ -187,10 +187,9 @@ export const predefinedTemplates: Template[] = [
 
 interface TemplateSelectorProps {
   onSelect: (template: Template) => void;
-  onCancel: () => void;
 }
 
-export default function TemplateSelector({ onSelect, onCancel }: TemplateSelectorProps) {
+export default function TemplateSelector({ onSelect }: TemplateSelectorProps) {
   return (
     <div className="flex flex-col items-center justify-start h-full w-full py-12 px-8 bg-gray-50 overflow-y-auto">
       <div className="max-w-5xl w-full">
