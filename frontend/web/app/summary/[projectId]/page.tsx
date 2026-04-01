@@ -12,7 +12,7 @@ export default function SummaryPage() {
     const projectId = params?.projectId as string | undefined;
 
     return (
-        <div className="max-w-[1200px] mx-auto">
+        <div className="mobile-page-padding max-w-[1200px] mx-auto pb-28 sm:pb-8">
             {/* Metrics Section */}
             <div className="mb-6">
                 <MetricsGrid />

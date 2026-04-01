@@ -1,6 +1,7 @@
 import React, { Suspense } from "react";
 import Sidebar from "../nav/Sidebar";
 import TopBar from "../nav/TopBar";
+import BottomNav from "../nav/BottomNav";
 
 export default function AgileLayout({
 	children,
@@ -12,10 +13,11 @@ export default function AgileLayout({
 				<Suspense fallback={<div className="h-[119px] bg-[#F1F6F9]" />}>
 					<TopBar />
 				</Suspense>
-				<main className="flex-1 overflow-x-hidden overflow-y-auto bg-[#F1F6F9] p-6">
+				<main className="flex-1 overflow-x-hidden overflow-y-auto bg-[#F1F6F9] p-6 main-content-area">
 					<div className="max-w-[1272px] mx-auto">{children}</div>
 				</main>
 			</div>
+			<BottomNav />
 		</div>
 	);
 }

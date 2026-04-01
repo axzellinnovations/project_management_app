@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Sidebar from '../nav/Sidebar';
 import TopBar from '../nav/TopBar';
+import BottomNav from '../nav/BottomNav';
 import api from '@/lib/axios';
 
 export default function MembersLayout({
@@ -55,10 +56,11 @@ export default function MembersLayout({
       <Sidebar />
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
         <TopBar />
-        <main className="flex-1 min-h-0 overflow-y-auto bg-[#F7F8FA]">
+        <main className="flex-1 min-h-0 overflow-y-auto bg-[#F7F8FA] main-content-area">
           {children}
         </main>
       </div>
+      <BottomNav />
     </div>
   );
 }

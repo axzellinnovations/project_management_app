@@ -332,10 +332,12 @@ export default function SprintBacklogPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="mobile-page-padding flex flex-col gap-6 pb-28 sm:pb-8">
       {loading && (
-        <div className="flex items-center justify-center h-64 text-gray-500">
-          Loading sprint backlog...
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="skeleton rounded-xl h-32" />
+          ))}
         </div>
       )}
 

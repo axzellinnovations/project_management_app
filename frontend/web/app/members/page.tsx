@@ -1,14 +1,18 @@
 "use client";
-import { useEffect, useState } from "react";
-// Helper to get initials
-function getInitials(name: string, email: string) {
-  if (name) return name.split(" ").map(n => n[0]).join("").toUpperCase();
-  return email[0]?.toUpperCase() || "?";
-}
+import { useEffect, useState, useRef } from "react";
 import Image from "next/image";
 import axios from "@/lib/axios";
 import { useParams } from "next/navigation";
 import { getUserFromToken } from "@/lib/auth";
+import { UserPlus, Search, ChevronDown, ChevronRight, Mail, Clock, CheckSquare, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import BottomSheet from "@/components/shared/BottomSheet";
+import EmptyState from "@/components/shared/EmptyState";
+
+function getInitials(name: string, email: string) {
+  if (name) return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+  return email[0]?.toUpperCase() || "?";
+}
 
 
 interface Member {
@@ -69,7 +73,6 @@ export default function MembersPage() {
   const [pending, setPending] = useState<PendingInvite[]>([]);
   const [userProfilePics, setUserProfilePics] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
@@ -278,7 +281,7 @@ export default function MembersPage() {
       setInviteSuccess("Invitation sent!");
       setInviteEmail("");
       setInviteRole("");
-      setShowModal(false);
+      setInviteSheetOpen(false);
       // Refresh pending invites
       const pendingRes = await axios.get(`/api/projects/${projectId}/pending-invites`);
       setPending(pendingRes.data);
@@ -290,159 +293,516 @@ export default function MembersPage() {
     }
   };
 
-  if (loading) return <div className="p-8">Loading...</div>;
+  // ── local UI state ──────────────────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<string>("ALL");
+  const [pendingOpen, setPendingOpen] = useState(true);
+  const [inviteSheetOpen, setInviteSheetOpen] = useState(false);
+  const [roleSheetMember, setRoleSheetMember] = useState<Member | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Team Members</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {members.map((m) => {
-          const avatarKey = `${m.id}-${m.user.email}`;
-          const resolvedCandidates = getMemberProfilePicCandidates(m)
-            .map((url) => resolveProfilePicUrl(url))
-            .filter(Boolean);
-          const resolvedProfilePicUrl = resolvedCandidates.find(
-            (url) => !imgError[`${avatarKey}:${url}`]
-          ) || "";
+  const FILTERS = ["ALL", "OWNER", "ADMIN", "MEMBER", "VIEWER", "PENDING"];
 
-          return (
-          <div key={m.id} className="bg-white rounded-lg shadow p-4 flex flex-col gap-2 border">
-            <div className="flex items-center gap-4">
-              {resolvedProfilePicUrl ? (
-                <Image
-                  src={resolvedProfilePicUrl}
-                  alt={m.user.fullName || m.user.email}
-                  width={48}
-                  height={48}
-                  unoptimized
-                  className="w-12 h-12 rounded-full object-cover"
-                  onError={() => setImgError(errs => ({ ...errs, [`${avatarKey}:${resolvedProfilePicUrl}`]: true }))}
-                />
-              ) : (
-                <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-lg">
-                  {getInitials(m.user.fullName, m.user.email)}
-                </div>
-              )}
-              <div>
-                <div className="font-semibold">{m.user.fullName || m.user.email}</div>
-                <div className="text-xs text-gray-500">{m.user.email}</div>
-                <div className="text-xs mt-1 flex items-center gap-2">
-                  {canChangeRole(m) ? (
-                    <select
-                      className="px-2 py-1 rounded text-xs border focus:outline-none focus:ring"
-                      value={m.role}
-                      disabled={roleChangeLoading === m.id}
-                      onChange={e => handleRoleChange(m, e.target.value)}
-                    >
-                      {allowedRoleOptions(m).map(role => (
-                        <option key={role} value={role}>{role}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className={`px-2 py-1 rounded text-xs ${m.role === "ADMIN" ? "bg-purple-100 text-purple-700" : m.role === "OWNER" ? "bg-yellow-100 text-yellow-700" : m.role === "MEMBER" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700"}`}>{m.role}</span>
-                  )}
-                  <span className={`px-2 py-1 rounded text-xs ${m.status === "Active" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>{m.status}</span>
-                </div>
-                {roleChangeLoading === m.id && <div className="text-xs text-blue-500 mt-1">Updating role...</div>}
-                {roleChangeError && roleChangeLoading === m.id && <div className="text-xs text-red-500 mt-1">{roleChangeError}</div>}
-              </div>
-              <div className="ml-auto text-right">
-                <div className="text-xs text-gray-400">Last Active</div>
-                <div className="text-xs">{m.lastActive ? new Date(m.lastActive).toLocaleString() : "-"}</div>
-              </div>
+  const ROLE_COLOR: Record<string, string> = {
+    OWNER: "bg-amber-100 text-amber-700 border-amber-200",
+    ADMIN: "bg-purple-100 text-purple-700 border-purple-200",
+    MEMBER: "bg-blue-100 text-blue-700 border-blue-200",
+    VIEWER: "bg-gray-100 text-gray-600 border-gray-200",
+    PENDING: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  };
+
+  const filteredMembers = members.filter((m) => {
+    const matchesSearch =
+      !searchQuery ||
+      m.user.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.user.email?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFilter = activeFilter === "ALL" || m.role === activeFilter;
+    return matchesSearch && matchesFilter;
+  });
+
+  const filteredPending = pending.filter(
+    (p) =>
+      (!searchQuery || p.email.toLowerCase().includes(searchQuery.toLowerCase())) &&
+      (activeFilter === "ALL" || activeFilter === "PENDING")
+  );
+
+  // ── skeleton ─────────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="mobile-page-padding max-w-3xl mx-auto pb-28 sm:pb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div className="skeleton h-7 w-48 rounded-lg" />
+          <div className="skeleton h-9 w-28 rounded-xl" />
+        </div>
+        <div className="skeleton h-10 w-full rounded-xl mb-4" />
+        <div className="skeleton h-9 w-full rounded-xl mb-5" />
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 py-3 border-b border-gray-100">
+            <div className="skeleton w-11 h-11 rounded-full flex-shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="skeleton h-4 w-36 rounded" />
+              <div className="skeleton h-3 w-48 rounded" />
             </div>
-            <div className="flex items-center gap-2 mt-2">
-              <div className="text-xs text-gray-500">Tasks:</div>
-              <div className="font-semibold text-blue-700">{m.taskCount}</div>
-            </div>
-          </div>
-          );
-        })}
-        {pending.map((p) => (
-          <div key={"pending-" + p.id} className="bg-yellow-50 rounded-lg shadow p-4 flex flex-col gap-2 border border-yellow-200">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-yellow-400 flex items-center justify-center text-white font-bold text-lg">
-                {p.email[0].toUpperCase()}
-              </div>
-              <div>
-                <div className="font-semibold">{p.email}</div>
-                <div className="text-xs mt-1">
-                  <span className="px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-700">Pending</span>
-                </div>
-              </div>
-              <div className="ml-auto text-right">
-                <div className="text-xs text-gray-400">Invited</div>
-                <div className="text-xs">{new Date(p.invitedAt).toLocaleString()}</div>
-              </div>
-            </div>
+            <div className="skeleton h-6 w-16 rounded-full" />
           </div>
         ))}
       </div>
-      <button
-        className="mt-8 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        onClick={() => setShowModal(true)}
-      >
-        Invite Member
-      </button>
+    );
+  }
 
-      {showModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50">
-          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+  return (
+    <div className="mobile-page-padding max-w-3xl mx-auto pb-28 sm:pb-8">
+
+      {/* ── Sticky Header ──────────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-20 bg-[#F7F8FA]/95 backdrop-blur-md pb-3 pt-1 -mx-4 sm:-mx-6 px-4 sm:px-6 mb-1">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-xl font-bold text-gray-900">
+            Team{" "}
+            <span className="text-gray-400 font-normal text-base">
+              ({members.length})
+            </span>
+          </h1>
+          <button
+            onClick={() => setInviteSheetOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#155DFC] text-white text-sm font-semibold shadow-sm active:scale-95 transition-transform"
+          >
+            <UserPlus size={15} />
+            <span>Invite</span>
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="relative mb-3">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            ref={searchRef}
+            type="text"
+            placeholder="Search members…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#155DFC]/30"
+          />
+          {searchQuery && (
             <button
-              className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
-              onClick={() => setShowModal(false)}
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
-              &times;
+              <X size={14} />
             </button>
-            <h2 className="text-xl font-bold mb-4">Invite Team Member</h2>
-            <form onSubmit={handleInvite} className="flex flex-col gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Email Address <span className="text-red-500">*</span></label>
-                <input
-                  type="email"
-                  className="w-full border rounded px-3 py-2"
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Role <span className="text-red-500">*</span></label>
-                <select
-                  className="w-full border rounded px-3 py-2"
-                  value={inviteRole}
-                  onChange={e => setInviteRole(e.target.value)}
-                  required
-                >
-                  <option value="">Select a role</option>
-                  {ROLE_OPTIONS.map(role => (
-                    <option key={role} value={role}>{role}</option>
-                  ))}
-                </select>
-              </div>
-              {inviteError && <div className="text-red-600 text-sm">{inviteError}</div>}
-              {inviteSuccess && <div className="text-green-600 text-sm">{inviteSuccess}</div>}
-              <div className="flex gap-2 mt-4">
-                <button
-                  type="button"
-                  className="flex-1 py-2 rounded border border-gray-300 bg-gray-100 hover:bg-gray-200"
-                  onClick={() => setShowModal(false)}
-                  disabled={inviteLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center"
-                  disabled={inviteLoading}
-                >
-                  {inviteLoading ? "Sending..." : (<><span className="mr-2">✉️</span>Send Invite</>)}
-                </button>
-              </div>
-            </form>
-          </div>
+          )}
+        </div>
+
+        {/* Filter tabs */}
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+          {FILTERS.map((f) => {
+            const count =
+              f === "ALL"
+                ? members.length + pending.length
+                : f === "PENDING"
+                ? pending.length
+                : members.filter((m) => m.role === f).length;
+            return (
+              <button
+                key={f}
+                onClick={() => setActiveFilter(f)}
+                className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  activeFilter === f
+                    ? "bg-[#155DFC] text-white border-[#155DFC]"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                {f === "ALL" ? "All" : f.charAt(0) + f.slice(1).toLowerCase()}{" "}
+                <span className={activeFilter === f ? "opacity-75" : "text-gray-400"}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Role change error ───────────────────────────────────────────────── */}
+      {roleChangeError && (
+        <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+          {roleChangeError}
         </div>
       )}
+
+      {/* ── Member list ─────────────────────────────────────────────────────── */}
+      {filteredMembers.length === 0 && filteredPending.length === 0 && (
+        <EmptyState
+          icon={<UserPlus size={36} className="text-gray-400" />}
+          title="No members found"
+          subtitle={searchQuery ? "Try a different search term" : "Invite your first team member to get started"}
+          action={
+            <button
+              onClick={() => setInviteSheetOpen(true)}
+              className="px-4 py-2 rounded-xl bg-[#155DFC] text-white text-sm font-semibold"
+            >
+              Invite Member
+            </button>
+          }
+        />
+      )}
+
+      <div className="divide-y divide-gray-100">
+        <AnimatePresence initial={false}>
+          {filteredMembers.map((m) => {
+            const avatarKey = `${m.id}-${m.user.email}`;
+            const resolvedCandidates = getMemberProfilePicCandidates(m)
+              .map((url) => resolveProfilePicUrl(url))
+              .filter(Boolean);
+            const resolvedProfilePicUrl =
+              resolvedCandidates.find((url) => !imgError[`${avatarKey}:${url}`]) || "";
+
+            return (
+              <motion.div
+                key={m.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="touch-row gap-3 py-3"
+              >
+                {/* Avatar */}
+                <div className="relative flex-shrink-0">
+                  {resolvedProfilePicUrl ? (
+                    <Image
+                      src={resolvedProfilePicUrl}
+                      alt={m.user.fullName || m.user.email}
+                      width={44}
+                      height={44}
+                      unoptimized
+                      className="w-11 h-11 rounded-full object-cover"
+                      onError={() =>
+                        setImgError((errs) => ({
+                          ...errs,
+                          [`${avatarKey}:${resolvedProfilePicUrl}`]: true,
+                        }))
+                      }
+                    />
+                  ) : (
+                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+                      {getInitials(m.user.fullName, m.user.email)}
+                    </div>
+                  )}
+                  {/* Online dot */}
+                  <span
+                    className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
+                      m.status === "Active" ? "bg-green-500" : "bg-gray-300"
+                    }`}
+                  />
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-gray-900 text-sm truncate">
+                    {m.user.fullName || m.user.username || m.user.email}
+                  </div>
+                  <div className="text-xs text-gray-500 truncate">{m.user.email}</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <CheckSquare size={11} className="text-gray-400" />
+                    <span className="text-xs text-gray-500">{m.taskCount} tasks</span>
+                    {m.lastActive && (
+                      <>
+                        <Clock size={11} className="text-gray-400" />
+                        <span className="text-xs text-gray-400">
+                          {new Date(m.lastActive).toLocaleDateString()}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Role badge / change */}
+                {canChangeRole(m) ? (
+                  <button
+                    onClick={() => setRoleSheetMember(m)}
+                    disabled={roleChangeLoading === m.id}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${ROLE_COLOR[m.role] || ROLE_COLOR.VIEWER}`}
+                  >
+                    {roleChangeLoading === m.id ? (
+                      <span className="animate-pulse">…</span>
+                    ) : (
+                      <>
+                        {m.role.charAt(0) + m.role.slice(1).toLowerCase()}
+                        <ChevronDown size={11} />
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border ${ROLE_COLOR[m.role] || ROLE_COLOR.VIEWER}`}
+                  >
+                    {m.role.charAt(0) + m.role.slice(1).toLowerCase()}
+                  </span>
+                )}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Pending Invites Section ─────────────────────────────────────────── */}
+      {filteredPending.length > 0 && (
+        <div className="mt-4">
+          <button
+            onClick={() => setPendingOpen((v) => !v)}
+            className="sticky-section-header w-full flex items-center gap-2 py-2 -mx-4 px-4 text-sm font-semibold text-gray-700"
+          >
+            {pendingOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+            Pending Invites
+            <span className="ml-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-xs">
+              {filteredPending.length}
+            </span>
+          </button>
+
+          <AnimatePresence>
+            {pendingOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden divide-y divide-gray-100"
+              >
+                {filteredPending.map((p) => (
+                  <div key={"pending-" + p.id} className="touch-row gap-3 py-3">
+                    <div className="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm flex-shrink-0">
+                      {p.email[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-700 truncate">{p.email}</div>
+                      <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                        <Mail size={10} />
+                        Invited {new Date(p.invitedAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${ROLE_COLOR.PENDING}`}>
+                      Pending
+                    </span>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* ── FAB (mobile only) ────────────────────────────────────────────────── */}
+      <button
+        onClick={() => setInviteSheetOpen(true)}
+        className="fab md:hidden"
+        aria-label="Invite member"
+      >
+        <UserPlus size={22} />
+      </button>
+
+      {/* ── Role Change BottomSheet ─────────────────────────────────────────── */}
+      <BottomSheet
+        isOpen={!!roleSheetMember}
+        onClose={() => setRoleSheetMember(null)}
+        title={`Change role for ${roleSheetMember?.user.fullName || roleSheetMember?.user.email || ""}`}
+        snapPoint="auto"
+      >
+        {roleSheetMember && (
+          <div className="px-4 pb-6 pt-2 space-y-2">
+            {allowedRoleOptions(roleSheetMember).map((role) => (
+              <button
+                key={role}
+                onClick={async () => {
+                  await handleRoleChange(roleSheetMember, role);
+                  setRoleSheetMember(null);
+                }}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${
+                  roleSheetMember.role === role
+                    ? "border-[#155DFC] bg-blue-50 text-[#155DFC]"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                {role.charAt(0) + role.slice(1).toLowerCase()}
+                {roleSheetMember.role === role && (
+                  <span className="text-[#155DFC] text-lg">✓</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </BottomSheet>
+
+      {/* ── Invite BottomSheet / Modal ─────────────────────────────────────── */}
+      {/* Mobile: BottomSheet */}
+      <BottomSheet
+        isOpen={inviteSheetOpen}
+        onClose={() => {
+          setInviteSheetOpen(false);
+          setInviteError("");
+          setInviteSuccess("");
+        }}
+        title="Invite Team Member"
+        snapPoint="auto"
+      >
+        <InviteForm
+          inviteEmail={inviteEmail}
+          setInviteEmail={setInviteEmail}
+          inviteRole={inviteRole}
+          setInviteRole={setInviteRole}
+          inviteLoading={inviteLoading}
+          inviteError={inviteError}
+          inviteSuccess={inviteSuccess}
+          onSubmit={handleInvite}
+          onCancel={() => {
+            setInviteSheetOpen(false);
+            setInviteError("");
+            setInviteSuccess("");
+          }}
+        />
+      </BottomSheet>
+
+      {/* Desktop: modal (shown when inviteSheetOpen but on ≥md screen) */}
+      <AnimatePresence>
+        {inviteSheetOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="hidden md:flex fixed inset-0 items-center justify-center bg-black/40 z-50"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setInviteSheetOpen(false);
+                setInviteError("");
+                setInviteSuccess("");
+              }
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4"
+            >
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-bold text-gray-900">Invite Team Member</h2>
+                <button
+                  onClick={() => {
+                    setInviteSheetOpen(false);
+                    setInviteError("");
+                    setInviteSuccess("");
+                  }}
+                  className="text-gray-400 hover:text-gray-600 p-1"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <InviteForm
+                inviteEmail={inviteEmail}
+                setInviteEmail={setInviteEmail}
+                inviteRole={inviteRole}
+                setInviteRole={setInviteRole}
+                inviteLoading={inviteLoading}
+                inviteError={inviteError}
+                inviteSuccess={inviteSuccess}
+                onSubmit={handleInvite}
+                onCancel={() => {
+                  setInviteSheetOpen(false);
+                  setInviteError("");
+                  setInviteSuccess("");
+                }}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+// ── Invite form (shared between mobile sheet + desktop modal) ──────────────────
+interface InviteFormProps {
+  inviteEmail: string;
+  setInviteEmail: (v: string) => void;
+  inviteRole: string;
+  setInviteRole: (v: string) => void;
+  inviteLoading: boolean;
+  inviteError: string;
+  inviteSuccess: string;
+  onSubmit: (e: React.FormEvent) => void;
+  onCancel: () => void;
+}
+
+function InviteForm({
+  inviteEmail, setInviteEmail,
+  inviteRole, setInviteRole,
+  inviteLoading, inviteError, inviteSuccess,
+  onSubmit, onCancel,
+}: InviteFormProps) {
+  return (
+    <form onSubmit={onSubmit} className="px-4 pb-6 pt-2 flex flex-col gap-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Email Address <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="email"
+          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#155DFC]/30"
+          placeholder="colleague@company.com"
+          value={inviteEmail}
+          onChange={(e) => setInviteEmail(e.target.value)}
+          required
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Role <span className="text-red-500">*</span>
+        </label>
+        <select
+          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#155DFC]/30 bg-white"
+          value={inviteRole}
+          onChange={(e) => setInviteRole(e.target.value)}
+          required
+        >
+          <option value="">Select a role</option>
+          {ROLE_OPTIONS.map((role) => (
+            <option key={role} value={role}>
+              {role.charAt(0) + role.slice(1).toLowerCase()}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {inviteError && (
+        <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+          {inviteError}
+        </div>
+      )}
+      {inviteSuccess && (
+        <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-xl text-sm text-green-600">
+          {inviteSuccess}
+        </div>
+      )}
+
+      <div className="flex gap-2 mt-1">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={inviteLoading}
+          className="flex-1 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm font-medium hover:bg-gray-100 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={inviteLoading}
+          className="flex-1 py-2.5 rounded-xl bg-[#155DFC] text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-blue-700 transition-colors"
+        >
+          {inviteLoading ? (
+            <span className="animate-pulse">Sending…</span>
+          ) : (
+            <>
+              <Mail size={15} />
+              Send Invite
+            </>
+          )}
+        </button>
+      </div>
+    </form>
   );
 }

@@ -46,7 +46,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className='min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] p-4'>
+    <div className='min-h-screen flex flex-col items-center justify-center p-4'>
       {/* Back to Login Link */}
       <div className="w-full max-w-[420px] mb-4">
         <Link href="/login" className='inline-flex items-center text-sm text-gray-500 hover:text-gray-900 transition-colors'>
@@ -69,7 +69,7 @@ export default function ForgotPasswordPage() {
       </div>
 
       {/* Main Card Container */}
-      <div className='w-full max-w-[420px] bg-white rounded-[24px] shadow-sm p-8'>
+      <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-8'>
         {submitted ? (
           // Success Message
           <div className="text-center py-8">

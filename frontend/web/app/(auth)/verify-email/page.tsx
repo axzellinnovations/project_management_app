@@ -4,7 +4,7 @@ import VerifyEmailForm from '../components/VerifyEmailForm';
 
 export default function VerifyEmailPage() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] p-4 font-sans">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans">
       
       <BrandLogo />
       

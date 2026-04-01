@@ -5,7 +5,7 @@ import Column from "./components/Column";
 // import { motion } from "./components/motionShim";
 export default function SprintBoardPage() {
   return (
-    <main className="w-full bg-[#F1F6F9] min-h-screen px-[10px] py-2">
+    <main className="w-full bg-[#F1F6F9] min-h-full px-[10px] py-2 pb-28 sm:pb-8">
       <div className="mx-auto bg-white shadow p-0 rounded-none" style={{ maxWidth: 'clamp(0px, calc(100% - 4cm), 1272px)' }}>
         <Header />
 

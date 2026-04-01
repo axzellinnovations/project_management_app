@@ -161,7 +161,7 @@ export default function ProfilePage() {
     }
 
     return (
-        <div className="max-w-3xl mx-auto py-2">
+        <div className="mobile-page-padding max-w-3xl mx-auto pb-28 sm:pb-8">
             <h1 className="text-[28px] font-semibold text-[#101828]">User Profile</h1>
             <p className="text-sm text-[#6A7282] mt-1 mb-8">See and edit your profile details.</p>
 

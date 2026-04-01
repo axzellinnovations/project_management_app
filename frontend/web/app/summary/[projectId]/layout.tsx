@@ -1,6 +1,7 @@
 'use client';
 
-import Sidebar from "../../nav/Sidebar";
+import { Suspense } from 'react';
+import SidebarLayout from "../../nav/SidebarLayout";
 import TopBar from "../../nav/TopBar";
 import { useEffect } from "react";
 import { useParams } from "next/navigation";
@@ -34,14 +35,13 @@ export default function SummaryLayout({
     }, [projectId]);
 
     return (
-        <div className="flex h-screen bg-gray-50">
-            <Sidebar />
-            <div className="flex-1 flex flex-col overflow-hidden">
+        <SidebarLayout>
+            <Suspense fallback={null}>
                 <TopBar />
-                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">
-                    {children}
-                </main>
-            </div>
-        </div>
+            </Suspense>
+            <main className="flex-1 overflow-y-auto bg-[#F7F8FA]">
+                {children}
+            </main>
+        </SidebarLayout>
     );
 }

@@ -4,11 +4,9 @@ export const dynamic = 'force-dynamic';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TimelineView from '../kanban/components/TimelineView';
-import Sidebar from '../nav/Sidebar';
-import TopBar from '../nav/TopBar';
 import { Task } from '../kanban/types';
 import { fetchTasksByProject, updateTask } from '../kanban/api';
-import { AlertCircle, Loader } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 export default function TimelinePage() {
   const searchParams = useSearchParams();
@@ -82,55 +80,41 @@ export default function TimelinePage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <Sidebar />
-      
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* TopBar */}
-        <TopBar />
-        
-        {/* Content Area */}
-        <div className="flex-1 overflow-auto p-6">
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-800">Timeline View</h1>
-                <p className="text-sm text-gray-600 mt-1">Visualize your project timeline with Gantt chart</p>
-              </div>
-            </div>
-
-            {/* Error Message */}
-            {error && (
-              <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 mb-4">
-                <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-sm">Error</p>
-                  <p className="text-xs">{error}</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Loading State */}
-          {loading ? (
-            <div className="flex items-center justify-center h-96">
-              <div className="text-center">
-                <Loader className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-2" />
-                <p className="text-gray-600">Loading tasks...</p>
-              </div>
-            </div>
-          ) : (
-            /* Timeline View */
-            <TimelineView
-              tasks={tasks}
-              onTaskUpdate={handleTaskUpdate}
-              projectId={parseInt(projectId as string)}
-            />
-          )}
+    <div className="mobile-page-padding pb-28 sm:pb-8">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Timeline</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Gantt view of your project tasks</p>
         </div>
       </div>
+
+      {/* Error */}
+      {error && (
+        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 mb-5">
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-sm">Error</p>
+            <p className="text-xs">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Loading skeleton */}
+      {loading ? (
+        <div className="space-y-3">
+          <div className="skeleton h-10 w-full rounded-xl" />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="skeleton h-12 rounded-xl w-full" style={{ opacity: 1 - i * 0.12 }} />
+          ))}
+        </div>
+      ) : (
+        <TimelineView
+          tasks={tasks}
+          onTaskUpdate={handleTaskUpdate}
+          projectId={parseInt(projectId as string)}
+        />
+      )}
     </div>
   );
 }
