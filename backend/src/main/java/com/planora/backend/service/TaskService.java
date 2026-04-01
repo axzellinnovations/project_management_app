@@ -29,6 +29,13 @@ import com.planora.backend.repository.UserRepository;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class TaskService {
@@ -152,6 +159,12 @@ public class TaskService {
             task.setSprint(sprint);
         }
 
+        // update assignee
+        if(request.getAssigneeId() != null){
+            TeamMember newAssignee = validateTeamMember(teamId, request.getAssigneeId());
+            task.setAssignee(newAssignee);
+        }
+
         //update reporter
         if(request.getReporterId() != null){
             TeamMember newReporter= validateTeamMember(teamId, request.getReporterId());
@@ -200,7 +213,7 @@ public class TaskService {
                 .orElseThrow(()-> new EntityNotFoundException("Parent task is not found"));
 
         //permission check
-        validatePermission(parent.getProject().getId(), currentUserId, TeamRole.VIEWER);
+        validatePermission(parent.getProject().getTeam().getId(), currentUserId, TeamRole.VIEWER);
 
         //reuse create logic but set parent
         TaskResponseDTO childDTO = createTask(subTaskRequest, currentUserId);
@@ -218,7 +231,7 @@ public class TaskService {
     @Transactional
     public void addDependency(Long taskId, Long blockerId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        validatePermission(task.getProject().getTeam().getId(),currentUserId, TeamRole.VIEWER);
 
         Task blocker = taskRepository.findById(blockerId).orElseThrow();
         task.getDependencies().add(blocker);
@@ -229,7 +242,7 @@ public class TaskService {
     @Transactional
     public void removeDependency(Long taskId, Long blockerId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        validatePermission(task.getProject().getTeam().getId(),currentUserId, TeamRole.VIEWER);
 
         Task blocker = taskRepository.findById(blockerId).orElseThrow();
         task.getDependencies().remove(blocker);
@@ -242,7 +255,7 @@ public class TaskService {
     @Transactional
     public void addLabel(Long taskId, Long labelId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        validatePermission(task.getProject().getTeam().getId(),currentUserId, TeamRole.VIEWER);
 
         Label label = labelRepository.findById(labelId).orElseThrow();
         task.getLabels().add(label);
@@ -253,7 +266,7 @@ public class TaskService {
     @Transactional
     public void removeLabel(Long taskId, Long labelId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        validatePermission(task.getProject().getTeam().getId(),currentUserId, TeamRole.VIEWER);
 
         Label label = labelRepository.findById(labelId).orElseThrow();
         task.getLabels().remove(label);
@@ -319,11 +332,11 @@ public class TaskService {
     //---HELPER-01--- : For Permission Checking ---
     private void validatePermission(Long teamId, Long userId, TeamRole forbiddenRole){
         TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId,userId)
-                .orElseThrow(()-> new RuntimeException("User is not a member of this Team"));
+                .orElseThrow(()-> new AccessDeniedException("User is not a member of this team"));
 
         // If forbiddenRole is specified, check that user doesn't have that role
         if(forbiddenRole != null && member.getRole() == forbiddenRole){
-            throw new RuntimeException("Insufficient Permissions: " + forbiddenRole + " cannot perform this action.");
+            throw new AccessDeniedException("Insufficient permissions for this action");
         }
     }
 
@@ -352,14 +365,21 @@ public class TaskService {
         }
 
         if(task.getAssignee() != null){
-            dto.setAssigneeId(task.getAssignee().getId());
-            dto.setAssigneeName(task.getAssignee().getUser().getUsername());
-            dto.setAssigneePhotoUrl(task.getAssignee().getUser().getProfilePicUrl());
+            dto.setAssigneeId(task.getAssignee().getUser().getUserId());
+            String assigneeName = task.getAssignee().getUser().getFullName();
+            if (assigneeName == null || assigneeName.isBlank()) {
+                assigneeName = task.getAssignee().getUser().getUsername();
+            }
+            dto.setAssigneeName(assigneeName);
         }
 
         if(task.getReporter() != null){
-            dto.setReporterId(task.getReporter().getId());
-            dto.setReporterName(task.getReporter().getUser().getUsername());
+            dto.setReporterId(task.getReporter().getUser().getUserId());
+            String reporterName = task.getReporter().getUser().getFullName();
+            if (reporterName == null || reporterName.isBlank()) {
+                reporterName = task.getReporter().getUser().getUsername();
+            }
+            dto.setReporterName(reporterName);
         }
         return dto;
     }

@@ -40,11 +40,9 @@ public class ProjectController {
 
     // ---------------- READ PROJECTS (FOR AUTH USER) ----------------
     @GetMapping
-    public ResponseEntity<List<ProjectResponseDTO>> getProjectsForUser(
+    public ResponseEntity<List<ProjectResponseDTO>> getProjects(
             @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
-        return new ResponseEntity<>(
-                projectService.getProjectsForUser(principal.getUserId()),
-                HttpStatus.OK);
+        return ResponseEntity.ok(projectService.getProjectsForUser(principal.getUserId()));
     }
 
     // ---------------- READ RECENT (FOR AUTH USER) ----------------

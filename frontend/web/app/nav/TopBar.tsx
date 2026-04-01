@@ -193,7 +193,7 @@ function TopBarContent() {
             return 'timeline';
         }
 
-        if (pathname.startsWith('/sprint-backlog')) {
+        if (pathname.startsWith('/backlog') || pathname.startsWith('/sprint-backlog')) {
             return 'backlog';
         }
 
@@ -278,7 +278,7 @@ function TopBarContent() {
             case 'timeline':
                 return withProjectId('/timeline');
             case 'backlog':
-                return withProjectId('/sprint-backlog');
+                return withProjectId('/backlog');
             case 'board':
                 return withProjectId('/kanban');
             case 'calendar':
@@ -300,6 +300,7 @@ function TopBarContent() {
         const projectPaths = [
             '/summary',
             '/timeline',
+            '/backlog',
             '/sprint-backlog',
             '/kanban',
             '/calendar',

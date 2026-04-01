@@ -11,11 +11,13 @@ import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.TeamRepository;
 import com.planora.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 
@@ -229,7 +231,7 @@ public class ProjectService {
     }
 
     // ---------------- READ BY ID ----------------
-    public ProjectResponseDTO getProjectById(Long id) {
+    public ProjectResponseDTO getProjectById(Long id, Long currentUserId) {
         Project project = findProjectById(id);
         return convertToResponseDTO(project, null);
     }
@@ -310,5 +312,10 @@ public class ProjectService {
         if (member.getRole() != TeamRole.OWNER) {
             throw new RuntimeException("Only PROJECT OWNER can delete this project");
         }
+    }
+
+    private void validateMembership(Long teamId, Long userId) {
+        teamMemberRepository.findByTeamIdAndUserUserId(teamId, userId)
+                .orElseThrow(() -> new AccessDeniedException("Access denied: You are not a member of this team"));
     }
 }

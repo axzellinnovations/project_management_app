@@ -18,6 +18,9 @@ api.interceptors.request.use(
             const token = localStorage.getItem('token');
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
+                console.debug('[Axios] Bearer token added for request:', config.url);
+            } else {
+                console.warn('[Axios] No token found in localStorage for request:', config.url);
             }
         }
         return config;
@@ -37,6 +40,7 @@ api.interceptors.response.use(
             const isAuthEndpoint = authEndpoints.some(endpoint => error.config?.url?.includes(endpoint));
             
             if (!isAuthEndpoint) {
+                console.warn('[Axios] 401 Unauthorized - Token may be expired');
                 // Token expired or invalid - redirect to login
                 if (typeof window !== 'undefined') {
                     localStorage.removeItem('token');

@@ -51,9 +51,13 @@ public class ProjectInvitationService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
 
+        if (project.getTeam() == null || project.getTeam().getId() == null) {
+            throw new RuntimeException("Project team not found");
+        }
+
         Long teamId = project.getTeam().getId();
 
-        // Allow TEAM OWNER and ADMIN to invite
+        // TEAM OWNER or ADMIN can invite
         teamMemberService.validateOwnerOrAdmin(teamId, inviterUserId);
 
 
