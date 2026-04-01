@@ -13,8 +13,6 @@ import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.TeamRepository;
 import com.planora.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -196,16 +194,4 @@ public class TeamMemberService {
                 return member;
         }
 
-        // =====================================================
-        // HELPER : VALIDATE OWNER OR ADMIN
-        // =====================================================
-        public TeamMember validateOwnerOrAdmin(Long teamId, Long userId) {
-                TeamMember member = validateMembership(teamId, userId);
-
-                if (member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN) {
-                        throw new RuntimeException("Only TEAM OWNER or ADMIN can perform this action");
-                }
-
-                return member;
-        }
 }
