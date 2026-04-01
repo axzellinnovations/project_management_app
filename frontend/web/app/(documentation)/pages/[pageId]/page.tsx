@@ -11,7 +11,7 @@ import { predefinedTemplates } from '../components/TemplateSelector';
 import axiosInstance from '../../../../lib/axios';
 import {
   Download, Upload, Trash2, CheckCircle2, Loader2,
-  Save, FileEdit, History, X,
+  Save, FileEdit, History, X, PanelLeft,
 } from 'lucide-react';
 import TurndownService from 'turndown';
 import { marked } from 'marked';
@@ -30,6 +30,7 @@ export default function PageDetailPage() {
   const [title, setTitle] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [historyMock, setHistoryMock] = useState<PageHistoryItem[]>([]);
+  const [showDocSidebar, setShowDocSidebar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -213,19 +214,32 @@ export default function PageDetailPage() {
   }
 
   return (
-    <div className="flex h-full w-full bg-white overflow-hidden rounded-lg border border-gray-200 shadow-sm mt-4 mb-4 mx-4">
+    <div className="flex flex-col lg:flex-row h-full w-full bg-white overflow-hidden rounded-lg border border-gray-200 shadow-sm mt-4 mb-4 mx-4">
+      {/* Mobile sidebar toggle */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 lg:hidden">
+        <button
+          onClick={() => setShowDocSidebar(s => !s)}
+          className="flex items-center gap-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2.5 py-1.5 rounded-lg transition-colors"
+        >
+          <PanelLeft size={16} />
+          {showDocSidebar ? 'Hide pages' : 'Show pages'}
+        </button>
+      </div>
+
       {/* Left Sidebar */}
-      <DocumentSidebar
-        pages={filteredPages}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        selectedPageId={isDraft ? null : pageId}
-        projectId={projectId}
-        onCreateClick={() => router.push(projectId ? `/pages?projectId=${projectId}` : '/pages')}
-      />
+      <div className={showDocSidebar ? 'flex' : 'hidden lg:flex'}>
+        <DocumentSidebar
+          pages={filteredPages}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          selectedPageId={isDraft ? null : pageId}
+          projectId={projectId}
+          onCreateClick={() => router.push(projectId ? `/pages?projectId=${projectId}` : '/pages')}
+        />
+      </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full bg-white relative overflow-hidden">
+      <div className="flex-1 flex flex-col h-full bg-white relative overflow-hidden pb-28 lg:pb-0">
         {loadingPage ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="animate-spin text-blue-500" size={32} />

@@ -196,6 +196,8 @@ export default function BacklogPage() {
     const [error,    setError]   = useState<string | null>(null);
     const [collapsed, setCollapsed] = useState(false);
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+    const [showCreateSheet, setShowCreateSheet] = useState(false);
+    const [createTitle, setCreateTitle] = useState('');
 
     const loadTasks = useCallback(async () => {
         if (!projectId) return;
@@ -214,6 +216,12 @@ export default function BacklogPage() {
     }, [projectId]);
 
     useEffect(() => { void loadTasks(); }, [loadTasks]);
+
+    useEffect(() => {
+        const handler = () => setShowCreateSheet(true);
+        document.addEventListener('backlog:open-create', handler);
+        return () => document.removeEventListener('backlog:open-create', handler);
+    }, []);
 
     const handleMarkDone = useCallback(async (id: number) => {
         setTasks((prev) => prev.map((t) => t.id === id ? { ...t, status: 'DONE' } : t));
@@ -419,6 +427,44 @@ export default function BacklogPage() {
                         </button>
                     </div>
                 )}
+            </BottomSheet>
+
+            {/* ── Create issue bottom sheet ── */}
+            <BottomSheet
+                isOpen={showCreateSheet}
+                onClose={() => { setShowCreateSheet(false); setCreateTitle(''); }}
+                title="Create Issue"
+                snapPoint="half"
+            >
+                <div className="flex flex-col gap-4 pt-1">
+                    <input
+                        autoFocus
+                        value={createTitle}
+                        onChange={(e) => setCreateTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && createTitle.trim()) {
+                                void handleAddTask(createTitle.trim());
+                                setCreateTitle('');
+                                setShowCreateSheet(false);
+                            }
+                        }}
+                        placeholder="Issue title…"
+                        className="w-full px-4 py-3 border border-[#E5E7EB] rounded-xl text-[14px] text-[#101828] placeholder-[#9CA3AF] outline-none focus:border-[#155DFC] focus:ring-2 focus:ring-[#EAF2FF] transition-all"
+                    />
+                    <button
+                        onClick={() => {
+                            if (!createTitle.trim()) return;
+                            void handleAddTask(createTitle.trim());
+                            setCreateTitle('');
+                            setShowCreateSheet(false);
+                        }}
+                        disabled={!createTitle.trim()}
+                        className="flex items-center justify-center gap-2 w-full py-3 bg-[#155DFC] text-white rounded-xl font-medium text-[14px] disabled:opacity-50 active:scale-[0.98] transition-transform"
+                    >
+                        <Plus size={16} />
+                        Create Issue
+                    </button>
+                </div>
             </BottomSheet>
         </div>
     );

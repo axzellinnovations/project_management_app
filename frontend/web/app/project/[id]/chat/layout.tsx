@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Sidebar from '../../../nav/Sidebar';
+import SidebarLayout from '../../../nav/SidebarLayout';
 import TopBar from '../../../nav/TopBar';
 import api from '@/lib/axios';
 
@@ -48,14 +48,13 @@ export default function ChatLayout({
   }, [projectId, router]);
 
   return (
-    <div className="flex h-screen bg-[#F7F8FA]">
-      <Sidebar />
-      <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
+    <SidebarLayout>
+      <Suspense fallback={<div className="h-[74px] bg-[#F1F6F9]" />}>
         <TopBar />
-        <main className="flex-1 min-h-0 overflow-hidden bg-[#F7F8FA]">
-          {children}
-        </main>
-      </div>
-    </div>
+      </Suspense>
+      <main className="flex-1 min-h-0 overflow-hidden bg-[#F7F8FA]">
+        {children}
+      </main>
+    </SidebarLayout>
   );
 }

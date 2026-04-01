@@ -173,73 +173,76 @@ function TabBar({
     const activeInOverflow = overflowTabs.some(t => t.id === activeTab);
 
     return (
-        <div className="h-[45px] bg-white border-b border-[#E3E8EF] px-4 sm:px-8 flex items-end overflow-x-auto no-scrollbar scroll-smooth">
-            <div className="flex items-end gap-4 sm:gap-8 min-w-max">
-                {visibleTabs.map((tab) => (
-                    <Link
-                        key={tab.id}
-                        href={getTabHref(tab.id)}
-                        className="relative pb-3 px-1 shrink-0"
-                    >
-                        <span
-                            className={`font-inter text-[13px] sm:text-[14px] leading-[20px] transition-colors duration-200 ${
-                                activeTab === tab.id
-                                    ? 'text-[#101828] font-semibold'
-                                    : 'text-[#667085] font-medium hover:text-[#101828]'
-                            }`}
+        <div className="h-[45px] bg-white border-b border-[#E3E8EF] flex items-end">
+            {/* Scrollable tabs — overflow stays inside this inner div so the More dropdown is never clipped */}
+            <div className="flex-1 overflow-x-auto no-scrollbar scroll-smooth px-4 sm:px-8">
+                <div className="flex items-end gap-4 sm:gap-8 min-w-max">
+                    {visibleTabs.map((tab) => (
+                        <Link
+                            key={tab.id}
+                            href={getTabHref(tab.id)}
+                            className="relative pb-3 px-1 shrink-0"
                         >
-                            {tab.label}
-                        </span>
-                        {activeTab === tab.id && (
-                            <motion.div
-                                layoutId="activeTab"
-                                className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#155DFC] rounded-t-[2px]"
-                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                            />
-                        )}
-                    </Link>
-                ))}
-
-                {/* More (…) overflow menu — only on sm screens when tabs overflow */}
-                {overflowTabs.length > 0 && (
-                    <div ref={moreRef} className="relative pb-3 shrink-0">
-                        <button
-                            onClick={() => setMoreOpen(p => !p)}
-                            className={`flex items-center gap-1 font-inter text-[13px] font-medium transition-colors duration-200 ${
-                                activeInOverflow || moreOpen ? 'text-[#101828] font-semibold' : 'text-[#667085] hover:text-[#101828]'
-                            }`}
-                        >
-                            More
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                                <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </button>
-                        {activeInOverflow && (
-                            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#155DFC] rounded-t-[2px]" />
-                        )}
-                        {moreOpen && (
-                            <div className="absolute bottom-[46px] left-0 z-50 bg-white/90 backdrop-blur-xl border border-[#E3E8EF] rounded-xl shadow-xl py-1 min-w-[140px] origin-bottom"
-                                style={{ animation: 'dropdownIn 150ms ease forwards' }}
+                            <span
+                                className={`font-inter text-[13px] sm:text-[14px] leading-[20px] transition-colors duration-200 ${
+                                    activeTab === tab.id
+                                        ? 'text-[#101828] font-semibold'
+                                        : 'text-[#667085] font-medium hover:text-[#101828]'
+                                }`}
                             >
-                                {overflowTabs.map((tab) => (
-                                    <Link
-                                        key={tab.id}
-                                        href={getTabHref(tab.id)}
-                                        onClick={() => setMoreOpen(false)}
-                                        className={`block px-4 py-2 text-[13px] transition-colors ${
-                                            activeTab === tab.id
-                                                ? 'text-[#155DFC] font-semibold bg-[#EAF2FF]'
-                                                : 'text-[#4B5563] hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        {tab.label}
-                                    </Link>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
+                                {tab.label}
+                            </span>
+                            {activeTab === tab.id && (
+                                <motion.div
+                                    layoutId="activeTab"
+                                    className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#155DFC] rounded-t-[2px]"
+                                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                />
+                            )}
+                        </Link>
+                    ))}
+                </div>
             </div>
+
+            {/* More button — sibling of the scroll container, so its dropdown is not clipped */}
+            {overflowTabs.length > 0 && (
+                <div ref={moreRef} className="relative pb-3 pr-4 flex-shrink-0 self-end">
+                    <button
+                        onClick={() => setMoreOpen(p => !p)}
+                        className={`flex items-center gap-1 font-inter text-[13px] font-medium transition-colors duration-200 ${
+                            activeInOverflow || moreOpen ? 'text-[#101828] font-semibold' : 'text-[#667085] hover:text-[#101828]'
+                        }`}
+                    >
+                        More
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className={`transition-transform duration-200 ${moreOpen ? 'rotate-180' : ''}`}>
+                            <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                    </button>
+                    {activeInOverflow && (
+                        <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#155DFC] rounded-t-[2px]" />
+                    )}
+                    {moreOpen && (
+                        <div className="absolute top-full right-0 mt-1 z-[200] bg-white/90 backdrop-blur-xl border border-[#E3E8EF] rounded-xl shadow-xl py-1 min-w-[140px]"
+                            style={{ animation: 'dropdownIn 150ms ease forwards' }}
+                        >
+                            {overflowTabs.map((tab) => (
+                                <Link
+                                    key={tab.id}
+                                    href={getTabHref(tab.id)}
+                                    onClick={() => setMoreOpen(false)}
+                                    className={`block px-4 py-2 text-[13px] transition-colors ${
+                                        activeTab === tab.id
+                                            ? 'text-[#155DFC] font-semibold bg-[#EAF2FF]'
+                                            : 'text-[#4B5563] hover:bg-gray-50'
+                                    }`}
+                                >
+                                    {tab.label}
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -265,7 +268,7 @@ function TopBarContent() {
             return getUserFromToken();
         }, [token]);
 
-    const { toggleSidebar } = useNavigation();
+    useNavigation();
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
     const [isFavorite, setIsFavorite] = useState(false);
     const params = useParams();
@@ -430,7 +433,7 @@ function TopBarContent() {
                 <div className="flex items-center gap-4">
                     {/* Hamburger Menu (Mobile Only) */}
                     <button 
-                        onClick={toggleSidebar}
+                        onClick={() => window.dispatchEvent(new CustomEvent('planora:sidebar:toggle'))}
                         className="lg:hidden p-2 -ml-2 text-[#6A7282] hover:bg-gray-200/50 rounded-lg transition-colors"
                         aria-label="Toggle Sidebar"
                     >
@@ -473,7 +476,7 @@ function TopBarContent() {
                 <div className="flex items-center gap-4">
                     {/* Hamburger Menu (Mobile Only) */}
                     <button 
-                        onClick={toggleSidebar}
+                        onClick={() => window.dispatchEvent(new CustomEvent('planora:sidebar:toggle'))}
                         className="lg:hidden p-2 -ml-2 text-[#6A7282] hover:bg-gray-200/50 rounded-lg transition-colors"
                         aria-label="Toggle Sidebar"
                     >

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, WifiOff, RefreshCw, Search, X } from 'lucide-react';
+import { Users, WifiOff, RefreshCw, Search, X, ArrowLeft } from 'lucide-react';
 import { useChat } from './components/useChat';
 import { ChatSidebar } from './components/chatSidebar';
 import { ChatMessages } from './components/chatMessage';
@@ -72,6 +72,18 @@ export default function ChatInterface() {
     roomMentionCounts,
     teamMentionCount,
   } = useChat(projectId);
+
+  const [showChatSidebar, setShowChatSidebar] = useState(true);
+
+  const handleSelectUser = (u: string | null) => {
+    selectPrivateUser(u);
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) setShowChatSidebar(false);
+  };
+
+  const handleSelectRoom = (id: number | null) => {
+    selectRoom(id);
+    if (id !== null && typeof window !== 'undefined' && window.innerWidth < 1024) setShowChatSidebar(false);
+  };
 
   const hasSelectedRoom = selectedRoomId !== null && Number.isFinite(selectedRoomId);
   const selectedRoom = hasSelectedRoom ? rooms.find((r) => r.id === selectedRoomId) : null;
@@ -251,38 +263,40 @@ export default function ChatInterface() {
     <div className="flex bg-[#F7F8FA] overflow-hidden h-full min-h-0">
 
       {/* ── Sidebar ── */}
-      <ChatSidebar
-        currentUser={currentUser}
-        currentUserAliases={currentUserAliases}
-        users={filteredUsers}
-        userProfilePics={userProfilePics}
-        rooms={rooms}
-        selectedUser={selectedUser}
-        selectedRoomId={selectedRoomId}
-        onSelectUser={selectPrivateUser}
-        onSelectRoom={selectRoom}
-        privateUnseenCounts={privateUnseenCounts}
-        roomUnseenCounts={roomUnseenCounts}
-        privateLastMessages={privateLastMessages}
-        roomLastMessages={roomLastMessages}
-        teamUnseenCount={teamUnseenCount}
-        teamLastMessage={teamLastMessage}
-        teamTypingUsers={teamTypingUsers}
-        roomTypingUsers={roomTypingUsers}
-        privateTypingUsers={privateTypingUsers}
-        onCreateRoom={handleCreateRoom}
-        onDeleteRoom={deleteRoom}
-        onUpdateRoomMeta={updateRoomMeta}
-        onAddTeam={addTeam}
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        isLoading={false}
-        roomMentionCounts={roomMentionCounts}
-        teamMentionCount={teamMentionCount}
-      />
+      <div className={showChatSidebar ? 'flex' : 'hidden lg:flex'}>
+        <ChatSidebar
+          currentUser={currentUser}
+          currentUserAliases={currentUserAliases}
+          users={filteredUsers}
+          userProfilePics={userProfilePics}
+          rooms={rooms}
+          selectedUser={selectedUser}
+          selectedRoomId={selectedRoomId}
+          onSelectUser={handleSelectUser}
+          onSelectRoom={handleSelectRoom}
+          privateUnseenCounts={privateUnseenCounts}
+          roomUnseenCounts={roomUnseenCounts}
+          privateLastMessages={privateLastMessages}
+          roomLastMessages={roomLastMessages}
+          teamUnseenCount={teamUnseenCount}
+          teamLastMessage={teamLastMessage}
+          teamTypingUsers={teamTypingUsers}
+          roomTypingUsers={roomTypingUsers}
+          privateTypingUsers={privateTypingUsers}
+          onCreateRoom={handleCreateRoom}
+          onDeleteRoom={deleteRoom}
+          onUpdateRoomMeta={updateRoomMeta}
+          onAddTeam={addTeam}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          isLoading={false}
+          roomMentionCounts={roomMentionCounts}
+          teamMentionCount={teamMentionCount}
+        />
+      </div>
 
       {/* ── Main chat area ── */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white border-l border-gray-100/60 shadow-sm">
+      <div className={`flex-1 flex flex-col min-w-0 bg-white border-l border-gray-100/60 shadow-sm ${!showChatSidebar ? 'flex' : 'hidden lg:flex'}`}>
 
         {/* Reconnect / disconnect banner */}
         <AnimatePresence>
@@ -342,6 +356,14 @@ export default function ChatInterface() {
         {/* Header */}
         <div className="h-16 px-5 flex items-center justify-between border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
+            {/* Back to sidebar on mobile */}
+            <button
+              className="lg:hidden p-1.5 -ml-1 rounded-lg hover:bg-gray-100 text-gray-500 flex-shrink-0"
+              onClick={() => setShowChatSidebar(true)}
+              aria-label="Back to conversations"
+            >
+              <ArrowLeft size={18} />
+            </button>
             <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
               {headerIcon}
             </div>
@@ -481,6 +503,8 @@ export default function ChatInterface() {
           enableMentions={!selectedUser}
           mentionCandidates={mentionCandidates}
         />
+        {/* Spacer for mobile BottomNav */}
+        <div className="h-20 flex-shrink-0 lg:hidden" aria-hidden="true" />
       </div>
 
       {/* ── Thread panel ── */}

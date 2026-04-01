@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { PanelLeft } from 'lucide-react';
 import DocumentSidebar from './components/DocumentSidebar';
 import TemplateSelector from './components/TemplateSelector';
 import { usePages } from './components/usePages';
@@ -39,6 +40,8 @@ export default function PagesPage() {
     setSearchQuery,
   } = usePages(projectId);
 
+  const [showDocSidebar, setShowDocSidebar] = useState(false);
+
   const handleTemplateSelect = async (template: Template) => {
     try {
       router.push(projectId ? `/pages/new?projectId=${projectId}&template=${template.id}` : `/pages/new?template=${template.id}`);
@@ -59,21 +62,34 @@ export default function PagesPage() {
 
   return (
     <>
-      <div className="flex h-full w-full bg-white overflow-hidden rounded-lg border border-gray-200 shadow-sm mt-4 mb-4 ml-4 mr-4 mx-4">
+      <div className="flex flex-col lg:flex-row h-full w-full bg-white overflow-hidden rounded-lg border border-gray-200 shadow-sm mt-4 mb-4 ml-4 mr-4 mx-4">
+        {/* Mobile sidebar toggle button */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 lg:hidden">
+          <button
+            onClick={() => setShowDocSidebar(s => !s)}
+            className="flex items-center gap-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2.5 py-1.5 rounded-lg transition-colors"
+          >
+            <PanelLeft size={16} />
+            {showDocSidebar ? 'Hide pages' : 'Show pages'}
+          </button>
+        </div>
+
         {/* Left Sidebar */}
-        <DocumentSidebar
-          pages={filteredPages}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          projectId={projectId}
-          selectedPageId={null} // Root path has no selected page
-          onCreateClick={() => {
-            // Already showing template selector here in root, but just in case
-          }}
-        />
+        <div className={showDocSidebar ? 'flex' : 'hidden lg:flex'}>
+          <DocumentSidebar
+            pages={filteredPages}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            projectId={projectId}
+            selectedPageId={null} // Root path has no selected page
+            onCreateClick={() => {
+              // Already showing template selector here in root, but just in case
+            }}
+          />
+        </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto pb-28 lg:pb-0">
           <TemplateSelector 
             onSelect={handleTemplateSelect} 
           />
