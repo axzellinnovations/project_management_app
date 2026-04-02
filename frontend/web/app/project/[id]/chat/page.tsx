@@ -41,8 +41,7 @@ export default function ChatInterface() {
     featureFlags,
     searchResults,
     isSearchLoading,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    commandNotice,
+    commandNotice: _commandNotice,
     messageReactions,
     activeThreadRoot,
     threadMessages,
@@ -67,6 +66,7 @@ export default function ChatInterface() {
     trackTelemetry,
     addTeam,
     isLoading,
+    isSocketConnected,
     error,
     retryConnection,
     roomMentionCounts,
@@ -180,7 +180,7 @@ export default function ChatInterface() {
     await loadRoomHistory(createdRoom.id);
   };
 
-  const isConnected = !error;
+  const isConnected = isSocketConnected;
 
   /* ── Header info ── */
   const AVATAR_COLORS = [

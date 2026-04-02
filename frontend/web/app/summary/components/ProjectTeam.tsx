@@ -1,6 +1,5 @@
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function TeamMember({
+function _TeamMember({
     initials,
     gradient,
     name,

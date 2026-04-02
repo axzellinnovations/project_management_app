@@ -1,15 +1,11 @@
 'use client';
 
-import { useParams } from "next/navigation";
 import MetricsGrid from "../components/MetricsGrid";
 import { ProjectTimeline, CurrentSprint } from "../components/ProjectTimeline";
 import RecentActivity from "../components/RecentActivity";
 import ProjectTeam from "../components/ProjectTeam";
 
 export default function SummaryPage() {
-    const params = useParams();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const projectId = params?.projectId as string | undefined;
 
     return (
         <div className="mobile-page-padding max-w-[1200px] mx-auto pb-28 sm:pb-8">
