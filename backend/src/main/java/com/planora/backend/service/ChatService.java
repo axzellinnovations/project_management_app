@@ -39,7 +39,7 @@ public class ChatService {
     private final UserRepository userRepository;
     private final ChatDocumentService chatDocumentService;
 
-    public record RoomChatSummary(Long roomId, String lastMessage, String lastMessageSender, String lastMessageTimestamp, long unseenCount) {}
+    public record RoomChatSummary(Long roomId, String roomName, String lastMessage, String lastMessageSender, String lastMessageTimestamp, long unseenCount) {}
 
     public record DirectChatSummary(String username, String lastMessage, String lastMessageSender, String lastMessageTimestamp, long unseenCount) {}
 
@@ -405,6 +405,7 @@ public class ChatService {
 
                     return new RoomChatSummary(
                             room.getId(),
+                            room.getName(),
                             latestMessage != null ? latestMessage.getContent() : null,
                             latestMessage != null ? latestMessage.getSender() : null,
                             latestMessage != null && latestMessage.getTimestamp() != null ? latestMessage.getTimestamp().toString() : null,

@@ -5,8 +5,8 @@ import { useEffect, useState } from 'react';
 import { getUserFromToken, User } from '@/lib/auth';
 import Link from 'next/link';
 import api from '@/lib/axios';
-import RecentProjectCard from './components/RecentProjectCard';
 import { useRouter } from 'next/navigation';
+import RecentSpacesCarousel from './components/RecentSpacesCarousel';
 
 interface ProjectSummary {
     id: number;
@@ -147,56 +147,12 @@ export default function DashboardPage() {
                     </div>
                 </div>
 
-                {/* Spaces Cards — Adaptive Grid: 1-col mobile → 2-col tablet → 3-col lg → 4-col xl */}
-                <div className="w-full mt-1">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-2 pb-4">
-                        {loading ? (
-                            // Skeleton shimmer tiles
-                            Array.from({ length: 4 }).map((_, i) => (
-                                <div key={i} className="skeleton h-[160px] w-full rounded-[8px]" />
-                            ))
-                        ) : filteredRecentProjects.length > 0 ? (
-                            <>
-                                {filteredRecentProjects.slice(0, 8).map((project) => (
-                                    <RecentProjectCard
-                                        key={project.id}
-                                        id={project.id.toString()}
-                                        name={project.name}
-                                        projectKey={project.projectKey}
-                                        isFavorite={project.isFavorite}
-                                        onFavoriteToggle={() => {
-                                            window.dispatchEvent(new CustomEvent('planora:favorite-toggled'));
-                                        }}
-                                        type={project.type === 'AGILE' ? 'Agile Scrum' : 'Kanban'}
-                                        boardCount={1}
-                                        width="w-full"
-                                    />
-                                ))}
-                                {filteredRecentProjects.length > 8 && (
-                                    <div
-                                        onClick={() => router.push('/spaces')}
-                                        className="group flex flex-col justify-center items-center h-[160px] bg-gray-50/50 hover:bg-white rounded-[8px] border border-dashed border-gray-300 hover:border-[#0052CC]/30 hover:shadow-[0_4px_16px_rgba(0,82,204,0.06)] cursor-pointer transition-all duration-200 hover:-translate-y-[2px]"
-                                    >
-                                        <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-gray-100 mb-3 group-hover:bg-[#EAF2FF] group-hover:border-transparent transition-all duration-200">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0052CC" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="M5 12h14" />
-                                                <path d="M12 5l7 7-7 7" />
-                                            </svg>
-                                        </div>
-                                        <span className="font-arimo text-[15px] font-semibold text-[#4B5563] group-hover:text-[#0052CC] transition-colors">View all spaces</span>
-                                        <span className="font-arimo text-[12px] text-[#9CA3AF] mt-1 font-medium">+{filteredRecentProjects.length - 8} more</span>
-                                    </div>
-                                )}
-                            </>
-                        ) : (
-                            <div className="col-span-full py-8 text-center bg-gray-50 rounded border border-dashed border-gray-300">
-                                <p className="font-arimo text-[14px] text-[#6A7282]">
-                                    {recentSpacesSearch ? `No results for "${recentSpacesSearch}"` : 'No spaces found for this tab'}
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                </div>
+                {/* Recent Spaces Carousel */}
+                <RecentSpacesCarousel 
+                    projects={filteredRecentProjects} 
+                    loading={loading} 
+                    searchQuery={recentSpacesSearch}
+                />
             </div>
 
             {/* Boards Section */}
