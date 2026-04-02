@@ -2,11 +2,13 @@
 
 import React, { useMemo, useState } from 'react';
 import { Task } from '../types';
-import { format, addMonths, startOfMonth, endOfMonth, differenceInDays, parseISO } from 'date-fns';
+import { format, addMonths, startOfMonth, endOfMonth, differenceInDays, parseISO, addDays } from 'date-fns';
 import { Calendar, User, Flag } from 'lucide-react';
 
 interface TimelineViewProps {
   tasks: Task[];
+  onTaskUpdate: (taskId: number, updates: Partial<Task>) => void;
+  projectId: number;
 }
 
 const statusColors = {
@@ -31,7 +33,7 @@ interface TimelineTask extends Task {
   dueDateObj: Date;
 }
 
-export default function TimelineView({ tasks }: TimelineViewProps) {
+export default function TimelineView({ tasks, onTaskUpdate, projectId }: TimelineViewProps) {
   const [selectedTask, setSelectedTask] = useState<TimelineTask | null>(null);
 
   const timelineData = useMemo(() => {

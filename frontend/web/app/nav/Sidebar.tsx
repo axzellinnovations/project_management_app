@@ -12,28 +12,6 @@ import api from '@/lib/axios';
 ───────────────────────────────────────────── */
 interface UserSummary { email: string; profilePicUrl?: string; }
 interface Project { id: number; name: string; projectKey?: string; isFavorite?: boolean; }
-interface RoomSummary {
-    roomId: number;
-    roomName?: string;
-    unseenCount: number;
-    lastMessage?: string;
-    lastMessageSender?: string;
-}
-interface DirectMessageSummary {
-    username: string;
-    unseenCount: number;
-    lastMessage?: string;
-    lastMessageSender?: string;
-}
-interface ChatSummaries {
-    rooms: RoomSummary[];
-    directMessages: DirectMessageSummary[];
-}
-interface InboxItem {
-    unseenCount: number;
-    lastMessage?: string;
-    lastMessageSender?: string;
-}
 
 /* storage sync helper */
 const subscribeToBrowserStorage = (onChange: () => void) => {
@@ -85,7 +63,10 @@ export default function Sidebar() {
     const [loadingProjects, setLoadingProjects] = useState(true);
     const [togglingFavoriteId, setTogglingFavoriteId] = useState<number | null>(null);
 
-    const [chatSummaries, setChatSummaries] = useState<ChatSummaries | null>(null);
+    const [chatSummaries, setChatSummaries] = useState<{
+        rooms: any[];
+        directMessages: any[];
+    } | null>(null);
     const [inboxOpen, setInboxOpen] = useState(false);
     const [inboxSearch, setInboxSearch] = useState('');
     const [loadingInbox, setLoadingInbox] = useState(false);
@@ -142,9 +123,9 @@ export default function Sidebar() {
             ]);
             setRecentProjects(recentRes.data);
             setFavoriteProjects(favRes.data);
-        } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : 'Unknown error';
-            console.error('Sidebar: failed to fetch projects', message);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } catch (error: any) {
+            console.error('Sidebar: failed to fetch projects', error?.response?.data?.message || error.message);
         } finally {
             setLoadingProjects(false);
         }
@@ -827,6 +808,53 @@ function SectionHeader({ label, collapsed, expanded, onToggle }: {
 }
 
 /* ─────────────────────────────────────────────
+   Inbox Nav Row (with unread dot)
+   ───────────────────────────────────────────── */
+function InboxNavRow({
+    icon, label, subtitle, unseenCount, collapsed, onClick,
+}: {
+    icon: React.ReactNode;
+    label: string;
+    subtitle?: string;
+    unseenCount: number;
+    collapsed: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-all duration-150 text-left hover:bg-[#F5F7FA] group"
+        >
+            <span className="flex-shrink-0 w-4 flex items-center justify-center text-[#94A3B8] group-hover:text-[#64748B]">
+                {icon}
+            </span>
+            <div
+                className="flex flex-col flex-1 min-w-0"
+                style={{
+                    maxWidth: collapsed ? '0px' : '160px',
+                    opacity: collapsed ? 0 : 1,
+                    transition: 'max-width 280ms cubic-bezier(0.4,0,0.2,1), opacity 200ms',
+                }}
+            >
+                <div className="flex items-center gap-1.5">
+                    <span className={`font-arimo text-[12.5px] truncate font-medium ${unseenCount > 0 ? 'text-[#101828]' : 'text-[#4A5565]'}`}>
+                        {label}
+                    </span>
+                    {unseenCount > 0 && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] shadow-[0_0_8px_rgba(16,185,129,0.4)] animate-pulse flex-shrink-0" title={`${unseenCount} unread messages`} />
+                    )}
+                </div>
+                {subtitle && (
+                    <span className="font-arimo text-[10.5px] text-[#94A3B8] truncate leading-tight group-hover:text-[#64748B]">
+                        {subtitle}
+                    </span>
+                )}
+            </div>
+        </button>
+    );
+}
+
+/* ─────────────────────────────────────────────
    Inbox Dropdown Box
    ───────────────────────────────────────────── */
 function InboxDropdown({
@@ -834,7 +862,7 @@ function InboxDropdown({
 }: {
     fixedTop: number;
     fixedLeft: number;
-    summaries: ChatSummaries | null;
+    summaries: any;
     loading: boolean;
     search: string;
     onSearch: (v: string) => void;
@@ -843,11 +871,11 @@ function InboxDropdown({
     const router = useRouter();
     const pid = typeof window !== 'undefined' ? localStorage.getItem('currentProjectId') : null;
 
-    const filteredRooms = (summaries?.rooms || []).filter((r: RoomSummary) => 
+    const filteredRooms = (summaries?.rooms || []).filter((r: any) => 
         (r.roomName || '').toLowerCase().includes(search.toLowerCase())
     ).slice(0, 3);
 
-    const filteredDirects = (summaries?.directMessages || []).filter((d: DirectMessageSummary) => 
+    const filteredDirects = (summaries?.directMessages || []).filter((d: any) => 
         d.username.toLowerCase().includes(search.toLowerCase())
     ).slice(0, 3);
 
@@ -898,7 +926,7 @@ function InboxDropdown({
                         {filteredDirects.length > 0 && (
                             <div className="mb-2">
                                 <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-[#B0B8C4] uppercase tracking-wider">Direct Messages</div>
-                                {filteredDirects.map((dm: DirectMessageSummary) => (
+                                {filteredDirects.map((dm: any) => (
                                     <InboxDropdownItem
                                         key={`dm-${dm.username}`}
                                         item={dm}
@@ -917,7 +945,7 @@ function InboxDropdown({
                         {filteredRooms.length > 0 && (
                             <div>
                                 <div className="px-3 pt-1 pb-1 text-[10px] font-bold text-[#B0B8C4] uppercase tracking-wider">Group Chats</div>
-                                {filteredRooms.map((room: RoomSummary) => (
+                                {filteredRooms.map((room: any) => (
                                     <InboxDropdownItem
                                         key={`room-${room.roomId}`}
                                         item={room}
@@ -962,7 +990,7 @@ function InboxDropdown({
 function InboxDropdownItem({
     item, icon, label, onClick
 }: {
-    item: InboxItem;
+    item: any;
     icon: React.ReactNode;
     label: string;
     onClick: () => void;
