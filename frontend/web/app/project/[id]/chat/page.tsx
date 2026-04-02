@@ -41,8 +41,7 @@ export default function ChatInterface() {
     featureFlags,
     searchResults,
     isSearchLoading,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    commandNotice,
+    commandNotice: _commandNotice,
     messageReactions,
     activeThreadRoot,
     threadMessages,

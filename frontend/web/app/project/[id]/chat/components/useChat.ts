@@ -837,22 +837,6 @@ export const useChat = (projectId: string) => {
     }
   }, [projectId]);
 
-  const _scheduleHistorySync = useCallback((recipient?: string | null, roomId?: number | null) => {
-    window.setTimeout(() => {
-      if (roomId !== null && roomId !== undefined) {
-        loadRoomHistory(roomId);
-        return;
-      }
-
-      if (recipient) {
-        loadPrivateHistory(recipient);
-        return;
-      }
-
-      loadHistory();
-    }, 450);
-  }, [loadHistory, loadPrivateHistory, loadRoomHistory]);
-
   const connectToChat = useCallback((token: string, username: string, aliases: string[]) => {
     try {
       const client = Stomp.over(() => new SockJS('http://localhost:8080/ws'));
