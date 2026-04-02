@@ -19,6 +19,11 @@ public class NotificationService {
     @Autowired
     private NotificationRepository notificationRepository;
 
+    /**
+     * Unconditionally creates and persists a notification.
+     * Used by TaskService for task-assignment and comment events
+     * (where duplicates are not a concern).
+     */
     @Transactional
     public void createNotification(User recipient, String message, String link) {
         Notification notification = new Notification();
@@ -28,6 +33,26 @@ public class NotificationService {
         notification.setRead(false);
         notification.setCreatedAt(LocalDateTime.now());
         notificationRepository.save(notification);
+    }
+
+    /**
+     * Creates a notification only if an identical one (same recipient, message,
+     * and link) has NOT already been created within the last 60 seconds.
+     *
+     * This prevents duplicate notifications when chat events (DMs, @mentions)
+     * may be triggered by multiple code paths for the same underlying message.
+     */
+    @Transactional
+    public void createNotificationIfNotDuplicate(User recipient, String message, String link) {
+        // Dedup window: 60 seconds
+        LocalDateTime window = LocalDateTime.now().minusSeconds(60);
+        boolean alreadyExists = notificationRepository
+                .existsByRecipientUserIdAndMessageAndLinkAndCreatedAtAfter(
+                        recipient.getUserId(), message, link, window
+                );
+        if (!alreadyExists) {
+            createNotification(recipient, message, link);
+        }
     }
 
     public List<NotificationResponseDTO> getUserNotifications(Long userId) {

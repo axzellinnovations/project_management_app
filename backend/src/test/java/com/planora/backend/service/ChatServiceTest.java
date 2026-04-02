@@ -1,30 +1,34 @@
 package com.planora.backend.service;
 
+import java.util.List;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import static org.mockito.ArgumentMatchers.any;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import com.planora.backend.model.ChatMessage;
+import com.planora.backend.model.ChatReaction;
 import com.planora.backend.model.ChatRoom;
 import com.planora.backend.model.ChatThread;
 import com.planora.backend.model.User;
-import com.planora.backend.model.ChatReaction;
 import com.planora.backend.repository.ChatMessageRepository;
 import com.planora.backend.repository.ChatReactionRepository;
 import com.planora.backend.repository.ChatReadStateRepository;
 import com.planora.backend.repository.ChatRoomRepository;
 import com.planora.backend.repository.ChatThreadRepository;
 import com.planora.backend.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ChatServiceTest {

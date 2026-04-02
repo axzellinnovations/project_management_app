@@ -1,11 +1,14 @@
 package com.planora.backend.service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.planora.backend.controller.ProjectMemberController;
 import com.planora.backend.dto.ProjectInviteRequest;
 import com.planora.backend.model.Project;
 import com.planora.backend.model.TeamInvitation;
@@ -29,6 +32,12 @@ public class ProjectInvitationService {
     private final TeamMemberService teamMemberService;
     private final TeamMemberRepository teamMemberRepository;
     private final EmailService emailService;
+    private final NotificationService notificationService;
+
+    // ── Real-time: broadcast MEMBER_JOINED to members page viewers ────────────
+    // Uses the same STOMP broker as the chat system (/ws endpoint).
+    private final SimpMessagingTemplate simpMessagingTemplate;
+    // ─────────────────────────────────────────────────────────────────
 
     @Transactional
     public void inviteToProject(Long projectId, ProjectInviteRequest request, Long inviterUserId) {
@@ -154,5 +163,54 @@ public class ProjectInvitationService {
 
         invitation.setStatus("ACCEPTED");
         teamInvitationRepository.save(invitation);
+
+        // ── NOTIFICATION: tell OWNERs and ADMINs that someone joined ──────────
+        String joinerName = (user.getFullName() != null && !user.getFullName().isBlank())
+                ? user.getFullName()
+                : (user.getUsername() != null && !user.getUsername().isBlank())
+                        ? user.getUsername()
+                        : user.getEmail();
+
+        String projectName = invitation.getTeam().getProjects().stream()
+                .findFirst().map(p -> p.getName()).orElse("your project");
+        String projectId = invitation.getTeam().getProjects().stream()
+                .findFirst().map(p -> String.valueOf(p.getId())).orElse("");
+
+        String message = joinerName + " accepted your invitation and joined project \""
+                + projectName + "\"";
+        String link = "/members/" + projectId;
+
+        List<TeamMember> currentMembers = teamMemberRepository.findByTeamId(invitation.getTeam().getId());
+        currentMembers.stream()
+                .filter(m -> m.getRole() == TeamRole.OWNER || m.getRole() == TeamRole.ADMIN)
+                .filter(m -> !m.getUser().getUserId().equals(userId))
+                .forEach(m -> notificationService.createNotification(m.getUser(), message, link));
+        // ─────────────────────────────────────────────────────────────────────
+
+        // ── REAL-TIME: push MEMBER_JOINED to all members page viewers ─────────
+        // Broadcast the new member's full profile so the UI can append them
+        // to the list without needing a page refresh.
+        if (!projectId.isEmpty()) {
+            var memberPayload = new ProjectMemberController.MemberPayload(
+                    user.getUserId(),
+                    user.getUsername(),
+                    user.getFullName(),
+                    user.getEmail(),
+                    user.getProfilePicUrl(),
+                    invitedRole.name(),
+                    0,        // task count starts at 0 for a brand-new member
+                    "Active"
+            );
+            simpMessagingTemplate.convertAndSend(
+                    "/topic/project/" + projectId + "/members",
+                    new ProjectMemberController.MemberEvent(
+                            ProjectMemberController.MemberEventAction.MEMBER_JOINED,
+                            user.getUserId(),
+                            invitedRole.name(),
+                            memberPayload
+                    )
+            );
+        }
+        // ─────────────────────────────────────────────────────────────────────
     }
 }

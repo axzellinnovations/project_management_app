@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Image from "next/image";
+import { useMembersSync, type MemberPayload } from "./useMembersSync";
 // Heroicons and custom SVGs for UI icons
 const ICONS = {
   members: <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 20h5v-2a4 4 0 0 0-3-3.87M9 20H4v-2a4 4 0 0 1 3-3.87M16 3.13a4 4 0 1 1-8 0M12 7a4 4 0 0 1 4-4" /></svg>,
@@ -180,6 +181,51 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
       cancelled = true;
     };
   }, [projectId]);
+
+  // ── Real-time sync via STOMP WebSocket ───────────────────────────────────────
+  // Subscribes to /topic/project/{projectId}/members.  The three callbacks are
+  // memoized so they never cause the hook to reconnect unnecessarily — only a
+  // projectId change triggers a new WebSocket session.
+
+  const handleRoleChangedLive = useCallback((userId: number, newRole: string) => {
+    setMembers(prev =>
+      prev.map(m => m.user.userId === userId ? { ...m, role: newRole } : m)
+    );
+  }, []);
+
+  const handleMemberRemovedLive = useCallback((userId: number) => {
+    setMembers(prev => prev.filter(m => m.user.userId !== userId));
+  }, []);
+
+  const handleMemberJoinedLive = useCallback((payload: MemberPayload) => {
+    setMembers(prev => {
+      // Guard against duplicates (e.g. if the accepter is also on this page)
+      if (prev.some(m => m.user.userId === payload.userId)) return prev;
+      return [
+        ...prev,
+        {
+          id: payload.userId,          // use userId as a synthetic id
+          role: payload.role,
+          user: {
+            userId: payload.userId,
+            username: payload.username,
+            fullName: payload.fullName,
+            email: payload.email,
+            profilePicUrl: payload.profilePicUrl,
+          },
+          taskCount: payload.taskCount,
+          status: payload.status,
+        },
+      ];
+    });
+  }, []);
+
+  useMembersSync(projectId, {
+    onRoleChanged: handleRoleChangedLive,
+    onMemberRemoved: handleMemberRemovedLive,
+    onMemberJoined: handleMemberJoinedLive,
+  });
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const allMembers = useMemo(() => [
     ...members,
