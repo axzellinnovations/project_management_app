@@ -63,6 +63,14 @@ export default function Sidebar() {
     const [loadingProjects, setLoadingProjects] = useState(true);
     const [togglingFavoriteId, setTogglingFavoriteId] = useState<number | null>(null);
 
+    const [chatSummaries, setChatSummaries] = useState<{
+        rooms: any[];
+        directMessages: any[];
+    } | null>(null);
+    const [inboxOpen, setInboxOpen] = useState(false);
+    const [inboxSearch, setInboxSearch] = useState('');
+    const [loadingInbox, setLoadingInbox] = useState(false);
+
     const [isMobile, setIsMobile] = useState(false);
     useEffect(() => {
         let isCurrentlyMobile = window.innerWidth < 768;
@@ -103,6 +111,7 @@ export default function Sidebar() {
     /* refs for click-outside + anchor position */
     const favRef    = useRef<HTMLDivElement>(null);
     const recentRef = useRef<HTMLDivElement>(null);
+    const inboxRef  = useRef<HTMLDivElement>(null);
     const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
     /* ── fetch projects ── */
@@ -119,6 +128,19 @@ export default function Sidebar() {
             console.error('Sidebar: failed to fetch projects', error?.response?.data?.message || error.message);
         } finally {
             setLoadingProjects(false);
+        }
+    }, []);
+
+    /* ── fetch chats ── */
+    const fetchChatSummaries = useCallback(async (projId: number) => {
+        setLoadingInbox(true);
+        try {
+            const res = await api.get(`/api/projects/${projId}/chat/summaries`);
+            setChatSummaries(res.data);
+        } catch (error) {
+            console.error('Sidebar: failed to fetch chat summaries', error);
+        } finally {
+            setLoadingInbox(false);
         }
     }, []);
 
@@ -170,8 +192,18 @@ export default function Sidebar() {
     useEffect(() => {
         const projectId =
             (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('projectId'))
-            || localStorage.getItem('currentProjectId');
-        if (!projectId) { setFolderStats({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 }); return; }
+            || localStorage.getItem('currentProjectId')
+            || (recentProjects.length > 0 ? recentProjects[0].id.toString() : null);
+
+        if (!projectId) { 
+            setFolderStats({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 }); 
+            setChatSummaries(null);
+            return; 
+        }
+
+        const pid = parseInt(projectId);
+        void fetchChatSummaries(pid);
+
         Promise.all([
             api.get(`/api/projects/${projectId}/documents?includeDeleted=false`),
             api.get(`/api/projects/${projectId}/documents?includeDeleted=true`),
@@ -191,7 +223,7 @@ export default function Sidebar() {
                 trash: allDocs.filter((d: { status?: string }) => d.status === 'SOFT_DELETED').length,
             });
         }).catch(() => setFolderStats({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 }));
-    }, [pathname, user]);
+    }, [pathname, user, recentProjects, fetchChatSummaries]);
 
     /* click-outside to close dropdowns */
     useEffect(() => {
@@ -200,10 +232,12 @@ export default function Sidebar() {
             // check if click is inside either anchor OR inside a fixed dropdown
             const inFav    = favRef.current?.contains(target);
             const inRecent = recentRef.current?.contains(target);
+            const inInbox  = inboxRef.current?.contains(target);
             // also check if click is inside a fixed dropdown portal (data attribute)
             const inDropdown = (target as Element)?.closest?.('[data-sidebar-dropdown]');
             if (!inFav && !inDropdown)    setFavOpen(false);
             if (!inRecent && !inDropdown) setRecentOpen(false);
+            if (!inInbox && !inDropdown)  setInboxOpen(false);
         };
         document.addEventListener('mousedown', handleClickOutside);
         
@@ -232,12 +266,24 @@ export default function Sidebar() {
     };
     const openRecentDropdown = () => {
         setFavOpen(false);
+        setInboxOpen(false);
         if (recentRef.current) {
             const rect = recentRef.current.getBoundingClientRect();
             setDropdownPos({ top: rect.top, left: rect.right + 8 });
         }
         setRecentOpen(p => !p);
         setRecentSearch('');
+    };
+
+    const openInboxDropdown = () => {
+        setFavOpen(false);
+        setRecentOpen(false);
+        if (inboxRef.current) {
+            const rect = inboxRef.current.getBoundingClientRect();
+            setDropdownPos({ top: rect.top, left: rect.right + 8 });
+        }
+        setInboxOpen(p => !p);
+        setInboxSearch('');
     };
 
     /* ── handlers ── */
@@ -384,6 +430,19 @@ export default function Sidebar() {
                         />
                     </div>
 
+                    {/* Inbox row + dropdown */}
+                    <div ref={inboxRef} className="relative">
+                        <NavRow
+                            icon={<InboxIcon />}
+                            label="Inbox"
+                            collapsed={collapsed}
+                            active={inboxOpen}
+                            hasChevron
+                            chevronOpen={inboxOpen}
+                            onClick={openInboxDropdown}
+                        />
+                    </div>
+
                     {/* Profile */}
                     <NavRow
                         icon={<ProfileIcon />}
@@ -485,6 +544,17 @@ export default function Sidebar() {
                     viewAllHref="/spaces?filter=recent"
                     viewAllLabel="View all recent spaces"
                     onProjectClick={handleProjectClick}
+                />
+            )}
+            {inboxOpen && (
+                <InboxDropdown
+                    fixedTop={dropdownPos.top}
+                    fixedLeft={dropdownPos.left}
+                    summaries={chatSummaries}
+                    loading={loadingInbox}
+                    search={inboxSearch}
+                    onSearch={setInboxSearch}
+                    onClose={() => setInboxOpen(false)}
                 />
             )}
         </div>
@@ -738,8 +808,220 @@ function SectionHeader({ label, collapsed, expanded, onToggle }: {
 }
 
 /* ─────────────────────────────────────────────
+   Inbox Nav Row (with unread dot)
+   ───────────────────────────────────────────── */
+function InboxNavRow({
+    icon, label, subtitle, unseenCount, collapsed, onClick,
+}: {
+    icon: React.ReactNode;
+    label: string;
+    subtitle?: string;
+    unseenCount: number;
+    collapsed: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-all duration-150 text-left hover:bg-[#F5F7FA] group"
+        >
+            <span className="flex-shrink-0 w-4 flex items-center justify-center text-[#94A3B8] group-hover:text-[#64748B]">
+                {icon}
+            </span>
+            <div
+                className="flex flex-col flex-1 min-w-0"
+                style={{
+                    maxWidth: collapsed ? '0px' : '160px',
+                    opacity: collapsed ? 0 : 1,
+                    transition: 'max-width 280ms cubic-bezier(0.4,0,0.2,1), opacity 200ms',
+                }}
+            >
+                <div className="flex items-center gap-1.5">
+                    <span className={`font-arimo text-[12.5px] truncate font-medium ${unseenCount > 0 ? 'text-[#101828]' : 'text-[#4A5565]'}`}>
+                        {label}
+                    </span>
+                    {unseenCount > 0 && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] shadow-[0_0_8px_rgba(16,185,129,0.4)] animate-pulse flex-shrink-0" title={`${unseenCount} unread messages`} />
+                    )}
+                </div>
+                {subtitle && (
+                    <span className="font-arimo text-[10.5px] text-[#94A3B8] truncate leading-tight group-hover:text-[#64748B]">
+                        {subtitle}
+                    </span>
+                )}
+            </div>
+        </button>
+    );
+}
+
+/* ─────────────────────────────────────────────
+   Inbox Dropdown Box
+   ───────────────────────────────────────────── */
+function InboxDropdown({
+    fixedTop, fixedLeft, summaries, loading, search, onSearch, onClose
+}: {
+    fixedTop: number;
+    fixedLeft: number;
+    summaries: any;
+    loading: boolean;
+    search: string;
+    onSearch: (v: string) => void;
+    onClose: () => void;
+}) {
+    const router = useRouter();
+    const pid = typeof window !== 'undefined' ? localStorage.getItem('currentProjectId') : null;
+
+    const filteredRooms = (summaries?.rooms || []).filter((r: any) => 
+        (r.roomName || '').toLowerCase().includes(search.toLowerCase())
+    ).slice(0, 3);
+
+    const filteredDirects = (summaries?.directMessages || []).filter((d: any) => 
+        d.username.toLowerCase().includes(search.toLowerCase())
+    ).slice(0, 3);
+
+    return (
+        <div
+            data-sidebar-dropdown
+            className="bg-white rounded-xl border border-[#E8ECF0] shadow-2xl shadow-black/10 overflow-hidden flex flex-col"
+            style={{
+                position: 'fixed',
+                top: fixedTop,
+                left: fixedLeft,
+                width: '260px',
+                zIndex: 9999,
+                animation: 'dropdownIn 180ms cubic-bezier(0.4,0,0.2,1)',
+                maxHeight: '400px'
+            }}
+        >
+            {/* Search bar */}
+            <div className="px-3 pt-3 pb-2 border-b border-[#F2F4F7]">
+                <div className="relative">
+                    <div className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#B0B8C4" strokeWidth="2" strokeLinecap="round">
+                            <circle cx="7" cy="7" r="5" /><path d="M11 11L14 14" />
+                        </svg>
+                    </div>
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={e => onSearch(e.target.value)}
+                        placeholder="Search messages…"
+                        autoFocus
+                        className="w-full pl-7 pr-3 py-1.5 text-[12px] bg-[#F7F8FA] border border-[#E8ECF0] rounded-lg placeholder-[#B0B8C4] text-[#1D293D] focus:outline-none focus:ring-1 focus:ring-[#155DFC]/30 focus:border-[#155DFC]/40 font-arimo transition-all"
+                    />
+                </div>
+            </div>
+
+            {/* Content list */}
+            <div className="overflow-y-auto flex-1 py-1 custom-scrollbar">
+                {loading && !summaries ? (
+                    <div className="px-3 py-3 flex flex-col gap-3 animate-pulse">
+                        <div className="h-3 w-32 bg-gray-100 rounded" />
+                        <div className="h-3 w-24 bg-gray-100 rounded" />
+                        <div className="h-3 w-28 bg-gray-100 rounded" />
+                    </div>
+                ) : (
+                    <>
+                        {/* Direct Messages */}
+                        {filteredDirects.length > 0 && (
+                            <div className="mb-2">
+                                <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-[#B0B8C4] uppercase tracking-wider">Direct Messages</div>
+                                {filteredDirects.map((dm: any) => (
+                                    <InboxDropdownItem
+                                        key={`dm-${dm.username}`}
+                                        item={dm}
+                                        icon={<UserIcon size={14} />}
+                                        label={dm.username}
+                                        onClick={() => {
+                                            router.push(`/projects/${pid}/chat?with=${dm.username}`);
+                                            onClose();
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Group Chats */}
+                        {filteredRooms.length > 0 && (
+                            <div>
+                                <div className="px-3 pt-1 pb-1 text-[10px] font-bold text-[#B0B8C4] uppercase tracking-wider">Group Chats</div>
+                                {filteredRooms.map((room: any) => (
+                                    <InboxDropdownItem
+                                        key={`room-${room.roomId}`}
+                                        item={room}
+                                        icon={<MessageSquareIcon size={14} />}
+                                        label={room.roomName || 'General'}
+                                        onClick={() => {
+                                            router.push(`/projects/${pid}/chat?roomId=${room.roomId}`);
+                                            onClose();
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        )}
+
+                        {filteredRooms.length === 0 && filteredDirects.length === 0 && (
+                            <div className="px-3 py-6 text-center">
+                                <div className="text-[12px] text-[#9AA3AE] font-medium">No recent messages</div>
+                                <div className="text-[10px] text-[#B0B8C4] mt-0.5">Start a conversation in your project chat</div>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+
+            {/* View all footer */}
+            <div className="border-t border-[#F2F4F7] px-3 py-2 bg-[#F9FAFB]">
+                <Link
+                    href={`/projects/${pid}/chat`}
+                    onClick={onClose}
+                    className="flex items-center justify-between w-full text-[12px] font-medium text-[#155DFC] hover:text-[#0040C4] transition-colors font-arimo"
+                >
+                    <span>Go to project chat</span>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                        <path d="M3 6h6M7 4l2 2-2 2" />
+                    </svg>
+                </Link>
+            </div>
+        </div>
+    );
+}
+
+function InboxDropdownItem({
+    item, icon, label, onClick
+}: {
+    item: any;
+    icon: React.ReactNode;
+    label: string;
+    onClick: () => void;
+}) {
+    return (
+        <div
+            className="group flex items-start gap-2.5 px-3 py-2 hover:bg-[#F5F7FA] transition-colors cursor-pointer"
+            onClick={onClick}
+        >
+            <div className="w-8 h-8 rounded-full bg-[#EAF2FF] flex items-center justify-center text-[#155DFC] flex-shrink-0 mt-0.5">
+                {icon}
+            </div>
+            <div className="flex flex-col flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-1">
+                    <span className="font-arimo text-[12px] font-semibold text-[#1D293D] truncate">{label}</span>
+                    {item.unseenCount > 0 && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] flex-shrink-0" />
+                    )}
+                </div>
+                <div className="font-arimo text-[10.5px] text-[#6A7282] truncate leading-normal">
+                    {item.lastMessageSender && <span className="font-medium mr-1 text-[#4B5563]">{item.lastMessageSender}:</span>}
+                    {item.lastMessage || 'No messages yet'}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ─────────────────────────────────────────────
    Icons
-───────────────────────────────────────────── */
+   ───────────────────────────────────────────── */
 const HomeIcon = () => (
     <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 9.5L10 3L17 9.5V17H13V13H7V17H3V9.5Z" />
@@ -787,5 +1069,25 @@ const LogoutIcon = () => (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4" />
         <path d="M10 17l5-5-5-5" /><path d="M15 12H3" />
+    </svg>
+);
+
+const InboxIcon = ({ size = 16 }: { size?: number }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m22 13-1.29-2.58a3 3 0 0 0-2.68-1.51H14.12l-1.42-3.12A2 2 0 0 0 10.88 4.67H5.29A3 3 0 0 0 2.61 6.25L1 9.47V17a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2Z" />
+        <path d="M2 13h4.45l.91 1.82A2 2 0 0 0 9.15 16h5.7a2 2 0 0 0 1.79-1.18L17.55 13H22" />
+    </svg>
+);
+
+const MessageSquareIcon = ({ size = 16 }: { size?: number }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+);
+
+const UserIcon = ({ size = 16 }: { size?: number }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
     </svg>
 );

@@ -116,18 +116,14 @@ public class ProjectService {
 
         List<Project> userProjects = projectRepository.findByTeamIn(userTeams);
 
-        // Sort projects by last access time (ProjectAccess)
+        // Sort projects by effective last access/join time
         return userProjects.stream()
-                .sorted((p1, p2) -> {
-                    LocalDateTime t1 = projectAccessRepository.findByProject_IdAndUser_UserId(p1.getId(), userId)
-                            .map(ProjectAccess::getLastAccessedAt)
-                            .orElse(p1.getCreatedAt() != null ? p1.getCreatedAt() : LocalDateTime.MIN);
-                    LocalDateTime t2 = projectAccessRepository.findByProject_IdAndUser_UserId(p2.getId(), userId)
-                            .map(ProjectAccess::getLastAccessedAt)
-                            .orElse(p2.getCreatedAt() != null ? p2.getCreatedAt() : LocalDateTime.MIN);
+                .map(p -> convertToResponseDTO(p, userId))
+                .sorted((d1, d2) -> {
+                    LocalDateTime t1 = d1.getLastAccessedAt() != null ? d1.getLastAccessedAt() : LocalDateTime.MIN;
+                    LocalDateTime t2 = d2.getLastAccessedAt() != null ? d2.getLastAccessedAt() : LocalDateTime.MIN;
                     return t2.compareTo(t1); // Descending order
                 })
-                .map(p -> convertToResponseDTO(p, userId))
                 .collect(Collectors.toList());
     }
 
@@ -173,31 +169,18 @@ public class ProjectService {
 
         if (userTeams.isEmpty()) return java.util.Collections.emptyList();
 
-        // Fetch the top-N most recently accessed project IDs
-        List<ProjectAccess> recentAccesses = projectAccessRepository
-                .findByUser_UserIdOrderByLastAccessedAtDesc(userId, PageRequest.of(0, limit * 3)); // fetch extra to allow for filtering
+        // Fetch ALL candidate projects from user's teams
+        List<Project> allMemberProjects = projectRepository.findByTeamIn(userTeams);
 
-        if (recentAccesses.isEmpty()) {
-            // Fall back to most recently created projects in user's teams
-            return projectRepository.findByTeamIn(userTeams).stream()
-                    .sorted((a, b) -> {
-                        LocalDateTime ca = a.getCreatedAt() != null ? a.getCreatedAt() : LocalDateTime.MIN;
-                        LocalDateTime cb = b.getCreatedAt() != null ? b.getCreatedAt() : LocalDateTime.MIN;
-                        return cb.compareTo(ca);
-                    })
-                    .limit(limit)
-                    .map(p -> convertToResponseDTO(p, userId))
-                    .collect(Collectors.toList());
-        }
-
-        // Filter: only include projects the user is still a team member of
-        java.util.Set<Long> memberProjectIds = projectRepository.findByTeamIn(userTeams)
-                .stream().map(Project::getId).collect(java.util.stream.Collectors.toSet());
-
-        return recentAccesses.stream()
-                .filter(access -> memberProjectIds.contains(access.getProject().getId()))
+        // Map and sort by the effective lastAccessedAt field (which now includes joinedAt fallback)
+        return allMemberProjects.stream()
+                .map(p -> convertToResponseDTO(p, userId))
+                .sorted((d1, d2) -> {
+                    LocalDateTime t1 = d1.getLastAccessedAt() != null ? d1.getLastAccessedAt() : LocalDateTime.MIN;
+                    LocalDateTime t2 = d2.getLastAccessedAt() != null ? d2.getLastAccessedAt() : LocalDateTime.MIN;
+                    return t2.compareTo(t1); // Descending order
+                })
                 .limit(limit)
-                .map(access -> convertToResponseDTO(access.getProject(), userId))
                 .collect(Collectors.toList());
     }
 
@@ -281,7 +264,13 @@ public class ProjectService {
             lastAccessedAt = projectAccessRepository
                     .findByProject_IdAndUser_UserId(project.getId(), userId)
                     .map(ProjectAccess::getLastAccessedAt)
-                    .orElse(null);
+                    .orElseGet(() -> {
+                        // FALLBACK: If user never accessed, use joinedAt from TeamMember
+                        return teamMemberRepository
+                                .findByTeamIdAndUserUserId(project.getTeam().getId(), userId)
+                                .map(TeamMember::getJoinedAt)
+                                .orElse(null);
+                    });
         }
 
         return ProjectResponseDTO.builder()
