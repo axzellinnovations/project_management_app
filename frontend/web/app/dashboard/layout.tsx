@@ -3,7 +3,6 @@
 import { useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "../nav/Sidebar";
-import TopBar from "../nav/TopBar";
 
 export default function DashboardLayout({
     children,
