@@ -329,7 +329,7 @@ export default function MembersPage() {
   // ── skeleton ─────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="mobile-page-padding max-w-3xl mx-auto pb-28 sm:pb-8">
+      <div className="mobile-page-padding max-w-5xl mx-auto pb-[clamp(96px,12vh,128px)] sm:pb-10">
         <div className="flex items-center justify-between mb-4">
           <div className="skeleton h-7 w-48 rounded-lg" />
           <div className="skeleton h-9 w-28 rounded-xl" />
@@ -351,12 +351,12 @@ export default function MembersPage() {
   }
 
   return (
-    <div className="mobile-page-padding max-w-3xl mx-auto pb-28 sm:pb-8">
+    <div className="mobile-page-padding max-w-5xl mx-auto pb-[clamp(96px,12vh,128px)] sm:pb-10">
 
       {/* ── Sticky Header ──────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 bg-[#F7F8FA]/95 backdrop-blur-md pb-3 pt-1 -mx-4 sm:-mx-6 px-4 sm:px-6 mb-1">
-        <div className="flex items-center justify-between mb-3">
-          <h1 className="text-xl font-bold text-gray-900">
+      <div className="sticky top-0 z-20 bg-[#F7F8FA]/95 backdrop-blur-md pb-3 pt-2 -mx-4 sm:-mx-6 px-4 sm:px-6 mb-1">
+        <div className="flex items-center justify-between mb-3 gap-3">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
             Team{" "}
             <span className="text-gray-400 font-normal text-base">
               ({members.length})
@@ -364,7 +364,7 @@ export default function MembersPage() {
           </h1>
           <button
             onClick={() => setInviteSheetOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#155DFC] text-white text-sm font-semibold shadow-sm active:scale-95 transition-transform"
+            className="flex items-center gap-1.5 px-3.5 h-11 min-h-[44px] rounded-xl bg-[#155DFC] text-white text-sm font-semibold shadow-sm active:scale-95 transition-transform"
           >
             <UserPlus size={15} />
             <span>Invite</span>
@@ -380,12 +380,12 @@ export default function MembersPage() {
             placeholder="Search members…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#155DFC]/30"
+            className="w-full bg-white border border-gray-200 rounded-2xl pl-10 pr-12 py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#155DFC]/30 shadow-[0_4px_10px_rgba(0,0,0,0.03)]"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 h-9 w-9 flex items-center justify-center"
             >
               <X size={14} />
             </button>
@@ -405,7 +405,7 @@ export default function MembersPage() {
               <button
                 key={f}
                 onClick={() => setActiveFilter(f)}
-                className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                className={`flex-shrink-0 h-10 min-w-[44px] px-3.5 rounded-full text-xs font-semibold border transition-colors shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${
                   activeFilter === f
                     ? "bg-[#155DFC] text-white border-[#155DFC]"
                     : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
@@ -443,7 +443,7 @@ export default function MembersPage() {
         />
       )}
 
-      <div className="divide-y divide-gray-100">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <AnimatePresence initial={false}>
           {filteredMembers.map((m) => {
             const avatarKey = `${m.id}-${m.user.email}`;
@@ -460,81 +460,83 @@ export default function MembersPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.18 }}
-                className="touch-row gap-3 py-3"
+                className="rounded-2xl border border-gray-100 bg-white shadow-[0_6px_18px_rgba(0,0,0,0.04)] p-3 sm:p-4 flex flex-col gap-3"
               >
-                {/* Avatar */}
-                <div className="relative flex-shrink-0">
-                  {resolvedProfilePicUrl ? (
-                    <Image
-                      src={resolvedProfilePicUrl}
-                      alt={m.user.fullName || m.user.email}
-                      width={44}
-                      height={44}
-                      unoptimized
-                      className="w-11 h-11 rounded-full object-cover"
-                      onError={() =>
-                        setImgError((errs) => ({
-                          ...errs,
-                          [`${avatarKey}:${resolvedProfilePicUrl}`]: true,
-                        }))
-                      }
+                <div className="flex items-start gap-3">
+                  <div className="relative flex-shrink-0">
+                    {resolvedProfilePicUrl ? (
+                      <Image
+                        src={resolvedProfilePicUrl}
+                        alt={m.user.fullName || m.user.email}
+                        width={48}
+                        height={48}
+                        unoptimized
+                        className="w-12 h-12 rounded-2xl object-cover"
+                        onError={() =>
+                          setImgError((errs) => ({
+                            ...errs,
+                            [`${avatarKey}:${resolvedProfilePicUrl}`]: true,
+                          }))
+                        }
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+                        {getInitials(m.user.fullName, m.user.email)}
+                      </div>
+                    )}
+                    <span
+                      className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
+                        m.status === "Active" ? "bg-green-500" : "bg-gray-300"
+                      }`}
                     />
-                  ) : (
-                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
-                      {getInitials(m.user.fullName, m.user.email)}
-                    </div>
-                  )}
-                  {/* Online dot */}
-                  <span
-                    className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
-                      m.status === "Active" ? "bg-green-500" : "bg-gray-300"
-                    }`}
-                  />
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-gray-900 text-sm truncate">
-                    {m.user.fullName || m.user.username || m.user.email}
                   </div>
-                  <div className="text-xs text-gray-500 truncate">{m.user.email}</div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <CheckSquare size={11} className="text-gray-400" />
-                    <span className="text-xs text-gray-500">{m.taskCount} tasks</span>
-                    {m.lastActive && (
-                      <>
-                        <Clock size={11} className="text-gray-400" />
-                        <span className="text-xs text-gray-400">
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-gray-900 text-sm sm:text-base truncate">
+                          {m.user.fullName || m.user.username || m.user.email}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">{m.user.email}</div>
+                      </div>
+                      {canChangeRole(m) ? (
+                        <button
+                          onClick={() => setRoleSheetMember(m)}
+                          disabled={roleChangeLoading === m.id}
+                          className={`h-9 min-h-[36px] px-3 rounded-full text-xs font-semibold border whitespace-nowrap flex items-center gap-1 ${ROLE_COLOR[m.role] || ROLE_COLOR.VIEWER}`}
+                        >
+                          {roleChangeLoading === m.id ? (
+                            <span className="animate-pulse">…</span>
+                          ) : (
+                            <>
+                              {m.role.charAt(0) + m.role.slice(1).toLowerCase()}
+                              <ChevronDown size={11} />
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <span
+                          className={`h-9 min-h-[36px] px-3 inline-flex items-center rounded-full text-xs font-semibold border whitespace-nowrap ${ROLE_COLOR[m.role] || ROLE_COLOR.VIEWER}`}
+                        >
+                          {m.role.charAt(0) + m.role.slice(1).toLowerCase()}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-500">
+                      <span className="inline-flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full min-h-[28px]">
+                        <CheckSquare size={11} className="text-gray-400" />
+                        {m.taskCount} tasks
+                      </span>
+                      {m.lastActive && (
+                        <span className="inline-flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full min-h-[28px]">
+                          <Clock size={11} className="text-gray-400" />
                           {new Date(m.lastActive).toLocaleDateString()}
                         </span>
-                      </>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                {/* Role badge / change */}
-                {canChangeRole(m) ? (
-                  <button
-                    onClick={() => setRoleSheetMember(m)}
-                    disabled={roleChangeLoading === m.id}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${ROLE_COLOR[m.role] || ROLE_COLOR.VIEWER}`}
-                  >
-                    {roleChangeLoading === m.id ? (
-                      <span className="animate-pulse">…</span>
-                    ) : (
-                      <>
-                        {m.role.charAt(0) + m.role.slice(1).toLowerCase()}
-                        <ChevronDown size={11} />
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium border ${ROLE_COLOR[m.role] || ROLE_COLOR.VIEWER}`}
-                  >
-                    {m.role.charAt(0) + m.role.slice(1).toLowerCase()}
-                  </span>
-                )}
               </motion.div>
             );
           })}
@@ -564,23 +566,28 @@ export default function MembersPage() {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden divide-y divide-gray-100"
               >
-                {filteredPending.map((p) => (
-                  <div key={"pending-" + p.id} className="touch-row gap-3 py-3">
-                    <div className="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm flex-shrink-0">
-                      {p.email[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-700 truncate">{p.email}</div>
-                      <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-                        <Mail size={10} />
-                        Invited {new Date(p.invitedAt).toLocaleDateString()}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 px-0 pb-2 pt-1">
+                  {filteredPending.map((p) => (
+                    <div
+                      key={"pending-" + p.id}
+                      className="rounded-2xl border border-gray-100 bg-white shadow-[0_6px_18px_rgba(0,0,0,0.04)] p-3 sm:p-4 flex items-start gap-3"
+                    >
+                      <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm flex-shrink-0">
+                        {p.email[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="text-sm font-semibold text-gray-800 truncate">{p.email}</div>
+                        <div className="text-xs text-gray-500 flex items-center gap-1">
+                          <Mail size={10} />
+                          Invited {new Date(p.invitedAt).toLocaleDateString()}
+                        </div>
+                        <span className={`inline-flex w-fit px-2.5 py-1 rounded-full text-xs font-semibold border ${ROLE_COLOR.PENDING}`}>
+                          Pending
+                        </span>
                       </div>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${ROLE_COLOR.PENDING}`}>
-                      Pending
-                    </span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

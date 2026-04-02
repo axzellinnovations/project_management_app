@@ -5,7 +5,9 @@ import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,11 +20,14 @@ import com.planora.backend.dto.TeamMemberResponseDTO;
 import com.planora.backend.model.Project;
 import com.planora.backend.model.TeamInvitation;
 import com.planora.backend.model.TeamMember;
+import com.planora.backend.model.User;
 import com.planora.backend.model.UserPrincipal;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.TaskRepository;
 import com.planora.backend.repository.TeamInvitationRepository;
 import com.planora.backend.repository.TeamMemberRepository;
+import com.planora.backend.repository.UserRepository;
+import com.planora.backend.service.NotificationService;
 import com.planora.backend.service.TeamMemberService;
 
 import lombok.RequiredArgsConstructor;
@@ -31,16 +36,60 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/projects")
 @RequiredArgsConstructor
 public class ProjectMemberController {
+
     private final ProjectRepository projectRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final TeamInvitationRepository teamInvitationRepository;
     private final TaskRepository taskRepository;
     private final TeamMemberService teamMemberService;
+    private final NotificationService notificationService;
+    private final UserRepository userRepository;
 
-        public static class ChangeRoleRequest {
-                public String role;
-                public Long userId;
-        }
+    // ── Real-time: broadcast member-page events to viewers on the same page ───
+    // Uses the existing STOMP broker (same /ws endpoint as chat) on topic
+    // /topic/project/{projectId}/members so all connected clients update instantly.
+    private final SimpMessagingTemplate simpMessagingTemplate;
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Shape of events pushed to /topic/project/{projectId}/members */
+    public enum MemberEventAction { ROLE_CHANGED, MEMBER_REMOVED, MEMBER_JOINED }
+
+    public record MemberEvent(
+            MemberEventAction action,
+            Long userId,
+            String newRole,          // populated for ROLE_CHANGED
+            MemberPayload member     // populated for MEMBER_JOINED
+    ) {}
+
+    public record MemberPayload(
+            Long userId,
+            String username,
+            String fullName,
+            String email,
+            String profilePicUrl,
+            String role,
+            int taskCount,
+            String status
+    ) {}
+
+    public static class ChangeRoleRequest {
+        public String role;
+        public Long userId;
+    }
+
+    // ── Helper: broadcast an event to every client on this project's member page
+    private void broadcastMemberEvent(Long projectId, MemberEvent event) {
+        simpMessagingTemplate.convertAndSend(
+                "/topic/project/" + projectId + "/members", event);
+    }
+
+    // ── Helper: resolve display name
+    private String resolveDisplayName(Long userId) {
+        return userRepository.findById(userId)
+                .map(u -> u.getFullName() != null && !u.getFullName().isBlank()
+                        ? u.getFullName() : u.getUsername())
+                .orElse("A team admin");
+    }
 
     @GetMapping("/{projectId}/members")
     public ResponseEntity<List<TeamMemberResponseDTO>> getProjectMembers(
@@ -106,13 +155,39 @@ public class ProjectMemberController {
                 .orElseThrow(() -> new RuntimeException("Project not found"));
         Long teamId = project.getTeam().getId();
         Long currentUserId = principal.getUserId();
-        TeamMember updated = teamMemberService.changeMemberRoleWithPermissions(
+
+        teamMemberService.changeMemberRoleWithPermissions(
                 teamId, userId, request.role, currentUserId
         );
+
+        // ── REAL-TIME: push ROLE_CHANGED to all members page viewers ─────────
+        broadcastMemberEvent(projectId, new MemberEvent(
+                MemberEventAction.ROLE_CHANGED,
+                userId,
+                request.role != null ? request.role.toUpperCase() : null,
+                null
+        ));
+        // ─────────────────────────────────────────────────────────────────────
+
+        // ── NOTIFICATION: tell the affected user their role changed ───────────
+        if (!userId.equals(currentUserId)) {
+            userRepository.findById(userId).ifPresent(targetUser -> {
+                String changerName = resolveDisplayName(currentUserId);
+                String newRole = request.role != null
+                        ? request.role.substring(0, 1).toUpperCase()
+                          + request.role.substring(1).toLowerCase()
+                        : "Unknown";
+                String message = changerName + " updated your role to " + newRole
+                        + " in project \"" + project.getName() + "\"";
+                notificationService.createNotification(targetUser, message, "/members/" + projectId);
+            });
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         return ResponseEntity.ok().build();
     }
 
-    @org.springframework.web.bind.annotation.DeleteMapping("/{projectId}/members/{userId}")
+    @DeleteMapping("/{projectId}/members/{userId}")
     public ResponseEntity<?> removeMember(
             @PathVariable Long projectId,
             @PathVariable Long userId,
@@ -122,9 +197,31 @@ public class ProjectMemberController {
                 .orElseThrow(() -> new RuntimeException("Project not found"));
         Long teamId = project.getTeam().getId();
         Long currentUserId = principal.getUserId();
-        teamMemberService.removeMemberWithPermissions(
-                teamId, userId, currentUserId
-        );
+
+        User removedUser = !userId.equals(currentUserId)
+                ? userRepository.findById(userId).orElse(null)
+                : null;
+
+        teamMemberService.removeMemberWithPermissions(teamId, userId, currentUserId);
+
+        // ── REAL-TIME: push MEMBER_REMOVED to all members page viewers ────────
+        broadcastMemberEvent(projectId, new MemberEvent(
+                MemberEventAction.MEMBER_REMOVED,
+                userId,
+                null,
+                null
+        ));
+        // ─────────────────────────────────────────────────────────────────────
+
+        // ── NOTIFICATION: inform removed user ─────────────────────────────────
+        if (removedUser != null) {
+            String removerName = resolveDisplayName(currentUserId);
+            String message = removerName + " removed you from project \""
+                    + project.getName() + "\"";
+            notificationService.createNotification(removedUser, message, "/dashboard");
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         return ResponseEntity.ok().build();
     }
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Image from "next/image";
+import { useMembersSync, type MemberPayload } from "./useMembersSync";
 // Heroicons and custom SVGs for UI icons
 const ICONS = {
   members: <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 20h5v-2a4 4 0 0 0-3-3.87M9 20H4v-2a4 4 0 0 1 3-3.87M16 3.13a4 4 0 1 1-8 0M12 7a4 4 0 0 1 4-4" /></svg>,
@@ -180,6 +181,51 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
       cancelled = true;
     };
   }, [projectId]);
+
+  // ── Real-time sync via STOMP WebSocket ───────────────────────────────────────
+  // Subscribes to /topic/project/{projectId}/members.  The three callbacks are
+  // memoized so they never cause the hook to reconnect unnecessarily — only a
+  // projectId change triggers a new WebSocket session.
+
+  const handleRoleChangedLive = useCallback((userId: number, newRole: string) => {
+    setMembers(prev =>
+      prev.map(m => m.user.userId === userId ? { ...m, role: newRole } : m)
+    );
+  }, []);
+
+  const handleMemberRemovedLive = useCallback((userId: number) => {
+    setMembers(prev => prev.filter(m => m.user.userId !== userId));
+  }, []);
+
+  const handleMemberJoinedLive = useCallback((payload: MemberPayload) => {
+    setMembers(prev => {
+      // Guard against duplicates (e.g. if the accepter is also on this page)
+      if (prev.some(m => m.user.userId === payload.userId)) return prev;
+      return [
+        ...prev,
+        {
+          id: payload.userId,          // use userId as a synthetic id
+          role: payload.role,
+          user: {
+            userId: payload.userId,
+            username: payload.username,
+            fullName: payload.fullName,
+            email: payload.email,
+            profilePicUrl: payload.profilePicUrl,
+          },
+          taskCount: payload.taskCount,
+          status: payload.status,
+        },
+      ];
+    });
+  }, []);
+
+  useMembersSync(projectId, {
+    onRoleChanged: handleRoleChangedLive,
+    onMemberRemoved: handleMemberRemovedLive,
+    onMemberJoined: handleMemberJoinedLive,
+  });
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const allMembers = useMemo(() => [
     ...members,
@@ -528,21 +574,29 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
         </div>
       )}
 
-      {/* Members Table */}
-      <div className="bg-white rounded-lg shadow overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="border-b">
-              <th className="px-6 py-3 text-left font-semibold text-gray-700">Member</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">Role</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">Status</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">Last Active</th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-700">Tasks</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredMembers.map((m) => {
+      {/* Members Table - mobile: fully swipeable columns with clear separators */}
+      <div className="bg-white rounded-lg shadow">
+        <div className="max-md:-mx-4">
+          {/* Mobile rail: all columns swipe together with momentum; separators hint more content */}
+          <div
+            className="relative overflow-x-auto max-md:px-4"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            <table className="min-w-full max-md:min-w-[920px] text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="px-6 py-3 text-left font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[220px] max-md:border-r max-md:border-gray-100">
+                    Member
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[150px] max-md:border-l max-md:border-gray-100">Role</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[130px] max-md:border-l max-md:border-gray-100">Status</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[170px] max-md:border-l max-md:border-gray-100">Last Active</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[130px] max-md:border-l max-md:border-gray-100">Tasks</th>
+                  <th className="px-4 py-3 whitespace-nowrap max-md:min-w-[130px] max-md:border-l max-md:border-gray-100"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredMembers.map((m) => {
               const avatarKey = `${m.id}-${m.user.email}`;
               const resolvedCandidates = getMemberProfilePicCandidates(m)
                 .map((url) => resolveProfilePicUrl(url))
@@ -553,7 +607,7 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
 
               return (
               <tr key={m.id + m.user.email} className="border-b hover:bg-gray-50">
-                <td className="px-6 py-3 flex items-center gap-3">
+                <td className="px-6 py-3 flex items-center gap-3 max-md:min-w-[220px] max-md:border-r max-md:border-gray-100">
                   {resolvedProfilePicUrl && !brokenProfileImages[avatarKey] ? (
                     <Image
                       src={resolvedProfilePicUrl}
@@ -569,19 +623,19 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
                       {m.user.fullName ? m.user.fullName.split(" ").map(n => n[0]).join("") : m.user.email[0]?.toUpperCase()}
                     </div>
                   )}
-                  <div>
-                    <div className="font-medium text-gray-900">{m.user.fullName || m.user.email}</div>
-                    <div className="text-xs text-gray-500">{m.user.email}</div>
+                  <div className="max-md:max-w-[180px]">
+                    <div className="font-medium text-gray-900 truncate">{m.user.fullName || m.user.email}</div>
+                    <div className="text-xs text-gray-500 truncate">{m.user.email}</div>
                   </div>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 align-middle whitespace-nowrap max-md:min-w-[140px] max-md:border-l max-md:border-gray-100">
                   {canChangeRole(m) && m.user.userId ? (
                     <div className="relative">
                       <select 
                         value={m.role}
                         onChange={(e) => handleRoleChange(m.user.userId, e.target.value)}
                         disabled={changingRoleId === m.user.userId}
-                        className={`appearance-none outline-none cursor-pointer pl-7 pr-4 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider ${ROLE_COLORS[m.role] || "bg-gray-100 text-gray-700"}`}
+                        className={`appearance-none outline-none cursor-pointer pl-7 pr-4 py-2 max-md:min-h-[44px] rounded-md text-xs font-semibold uppercase tracking-wider ${ROLE_COLORS[m.role] || "bg-gray-100 text-gray-700"}`}
                       >
                         {getAvailableOptions().map(opt => (
                           <option key={opt} value={opt}>{opt}</option>
@@ -611,22 +665,22 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 align-middle whitespace-nowrap max-md:min-w-[120px] max-md:border-l max-md:border-gray-100">
                   <span className={`px-2 py-1 rounded text-xs font-medium ${STATUS_COLORS[m.status] || "bg-gray-100 text-gray-700"}`}>{m.status}</span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 align-middle whitespace-nowrap max-md:min-w-[160px] max-md:border-l max-md:border-gray-100">
                   {m.status === "Pending"
                     ? "Never"
                     : m.lastActive
                       ? timeAgo(m.lastActive)
                       : "-"}
                 </td>
-                <td className="px-4 py-3 font-semibold text-blue-700">{m.taskCount}</td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3 font-semibold text-blue-700 align-middle whitespace-nowrap max-md:min-w-[120px] max-md:border-l max-md:border-gray-100">{m.taskCount}</td>
+                <td className="px-4 py-3 text-right align-middle whitespace-nowrap max-md:min-w-[120px] max-md:border-l max-md:border-gray-100">
                   {canRemoveMember(m) && (
                     <button 
                       onClick={() => { setMemberToRemove(m); setShowRemoveModal(true); setRemoveError(""); }}
-                      className="p-1 px-3 rounded text-red-600 hover:bg-red-50 font-medium text-sm transition-colors border border-transparent hover:border-red-200"
+                      className="p-1 px-3 max-md:min-h-[44px] rounded text-red-600 hover:bg-red-50 font-medium text-sm transition-colors border border-transparent hover:border-red-200"
                       title="Remove Member"
                     >
                       Remove
@@ -636,13 +690,15 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
               </tr>
               );
             })}
-            {filteredMembers.length === 0 && (
-              <tr>
-                <td colSpan={6} className="text-center py-8 text-gray-400">No members found.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                {filteredMembers.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-gray-400">No members found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* Invite Modal */}

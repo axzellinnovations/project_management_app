@@ -28,8 +28,19 @@ function NotificationBell() {
 
     useEffect(() => {
         const token = localStorage.getItem('token');
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (token) fetchNotifications();
+        if (!token) return;
+
+        // Fetch notifications immediately on mount.
+        void fetchNotifications();
+
+        // Then re-poll every 30 s so new notifications (chat DMs, @mentions, member
+        // role changes, removals, invitation acceptances) appear without a page reload.
+        const intervalId = setInterval(() => void fetchNotifications(), 30_000);
+
+        // Clean up the interval when the component unmounts to prevent memory leaks.
+        return () => clearInterval(intervalId);
+    // fetchNotifications is intentionally excluded — it's stable (defined outside useEffect)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const markAsRead = async (id: number) => {

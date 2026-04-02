@@ -87,6 +87,7 @@ export default function ChatInterface() {
 
   const hasSelectedRoom = selectedRoomId !== null && Number.isFinite(selectedRoomId);
   const selectedRoom = hasSelectedRoom ? rooms.find((r) => r.id === selectedRoomId) : null;
+  const isPrivateChat = !!selectedUser && !hasSelectedRoom;
 
   const displayMessages = hasSelectedRoom
     ? roomMessages[selectedRoomId as number] || []
@@ -263,7 +264,7 @@ export default function ChatInterface() {
     <div className="flex bg-[#F7F8FA] overflow-hidden h-full min-h-0">
 
       {/* ── Sidebar ── */}
-      <div className={showChatSidebar ? 'flex' : 'hidden lg:flex'}>
+      <div className={showChatSidebar ? 'flex w-full lg:w-auto' : 'hidden lg:flex'}>
         <ChatSidebar
           currentUser={currentUser}
           currentUserAliases={currentUserAliases}
@@ -296,7 +297,7 @@ export default function ChatInterface() {
       </div>
 
       {/* ── Main chat area ── */}
-      <div className={`flex-1 flex flex-col min-w-0 bg-white border-l border-gray-100/60 shadow-sm ${!showChatSidebar ? 'flex' : 'hidden lg:flex'}`}>
+      <div className={`flex-1 flex flex-col min-w-0 bg-white border-l-0 lg:border-l border-gray-100/60 shadow-sm ${!showChatSidebar ? 'flex w-full' : 'hidden lg:flex'}`}>
 
         {/* Reconnect / disconnect banner */}
         <AnimatePresence>
@@ -354,17 +355,17 @@ export default function ChatInterface() {
         </AnimatePresence>
 
         {/* Header */}
-        <div className="h-16 px-5 flex items-center justify-between border-b border-gray-100 flex-shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="h-14 sm:h-16 px-3 sm:px-5 flex items-center justify-between border-b border-gray-100 flex-shrink-0 sticky top-0 z-30 bg-white/95 supports-[backdrop-filter]:backdrop-blur backdrop-blur">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {/* Back to sidebar on mobile */}
             <button
-              className="lg:hidden p-1.5 -ml-1 rounded-lg hover:bg-gray-100 text-gray-500 flex-shrink-0"
+              className="lg:hidden h-11 w-11 -ml-1 rounded-full hover:bg-gray-100 text-gray-600 flex items-center justify-center flex-shrink-0"
               onClick={() => setShowChatSidebar(true)}
               aria-label="Back to conversations"
             >
               <ArrowLeft size={18} />
             </button>
-            <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
               {headerIcon}
             </div>
             <div className="min-w-0">
@@ -394,7 +395,7 @@ export default function ChatInterface() {
             {featureFlags.phaseDEnabled && (
               <button
                 onClick={() => setShowSearch((prev) => !prev)}
-                className="w-9 h-9 rounded-xl hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+                  className="w-11 h-11 sm:w-9 sm:h-9 rounded-xl hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
                 title="Search messages"
                 aria-label="Toggle message search"
               >
@@ -474,6 +475,7 @@ export default function ChatInterface() {
           messages={filteredMessages}
           currentUser={currentUser}
           currentUserAliases={currentUserAliases}
+          isPrivateChat={isPrivateChat}
           userProfilePics={userProfilePics}
           activeRoomId={selectedRoomId}
           pinnedMessageId={selectedRoom?.pinnedMessageId ?? null}
@@ -503,8 +505,6 @@ export default function ChatInterface() {
           enableMentions={!selectedUser}
           mentionCandidates={mentionCandidates}
         />
-        {/* Spacer for mobile BottomNav */}
-        <div className="h-20 flex-shrink-0 lg:hidden" aria-hidden="true" />
       </div>
 
       {/* ── Thread panel ── */}
@@ -515,7 +515,7 @@ export default function ChatInterface() {
             animate={{ width: 340, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ duration: 0.25, ease: 'easeInOut' }}
-            className="overflow-hidden flex-shrink-0"
+            className="overflow-hidden flex-shrink-0 hidden lg:flex"
           >
             <ThreadPanel
               rootMessage={activeThreadRoot}
