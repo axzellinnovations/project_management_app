@@ -837,7 +837,7 @@ export const useChat = (projectId: string) => {
     }
   }, [projectId]);
 
-  const scheduleHistorySync = useCallback((recipient?: string | null, roomId?: number | null) => {
+  const _scheduleHistorySync = useCallback((recipient?: string | null, roomId?: number | null) => {
     window.setTimeout(() => {
       if (roomId !== null && roomId !== undefined) {
         loadRoomHistory(roomId);
