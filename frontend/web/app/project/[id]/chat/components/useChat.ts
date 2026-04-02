@@ -847,6 +847,7 @@ export const useChat = (projectId: string) => {
       client.connect({ Authorization: `Bearer ${token}` }, () => {
         stompClientRef.current = client;
         setIsSocketConnected(true);
+        setError('');
 
         client.subscribe(`/topic/project/${projectId}/public`, payload => {
           const incoming: ChatMessage = JSON.parse(payload.body);
@@ -1509,6 +1510,7 @@ export const useChat = (projectId: string) => {
     trackTelemetry,
     addTeam,
     isLoading,
+    isSocketConnected,
     error,
     roomMentionCounts,
     teamMentionCount,

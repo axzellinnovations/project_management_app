@@ -66,6 +66,7 @@ export default function ChatInterface() {
     trackTelemetry,
     addTeam,
     isLoading,
+    isSocketConnected,
     error,
     retryConnection,
     roomMentionCounts,
@@ -178,7 +179,7 @@ export default function ChatInterface() {
     await loadRoomHistory(createdRoom.id);
   };
 
-  const isConnected = !error;
+  const isConnected = isSocketConnected;
 
   /* ── Header info ── */
   const AVATAR_COLORS = [
