@@ -837,22 +837,6 @@ export const useChat = (projectId: string) => {
     }
   }, [projectId]);
 
-  const scheduleHistorySync = useCallback((recipient?: string | null, roomId?: number | null) => {
-    window.setTimeout(() => {
-      if (roomId !== null && roomId !== undefined) {
-        loadRoomHistory(roomId);
-        return;
-      }
-
-      if (recipient) {
-        loadPrivateHistory(recipient);
-        return;
-      }
-
-      loadHistory();
-    }, 450);
-  }, [loadHistory, loadPrivateHistory, loadRoomHistory]);
-
   const connectToChat = useCallback((token: string, username: string, aliases: string[]) => {
     try {
       const client = Stomp.over(() => new SockJS('http://localhost:8080/ws'));
@@ -863,6 +847,7 @@ export const useChat = (projectId: string) => {
       client.connect({ Authorization: `Bearer ${token}` }, () => {
         stompClientRef.current = client;
         setIsSocketConnected(true);
+        setError('');
 
         client.subscribe(`/topic/project/${projectId}/public`, payload => {
           const incoming: ChatMessage = JSON.parse(payload.body);
@@ -1525,6 +1510,7 @@ export const useChat = (projectId: string) => {
     trackTelemetry,
     addTeam,
     isLoading,
+    isSocketConnected,
     error,
     roomMentionCounts,
     teamMentionCount,
