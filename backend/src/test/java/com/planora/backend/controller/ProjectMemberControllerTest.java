@@ -12,14 +12,17 @@ import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.TaskRepository;
 import com.planora.backend.repository.TeamInvitationRepository;
 import com.planora.backend.repository.TeamMemberRepository;
+import com.planora.backend.repository.UserRepository;
 import com.planora.backend.service.TeamMemberService;
 import com.planora.backend.service.JWTService;
+import com.planora.backend.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
@@ -55,6 +58,12 @@ class ProjectMemberControllerTest {
     private TaskRepository taskRepository;
     @MockBean
     private TeamMemberService teamMemberService;
+    @MockBean
+    private NotificationService notificationService;
+    @MockBean
+    private UserRepository userRepository;
+    @MockBean
+    private SimpMessagingTemplate simpMessagingTemplate;
     @MockBean
     private JWTService jwtService;
     @MockBean

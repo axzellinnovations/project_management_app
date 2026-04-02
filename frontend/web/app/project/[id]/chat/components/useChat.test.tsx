@@ -182,21 +182,42 @@ describe('useChat hook', () => {
       result.current.sendRoomMessage('room update', 1);
     });
 
-    expect(stompClient.send).toHaveBeenCalledWith(
-      '/app/project/42/chat.sendMessage',
-      {},
-      JSON.stringify({ sender: 'alice', content: 'hello team', type: 'CHAT', formatType: 'PLAIN' })
-    );
-    expect(stompClient.send).toHaveBeenCalledWith(
-      '/app/project/42/chat.sendPrivateMessage',
-      {},
-      JSON.stringify({ sender: 'alice', content: 'ping bob', recipient: 'bob', type: 'CHAT', formatType: 'PLAIN' })
-    );
-    expect(stompClient.send).toHaveBeenCalledWith(
-      '/app/project/42/room/1/send',
-      {},
-      JSON.stringify({ sender: 'alice', content: 'room update', roomId: 1, type: 'CHAT', formatType: 'PLAIN' })
-    );
+    expect(stompClient.send).toHaveBeenCalledTimes(3);
+
+    const [teamDestination, teamHeaders, teamBody] = stompClient.send.mock.calls[0];
+    expect(teamDestination).toBe('/app/project/42/chat.sendMessage');
+    expect(teamHeaders).toEqual({});
+    expect(JSON.parse(teamBody)).toMatchObject({
+      sender: 'alice',
+      content: 'hello team',
+      type: 'CHAT',
+      formatType: 'PLAIN',
+    });
+    expect(JSON.parse(teamBody).timestamp).toBeTruthy();
+
+    const [privateDestination, privateHeaders, privateBody] = stompClient.send.mock.calls[1];
+    expect(privateDestination).toBe('/app/project/42/chat.sendPrivateMessage');
+    expect(privateHeaders).toEqual({});
+    expect(JSON.parse(privateBody)).toMatchObject({
+      sender: 'alice',
+      content: 'ping bob',
+      recipient: 'bob',
+      type: 'CHAT',
+      formatType: 'PLAIN',
+    });
+    expect(JSON.parse(privateBody).timestamp).toBeTruthy();
+
+    const [roomDestination, roomHeaders, roomBody] = stompClient.send.mock.calls[2];
+    expect(roomDestination).toBe('/app/project/42/room/1/send');
+    expect(roomHeaders).toEqual({});
+    expect(JSON.parse(roomBody)).toMatchObject({
+      sender: 'alice',
+      content: 'room update',
+      roomId: 1,
+      type: 'CHAT',
+      formatType: 'PLAIN',
+    });
+    expect(JSON.parse(roomBody).timestamp).toBeTruthy();
   });
 
   it('rejects blank messages and sets reconnect error when socket is unavailable', async () => {
