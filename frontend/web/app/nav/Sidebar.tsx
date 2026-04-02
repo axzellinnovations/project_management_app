@@ -12,6 +12,28 @@ import api from '@/lib/axios';
 ───────────────────────────────────────────── */
 interface UserSummary { email: string; profilePicUrl?: string; }
 interface Project { id: number; name: string; projectKey?: string; isFavorite?: boolean; }
+interface ChatRoomSummary {
+    roomId: number;
+    roomName?: string;
+    lastMessage?: string;
+    lastMessageSender?: string;
+    unseenCount?: number;
+}
+interface DirectMessageSummary {
+    username: string;
+    lastMessage?: string;
+    lastMessageSender?: string;
+    unseenCount?: number;
+}
+interface ChatSummaries {
+    rooms: ChatRoomSummary[];
+    directMessages: DirectMessageSummary[];
+}
+
+function getErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    return 'Unknown error';
+}
 
 /* storage sync helper */
 const subscribeToBrowserStorage = (onChange: () => void) => {
@@ -63,10 +85,7 @@ export default function Sidebar() {
     const [loadingProjects, setLoadingProjects] = useState(true);
     const [togglingFavoriteId, setTogglingFavoriteId] = useState<number | null>(null);
 
-    const [chatSummaries, setChatSummaries] = useState<{
-        rooms: any[];
-        directMessages: any[];
-    } | null>(null);
+    const [chatSummaries, setChatSummaries] = useState<ChatSummaries | null>(null);
     const [inboxOpen, setInboxOpen] = useState(false);
     const [inboxSearch, setInboxSearch] = useState('');
     const [loadingInbox, setLoadingInbox] = useState(false);
@@ -123,9 +142,8 @@ export default function Sidebar() {
             ]);
             setRecentProjects(recentRes.data);
             setFavoriteProjects(favRes.data);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (error: any) {
-            console.error('Sidebar: failed to fetch projects', error?.response?.data?.message || error.message);
+        } catch (error: unknown) {
+            console.error('Sidebar: failed to fetch projects', getErrorMessage(error));
         } finally {
             setLoadingProjects(false);
         }
@@ -810,7 +828,7 @@ function SectionHeader({ label, collapsed, expanded, onToggle }: {
 /* ─────────────────────────────────────────────
    Inbox Nav Row (with unread dot)
    ───────────────────────────────────────────── */
-function InboxNavRow({
+function _InboxNavRow({
     icon, label, subtitle, unseenCount, collapsed, onClick,
 }: {
     icon: React.ReactNode;
@@ -862,7 +880,7 @@ function InboxDropdown({
 }: {
     fixedTop: number;
     fixedLeft: number;
-    summaries: any;
+    summaries: ChatSummaries | null;
     loading: boolean;
     search: string;
     onSearch: (v: string) => void;
@@ -871,11 +889,11 @@ function InboxDropdown({
     const router = useRouter();
     const pid = typeof window !== 'undefined' ? localStorage.getItem('currentProjectId') : null;
 
-    const filteredRooms = (summaries?.rooms || []).filter((r: any) => 
+    const filteredRooms = (summaries?.rooms || []).filter((r: ChatRoomSummary) => 
         (r.roomName || '').toLowerCase().includes(search.toLowerCase())
     ).slice(0, 3);
 
-    const filteredDirects = (summaries?.directMessages || []).filter((d: any) => 
+    const filteredDirects = (summaries?.directMessages || []).filter((d: DirectMessageSummary) => 
         d.username.toLowerCase().includes(search.toLowerCase())
     ).slice(0, 3);
 
@@ -926,7 +944,7 @@ function InboxDropdown({
                         {filteredDirects.length > 0 && (
                             <div className="mb-2">
                                 <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-[#B0B8C4] uppercase tracking-wider">Direct Messages</div>
-                                {filteredDirects.map((dm: any) => (
+                                {filteredDirects.map((dm: DirectMessageSummary) => (
                                     <InboxDropdownItem
                                         key={`dm-${dm.username}`}
                                         item={dm}
@@ -945,7 +963,7 @@ function InboxDropdown({
                         {filteredRooms.length > 0 && (
                             <div>
                                 <div className="px-3 pt-1 pb-1 text-[10px] font-bold text-[#B0B8C4] uppercase tracking-wider">Group Chats</div>
-                                {filteredRooms.map((room: any) => (
+                                {filteredRooms.map((room: ChatRoomSummary) => (
                                     <InboxDropdownItem
                                         key={`room-${room.roomId}`}
                                         item={room}
@@ -990,7 +1008,7 @@ function InboxDropdown({
 function InboxDropdownItem({
     item, icon, label, onClick
 }: {
-    item: any;
+    item: ChatRoomSummary | DirectMessageSummary;
     icon: React.ReactNode;
     label: string;
     onClick: () => void;
@@ -1006,7 +1024,7 @@ function InboxDropdownItem({
             <div className="flex flex-col flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-1">
                     <span className="font-arimo text-[12px] font-semibold text-[#1D293D] truncate">{label}</span>
-                    {item.unseenCount > 0 && (
+                    {(item.unseenCount ?? 0) > 0 && (
                         <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] flex-shrink-0" />
                     )}
                 </div>

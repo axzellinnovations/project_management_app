@@ -11,7 +11,7 @@ import EditTaskModal from './components/EditTaskModal';
 import Sidebar from '../nav/Sidebar';
 import TopBar from '../nav/TopBar';
 // removed DateRangeFilter import per requirements
-import { Task, KanbanColumn as KanbanColumnType, TaskStatus } from './types';
+import { Task, KanbanColumn as KanbanColumnType } from './types';
 import { fetchTasksByProject, updateTaskStatus, deleteTask, createTask, updateTask } from './api';
 import { AlertCircle, Loader, CheckCircle2, Plus } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';

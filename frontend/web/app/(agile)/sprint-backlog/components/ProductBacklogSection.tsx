@@ -64,20 +64,6 @@ export default function ProductBacklogSection({
 
   const assignMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const assigneeAvatarMap = useMemo(() => {
-    const avatarMap = new Map<string, string | null>();
-
-    teamMembers.forEach((member) => {
-      const keys = [member.user.fullName, member.user.username]
-        .map((value) => value?.trim().toLowerCase())
-        .filter((value): value is string => Boolean(value));
-
-      keys.forEach((key) => avatarMap.set(key, member.user.profilePicUrl ?? null));
-    });
-
-    return avatarMap;
-  }, [teamMembers]);
-
   const getMemberDisplayName = (member: TeamMemberInfo) => member.user.fullName || member.user.username;
 
   useEffect(() => {
