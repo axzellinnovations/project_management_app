@@ -72,6 +72,14 @@ export default function PopupMessage({
   const config = typeConfig[type];
   const IconComponent = config.icon;
 
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setVisible(false);
+      onClose();
+    }, 300);
+  };
+
   useEffect(() => {
     setVisible(isOpen);
     setIsClosing(false);
@@ -83,15 +91,7 @@ export default function PopupMessage({
 
       return () => clearTimeout(timer);
     }
-  }, [isOpen, duration]);
-
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setVisible(false);
-      onClose();
-    }, 300);
-  };
+  }, [isOpen, duration, handleClose]);
 
   if (!visible) return null;
 

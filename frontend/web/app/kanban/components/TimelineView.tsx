@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { Task } from '../types';
 import { format, addMonths, startOfMonth, endOfMonth, differenceInDays, parseISO } from 'date-fns';
-import { Calendar, X } from 'lucide-react';
+import { Calendar, X, User, Flag } from 'lucide-react';
 
 interface TimelineViewProps {
   tasks: Task[];
