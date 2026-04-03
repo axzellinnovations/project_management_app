@@ -30,17 +30,21 @@ function NotificationBell() {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        // Fetch notifications immediately on mount.
-        void fetchNotifications();
+        // Fetch notifications immediately on mount — using a timeout to avoid synchronous setState inside effect warning.
+        const timer = setTimeout(() => {
+            void fetchNotifications();
+        }, 0);
 
         // Then re-poll every 30 s so new notifications (chat DMs, @mentions, member
         // role changes, removals, invitation acceptances) appear without a page reload.
         const intervalId = setInterval(() => void fetchNotifications(), 30_000);
 
         // Clean up the interval when the component unmounts to prevent memory leaks.
-        return () => clearInterval(intervalId);
+        return () => {
+            clearTimeout(timer);
+            clearInterval(intervalId);
+        };
     // fetchNotifications is intentionally excluded — it's stable (defined outside useEffect)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const markAsRead = async (id: number) => {
@@ -282,6 +286,7 @@ function TopBarContent() {
     useNavigation();
     const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
     const [isFavorite, setIsFavorite] = useState(false);
+    const [projectType, setProjectType] = useState<string | null>(null);
     const params = useParams();
     const pathname = usePathname();
     const searchParams = useSearchParams();
@@ -361,8 +366,10 @@ function TopBarContent() {
             try {
                 const response = await api.get(`/api/projects/${projectId}`);
                 setIsFavorite(Boolean(response.data?.isFavorite));
+                setProjectType(response.data?.type);
             } catch {
                 setIsFavorite(false);
+                setProjectType(null);
             }
         };
 
@@ -407,7 +414,7 @@ function TopBarContent() {
             case 'backlog':
                 return withProjectId('/sprint-backlog');
             case 'board':
-                return withProjectId('/kanban');
+                return withProjectId(projectType === 'AGILE' ? '/sprint-board' : '/kanban');
             case 'calendar':
                 return withProjectId('/calendar');
             case 'chats':
@@ -570,7 +577,16 @@ function TopBarContent() {
             </div>
 
             {/* Bottom Nav Section (45px) — scrollable with "More" overflow on small screens */}
-            <TabBar tabs={baseTabs} activeTab={activeTab} getTabHref={getTabHref} />
+            <TabBar 
+                tabs={baseTabs.filter(tab => {
+                    if (projectType === 'KANBAN') {
+                        return !['backlog', 'burndown'].includes(tab.id);
+                    }
+                    return true;
+                })} 
+                activeTab={activeTab} 
+                getTabHref={getTabHref} 
+            />
         </div>
     );
 
