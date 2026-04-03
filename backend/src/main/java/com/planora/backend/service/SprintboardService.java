@@ -176,7 +176,6 @@ public class SprintboardService {
     }
 
     @Transactional
-    @Transactional
     public void moveTaskToColumn(Long taskId, Long sprintboardId, SprintcolumnStatus newStatus, Long currentUserId) {
         Sprintboard sprintboard = getSprintboardById(sprintboardId);
         Sprint sprint = sprintboard.getSprint();

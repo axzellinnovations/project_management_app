@@ -25,9 +25,15 @@ export function NotificationBell() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) return;
-    void fetchNotifications();
-    const intervalId = setInterval(() => void fetchNotifications(), 30_000);
-    return () => clearInterval(intervalId);
+    let cancelled = false;
+    const load = async () => {
+      if (cancelled) return;
+      await fetchNotifications();
+    };
+    load();
+    const intervalId = setInterval(() => void load(), 30_000);
+    return () => { cancelled = true; clearInterval(intervalId); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const markAsRead = async (id: number) => {
