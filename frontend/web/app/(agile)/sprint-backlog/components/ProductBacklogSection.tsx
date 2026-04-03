@@ -7,6 +7,8 @@ import {
   ChevronRight,
   Pencil,
   UserPlus,
+  Rocket,
+  CornerDownLeft,
 } from 'lucide-react';
 import type { TaskItem } from '../page';
 import api from '@/lib/axios';
@@ -25,7 +27,7 @@ interface ProductBacklogSectionProps {
   onCreateTask: (title: string) => void;
   onCreateSprint: (name: string) => void;
   onDropTask: (taskId: number) => void;
-  onAssignTask: (taskId: number, assigneeName: string) => void;
+  onAssignTask: (taskId: number, assigneeName: string, assigneePhotoUrl: string | null) => void;
   onStatusChange: (taskId: number, status: string) => void;
 }
 
@@ -63,6 +65,8 @@ export default function ProductBacklogSection({
   const [loadingMembers, setLoadingMembers] = useState(false);
 
   const assignMenuRef = useRef<HTMLDivElement | null>(null);
+  const createTaskRef = useRef<HTMLFormElement | null>(null);
+  const createSprintRef = useRef<HTMLFormElement | null>(null);
 
   const getMemberDisplayName = (member: TeamMemberInfo) => member.user.fullName || member.user.username;
 
@@ -70,6 +74,14 @@ export default function ProductBacklogSection({
     const handleClickOutside = (event: MouseEvent) => {
       if (assignMenuRef.current && !assignMenuRef.current.contains(event.target as Node)) {
         setAssignMenuTaskId(null);
+      }
+      if (createTaskRef.current && !createTaskRef.current.contains(event.target as Node)) {
+        setShowCreateTaskBox(false);
+        setNewTaskName('');
+      }
+      if (createSprintRef.current && !createSprintRef.current.contains(event.target as Node)) {
+        setShowCreateSprintBox(false);
+        setNewSprintName('');
       }
       setStatusMenuTaskId(prev => prev !== null ? null : prev);
     };
@@ -106,7 +118,7 @@ export default function ProductBacklogSection({
       await api.patch(`/api/tasks/${taskId}/assign/${userId}`);
       const member = teamMembers.find((m) => m.user.userId === userId);
       if (member) {
-        onAssignTask(taskId, getMemberDisplayName(member));
+        onAssignTask(taskId, getMemberDisplayName(member), member.user.profilePicUrl || null);
       }
     } catch {
       alert('Failed to assign task.');
@@ -137,6 +149,18 @@ export default function ProductBacklogSection({
     setShowCreateSprintBox(false);
   };
 
+  const openCreateTaskBox = () => {
+    setShowCreateSprintBox(false);
+    setNewSprintName('');
+    setShowCreateTaskBox(true);
+  };
+
+  const openCreateSprintBox = () => {
+    setShowCreateTaskBox(false);
+    setNewTaskName('');
+    setShowCreateSprintBox(true);
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const taskId = Number(e.dataTransfer.getData('text/plain'));
@@ -155,7 +179,7 @@ export default function ProductBacklogSection({
       onDrop={handleDrop}
       className="rounded-xl border border-[#E4E7EC] bg-[#F8F9FB] p-5 shadow-sm"
     >
-      <div className="mb-4 flex items-center justify-between border-b border-[#EAECF0] pb-4">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#EAECF0] pb-4 gap-4 sm:gap-0">
         <div className="flex items-center gap-3">
           <div className="h-5 w-5 rounded border border-[#98A2B3] bg-transparent" />
 
@@ -177,8 +201,8 @@ export default function ProductBacklogSection({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5">
             <div className="rounded-full bg-[#F2F4F7] px-2.5 py-[2px] text-[11px] font-semibold text-[#344054]" title="Total">
               {totals.total}
             </div>
@@ -191,7 +215,7 @@ export default function ProductBacklogSection({
           </div>
 
           <button
-            onClick={() => setShowCreateSprintBox(true)}
+            onClick={openCreateSprintBox}
             className="rounded-lg border border-[#175CD3] bg-[#175CD3] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#1849A9] transition-colors duration-150"
           >
             Create Sprint
@@ -301,9 +325,19 @@ export default function ProductBacklogSection({
                           }
                         }
                       }}
-                      className="rounded-md p-1.5 text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF] transition-all duration-150"
+                      className="rounded-md transition-all duration-150 overflow-hidden"
                     >
-                      <UserPlus size={16} />
+                      {task.assigneeName && task.assigneeName !== 'Unassigned' ? (
+                        <AssigneeAvatar
+                          name={task.assigneeName}
+                          profilePicUrl={task.assigneePhotoUrl}
+                          size={24}
+                        />
+                      ) : (
+                        <div className="rounded-md p-1.5 text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF]">
+                           <UserPlus size={16} />
+                        </div>
+                      )}
                     </button>
 
                     {assignMenuTaskId === task.id && (
@@ -364,86 +398,82 @@ export default function ProductBacklogSection({
           </div>
 
           {showCreateSprintBox && (
-            <div className="mt-4 rounded-lg border border-[#D0D5DD] bg-white p-4">
-              <h3 className="mb-3 text-[15px] font-semibold text-[#101828]">
-                Create Sprint
-              </h3>
+            <form 
+              ref={createSprintRef}
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleCreateSprint();
+              }}
+              className="mt-2 group relative flex items-center gap-4 rounded-lg border-2 border-[#175CD3] bg-white px-4 py-2 transition-all duration-200"
+            >
+              <Rocket size={18} className="text-[#98A2B3] opacity-50" />
 
               <input
                 type="text"
                 value={newSprintName}
                 onChange={(e) => setNewSprintName(e.target.value)}
-                placeholder="Enter sprint name"
-                className="w-full rounded-md border border-[#D0D5DD] px-3 py-2 text-sm text-[#101828] outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') { setShowCreateSprintBox(false); setNewSprintName(''); }
+                }}
+                placeholder="What is the sprint goal / name?"
+                autoFocus
+                className="flex-1 min-w-0 bg-transparent text-[14px] font-medium text-[#101828] outline-none placeholder-[#98A2B3]"
               />
 
-              <p className="mt-2 text-[12px] text-[#667085]">
-                Selected tasks will move into the new sprint.
-              </p>
-
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  onClick={handleCreateSprint}
-                  className="rounded-md bg-[#175CD3] px-4 py-2 text-sm font-medium text-white hover:bg-[#1849A9] disabled:opacity-50"
-                  disabled={!newSprintName.trim()}
-                >
-                  Create Sprint
-                </button>
-
-                <button
-                  onClick={() => {
-                    setShowCreateSprintBox(false);
-                    setNewSprintName('');
-                  }}
-                  className="rounded-md border border-[#D0D5DD] bg-white px-4 py-2 text-sm font-medium text-[#344054] hover:bg-[#F9FAFB]"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+              <button
+                type="submit"
+                disabled={!newSprintName.trim()}
+                className="flex items-center gap-1.5 flex-shrink-0 rounded-md bg-[#175CD3] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#1849A9] disabled:opacity-50 transition-colors duration-150"
+              >
+                Create Sprint
+                <CornerDownLeft size={16} />
+              </button>
+            </form>
           )}
 
           {!showCreateTaskBox ? (
-            <button
-              onClick={() => setShowCreateTaskBox(true)}
-              className="mt-3 flex items-center gap-2 text-[16px] font-medium text-[#667085] hover:text-[#344054]"
-            >
-              <span className="text-[28px] leading-none">+</span>
-              <span>Create</span>
-            </button>
-          ) : (
-            <div className="mt-4 rounded-lg border border-[#D0D5DD] bg-white p-4">
-              <h3 className="mb-3 text-[15px] font-semibold text-[#101828]">
+            <div className="mt-2 flex justify-start gap-3">
+              <button
+                onClick={openCreateTaskBox}
+                className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-3 py-1.5 text-[13px] font-medium text-[#344054] shadow-sm hover:bg-[#F9FAFB] transition-colors duration-150"
+              >
+                <span className="text-[18px] leading-none mb-0.5">+</span>
                 Create Task
-              </h3>
+              </button>
+            </div>
+          ) : (
+            <form 
+              ref={createTaskRef}
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleCreateTask();
+              }}
+              className="mt-2 group relative flex items-center gap-4 rounded-lg border-2 border-[#175CD3] bg-white px-4 py-2 transition-all duration-200"
+            >
+              <div className="h-6 w-6 flex-shrink-0 rounded border-2 border-[#D0D5DD] opacity-50" />
+              <ChevronDown size={18} className="text-[#98A2B3] opacity-50" />
 
               <input
                 type="text"
                 value={newTaskName}
                 onChange={(e) => setNewTaskName(e.target.value)}
-                placeholder="Enter task name"
-                className="w-full rounded-md border border-[#D0D5DD] px-3 py-2 text-sm text-[#101828] outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') { setShowCreateTaskBox(false); setNewTaskName(''); }
+                }}
+                placeholder="Task name"
+                autoFocus
+                className="flex-1 min-w-0 bg-transparent text-[14px] font-medium text-[#101828] outline-none placeholder-[#98A2B3]"
               />
 
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  onClick={handleCreateTask}
-                  className="rounded-md bg-[#175CD3] px-4 py-2 text-sm font-medium text-white hover:bg-[#1849A9]"
-                >
-                  Create Task
-                </button>
-
-                <button
-                  onClick={() => {
-                    setShowCreateTaskBox(false);
-                    setNewTaskName('');
-                  }}
-                  className="rounded-md border border-[#D0D5DD] bg-white px-4 py-2 text-sm font-medium text-[#344054] hover:bg-[#F9FAFB]"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+              <button
+                type="submit"
+                disabled={!newTaskName.trim()}
+                className="flex items-center gap-1.5 flex-shrink-0 rounded-md bg-[#175CD3] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#1849A9] disabled:opacity-50 transition-colors duration-150"
+              >
+                Create
+                <CornerDownLeft size={16} />
+              </button>
+            </form>
           )}
         </div>
       )}
