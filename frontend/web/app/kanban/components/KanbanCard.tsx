@@ -10,9 +10,10 @@ interface KanbanCardProps {
   task: Task;
   onDelete?: (taskId: number) => void;
   onEdit?: (task: Task) => void;
+  onView?: (taskId: number) => void;
 }
 
-export default function KanbanCard({ task, onDelete, onEdit }: KanbanCardProps) {
+export default function KanbanCard({ task, onDelete, onEdit, onView }: KanbanCardProps) {
   const {
     attributes,
     listeners,

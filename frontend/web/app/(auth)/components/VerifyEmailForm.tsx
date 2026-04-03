@@ -16,6 +16,7 @@ export default function VerifyEmailForm() {
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,10 +52,10 @@ export default function VerifyEmailForm() {
     
     setIsLoading(true);
     setError('');
+    setSuccess('');
 
     try {
       const response = await api.post('/api/auth/resend', { email });
-      setError('');
       const successMessage = typeof response.data === 'string' ? response.data : 'New OTP sent to your email.';
       setSuccess(successMessage);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,6 +106,12 @@ export default function VerifyEmailForm() {
         {error && (
           <p className="text-xs text-red-600 text-center bg-red-50 p-2 rounded-lg">
             {error}
+          </p>
+        )}
+
+        {success && (
+          <p className="text-xs text-green-600 text-center bg-green-50 p-2 rounded-lg">
+            {success}
           </p>
         )}
 

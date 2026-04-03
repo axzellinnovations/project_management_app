@@ -21,10 +21,8 @@ export async function fetchTasksByProject(projectId: number): Promise<Task[]> {
       // If assigneeName or assigneeId exists but assignee doesn't, create it
       if (!task.assignee && (task.assigneeName || task.assigneeId)) {
         task.assignee = {
-          id: task.assigneeId,
+          id: task.assigneeId!,
           name: task.assigneeName || 'Unknown',
-          email: task.assigneeEmail,
-          avatar: task.assigneeAvatar,
         };
       }
       return task;
