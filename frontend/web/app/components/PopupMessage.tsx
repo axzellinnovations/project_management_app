@@ -79,7 +79,7 @@ export default function PopupMessage({
   }, [onClose]);
 
   // Reset closing state when popup opens
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       setIsClosing(false);
     }
