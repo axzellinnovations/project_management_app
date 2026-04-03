@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useLayoutEffect } from 'react';
 import { X, CheckCircle2, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 export type PopupType = 'success' | 'error' | 'warning' | 'info';
@@ -66,7 +66,6 @@ export default function PopupMessage({
   duration = 5000,
   action,
 }: PopupMessageProps) {
-  const [visible, setVisible] = useState(isOpen);
   const [isClosing, setIsClosing] = useState(false);
 
   const config = typeConfig[type];
@@ -75,27 +74,30 @@ export default function PopupMessage({
   const handleClose = useCallback(() => {
     setIsClosing(true);
     setTimeout(() => {
-      setVisible(false);
       onClose();
     }, 300);
   }, [onClose]);
 
-  useEffect(() => {
+  // Reset closing state when popup opens
+  useLayoutEffect(() => {
     if (isOpen) {
-      setVisible(true);
       setIsClosing(false);
+    }
+  }, [isOpen]);
 
-      if (duration > 0) {
-        const timer = setTimeout(() => {
-          handleClose();
-        }, duration);
+  // Set up auto-close timer
+  useEffect(() => {
+    if (isOpen && duration > 0) {
+      const timer = setTimeout(() => {
+        handleClose();
+      }, duration);
 
-        return () => clearTimeout(timer);
-      }
+      return () => clearTimeout(timer);
     }
   }, [isOpen, duration, handleClose]);
 
-  if (!visible) return null;
+  // Don't render if not open and not closing
+  if (!isOpen && !isClosing) return null;
 
   return (
     <>
