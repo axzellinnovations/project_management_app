@@ -194,8 +194,6 @@ export function useMembersSync(
         }, reconnectDelayRef.current);
       }
     );
-  // connect is referentially stable; projectId changes correctly re-trigger.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   useEffect(() => {

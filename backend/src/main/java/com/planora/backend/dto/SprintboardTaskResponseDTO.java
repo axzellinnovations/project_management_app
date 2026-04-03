@@ -10,6 +10,7 @@ public class SprintboardTaskResponseDTO {
     private String title;
     private Integer storyPoint;
     private String assigneeName;
+    private String assigneePhotoUrl;
     private String status;
     private String priority;
     private LocalDate dueDate;
