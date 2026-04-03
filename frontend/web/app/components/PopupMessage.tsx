@@ -81,15 +81,17 @@ export default function PopupMessage({
   }, [onClose]);
 
   useEffect(() => {
-    setVisible(isOpen);
-    setIsClosing(false);
+    if (isOpen) {
+      setVisible(true);
+      setIsClosing(false);
 
-    if (isOpen && duration > 0) {
-      const timer = setTimeout(() => {
-        handleClose();
-      }, duration);
+      if (duration > 0) {
+        const timer = setTimeout(() => {
+          handleClose();
+        }, duration);
 
-      return () => clearTimeout(timer);
+        return () => clearTimeout(timer);
+      }
     }
   }, [isOpen, duration, handleClose]);
 

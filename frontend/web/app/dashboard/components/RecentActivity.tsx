@@ -1,30 +1,4 @@
-
 import React from 'react';
-
-// ActivityItem component - defined but not exported, used internally only
-function ActivityItem({
-    icon,
-    iconBg,
-    text,
-    time
-}: {
-    icon: React.ReactNode,
-    iconBg: string,
-    text: React.ReactNode,
-    time: string
-}) {
-    return (
-        <div className="flex gap-3 mb-4 last:mb-0">
-            <div className={`w-8 h-8 rounded-[10px] ${iconBg} flex items-center justify-center flex-shrink-0`}>
-                {icon}
-            </div>
-            <div>
-                <p className="font-arimo text-[14px] text-[#101828] leading-[20px]">{text}</p>
-                <p className="font-arimo text-[12px] text-[#6A7282] mt-0.5">{time}</p>
-            </div>
-        </div>
-    );
-}
 import MotionWrapper from './MotionWrapper';
 
 export default function RecentActivity() {
