@@ -117,7 +117,15 @@ export default function SprintBacklogPage() {
 
   const toggleTaskSelection = (id: number) => {
     setProductTasks((prev) =>
-      prev.map((task) => task.id === id ? { ...task, selected: !task.selected } : task)
+      prev.map((task) => (task.id === id ? { ...task, selected: !task.selected } : task))
+    );
+    setSprints((prev) =>
+      prev.map((sprint) => ({
+        ...sprint,
+        tasks: sprint.tasks.map((task) =>
+          task.id === id ? { ...task, selected: !task.selected } : task
+        ),
+      }))
     );
   };
 
@@ -362,6 +370,7 @@ export default function SprintBacklogPage() {
               projectId={projectId!}
               onDropTask={moveTaskToSprint}
               onCreateTask={createSprintTask}
+              onToggleTask={toggleTaskSelection}
               onDeleteTask={(taskId, sprintId) => {
                 setSprints((prev) =>
                   prev.map((s) =>
