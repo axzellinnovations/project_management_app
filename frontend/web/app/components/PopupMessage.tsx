@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useLayoutEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { X, CheckCircle2, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 export type PopupType = 'success' | 'error' | 'warning' | 'info';
@@ -78,14 +78,6 @@ export default function PopupMessage({
     }, 300);
   }, [onClose]);
 
-  // Reset closing state synchronously when popup opens (before paint)
-  // Using useLayoutEffect avoids the cascading render warning
-  useLayoutEffect(() => {
-    if (isOpen) {
-      setIsClosing(false);
-    }
-  }, [isOpen]);
-
   // Set up auto-close timer
   useEffect(() => {
     if (isOpen && duration > 0) {
@@ -96,6 +88,14 @@ export default function PopupMessage({
       return () => clearTimeout(timer);
     }
   }, [isOpen, duration, handleClose]);
+
+  // When popup becomes visible, reset closing animation state
+  useEffect(() => {
+    if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsClosing(false);
+    }
+  }, [isOpen]);
 
   // Don't render if not open and not closing
   if (!isOpen && !isClosing) return null;
