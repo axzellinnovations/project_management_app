@@ -8,6 +8,7 @@ import com.planora.backend.model.TeamRole;
 import com.planora.backend.model.User;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.SprintRepository;
+import com.planora.backend.repository.SprintboardRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
 import com.planora.backend.repository.TaskRepository;
@@ -28,19 +29,22 @@ public class SprintService {
     private final UserRepository userRepository;
     private final SprintboardService sprintboardService;
     private final TaskRepository taskRepository;
+    private final SprintboardRepository sprintboardRepository;
 
     public SprintService(SprintRepository sprintRepository,
                          ProjectRepository projectRepository,
                          TeamMemberRepository teamMemberRepository,
                          UserRepository userRepository,
                          SprintboardService sprintboardService,
-                         TaskRepository taskRepository) {
+                         TaskRepository taskRepository,
+                         SprintboardRepository sprintboardRepository) {
         this.sprintRepository = sprintRepository;
         this.projectRepository = projectRepository;
         this.teamMemberRepository = teamMemberRepository;
         this.userRepository = userRepository;
         this.sprintboardService = sprintboardService;
         this.taskRepository = taskRepository;
+        this.sprintboardRepository = sprintboardRepository;
     }
 
     // ---------- Get Current User from SecurityContext ----------
@@ -133,10 +137,10 @@ public class SprintService {
 
         requireConfigureBoard(existing.getProId());
 
-        existing.setName(updatedSprint.getName());
-        existing.setStartDate(updatedSprint.getStartDate());
-        existing.setEndDate(updatedSprint.getEndDate());
-        existing.setStatus(updatedSprint.getStatus());
+        if (updatedSprint.getName() != null) existing.setName(updatedSprint.getName());
+        if (updatedSprint.getStartDate() != null) existing.setStartDate(updatedSprint.getStartDate());
+        if (updatedSprint.getEndDate() != null) existing.setEndDate(updatedSprint.getEndDate());
+        if (updatedSprint.getStatus() != null) existing.setStatus(updatedSprint.getStatus());
 
         if (existing.getStartDate() != null && existing.getEndDate() != null
                 && existing.getStartDate().isAfter(existing.getEndDate())) {
@@ -164,6 +168,9 @@ public class SprintService {
             }
             taskRepository.saveAll(sprintTasks);
         }
+
+        // Delete associated sprintboard (and its columns via cascade) before deleting sprint
+        sprintboardRepository.findBySprintId(id).ifPresent(sprintboardRepository::delete);
 
         sprintRepository.deleteById(id);
     }
