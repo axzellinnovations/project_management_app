@@ -142,6 +142,7 @@ public class SprintboardService {
                 .orElseThrow(() -> new RuntimeException("Sprintboard not found"));
     }
 
+    @Transactional(readOnly = true)
     public List<SprintboardTaskResponseDTO> getTasksBySprintColumn(Long sprintboardId, SprintcolumnStatus columnStatus) {
         Sprintboard sprintboard = getSprintboardById(sprintboardId);
         Sprint sprint = sprintboard.getSprint();
@@ -174,6 +175,7 @@ public class SprintboardService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional
     @Transactional
     public void moveTaskToColumn(Long taskId, Long sprintboardId, SprintcolumnStatus newStatus, Long currentUserId) {
         Sprintboard sprintboard = getSprintboardById(sprintboardId);
