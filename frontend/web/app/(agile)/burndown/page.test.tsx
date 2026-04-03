@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 jest.mock('next/navigation', () => ({
   useSearchParams: jest.fn(),
   useRouter: jest.fn(),
+  usePathname: jest.fn(() => '/burndown'),
 }));
 
 jest.mock('@/lib/axios', () => ({
@@ -31,11 +32,23 @@ describe('BurndownPage', () => {
     });
 
     mockedApi.get.mockImplementation((url: string) => {
-      if (url.includes('/api/sprints/active/')) {
-        return Promise.resolve({ data: { id: 1, name: 'Sprint 1', startDate: '2026-04-01', endDate: '2026-04-14' } });
+      if (url.includes('/api/sprints/project/')) {
+        return Promise.resolve({ 
+          data: [{ id: 1, name: 'Sprint 1', startDate: '2026-04-01', endDate: '2026-04-14', status: 'ACTIVE' }] 
+        });
       }
-      if (url.includes('/api/tasks/sprint/')) {
-        return Promise.resolve({ data: [{ id: 101, storyPoints: 5, status: 'DONE', completedAt: '2026-04-03' }] });
+      if (url.includes('/api/burndown/sprint/')) {
+        return Promise.resolve({ 
+          data: { 
+            id: 1, 
+            sprintName: 'Sprint 1', 
+            totalStoryPoints: 10, 
+            dataPoints: [
+              { day: '2026-04-01', remainingPoints: 10, idealPoints: 10 },
+              { day: '2026-04-02', remainingPoints: 5, idealPoints: 5 }
+            ] 
+          } 
+        });
       }
       return Promise.reject(new Error('error'));
     });
@@ -44,7 +57,8 @@ describe('BurndownPage', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('burndown-chart')).toBeInTheDocument();
-      expect(screen.getByText('Sprint 1')).toBeInTheDocument();
+      // Ensure we check for 'Sprint 1' within the sprint selection area or just check that it's present (getAllByText)
+      expect(screen.getAllByText('Sprint 1').length).toBeGreaterThan(0);
     });
   });
 });
