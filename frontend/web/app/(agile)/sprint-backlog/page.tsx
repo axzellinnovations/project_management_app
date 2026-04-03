@@ -383,9 +383,9 @@ export default function SprintBacklogPage() {
             onCreateSprint={createSprint}
             onDropTask={moveTaskToBacklog}
             onStatusChange={handleTaskStatusChange}
-            onAssignTask={(taskId, assigneeName) => {
+            onAssignTask={(taskId, assigneeName, assigneePhotoUrl) => {
               setProductTasks((prev) =>
-                prev.map((t) => t.id === taskId ? { ...t, assigneeName } : t)
+                prev.map((t) => (t.id === taskId ? { ...t, assigneeName, assigneePhotoUrl } : t))
               );
             }}
           />

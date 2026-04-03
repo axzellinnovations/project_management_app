@@ -16,8 +16,12 @@ interface AssigneeAvatarProps {
 
 const joinClasses = (...values: Array<string | undefined>) => values.filter(Boolean).join(' ');
 
-const resolveProfilePic = (url?: string | null) => {
-  if (!url) return '';
+const resolveProfilePic = (url?: string | null, name?: string | null) => {
+  if (!url) {
+    if (!name || name === 'Unassigned') return '';
+    // DiceBear fallback for a professional "profile picture" look instead of just initials
+    return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=00319c,1e56a0,163172&fontFamily=Arial,sans-serif`;
+  }
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
   const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
   const path = url.startsWith('/') ? url : `/${url}`;
@@ -47,7 +51,7 @@ export default function AssigneeAvatar({
   fallbackClassName,
 }: AssigneeAvatarProps) {
   const [imgError, setImgError] = useState(false);
-  const resolvedProfilePic = resolveProfilePic(profilePicUrl);
+  const resolvedProfilePic = resolveProfilePic(profilePicUrl, name);
   const initials = getInitials(name);
   const showInitials = (!resolvedProfilePic || imgError) && !!initials && name !== 'Unassigned';
   const iconSize = Math.max(12, Math.round(size * 0.7));
