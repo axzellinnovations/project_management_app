@@ -38,6 +38,14 @@ export default function ProfilePage() {
     const [isSavingName, setIsSavingName] = useState(false);
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
+    // Password reset state
+    const [pwStep, setPwStep] = useState<'idle' | 'sent' | 'done'>('idle');
+    const [isSendingOtp, setIsSendingOtp] = useState(false);
+    const [otp, setOtp] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isResettingPw, setIsResettingPw] = useState(false);
+
     const [errorMessage, setErrorMessage] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
 
@@ -96,6 +104,44 @@ export default function ProfilePage() {
 
         void loadProfile();
     }, [router]);
+
+    const handleSendOtp = async () => {
+        setErrorMessage('');
+        setSuccessMessage('');
+        if (!email) { setErrorMessage('Email not found.'); return; }
+        try {
+            setIsSendingOtp(true);
+            await api.post('/api/auth/forgot', { email });
+            setPwStep('sent');
+            setSuccessMessage('Reset code sent to your email.');
+        } catch (error: unknown) {
+            setErrorMessage(getApiErrorMessage(error, 'Failed to send reset code.'));
+        } finally {
+            setIsSendingOtp(false);
+        }
+    };
+
+    const handleResetPassword = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setErrorMessage('');
+        setSuccessMessage('');
+        if (!otp.trim()) { setErrorMessage('Please enter the reset code.'); return; }
+        if (newPassword.length < 6) { setErrorMessage('Password must be at least 6 characters.'); return; }
+        if (newPassword !== confirmPassword) { setErrorMessage('Passwords do not match.'); return; }
+        try {
+            setIsResettingPw(true);
+            await api.post('/api/auth/reset', { email, otp: otp.trim(), newPassword });
+            setPwStep('done');
+            setOtp('');
+            setNewPassword('');
+            setConfirmPassword('');
+            setSuccessMessage('Password changed successfully.');
+        } catch (error: unknown) {
+            setErrorMessage(getApiErrorMessage(error, 'Failed to reset password. Check your reset code.'));
+        } finally {
+            setIsResettingPw(false);
+        }
+    };
 
     const onSaveFullName = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -256,6 +302,86 @@ export default function ProfilePage() {
                         </button>
                     </div>
                 </form>
+            </div>
+
+            {/* ── Change Password ── */}
+            <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 space-y-4 mt-6">
+                <div>
+                    <h2 className="text-[16px] font-semibold text-[#101828]">Change Password</h2>
+                    <p className="text-sm text-[#6A7282] mt-0.5">A reset code will be sent to your email address.</p>
+                </div>
+
+                {pwStep === 'idle' && (
+                    <button
+                        onClick={() => void handleSendOtp()}
+                        disabled={isSendingOtp}
+                        className={`rounded-lg px-5 py-2.5 text-white text-sm font-medium transition-colors ${
+                            isSendingOtp ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                    >
+                        {isSendingOtp ? 'Sending...' : 'Send Reset Code'}
+                    </button>
+                )}
+
+                {pwStep === 'sent' && (
+                    <form className="space-y-4" onSubmit={(e) => void handleResetPassword(e)}>
+                        <div>
+                            <label className="block text-sm font-medium text-[#344054] mb-1.5">Reset Code</label>
+                            <input
+                                type="text"
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value)}
+                                placeholder="Enter the code from your email"
+                                className="w-full rounded-lg border border-[#D0D5DD] bg-white text-[#101828] px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-[#344054] mb-1.5">New Password</label>
+                            <input
+                                type="password"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                placeholder="At least 6 characters"
+                                className="w-full rounded-lg border border-[#D0D5DD] bg-white text-[#101828] px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-[#344054] mb-1.5">Confirm Password</label>
+                            <input
+                                type="password"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                placeholder="Repeat new password"
+                                className="w-full rounded-lg border border-[#D0D5DD] bg-white text-[#101828] px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                            />
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                type="submit"
+                                disabled={isResettingPw}
+                                className={`rounded-lg px-5 py-2.5 text-white text-sm font-medium transition-colors ${
+                                    isResettingPw ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                                }`}
+                            >
+                                {isResettingPw ? 'Resetting...' : 'Reset Password'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setPwStep('idle'); setOtp(''); setNewPassword(''); setConfirmPassword(''); }}
+                                className="rounded-lg px-5 py-2.5 text-[#374151] text-sm font-medium border border-[#D0D5DD] hover:bg-[#F9FAFB] transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {pwStep === 'done' && (
+                    <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">
+                        Password changed successfully.
+                        <button onClick={() => setPwStep('idle')} className="ml-auto text-green-600 hover:underline text-xs">Reset again</button>
+                    </div>
+                )}
             </div>
         </div>
     );

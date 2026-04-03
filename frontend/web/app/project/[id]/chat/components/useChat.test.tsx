@@ -1,5 +1,4 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { Stomp } from '@stomp/stompjs';
 import { useChat } from './useChat';
 
 const pushMock = jest.fn();

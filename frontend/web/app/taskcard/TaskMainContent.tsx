@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Paperclip, CheckSquare, Link, Edit2, AlertCircle } from 'lucide-react';
 import SubtaskList from './SubtaskList';
 import CommentSection from './CommentSection';
@@ -19,6 +19,7 @@ interface TaskMainContentProps {
   taskId?: number;
   onUpdateTitle?: (title: string) => void;
   onUpdateDescription?: (description: string) => void;
+  onSubtaskAdded?: () => void;
 }
 
 const TaskMainContent: React.FC<TaskMainContentProps> = ({ 
@@ -28,12 +29,16 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
   dependencies, 
   taskId,
   onUpdateTitle,
-  onUpdateDescription
+  onUpdateDescription,
+  onSubtaskAdded,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedTitle, setEditedTitle] = useState(title);
   const [editedDescription, setEditedDescription] = useState(description);
+  const [subtaskAddTrigger, setSubtaskAddTrigger] = useState(0);
+  const _attachInputRef = useRef<HTMLInputElement>(null);
+  const [attachMsg, setAttachMsg] = useState<string | null>(null);
 
   // Update local state when props change
   useEffect(() => {
@@ -59,7 +64,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 border-r border-gray-100 scrollbar-thin scrollbar-thumb-gray-200">
+    <div className="flex-1 overflow-y-auto p-5 md:p-8 border-r border-gray-100 scrollbar-thin scrollbar-thumb-gray-200 min-h-0">
       
       {/* Title */}
       <div className="group mb-6">
@@ -90,11 +95,25 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
       </div>
 
       {/* Action Bar */}
-      <div className="flex gap-3 mb-6">
-        <ActionButton icon={<Paperclip size={14} />} label="Attach" />
-        <ActionButton icon={<CheckSquare size={14} />} label="Add subtask" />
+      <div className="flex flex-wrap gap-2 mb-6">
+        <ActionButton
+          icon={<Paperclip size={14} />}
+          label="Attach"
+          onClick={() => {
+            setAttachMsg('File attachments are coming soon.');
+            setTimeout(() => setAttachMsg(null), 3000);
+          }}
+        />
+        <ActionButton
+          icon={<CheckSquare size={14} />}
+          label="Add subtask"
+          onClick={() => setSubtaskAddTrigger(n => n + 1)}
+        />
         <ActionButton icon={<Link size={14} />} label="Link issue" />
       </div>
+      {attachMsg && (
+        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded mb-4">{attachMsg}</p>
+      )}
 
       {/* Description */}
       <div className="mb-8 group">
@@ -148,7 +167,12 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
       </div>
 
       {/* Subtasks Component */}
-      <SubtaskList subtasks={subtasks} />
+      <SubtaskList
+        subtasks={subtasks}
+        taskId={taskId}
+        onSubtaskAdded={onSubtaskAdded}
+        addTrigger={subtaskAddTrigger}
+      />
 
       {/* Linked Issues (Dependencies) */}
       {dependencies && dependencies.length > 0 && (
@@ -176,8 +200,11 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
 };
 
 // Small helper component for the top buttons
-const ActionButton = ({ icon, label }: { icon: React.ReactNode, label: string }) => (
-  <button className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm font-medium text-gray-700 transition-colors">
+const ActionButton = ({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick?: () => void }) => (
+  <button
+    onClick={onClick}
+    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm font-medium text-gray-700 transition-colors"
+  >
     {icon} {label}
   </button>
 );

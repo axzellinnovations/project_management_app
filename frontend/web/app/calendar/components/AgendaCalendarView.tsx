@@ -1,4 +1,8 @@
+'use client';
+
+import { useState } from 'react';
 import CalendarEventCard from './CalendarEventCard';
+import CalendarEventPopup from './CalendarEventPopup';
 import type { CalendarEventItem } from '../types';
 import { addDays, isDateInRange, isSameDay, startOfDay, toDate } from '../utils/date';
 
@@ -10,6 +14,11 @@ interface AgendaCalendarViewProps {
 const AGENDA_SPAN_DAYS = 14;
 
 export default function AgendaCalendarView({ currentDate, events }: AgendaCalendarViewProps) {
+  const [popup, setPopup] = useState<{ event: CalendarEventItem; x: number; y: number } | null>(null);
+
+  const handleEventClick = (event: CalendarEventItem, clientX: number, clientY: number) => {
+    setPopup({ event, x: clientX, y: clientY });
+  };
   const start = startOfDay(currentDate);
   const days = Array.from({ length: AGENDA_SPAN_DAYS }, (_, idx) => addDays(start, idx));
 
@@ -39,7 +48,7 @@ export default function AgendaCalendarView({ currentDate, events }: AgendaCalend
               <div className="space-y-1.5">
                 {dayEvents.length > 0 ? (
                   dayEvents.map((event) => (
-                    <CalendarEventCard key={`${event.id}-${day.toDateString()}`} event={event} />
+                    <CalendarEventCard key={`${event.id}-${day.toDateString()}`} event={event} onClick={handleEventClick} />
                   ))
                 ) : (
                   <div className="text-xs text-[#98A2B3]">No events</div>
@@ -49,6 +58,14 @@ export default function AgendaCalendarView({ currentDate, events }: AgendaCalend
           );
         })}
       </div>
+
+      {popup && (
+        <CalendarEventPopup
+          event={popup.event}
+          position={{ x: popup.x, y: popup.y }}
+          onClose={() => setPopup(null)}
+        />
+      )}
     </div>
   );
 }

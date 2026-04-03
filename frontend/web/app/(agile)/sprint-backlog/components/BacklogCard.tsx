@@ -566,6 +566,10 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
   const doDeleteSprint = async () => {
     setDeletingSprintLoading(true);
     try {
+      // Move all sprint tasks to backlog before deleting
+      await Promise.all(
+        localTasks.map((task) => api.put(`/api/tasks/${task.id}`, { sprintId: null }))
+      );
       await api.delete(`/api/sprints/${sprint.id}`);
       setConfirmDeleteSprint(false);
       onSprintDeleted(sprint.id, sprint.tasks);
