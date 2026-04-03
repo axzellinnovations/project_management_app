@@ -78,8 +78,9 @@ export default function PopupMessage({
     }, 300);
   }, [onClose]);
 
-  // Reset closing state when popup opens
-  useEffect(() => {
+  // Reset closing state synchronously when popup opens (before paint)
+  // Using useLayoutEffect avoids the cascading render warning
+  useLayoutEffect(() => {
     if (isOpen) {
       setIsClosing(false);
     }
