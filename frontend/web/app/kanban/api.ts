@@ -14,7 +14,21 @@ export interface TeamMemberOption {
 export async function fetchTasksByProject(projectId: number): Promise<Task[]> {
   try {
     const response = await axios.get(`/api/tasks/project/${projectId}`);
-    return response.data || [];
+    const tasks = response.data || [];
+    
+    // Transform tasks to ensure assignee object is properly formed
+    return tasks.map((task: any) => {
+      // If assigneeName or assigneeId exists but assignee doesn't, create it
+      if (!task.assignee && (task.assigneeName || task.assigneeId)) {
+        task.assignee = {
+          id: task.assigneeId,
+          name: task.assigneeName || 'Unknown',
+          email: task.assigneeEmail,
+          avatar: task.assigneeAvatar,
+        };
+      }
+      return task;
+    });
   } catch (error) {
     console.error('Error fetching tasks:', error);
     throw error;

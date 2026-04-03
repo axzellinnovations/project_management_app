@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  turbopack: {
+    root: '/Users/sinthuha/Desktop/project_management_app/frontend/web',
+  },
   async rewrites() {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8080';
     return [

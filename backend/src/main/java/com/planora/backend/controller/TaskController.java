@@ -3,7 +3,6 @@ package com.planora.backend.controller;
 import com.planora.backend.dto.CommentRequestDTO;
 import com.planora.backend.dto.TaskRequestDTO;
 import com.planora.backend.dto.TaskResponseDTO;
-import com.planora.backend.model.Task;
 import com.planora.backend.model.UserPrincipal;
 import com.planora.backend.service.TaskService;
 import org.springframework.beans.factory.annotation.Autowired;
