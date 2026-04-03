@@ -30,16 +30,21 @@ function NotificationBell() {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        // Fetch notifications immediately on mount.
-        void fetchNotifications();
+        // Fetch notifications immediately on mount inside an async function to avoid synchronous setState warning
+        const initFetch = async () => {
+            await fetchNotifications();
+        };
+        void initFetch();
 
         // Then re-poll every 30 s so new notifications (chat DMs, @mentions, member
         // role changes, removals, invitation acceptances) appear without a page reload.
-        const intervalId = setInterval(() => void fetchNotifications(), 30_000);
+        const intervalId = setInterval(() => {
+            void fetchNotifications();
+        }, 30_000);
 
         // Clean up the interval when the component unmounts to prevent memory leaks.
         return () => clearInterval(intervalId);
-    // fetchNotifications is intentionally excluded — it's stable (defined outside useEffect)
+    // fetchNotifications is intentionally excluded — it's stable (defined as a top-level function in component or memoized)
     }, []);
 
     const markAsRead = async (id: number) => {
