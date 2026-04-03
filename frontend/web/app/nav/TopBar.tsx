@@ -40,7 +40,6 @@ function NotificationBell() {
         // Clean up the interval when the component unmounts to prevent memory leaks.
         return () => clearInterval(intervalId);
     // fetchNotifications is intentionally excluded — it's stable (defined outside useEffect)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const markAsRead = async (id: number) => {

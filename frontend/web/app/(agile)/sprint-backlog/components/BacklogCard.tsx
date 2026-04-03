@@ -17,7 +17,7 @@ import {
   Clock,
   CornerDownLeft,
 } from 'lucide-react';
-import type { SprintItem } from '../page';
+import type { SprintItem, TaskItem } from '../page';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
 import api from '@/lib/axios';
 import AssigneeAvatar from './AssigneeAvatar';
@@ -34,7 +34,7 @@ interface BacklogCardProps {
   onCreateTask: (title: string, sprintId: number) => void;
   onDeleteTask: (taskId: number, sprintId: number) => void;
   onToggleTask: (taskId: number) => void;
-  onSprintDeleted: (sprintId: number, tasks: any[]) => void;
+  onSprintDeleted: (sprintId: number, tasks: TaskItem[]) => void;
 }
 
 type SprintStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
