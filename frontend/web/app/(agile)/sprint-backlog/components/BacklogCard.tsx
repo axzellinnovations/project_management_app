@@ -195,8 +195,12 @@ interface EditSprintModalProps {
 
 function EditSprintModal({ open, sprintName, loading, onConfirm, onCancel }: EditSprintModalProps) {
   const [name, setName] = useState(sprintName);
+  const [prevName, setPrevName] = useState(sprintName);
 
-  useEffect(() => { if (open) setName(sprintName); }, [open, sprintName]);
+  if (sprintName !== prevName) {
+    setName(sprintName);
+    setPrevName(sprintName);
+  }
 
   if (!open) return null;
 
