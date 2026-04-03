@@ -4,7 +4,6 @@ import React, { ReactNode } from 'react';
 import {
   DndContext,
   DragEndEvent,
-  DragOverEvent,
   DragStartEvent,
   MouseSensor,
   TouchSensor,

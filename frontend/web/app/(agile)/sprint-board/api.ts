@@ -1,5 +1,5 @@
 import axios from '@/lib/axios';
-import { Sprintboard, SprintboardTask, Sprintcolumn } from './types';
+import { Sprintboard } from './types';
 
 /**
  * Fetch sprint board for a specific sprint
@@ -12,7 +12,7 @@ export async function fetchSprintboardBySprintId(sprintId: number): Promise<Spri
     
     // Fetch tasks for each column
     const columnsWithTasks = await Promise.all(
-      sprintboard.columns.map(async (col: any) => {
+      sprintboard.columns.map(async (col: { columnStatus: string }) => {
         const tasksRes = await axios.get(`/api/sprintboards/${sprintboard.id}/columns/${col.columnStatus}/tasks`);
         return {
           ...col,
@@ -49,7 +49,7 @@ export async function moveTaskToColumn(taskId: number, sprintboardId: number, ne
 /**
  * Fetch all sprints for a project to find the active one
  */
-export async function fetchSprintsByProject(projectId: number): Promise<any[]> {
+export async function fetchSprintsByProject(projectId: number): Promise<unknown[]> {
   try {
     const response = await axios.get(`/api/sprints/project/${projectId}`);
     return response.data || [];
@@ -62,7 +62,7 @@ export async function fetchSprintsByProject(projectId: number): Promise<any[]> {
 /**
  * Complete a sprint (sets status to COMPLETED)
  */
-export async function completeSprint(sprintId: number, sprintData: any): Promise<void> {
+export async function completeSprint(sprintId: number, sprintData: Record<string, unknown>): Promise<void> {
   try {
     await axios.put(`/api/sprints/${sprintId}`, {
       ...sprintData,
@@ -77,7 +77,7 @@ export async function completeSprint(sprintId: number, sprintData: any): Promise
 /**
  * Create a new task within a sprint
  */
-export async function createTask(taskData: any): Promise<any> {
+export async function createTask(taskData: Record<string, unknown>): Promise<unknown> {
     try {
         const response = await axios.post('/api/tasks', taskData);
         return response.data;
@@ -90,7 +90,7 @@ export async function createTask(taskData: any): Promise<any> {
 /**
  * Update an existing task
  */
-export async function updateTask(taskId: number, taskData: any): Promise<any> {
+export async function updateTask(taskId: number, taskData: Record<string, unknown>): Promise<unknown> {
     try {
         const response = await axios.put(`/api/tasks/${taskId}`, taskData);
         return response.data;

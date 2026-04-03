@@ -5,11 +5,12 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { X, Calendar, User, Plus } from 'lucide-react';
 import axios from '@/lib/axios';
+import { AxiosError } from 'axios';
 
 interface CreateTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateTask: (taskData: any) => Promise<void>;
+  onCreateTask: (taskData: Record<string, unknown>) => Promise<void>;
   columnStatus: string;
   projectId: number;
   sprintId?: number;
@@ -66,8 +67,9 @@ export default function CreateTaskModal({
       setAssignee('');
       setShowDatePicker(false);
       onClose();
-    } catch (err: any) {
-      setSubmitError(err?.response?.data?.message || 'Failed to create task.');
+    } catch (err: unknown) {
+      const axiosErr = err as AxiosError<{ message?: string }>;
+      setSubmitError(axiosErr?.response?.data?.message || 'Failed to create task.');
       console.error('Task creation error:', err);
     }
   };
@@ -94,7 +96,7 @@ export default function CreateTaskModal({
                   ? payload.content
                   : [];
 
-          setTeamMembers(rawMembers.map((m: any) => ({
+          setTeamMembers(rawMembers.map((m: { id: number; name?: string; username?: string; fullName?: string; user?: { fullName?: string; username?: string } }) => ({
               id: m.id,
               name: m.name ?? m.username ?? m.fullName ?? m.user?.fullName ?? m.user?.username ?? 'Unknown'
           })));

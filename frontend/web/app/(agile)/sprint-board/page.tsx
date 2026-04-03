@@ -5,7 +5,7 @@ import { DragEndEvent } from '@dnd-kit/core';
 import { useSearchParams } from 'next/navigation';
 import Sidebar from '../../nav/Sidebar';
 import TopBar from '../../nav/TopBar';
-import { Sprintboard, SprintboardTask, Sprintcolumn } from './types';
+import { Sprintboard, SprintboardTask } from './types';
 import { fetchSprintboardBySprintId, moveTaskToColumn, fetchSprintsByProject, completeSprint, addColumn } from './api';
 import SprintBoardHeader from './components/SprintBoardHeader';
 import SprintColumn from './components/SprintColumn';
@@ -14,13 +14,20 @@ import CreateTaskModal from './components/CreateTaskModal';
 import CreateColumnModal from './components/CreateColumnModal';
 import { Loader, AlertCircle, CheckCircle2, Plus, Check, X } from 'lucide-react';
 import axios from '@/lib/axios';
+import { AxiosError } from 'axios';
+
+interface SprintSummary {
+  id: number;
+  status: string;
+  sprintName?: string;
+}
 
 export default function SprintBoardPage() {
   const searchParams = useSearchParams();
   const projectIdStr = searchParams.get('projectId');
   
   const [sprintboard, setSprintboard] = useState<Sprintboard | null>(null);
-  const [activeSprint, setActiveSprint] = useState<any | null>(null);
+  const [activeSprint, setActiveSprint] = useState<SprintSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,8 +62,8 @@ export default function SprintBoardPage() {
       }
       
       // 2. Fetch all sprints to find the active one
-      const sprints = await fetchSprintsByProject(projectId);
-      const active = sprints.find(s => s.status === 'ACTIVE');
+      const sprints = await fetchSprintsByProject(projectId) as SprintSummary[];
+      const active = sprints.find((s) => s.status === 'ACTIVE');
       
       if (!active) {
         setLoading(false);
@@ -68,9 +75,10 @@ export default function SprintBoardPage() {
       // 3. Fetch sprint board for the active sprint
       const board = await fetchSprintboardBySprintId(active.id);
       setSprintboard(board);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load sprint board:', err);
-      setError(err?.response?.data?.message || 'Failed to load sprint board. Please make sure the sprint has been started.');
+      const axiosErr = err as AxiosError<{ message?: string }>;
+      setError(axiosErr?.response?.data?.message || 'Failed to load sprint board. Please make sure the sprint has been started.');
     } finally {
       setLoading(false);
     }
@@ -137,7 +145,7 @@ export default function SprintBoardPage() {
     }
   };
 
-  const handleCreateTask = async (taskData: any) => {
+  const handleCreateTask = async (taskData: Record<string, unknown>) => {
     if (!projectIdStr) return;
     setIsCreating(true);
     try {
@@ -145,9 +153,10 @@ export default function SprintBoardPage() {
         setSuccessMsg('Task created!');
         setTimeout(() => setSuccessMsg(''), 2000);
         fetchActiveSprintAndBoard();
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error('Failed to create task:', err);
-        alert(err?.response?.data?.message || 'Failed to create task.');
+        const axiosErr = err as AxiosError<{ message?: string }>;
+        alert(axiosErr?.response?.data?.message || 'Failed to create task.');
     } finally {
         setIsCreating(false);
     }
@@ -158,7 +167,7 @@ export default function SprintBoardPage() {
     
     setIsUpdating(true);
     try {
-      await completeSprint(activeSprint.id, activeSprint);
+      await completeSprint(activeSprint.id, activeSprint as unknown as Record<string, unknown>);
       setSuccessMsg('Sprint completed successfully!');
       setTimeout(() => {
         setSuccessMsg('');
@@ -172,10 +181,7 @@ export default function SprintBoardPage() {
     }
   };
 
-  const handleAddColumn = () => {
-    if (!sprintboard) return;
-    setIsColumnModalOpen(true);
-  };
+  // Removing handleAddColumn as it reached deprecation after UI shift.
 
   const finalizeAddColumn = async (name: string, status: string) => {
     if (!sprintboard) return;
@@ -187,9 +193,10 @@ export default function SprintBoardPage() {
       setIsAddingColumn(false);
       setNewColumnName('');
       fetchActiveSprintAndBoard();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to add column:', err);
-      const msg = err?.response?.data?.message || err?.message || 'Failed to add column.';
+      const axiosErr = err as AxiosError<{ message?: string }>;
+      const msg = axiosErr?.response?.data?.message || axiosErr?.message || 'Failed to add column.';
       alert(msg);
     } finally {
       setIsCreatingColumn(false);
@@ -217,7 +224,7 @@ export default function SprintBoardPage() {
             <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
                <AlertCircle className="w-8 h-8 text-[#155DFC]" />
             </div>
-            <h2 className="text-2xl font-bold text-[#101828]">Kanban Projects don't have Sprints</h2>
+            <h2 className="text-2xl font-bold text-[#101828]">Kanban Projects don&apos;t have Sprints</h2>
             <p className="text-[#475467] mt-3">The Sprint Board is exclusive to <span className="font-bold text-[#155DFC]">Agile</span> projects. Please switch to the regular Kanban Board for this project.</p>
           </div>
         </div>
@@ -269,7 +276,6 @@ export default function SprintBoardPage() {
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
               onCompleteSprint={handleCompleteSprint}
-              onCreateColumn={() => setIsAddingColumn(true)}
               isLoading={isUpdating}
             />
             

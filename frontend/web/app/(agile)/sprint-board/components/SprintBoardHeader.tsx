@@ -1,14 +1,13 @@
 'use client';
 
 import React from 'react';
-import { Search, Plus, CheckCircle2, MoreHorizontal } from 'lucide-react';
+import { Search, CheckCircle2 } from 'lucide-react';
 
 interface SprintBoardHeaderProps {
   sprintName: string;
   searchTerm: string;
   onSearchChange: (val: string) => void;
   onCompleteSprint: () => void;
-  onCreateColumn?: () => void;
   isLoading?: boolean;
 }
 
@@ -17,10 +16,8 @@ export default function SprintBoardHeader({
   searchTerm,
   onSearchChange,
   onCompleteSprint,
-  onCreateColumn,
   isLoading
 }: SprintBoardHeaderProps) {
-  const [showTooltip, setShowTooltip] = React.useState(false);
   return (
     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 py-5 px-4 md:px-8 bg-white border-b border-[#EAECF0]">
       {/* Title section */}
