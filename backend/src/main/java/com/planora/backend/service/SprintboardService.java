@@ -3,6 +3,7 @@ package com.planora.backend.service;
 import com.planora.backend.dto.SprintboardResponseDTO;
 import com.planora.backend.dto.SprintboardTaskResponseDTO;
 import com.planora.backend.dto.SprintcolumnDTO;
+import com.planora.backend.dto.DashboardBoardDTO;
 import com.planora.backend.model.*;
 import com.planora.backend.repository.*;
 import org.springframework.security.core.Authentication;
@@ -88,6 +89,13 @@ public class SprintboardService {
         if (!(role == TeamRole.OWNER || role == TeamRole.ADMIN)) {
             throw new RuntimeException("Access denied: OWNER/ADMIN required (CONFIGURE_BOARD)");
         }
+    }
+
+    // ---------- Dashboard Boards APIs ----------
+
+    public List<DashboardBoardDTO> getRecentSprintboardsForUser(Long userId, int limit) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, limit);
+        return sprintboardRepository.findRecentSprintboardsForUser(userId, pageable);
     }
 
     // ---------- Sprintboard APIs ----------

@@ -60,6 +60,10 @@ public class Task {
 
     private int storyPoint;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "last_modified_by_id")
+    private User lastModifiedBy;
+
     //The "Parent" (If this is null, It's th main taks. If ser, it's a subtask)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")

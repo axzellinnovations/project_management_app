@@ -32,7 +32,11 @@ public class TaskController {
 
     @GetMapping("/{taskId}")
     public ResponseEntity<TaskResponseDTO> getTaskById(
-            @PathVariable Long taskId){
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal UserPrincipal currentUser){
+        if (currentUser != null) {
+            service.recordTaskAccess(taskId, currentUser.getUserId());
+        }
         return new ResponseEntity<>(service.getTaskById(taskId), HttpStatus.OK);
     }
 
@@ -61,6 +65,37 @@ public class TaskController {
     ){
         Long currentUserId = currentUser.getUserId();
         return new ResponseEntity<>(service.getTasksByProject(projectId, currentUserId), HttpStatus.OK);
+    }
+
+    // DASHBOARD ENDPOINTS
+
+    @PostMapping("/{taskId}/access")
+    public ResponseEntity<Void> recordTaskAccess(
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal UserPrincipal currentUser){
+        service.recordTaskAccess(taskId, currentUser.getUserId());
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    @GetMapping("/recent")
+    public ResponseEntity<List<TaskResponseDTO>> getRecentTasks(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @RequestParam(defaultValue = "20") int limit){
+        return new ResponseEntity<>(service.getRecentTasks(currentUser.getUserId(), limit), HttpStatus.OK);
+    }
+
+    @GetMapping("/assigned")
+    public ResponseEntity<List<TaskResponseDTO>> getAssignedTasks(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @RequestParam(defaultValue = "20") int limit){
+        return new ResponseEntity<>(service.getAssignedTasks(currentUser.getUserId(), limit), HttpStatus.OK);
+    }
+
+    @GetMapping("/worked-on")
+    public ResponseEntity<List<TaskResponseDTO>> getWorkedOnTasks(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @RequestParam(defaultValue = "20") int limit){
+        return new ResponseEntity<>(service.getWorkedOnTasks(currentUser.getUserId(), limit), HttpStatus.OK);
     }
 
     // SUBTASKS

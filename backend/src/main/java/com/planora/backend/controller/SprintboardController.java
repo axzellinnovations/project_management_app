@@ -1,11 +1,15 @@
 package com.planora.backend.controller;
 
+import com.planora.backend.dto.DashboardBoardDTO;
 import com.planora.backend.dto.SprintboardResponseDTO;
 import com.planora.backend.dto.SprintboardTaskResponseDTO;
+import com.planora.backend.dto.SprintcolumnDTO;
 import com.planora.backend.model.SprintcolumnStatus;
+import com.planora.backend.security.UserPrincipal;
 import com.planora.backend.service.SprintboardService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,6 +24,15 @@ public class SprintboardController {
 
     public SprintboardController(SprintboardService sprintboardService) {
         this.sprintboardService = sprintboardService;
+    }
+
+    // GET recent sprintboards for dashboard
+    @GetMapping("/user/recent")
+    public ResponseEntity<List<DashboardBoardDTO>> getRecentSprintboards(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @RequestParam(defaultValue = "20") int limit) {
+        List<DashboardBoardDTO> sprintboards = sprintboardService.getRecentSprintboardsForUser(currentUser.getUserId(), limit);
+        return new ResponseEntity<>(sprintboards, HttpStatus.OK);
     }
 
     // GET sprintboard by sprint ID
