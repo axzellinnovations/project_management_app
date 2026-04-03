@@ -34,6 +34,7 @@ interface BacklogCardProps {
   onCreateTask: (title: string, sprintId: number) => void;
   onDeleteTask: (taskId: number, sprintId: number) => void;
   onToggleTask: (taskId: number) => void;
+  onSprintDeleted: (sprintId: number, tasks: any[]) => void;
 }
 
 type SprintStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
@@ -282,7 +283,7 @@ function isDueWithinDays(dueDateStr: string, days: number): boolean {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTask, onDeleteTask, onToggleTask }: BacklogCardProps) {
+export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTask, onDeleteTask, onToggleTask, onSprintDeleted }: BacklogCardProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [showSprintMenu, setShowSprintMenu] = useState(false);
@@ -567,7 +568,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
     try {
       await api.delete(`/api/sprints/${sprint.id}`);
       setConfirmDeleteSprint(false);
-      window.location.reload();
+      onSprintDeleted(sprint.id, sprint.tasks);
     } catch {
       setConfirmDeleteSprint(false);
     } finally {

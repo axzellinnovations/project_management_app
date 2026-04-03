@@ -339,6 +339,10 @@ export default function SprintBacklogPage() {
     }
   };
 
+  const handleSprintDeleted = (sprintId: number) => {
+    setSprints((prev) => prev.filter((s) => s.id !== sprintId));
+  };
+
   return (
     <div className="mobile-page-padding flex flex-col gap-6 pb-28 sm:pb-8">
       {loading && (
@@ -380,6 +384,7 @@ export default function SprintBacklogPage() {
                   )
                 );
               }}
+              onSprintDeleted={handleSprintDeleted}
             />
           ))}
 
