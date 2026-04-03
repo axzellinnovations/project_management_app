@@ -1,7 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import SprintBoardPage from './page';
 import api from '@/lib/axios';
-import { useSearchParams } from 'next/navigation';
 
 jest.mock('next/navigation', () => ({
   useSearchParams: jest.fn(),
@@ -27,7 +26,7 @@ jest.mock('./components/SprintBoardHeader', () => ({
 
 jest.mock('./components/SprintColumn', () => ({
   __esModule: true,
-  default: ({ column }: any) => <div data-testid="board-column">{column.name}</div>,
+  default: ({ column }: { column: { name: string } }) => <div data-testid="board-column">{column.name}</div>,
 }));
 
 jest.mock('../../nav/Sidebar', () => ({
