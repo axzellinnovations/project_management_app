@@ -1,6 +1,7 @@
 
 import React from 'react';
 
+// ActivityItem component - defined but not exported, used internally only
 function ActivityItem({
     icon,
     iconBg,

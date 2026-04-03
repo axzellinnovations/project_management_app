@@ -17,7 +17,7 @@ export async function fetchTasksByProject(projectId: number): Promise<Task[]> {
     const tasks = response.data || [];
     
     // Transform tasks to ensure assignee object is properly formed
-    return tasks.map((task: any) => {
+    return tasks.map((task: Task) => {
       // If assigneeName or assigneeId exists but assignee doesn't, create it
       if (!task.assignee && (task.assigneeName || task.assigneeId)) {
         task.assignee = {

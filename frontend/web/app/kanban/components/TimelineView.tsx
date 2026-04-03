@@ -2,8 +2,8 @@
 
 import React, { useMemo, useState } from 'react';
 import { Task } from '../types';
-import { format, addMonths, startOfMonth, endOfMonth, differenceInDays, parseISO, isBefore, isAfter, isWithinInterval } from 'date-fns';
-import { Calendar, User, Flag, X } from 'lucide-react';
+import { format, addMonths, startOfMonth, endOfMonth, differenceInDays, parseISO } from 'date-fns';
+import { Calendar, X } from 'lucide-react';
 
 interface TimelineViewProps {
   tasks: Task[];
@@ -32,7 +32,7 @@ interface TimelineTask extends Task {
   dueDateObj: Date;
 }
 
-export default function TimelineView({ tasks, onTaskUpdate, projectId }: TimelineViewProps) {
+export default function TimelineView({ tasks }: TimelineViewProps) {
   const [selectedTask, setSelectedTask] = useState<TimelineTask | null>(null);
 
   const timelineData = useMemo(() => {
@@ -49,7 +49,7 @@ export default function TimelineView({ tasks, onTaskUpdate, projectId }: Timelin
       startMonth = startOfMonth(addMonths(minDate, -1));
     }
     
-    let endMonth = endOfMonth(addMonths(maxDate, 1));
+    const endMonth = endOfMonth(addMonths(maxDate, 1));
 
     // Calculate all months in the range
     const months = [];

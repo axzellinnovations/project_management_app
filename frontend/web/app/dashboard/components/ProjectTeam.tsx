@@ -1,4 +1,4 @@
-
+// TeamMember component - defined but not exported, used internally only
 function TeamMember({
     initials,
     gradient,
