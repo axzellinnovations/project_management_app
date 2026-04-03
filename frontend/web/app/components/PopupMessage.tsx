@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { X, CheckCircle2, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 export type PopupType = 'success' | 'error' | 'warning' | 'info';
@@ -72,13 +72,13 @@ export default function PopupMessage({
   const config = typeConfig[type];
   const IconComponent = config.icon;
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setIsClosing(true);
     setTimeout(() => {
       setVisible(false);
       onClose();
     }, 300);
-  };
+  }, [onClose]);
 
   useEffect(() => {
     setVisible(isOpen);
