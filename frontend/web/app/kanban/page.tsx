@@ -3,7 +3,8 @@ export const dynamic = 'force-dynamic';
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { DragEndEvent } from '@dnd-kit/core';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
+import axios from '@/lib/axios';
 import DragDropProvider from './components/DragDropProvider';
 import KanbanColumn from './components/KanbanColumn';
 import CreateTaskModal from './components/CreateTaskModal';
@@ -64,6 +65,7 @@ function SortableColumn({ column, children, width = '350px' }: { column: any; ch
 
 export default function KanbanPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const projectId = searchParams.get('projectId');
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -158,6 +160,14 @@ export default function KanbanPage() {
       if (isNaN(projectIdNum)) {
         throw new Error('Invalid project ID');
       }
+
+      // Check if project is AGILE
+      const projectRes = await axios.get(`/api/projects/${projectIdNum}`);
+      if (projectRes.data?.type === 'AGILE') {
+        router.push(`/sprint-board?projectId=${projectId}`);
+        return;
+      }
+
       const fetchedTasks = await fetchTasksByProject(projectIdNum);
       setTasks(fetchedTasks);
     } catch (err) {
@@ -168,7 +178,7 @@ export default function KanbanPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, router]);
 
   // Load tasks on mount
   useEffect(() => {

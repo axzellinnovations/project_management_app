@@ -109,6 +109,9 @@ export function useMembersSync(
     stompRef.current = null;
   }, []);
 
+  // Use a ref to resolve the circular dependency/hoisting issue with connect() calling itself in the retry logic.
+  const connectRef = useRef<(() => void) | undefined>(undefined);
+
   const connect = useCallback(() => {
     if (isUnmountedRef.current) return;
 
@@ -189,14 +192,16 @@ export function useMembersSync(
               reconnectDelayRef.current * RECONNECT_BACKOFF_MULTIPLIER,
               MAX_RECONNECT_DELAY_MS
             );
-            connect();
+            connectRef.current?.();
           }
         }, reconnectDelayRef.current);
       }
     );
-  // connect is referentially stable; projectId changes correctly re-trigger.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     isUnmountedRef.current = false;
