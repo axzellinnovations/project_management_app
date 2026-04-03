@@ -16,6 +16,8 @@ import { fetchTasksByProject, updateTaskStatus, deleteTask, createTask, updateTa
 import { AlertCircle, Loader, CheckCircle2, Plus } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import api from '@/lib/axios';
+import TaskCardModal from '@/app/taskcard/TaskCardModal';
 
 const DEFAULT_COLUMN_CONFIGS: Array<{
   status: string;
@@ -102,8 +104,23 @@ export default function KanbanPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isUpdatingTask, setIsUpdatingTask] = useState(false);
+  const [selectedTaskIdForModal, setSelectedTaskIdForModal] = useState<number | null>(null);
+  const [usersMap, setUsersMap] = useState<Record<string, string | null>>({});
   // Mobile: which column is currently active in the single-column switcher view
   const [activeMobileColumn, setActiveMobileColumn] = useState<string>(DEFAULT_COLUMN_CONFIGS[0].status);
+
+  // Fetch user avatar map
+  useEffect(() => {
+    api.get('/api/auth/users').then((res) => {
+      const map: Record<string, string | null> = {};
+      for (const u of (res.data as { username?: string; fullName?: string; profilePicUrl?: string }[])) {
+        const key = u.fullName || u.username || '';
+        if (key) map[key] = u.profilePicUrl ?? null;
+        if (u.username && u.username !== key) map[u.username] = u.profilePicUrl ?? null;
+      }
+      setUsersMap(map);
+    }).catch(() => {/* non-critical */});
+  }, []);
 
   // handlers for column interactions
   const handleAddColumn = () => {
@@ -426,6 +443,8 @@ export default function KanbanPage() {
                         onDeleteTask={handleDeleteTask}
                         onCreateTask={handleCreateTaskClick}
                         onEditTask={handleEditTaskClick}
+                        onOpenTask={setSelectedTaskIdForModal}
+                        usersMap={usersMap}
                       />
                     </SortableColumn>
                   ))}
@@ -448,6 +467,8 @@ export default function KanbanPage() {
                       onDeleteTask={handleDeleteTask}
                       onCreateTask={handleCreateTaskClick}
                       onEditTask={handleEditTaskClick}
+                      onOpenTask={setSelectedTaskIdForModal}
+                      usersMap={usersMap}
                     />
                   ))}
               </div>
@@ -494,6 +515,13 @@ export default function KanbanPage() {
               onUpdateTask={handleUpdateTask}
               task={editingTask}
               loading={isUpdatingTask}
+            />
+          )}
+
+          {selectedTaskIdForModal !== null && (
+            <TaskCardModal
+              taskId={selectedTaskIdForModal}
+              onClose={() => { setSelectedTaskIdForModal(null); void loadTasks(); }}
             />
           )}
         </div>
