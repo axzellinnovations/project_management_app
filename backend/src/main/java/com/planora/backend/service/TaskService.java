@@ -116,6 +116,7 @@ public class TaskService {
     }
 
     //2. GET TASK BY ID
+    @Transactional
     public TaskResponseDTO getTaskById(Long taskId) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(()-> new EntityNotFoundException("Task not found"));
@@ -180,6 +181,7 @@ public class TaskService {
     }
 
     //5. GET PROJECT BY ID
+    @Transactional
     public List<TaskResponseDTO> getTasksByProject(Long projectId, Long currentUserId) {
         // Check if user has permission to view tasks in this project
         Project project = projectRepository.findById(projectId)
@@ -341,11 +343,14 @@ public class TaskService {
         dto.setTitle(task.getTitle());
         dto.setDescription(task.getDescription());
         dto.setProjectId(task.getProject().getId());
+        dto.setProjectName(task.getProject().getName());
         dto.setPriority(task.getPriority() != null ? task.getPriority().name(): null);
         dto.setStatus(task.getStatus());
         dto.setStoryPoint(task.getStoryPoint());
         dto.setDueDate(task.getDueDate());
         dto.setStartDate(task.getStartDate());
+        dto.setCreatedAt(task.getCreatedAt());
+        dto.setUpdatedAt(task.getUpdatedAt());
 
         if(task.getSprint() != null){
             dto.setSprintId(task.getSprint().getId());
@@ -362,6 +367,28 @@ public class TaskService {
             dto.setReporterId(task.getReporter().getId());
             dto.setReporterName(task.getReporter().getUser().getUsername());
         }
+
+        // Map subtasks
+        if(task.getSubTasks() != null){
+            dto.setSubtasks(task.getSubTasks().stream()
+                .map(st -> new TaskResponseDTO.SubtaskDTO(st.getId(), st.getTitle(), st.getStatus()))
+                .collect(Collectors.toList()));
+        }
+
+        // Map labels
+        if(task.getLabels() != null){
+            dto.setLabels(task.getLabels().stream()
+                .map(l -> new TaskResponseDTO.LabelDTO(l.getId(), l.getName()))
+                .collect(Collectors.toList()));
+        }
+
+        // Map dependencies
+        if(task.getDependencies() != null){
+            dto.setDependencies(task.getDependencies().stream()
+                .map(d -> new TaskResponseDTO.DependencyDTO(d.getId(), d.getTitle(), "BLOCKED_BY"))
+                .collect(Collectors.toList()));
+        }
+
         return dto;
     }
 }
