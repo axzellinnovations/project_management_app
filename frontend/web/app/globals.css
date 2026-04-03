@@ -1,3 +1,5 @@
+@import '../styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,47 +9,41 @@
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
   }
-  
+
   html {
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  
+
   @media (min-width: 640px) {
-    html {
-      font-size: 14.5px;
-    }
+    html { font-size: 14.5px; }
   }
-  
+
   @media (min-width: 768px) {
-    html {
-      font-size: 15px;
-    }
+    html { font-size: 15px; }
   }
-  
+
   /* Ensure proper touch targets on mobile */
   @media (max-width: 639px) {
-    button, a {
-      min-height: 44px;
-    }
+    button, a { min-height: 44px; }
   }
 }
 
 body {
-  @apply bg-white text-slate-900 text-sm;
+  @apply bg-cu-bg text-cu-text-primary text-base font-inter;
 }
 
 h1 {
-  @apply text-3xl md:text-4xl font-bold;
+  @apply text-2xl font-bold tracking-tight;
 }
 
 h2 {
-  @apply text-2xl font-semibold;
+  @apply text-xl font-semibold;
 }
 
 h3 {
-  @apply text-lg font-medium;
+  @apply text-md font-medium;
 }
 
 button, a {

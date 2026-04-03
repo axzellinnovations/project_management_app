@@ -1,4 +1,8 @@
+'use client';
+
+import { useState } from 'react';
 import CalendarEventCard from './CalendarEventCard';
+import CalendarEventPopup from './CalendarEventPopup';
 import type { CalendarEventItem } from '../types';
 import {
   DAY_NAMES,
@@ -26,6 +30,11 @@ const getEventsForDate = (events: CalendarEventItem[], day: Date) =>
   });
 
 export default function MonthCalendarView({ currentDate, events }: MonthCalendarViewProps) {
+  const [popup, setPopup] = useState<{ event: CalendarEventItem; x: number; y: number } | null>(null);
+
+  const handleEventClick = (event: CalendarEventItem, clientX: number, clientY: number) => {
+    setPopup({ event, x: clientX, y: clientY });
+  };
   const start = startOfMonthGrid(currentDate);
   const end = endOfMonthGrid(currentDate);
 
@@ -69,6 +78,7 @@ export default function MonthCalendarView({ currentDate, events }: MonthCalendar
                       compact
                       isSprintSegmentStart={!eventStart || isSameDay(day, eventStart)}
                       isSprintSegmentEnd={!eventEnd || isSameDay(day, eventEnd)}
+                      onClick={handleEventClick}
                     />
                   );
                 })}
@@ -80,6 +90,14 @@ export default function MonthCalendarView({ currentDate, events }: MonthCalendar
           );
         })}
       </div>
+
+      {popup && (
+        <CalendarEventPopup
+          event={popup.event}
+          position={{ x: popup.x, y: popup.y }}
+          onClose={() => setPopup(null)}
+        />
+      )}
     </div>
   );
 }

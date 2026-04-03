@@ -325,7 +325,7 @@ export default function SprintBacklogPage() {
 
   const handleTaskStatusChange = async (taskId: number, newStatus: string) => {
     try {
-      await api.patch(`/api/tasks/${taskId}/status?status=${newStatus}`);
+      await api.put(`/api/tasks/${taskId}`, { status: newStatus });
       
       // Update local state in both productTasks and sprints
       setProductTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
@@ -339,8 +339,12 @@ export default function SprintBacklogPage() {
     }
   };
 
-  const handleSprintDeleted = (sprintId: number) => {
-    setSprints((prev) => prev.filter((s) => s.id !== sprintId));
+  const handleSprintDeleted = (sprintId: number, tasks: SprintItem['tasks']) => {
+    setSprints(prev => prev.filter(s => s.id !== sprintId));
+    setProductTasks(prev => [
+      ...prev,
+      ...tasks.map(t => ({ ...t, sprintId: null })),
+    ]);
   };
 
   return (

@@ -1,9 +1,12 @@
 package com.planora.backend.dto;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class TaskResponseDTO {
@@ -30,4 +33,34 @@ public class TaskResponseDTO {
 
     private Long reporterId;
     private String reporterName;
+
+    private List<SubtaskDTO> subtasks;
+    private List<LabelDTO> labels;
+    private List<DependencyDTO> dependencies;
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class SubtaskDTO {
+        private Long id;
+        private String title;
+        private String status;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class LabelDTO {
+        private Long id;
+        private String name;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class DependencyDTO {
+        private Long id;
+        private String title;
+        private String relation;
+    }
 }

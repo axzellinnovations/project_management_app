@@ -97,7 +97,7 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
   };
 
   return (
-    <div className="w-80 bg-gray-50/50 p-6 overflow-y-auto border-l border-gray-100 flex-shrink-0 scrollbar-thin">
+    <div className="w-full md:w-80 bg-gray-50/50 p-5 overflow-y-auto border-t md:border-t-0 md:border-l border-gray-100 flex-shrink-0 scrollbar-thin min-h-0">
       
       {/* Status Dropdown */}
       <div className="mb-6">

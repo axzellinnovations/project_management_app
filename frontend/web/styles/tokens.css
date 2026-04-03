@@ -1,0 +1,100 @@
+/* ═══════════════════════════════════════════════════
+   ClickUp Design Tokens — Planora
+   ═══════════════════════════════════════════════════ */
+
+:root {
+  /* ── Brand colors ── */
+  --cu-purple: #7B68EE;
+  --cu-purple-hover: #6C5CE7;
+  --cu-purple-light: #E8E5FF;
+  --cu-purple-muted: #A29BFE;
+
+  /* ── Sidebar ── */
+  --cu-sidebar: #1A1A2E;
+  --cu-sidebar-hover: #252543;
+  --cu-sidebar-active: #2D2D50;
+  --cu-sidebar-border: #32325D;
+  --cu-sidebar-text: #A0A0B8;
+  --cu-sidebar-text-bright: #E0E0F0;
+
+  /* ── Semantic colors ── */
+  --cu-success: #6BC950;
+  --cu-success-light: #E6F9E0;
+  --cu-warning: #FF9F43;
+  --cu-warning-light: #FFF3E0;
+  --cu-danger: #FF5C5C;
+  --cu-danger-light: #FFE5E5;
+  --cu-info: #4299E1;
+  --cu-info-light: #E3F2FD;
+
+  /* ── Status colors ── */
+  --cu-status-todo: #D3D3D3;
+  --cu-status-in-progress: #7B68EE;
+  --cu-status-in-review: #FF9F43;
+  --cu-status-done: #6BC950;
+
+  /* ── Priority colors ── */
+  --cu-priority-urgent: #FF5C5C;
+  --cu-priority-high: #FF9F43;
+  --cu-priority-normal: #7B68EE;
+  --cu-priority-low: #D3D3D3;
+
+  /* ── Surface colors ── */
+  --cu-bg: #FFFFFF;
+  --cu-bg-secondary: #F7F8FA;
+  --cu-bg-tertiary: #F0F1F3;
+  --cu-border: #E8E8ED;
+  --cu-border-light: #F0F0F5;
+
+  /* ── Text colors ── */
+  --cu-text-primary: #1A1A2E;
+  --cu-text-secondary: #6B6F7B;
+  --cu-text-tertiary: #9CA3AF;
+  --cu-text-inverse: #FFFFFF;
+
+  /* ── Typography scale (px) ── */
+  --cu-text-2xs: 0.6875rem;   /* 11px */
+  --cu-text-xs: 0.75rem;      /* 12px */
+  --cu-text-sm: 0.8125rem;    /* 13px */
+  --cu-text-base: 0.875rem;   /* 14px */
+  --cu-text-md: 1rem;         /* 16px */
+  --cu-text-lg: 1.125rem;     /* 18px */
+  --cu-text-xl: 1.25rem;      /* 20px */
+  --cu-text-2xl: 1.5rem;      /* 24px */
+
+  /* ── Spacing scale (px) ── */
+  --cu-space-1: 0.25rem;  /* 4px */
+  --cu-space-2: 0.5rem;   /* 8px */
+  --cu-space-3: 0.75rem;  /* 12px */
+  --cu-space-4: 1rem;     /* 16px */
+  --cu-space-5: 1.25rem;  /* 20px */
+  --cu-space-6: 1.5rem;   /* 24px */
+  --cu-space-8: 2rem;     /* 32px */
+  --cu-space-10: 2.5rem;  /* 40px */
+  --cu-space-12: 3rem;    /* 48px */
+
+  /* ── Border radius ── */
+  --cu-radius-sm: 4px;
+  --cu-radius-md: 6px;
+  --cu-radius-lg: 8px;
+  --cu-radius-xl: 12px;
+  --cu-radius-2xl: 16px;
+  --cu-radius-full: 9999px;
+
+  /* ── Shadows ── */
+  --cu-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --cu-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --cu-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --cu-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.16);
+
+  /* ── Transitions ── */
+  --cu-transition-fast: 100ms ease;
+  --cu-transition-normal: 200ms ease-out;
+  --cu-transition-slow: 300ms ease-in-out;
+
+  /* ── Layout ── */
+  --cu-sidebar-width: 240px;
+  --cu-sidebar-collapsed: 56px;
+  --cu-topbar-height: 48px;
+  --cu-detail-panel-width: 400px;
+}

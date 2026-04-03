@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { Task } from '../kanban/types';
 import { fetchTasksByProject } from '../kanban/api';
 import api from '@/lib/axios';
+import Image from 'next/image';
 import {
     AlertCircle, Plus, ChevronDown, ChevronUp,
     ArrowUp, ArrowRight, ArrowDown, Minus,
@@ -14,6 +15,9 @@ import {
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import EmptyState from '@/components/shared/EmptyState';
 import BottomSheet from '@/components/shared/BottomSheet';
+import TaskCardModal from '@/app/taskcard/TaskCardModal';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
 // ── Priority helpers ──────────────────────────────────────────────────────────
 const PRIORITY_CONFIG: Record<string, { color: string; icon: React.ElementType; label: string }> = {
@@ -29,17 +33,31 @@ const STATUS_COLOR: Record<string, string> = {
     DONE:        'bg-[#DCFCE7] text-[#166534]',
 };
 
+const STATUS_OPTIONS = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
+
+function resolveUrl(url?: string | null) {
+    if (!url) return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return `${API_BASE_URL}${url}`;
+}
+
 // ── Swipeable task row ────────────────────────────────────────────────────────
 function SwipeableTaskRow({
     task,
     onMarkDone,
     onDelete,
     onClick,
+    onStatusChange,
+    onOpenModal,
+    usersMap,
 }: {
     task: Task;
     onMarkDone: (id: number) => void;
     onDelete: (id: number) => void;
     onClick: (task: Task) => void;
+    onStatusChange: (id: number, status: string) => void;
+    onOpenModal: (id: number) => void;
+    usersMap: Record<string, string | null>;
 }) {
     const x = useMotionValue(0);
     const background = useTransform(
@@ -50,9 +68,25 @@ function SwipeableTaskRow({
     const PriorityIcon = task.priority ? (PRIORITY_CONFIG[task.priority]?.icon ?? Minus) : Minus;
     const priorityColor = task.priority ? (PRIORITY_CONFIG[task.priority]?.color ?? '#9CA3AF') : '#9CA3AF';
     const statusClass = STATUS_COLOR[task.status] ?? 'bg-[#F3F4F6] text-[#6A7282]';
+    const [statusOpen, setStatusOpen] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const statusRef = useRef<HTMLDivElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    // Close dropdowns on outside click
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (statusRef.current && !statusRef.current.contains(e.target as Node)) setStatusOpen(false);
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    const avatarUrl = task.assigneeName ? resolveUrl(usersMap[task.assigneeName] ?? usersMap[task.assigneeName?.split(' ')[0]] ?? null) : null;
 
     return (
-        <div className="relative overflow-hidden rounded-xl">
+        <div className="relative overflow-visible rounded-xl">
             {/* Swipe reveal backgrounds */}
             <motion.div
                 className="absolute inset-0 flex items-center rounded-xl pointer-events-none"
@@ -72,7 +106,12 @@ function SwipeableTaskRow({
                     if (info.offset.x < -60)      onDelete(task.id);
                     else if (info.offset.x > 60)  onMarkDone(task.id);
                 }}
-                onClick={() => onClick(task)}
+                onClick={() => {
+                    if (statusOpen || menuOpen) return;
+                    // Desktop: open modal; mobile: open bottom sheet
+                    if (window.innerWidth >= 768) onOpenModal(task.id);
+                    else onClick(task);
+                }}
                 className="relative bg-white rounded-xl border border-[#E5E7EB] cursor-pointer select-none"
             >
                 <div className="flex items-center gap-3 px-4 py-3 min-h-[60px]">
@@ -93,7 +132,6 @@ function SwipeableTaskRow({
                         {task.description && (
                             <p className="text-[12px] text-[#6A7282] truncate mt-0.5">{task.description}</p>
                         )}
-                        {/* Labels */}
                         {task.labels && task.labels.length > 0 && (
                             <div className="flex gap-1 mt-1 flex-wrap">
                                 {task.labels.slice(0, 3).map((l) => (
@@ -105,22 +143,75 @@ function SwipeableTaskRow({
                         )}
                     </div>
 
-                    {/* Right side: assignee + points + status */}
+                    {/* Right side: assignee + points + status + menu */}
                     <div className="shrink-0 flex items-center gap-2">
+                        {/* Assignee avatar */}
                         {task.assigneeName && (
-                            <span className="hidden sm:flex w-6 h-6 rounded-full bg-[#155DFC] text-white text-[10px] font-bold items-center justify-center uppercase">
-                                {task.assigneeName.charAt(0)}
-                            </span>
+                            <div className="hidden sm:flex w-6 h-6 rounded-full bg-[#155DFC] text-white text-[10px] font-bold items-center justify-center uppercase overflow-hidden shrink-0">
+                                {avatarUrl ? (
+                                    <Image src={avatarUrl} alt={task.assigneeName} width={24} height={24} className="w-full h-full object-cover" unoptimized />
+                                ) : (
+                                    task.assigneeName.charAt(0)
+                                )}
+                            </div>
                         )}
                         {task.storyPoint != null && (
                             <span className="hidden sm:block text-[11px] font-semibold text-[#374151] bg-[#F3F4F6] rounded px-1.5 py-0.5">
                                 {task.storyPoint}
                             </span>
                         )}
-                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusClass}`}>
-                            {task.status?.replace('_', ' ')}
-                        </span>
+
+                        {/* Status badge with dropdown */}
+                        <div className="relative" ref={statusRef}>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setStatusOpen(s => !s); }}
+                                className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${statusClass}`}
+                            >
+                                {task.status?.replace(/_/g, ' ')}
+                                <ChevronDown size={10} />
+                            </button>
+                            {statusOpen && (
+                                <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-[#E5E7EB] rounded-xl shadow-lg py-1 min-w-[130px]">
+                                    {STATUS_OPTIONS.map((s) => (
+                                        <button
+                                            key={s}
+                                            onClick={(e) => { e.stopPropagation(); onStatusChange(task.id, s); setStatusOpen(false); }}
+                                            className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-[#F9FAFB] transition-colors ${task.status === s ? 'font-semibold text-[#155DFC]' : 'text-[#374151]'}`}
+                                        >
+                                            {s.replace(/_/g, ' ')}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
                         <PriorityIcon size={14} color={priorityColor} className="shrink-0" />
+
+                        {/* Desktop context menu */}
+                        <div className="hidden sm:block relative" ref={menuRef}>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setMenuOpen(m => !m); }}
+                                className="p-1 rounded hover:bg-[#F3F4F6] text-[#9CA3AF] transition-colors"
+                            >
+                                <MoreHorizontal size={15} />
+                            </button>
+                            {menuOpen && (
+                                <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-[#E5E7EB] rounded-xl shadow-lg py-1 min-w-[120px]">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onOpenModal(task.id); }}
+                                        className="w-full text-left px-3 py-1.5 text-[12px] text-[#374151] hover:bg-[#F9FAFB] transition-colors"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(task.id); }}
+                                        className="w-full text-left px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50 transition-colors"
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
                 {/* Mobile swipe hint */}
@@ -198,6 +289,21 @@ export default function BacklogPage() {
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [showCreateSheet, setShowCreateSheet] = useState(false);
     const [createTitle, setCreateTitle] = useState('');
+    const [selectedTaskIdForModal, setSelectedTaskIdForModal] = useState<number | null>(null);
+    const [usersMap, setUsersMap] = useState<Record<string, string | null>>({});
+
+    // Fetch user avatar map
+    useEffect(() => {
+        api.get('/api/auth/users').then((res) => {
+            const map: Record<string, string | null> = {};
+            for (const u of (res.data as { username?: string; fullName?: string; profilePicUrl?: string }[])) {
+                const key = u.fullName || u.username || '';
+                if (key) map[key] = u.profilePicUrl ?? null;
+                if (u.username && u.username !== key) map[u.username] = u.profilePicUrl ?? null;
+            }
+            setUsersMap(map);
+        }).catch(() => {/* non-critical */});
+    }, []);
 
     const loadTasks = useCallback(async () => {
         if (!projectId) return;
@@ -251,6 +357,15 @@ export default function BacklogPage() {
             console.error('Failed to create task:', err);
         }
     }, [projectId]);
+
+    const handleStatusChange = useCallback(async (id: number, status: string) => {
+        setTasks((prev) => prev.map((t) => t.id === id ? { ...t, status } : t));
+        try {
+            await api.put(`/api/tasks/${id}`, { status });
+        } catch {
+            void loadTasks();
+        }
+    }, [loadTasks]);
 
     // ── Skeletons ──────────────────────────────────────────────────────────────
     if (loading) {
@@ -352,6 +467,9 @@ export default function BacklogPage() {
                                                 onMarkDone={handleMarkDone}
                                                 onDelete={handleDelete}
                                                 onClick={setSelectedTask}
+                                                onStatusChange={handleStatusChange}
+                                                onOpenModal={setSelectedTaskIdForModal}
+                                                usersMap={usersMap}
                                             />
                                         </div>
                                     ))}
@@ -383,16 +501,26 @@ export default function BacklogPage() {
             >
                 {selectedTask && (
                     <div className="flex flex-col gap-4">
-                        <div className="flex items-center gap-3">
-                            <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${STATUS_COLOR[selectedTask.status] ?? 'bg-[#F3F4F6] text-[#6A7282]'}`}>
-                                {selectedTask.status?.replace('_', ' ')}
-                            </span>
-                            {selectedTask.priority && (
-                                <span className="text-[11px] font-medium text-[#6A7282]">
-                                    {PRIORITY_CONFIG[selectedTask.priority]?.label ?? selectedTask.priority} priority
-                                </span>
-                            )}
+                        {/* Status selector */}
+                        <div>
+                            <p className="text-[11px] text-[#9CA3AF] mb-2 font-medium uppercase tracking-wide">Status</p>
+                            <div className="flex gap-2 flex-wrap">
+                                {STATUS_OPTIONS.map((s) => (
+                                    <button
+                                        key={s}
+                                        onClick={() => { void handleStatusChange(selectedTask.id, s); setSelectedTask({ ...selectedTask, status: s }); }}
+                                        className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${selectedTask.status === s ? 'border-[#155DFC] bg-[#EFF6FF] text-[#1D4ED8] font-semibold' : 'border-[#E5E7EB] text-[#6A7282] hover:border-[#155DFC]'}`}
+                                    >
+                                        {s.replace(/_/g, ' ')}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
+                        {selectedTask.priority && (
+                            <p className="text-[11px] font-medium text-[#6A7282]">
+                                {PRIORITY_CONFIG[selectedTask.priority]?.label ?? selectedTask.priority} priority
+                            </p>
+                        )}
                         {selectedTask.description && (
                             <p className="text-[14px] text-[#374151] leading-relaxed">{selectedTask.description}</p>
                         )}
@@ -418,13 +546,27 @@ export default function BacklogPage() {
                                 </div>
                             )}
                         </div>
-                        <button
-                            onClick={() => { void handleMarkDone(selectedTask.id); setSelectedTask(null); }}
-                            className="flex items-center justify-center gap-2 w-full py-3 bg-[#16A34A] text-white rounded-xl font-medium text-[14px] active:scale-[0.98] transition-transform"
-                        >
-                            <Check size={16} />
-                            Mark as Done
-                        </button>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => { void handleMarkDone(selectedTask.id); setSelectedTask(null); }}
+                                className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#16A34A] text-white rounded-xl font-medium text-[14px] active:scale-[0.98] transition-transform"
+                            >
+                                <Check size={16} />
+                                Mark as Done
+                            </button>
+                            <button
+                                onClick={() => { setSelectedTaskIdForModal(selectedTask.id); setSelectedTask(null); }}
+                                className="px-4 py-3 border border-[#E5E7EB] text-[#374151] rounded-xl font-medium text-[14px] hover:bg-[#F9FAFB] transition-colors"
+                            >
+                                Edit
+                            </button>
+                            <button
+                                onClick={() => { void handleDelete(selectedTask.id); setSelectedTask(null); }}
+                                className="px-4 py-3 border border-red-200 text-red-600 rounded-xl font-medium text-[14px] hover:bg-red-50 transition-colors"
+                            >
+                                <Trash2 size={15} />
+                            </button>
+                        </div>
                     </div>
                 )}
             </BottomSheet>
@@ -466,6 +608,14 @@ export default function BacklogPage() {
                     </button>
                 </div>
             </BottomSheet>
+
+            {/* ── Desktop Task Card Modal ── */}
+            {selectedTaskIdForModal !== null && (
+                <TaskCardModal
+                    taskId={selectedTaskIdForModal}
+                    onClose={() => { setSelectedTaskIdForModal(null); void loadTasks(); }}
+                />
+            )}
         </div>
     );
 }
