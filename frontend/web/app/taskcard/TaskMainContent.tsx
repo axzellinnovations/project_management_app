@@ -37,7 +37,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
   const [editedTitle, setEditedTitle] = useState(title);
   const [editedDescription, setEditedDescription] = useState(description);
   const [subtaskAddTrigger, setSubtaskAddTrigger] = useState(0);
-  const attachInputRef = useRef<HTMLInputElement>(null);
+  const _attachInputRef = useRef<HTMLInputElement>(null);
   const [attachMsg, setAttachMsg] = useState<string | null>(null);
 
   // Update local state when props change

@@ -3,11 +3,6 @@
 import { create } from 'zustand';
 import type { Project } from '@/types';
 
-interface SpaceNode {
-  project: Project;
-  expanded: boolean;
-}
-
 interface ProjectStoreState {
   // Current active project
   currentProjectId: number | null;
@@ -28,7 +23,7 @@ interface ProjectStoreState {
   setFavorites: (ids: number[]) => void;
 }
 
-export const useProjectStore = create<ProjectStoreState>()((set, get) => ({
+export const useProjectStore = create<ProjectStoreState>()((set, _get) => ({
   // Current project
   currentProjectId: null,
   setCurrentProjectId: (id) => set({ currentProjectId: id }),

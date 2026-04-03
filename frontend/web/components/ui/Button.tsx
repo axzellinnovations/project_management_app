@@ -1,35 +1,6 @@
 'use client';
 
 import React from 'react';
-import { cva, type VariantProps } from 'class-variance-authority';
-
-const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 font-medium transition-colors duration-normal rounded-cu-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cu-purple focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap',
-  {
-    variants: {
-      variant: {
-        primary: 'bg-cu-purple text-white hover:bg-cu-purple-hover active:bg-[#5B4BCF] shadow-cu-sm',
-        secondary: 'bg-cu-bg-secondary text-cu-text-primary border border-cu-border hover:bg-cu-bg-tertiary',
-        ghost: 'text-cu-text-secondary hover:bg-cu-bg-secondary hover:text-cu-text-primary',
-        danger: 'bg-cu-danger text-white hover:bg-[#E54545] active:bg-[#CC3D3D]',
-        outline: 'border border-cu-border text-cu-text-primary hover:bg-cu-bg-secondary',
-        link: 'text-cu-purple hover:text-cu-purple-hover underline-offset-4 hover:underline p-0 h-auto',
-      },
-      size: {
-        xs: 'h-7 px-2 text-xs',
-        sm: 'h-8 px-3 text-sm',
-        md: 'h-9 px-4 text-base',
-        lg: 'h-10 px-5 text-md',
-        icon: 'h-8 w-8 p-0',
-        'icon-sm': 'h-7 w-7 p-0',
-      },
-    },
-    defaultVariants: {
-      variant: 'primary',
-      size: 'md',
-    },
-  }
-);
 
 // Inline cva since class-variance-authority isn't installed yet — use plain function
 // Re-implemented without cva dep to avoid extra install
