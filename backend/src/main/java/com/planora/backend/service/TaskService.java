@@ -200,9 +200,10 @@ public class TaskService {
                 .orElseThrow(()-> new EntityNotFoundException("Parent task is not found"));
 
         //permission check
-        validatePermission(parent.getProject().getId(), currentUserId, TeamRole.VIEWER);
+        validatePermission(parent.getProject().getTeam().getId(), currentUserId, TeamRole.VIEWER);
 
         //reuse create logic but set parent
+        subTaskRequest.setProjectId(parent.getProject().getId());
         TaskResponseDTO childDTO = createTask(subTaskRequest, currentUserId);
 
         //link parent-child manually
@@ -218,7 +219,7 @@ public class TaskService {
     @Transactional
     public void addDependency(Long taskId, Long blockerId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        validatePermission(task.getProject().getTeam().getId(),currentUserId, TeamRole.VIEWER);
 
         Task blocker = taskRepository.findById(blockerId).orElseThrow();
         task.getDependencies().add(blocker);
@@ -229,7 +230,7 @@ public class TaskService {
     @Transactional
     public void removeDependency(Long taskId, Long blockerId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        validatePermission(task.getProject().getTeam().getId(),currentUserId, TeamRole.VIEWER);
 
         Task blocker = taskRepository.findById(blockerId).orElseThrow();
         task.getDependencies().remove(blocker);
@@ -242,7 +243,7 @@ public class TaskService {
     @Transactional
     public void addLabel(Long taskId, Long labelId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        validatePermission(task.getProject().getTeam().getId(),currentUserId, TeamRole.VIEWER);
 
         Label label = labelRepository.findById(labelId).orElseThrow();
         task.getLabels().add(label);
@@ -253,7 +254,7 @@ public class TaskService {
     @Transactional
     public void removeLabel(Long taskId, Long labelId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        validatePermission(task.getProject().getTeam().getId(),currentUserId, TeamRole.VIEWER);
 
         Label label = labelRepository.findById(labelId).orElseThrow();
         task.getLabels().remove(label);

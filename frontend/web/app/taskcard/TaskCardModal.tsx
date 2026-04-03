@@ -75,11 +75,14 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50"
       onClick={onClose}
     >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40" />
+      {/* Slide-over panel */}
       <div
-        className="w-full max-w-6xl bg-white h-[90vh] shadow-2xl flex flex-col font-sans rounded-lg overflow-hidden"
+        className="absolute inset-y-0 right-0 w-full md:w-[900px] bg-white shadow-2xl flex flex-col font-sans overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {loading && (
@@ -113,7 +116,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
               taskId={`TASK-${taskData.id}`}
               onClose={onClose}
             />
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
               <TaskMainContent
                 title={taskData.title}
                 description={taskData.description}
@@ -122,6 +125,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                 taskId={taskData.id}
                 onUpdateTitle={(title) => updateTask({ title })}
                 onUpdateDescription={(description) => updateTask({ description })}
+                onSubtaskAdded={fetchTaskData}
               />
               <TaskSidebar
                 status={taskData.status}
