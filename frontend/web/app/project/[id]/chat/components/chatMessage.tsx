@@ -13,6 +13,7 @@ interface ChatMessagesProps {
   currentUser: string;
   currentUserAliases: string[];
   userProfilePics?: Record<string, string>;
+  isPrivateChat?: boolean;
   activeRoomId?: number | null;
   pinnedMessageId?: number | null;
   reactionsByMessageId: Record<number, ChatReactionSummary[]>;
@@ -149,6 +150,7 @@ export const ChatMessages = ({
   messages,
   currentUser,
   currentUserAliases,
+  isPrivateChat,
   activeRoomId,
   pinnedMessageId,
   reactionsByMessageId,
@@ -205,11 +207,16 @@ export const ChatMessages = ({
   }
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-0.5 scroll-smooth">
+    <div
+      ref={scrollRef}
+      className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 sm:py-4 space-y-0.5 scroll-smooth overscroll-y-contain"
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)' }}
+    >
       <AnimatePresence initial={false}>
         {visibleMessages.map((msg, idx) => {
           const prevMsg = idx > 0 ? visibleMessages[idx - 1] : undefined;
           const isMe = aliasSet.has((msg.sender || '').toLowerCase());
+          const hasAvatar = !isMe && !isPrivateChat;
           const grouped = isGrouped(msg, prevMsg);
           const showSeparator = shouldShowDateSeparator(msg, prevMsg);
           const msgReactions = msg.id ? (reactionsByMessageId[msg.id] || []) : [];
@@ -235,10 +242,10 @@ export const ChatMessages = ({
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18, ease: 'easeOut' }}
-                className={`flex items-end gap-2.5 group relative ${grouped ? 'mt-0.5' : 'mt-3'} ${isMe ? 'flex-row-reverse' : 'flex-row'} ${isMentioned ? 'pl-1.5 border-l-2 border-amber-400 rounded-l' : ''}`}
+                className={`flex items-end ${hasAvatar ? 'gap-2.5' : 'gap-1.5'} group relative ${grouped ? 'mt-0.5' : 'mt-3'} ${isMe ? 'flex-row-reverse' : 'flex-row'} ${isMentioned ? 'pl-1.5 border-l-2 border-amber-400 rounded-l' : ''}`}
               >
                 {/* Avatar */}
-                {!isMe && (
+                {hasAvatar && (
                   <div className={`relative flex-shrink-0 ${grouped ? 'opacity-0' : 'opacity-100'}`}>
                     {userProfilePics?.[msg.sender] ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -252,9 +259,9 @@ export const ChatMessages = ({
                 )}
 
                 {/* Bubble column */}
-                <div className={`flex flex-col max-w-[72%] ${isMe ? 'items-end' : 'items-start'}`}>
+                <div className={`flex flex-col max-w-[90%] sm:max-w-[74%] ${isMe ? 'items-end' : 'items-start'}`}>
                   {/* Sender name (others, no group) */}
-                  {!isMe && !grouped && (
+                  {!isMe && !grouped && !isPrivateChat && (
                     <span className="text-[11.5px] font-semibold text-gray-500 mb-1 ml-1">{msg.sender}</span>
                   )}
 
@@ -330,7 +337,7 @@ export const ChatMessages = ({
 
                     {/* Message bubble */}
                     <div className={`
-                      relative px-4 py-2.5 text-[13.5px] leading-relaxed shadow-sm
+                      relative px-4 py-2.5 pr-14 pb-4 text-[13.5px] leading-relaxed shadow-sm
                       ${msg.deleted
                         ? 'bg-gray-100 text-gray-400 italic rounded-2xl'
                         : isMe
@@ -359,6 +366,14 @@ export const ChatMessages = ({
                           {renderMentionContent(msg.content, aliasSet)}
                         </span>
                       )}
+
+                      {/* Time + edited inside bubble */}
+                      {!msg.deleted && msg.timestamp && (
+                        <span className={`absolute bottom-1.5 right-3 text-[10px] leading-none ${isMe ? 'text-blue-100/80' : 'text-gray-400'}`}>
+                          {msg.editedAt && <span className="mr-1 italic">edited</span>}
+                          {formatTime(msg.timestamp)}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -380,16 +395,6 @@ export const ChatMessages = ({
                       ))}
                     </div>
                   )}
-
-                  {/* Meta: time + edited */}
-                  <div className={`flex items-center gap-1.5 mt-0.5 px-1 ${isMe ? 'flex-row-reverse' : ''}`}>
-                    {!msg.deleted && msg.editedAt && (
-                      <span className="text-[10px] text-gray-400 italic">edited</span>
-                    )}
-                    {msg.timestamp && (
-                      <span className="text-[10px] text-gray-400">{formatTime(msg.timestamp)}</span>
-                    )}
-                  </div>
                 </div>
               </motion.div>
             </React.Fragment>

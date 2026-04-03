@@ -126,6 +126,7 @@ public class TaskService {
     }
 
     //2. GET TASK BY ID
+    @Transactional
     public TaskResponseDTO getTaskById(Long taskId) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(()-> new EntityNotFoundException("Task not found"));
@@ -192,6 +193,7 @@ public class TaskService {
     }
 
     //5. GET PROJECT BY ID
+    @Transactional
     public List<TaskResponseDTO> getTasksByProject(Long projectId, Long currentUserId) {
         // Check if user has permission to view tasks in this project
         Project project = projectRepository.findById(projectId)
@@ -212,9 +214,10 @@ public class TaskService {
                 .orElseThrow(()-> new EntityNotFoundException("Parent task is not found"));
 
         //permission check
-        validatePermission(parent.getProject().getId(), currentUserId, TeamRole.VIEWER);
+        validatePermission(parent.getProject().getTeam().getId(), currentUserId, TeamRole.VIEWER);
 
         //reuse create logic but set parent
+        subTaskRequest.setProjectId(parent.getProject().getId());
         TaskResponseDTO childDTO = createTask(subTaskRequest, currentUserId);
 
         //link parent-child manually
@@ -230,7 +233,7 @@ public class TaskService {
     @Transactional
     public void addDependency(Long taskId, Long blockerId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        validatePermission(task.getProject().getTeam().getId(),currentUserId, TeamRole.VIEWER);
 
         Task blocker = taskRepository.findById(blockerId).orElseThrow();
         task.getDependencies().add(blocker);
@@ -242,7 +245,7 @@ public class TaskService {
     @Transactional
     public void removeDependency(Long taskId, Long blockerId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        validatePermission(task.getProject().getTeam().getId(),currentUserId, TeamRole.VIEWER);
 
         Task blocker = taskRepository.findById(blockerId).orElseThrow();
         task.getDependencies().remove(blocker);
@@ -256,7 +259,7 @@ public class TaskService {
     @Transactional
     public void addLabel(Long taskId, Long labelId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        validatePermission(task.getProject().getTeam().getId(),currentUserId, TeamRole.VIEWER);
 
         Label label = labelRepository.findById(labelId).orElseThrow();
         task.getLabels().add(label);
@@ -268,7 +271,7 @@ public class TaskService {
     @Transactional
     public void removeLabel(Long taskId, Long labelId, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        validatePermission(task.getProject().getTeam().getId(),currentUserId, TeamRole.VIEWER);
 
         Label label = labelRepository.findById(labelId).orElseThrow();
         task.getLabels().remove(label);
@@ -401,11 +404,14 @@ public class TaskService {
         dto.setTitle(task.getTitle());
         dto.setDescription(task.getDescription());
         dto.setProjectId(task.getProject().getId());
+        dto.setProjectName(task.getProject().getName());
         dto.setPriority(task.getPriority() != null ? task.getPriority().name(): null);
         dto.setStatus(task.getStatus());
         dto.setStoryPoint(task.getStoryPoint());
         dto.setDueDate(task.getDueDate());
         dto.setStartDate(task.getStartDate());
+        dto.setCreatedAt(task.getCreatedAt());
+        dto.setUpdatedAt(task.getUpdatedAt());
 
         if(task.getSprint() != null){
             dto.setSprintId(task.getSprint().getId());
@@ -422,6 +428,28 @@ public class TaskService {
             dto.setReporterId(task.getReporter().getId());
             dto.setReporterName(task.getReporter().getUser().getUsername());
         }
+
+        // Map subtasks
+        if(task.getSubTasks() != null){
+            dto.setSubtasks(task.getSubTasks().stream()
+                .map(st -> new TaskResponseDTO.SubtaskDTO(st.getId(), st.getTitle(), st.getStatus()))
+                .collect(Collectors.toList()));
+        }
+
+        // Map labels
+        if(task.getLabels() != null){
+            dto.setLabels(task.getLabels().stream()
+                .map(l -> new TaskResponseDTO.LabelDTO(l.getId(), l.getName()))
+                .collect(Collectors.toList()));
+        }
+
+        // Map dependencies
+        if(task.getDependencies() != null){
+            dto.setDependencies(task.getDependencies().stream()
+                .map(d -> new TaskResponseDTO.DependencyDTO(d.getId(), d.getTitle(), "BLOCKED_BY"))
+                .collect(Collectors.toList()));
+        }
+
         return dto;
     }
 }

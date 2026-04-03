@@ -24,6 +24,7 @@ import com.planora.backend.repository.UserRepository;
 import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
 import com.planora.backend.service.ChatWebhookService;
+import com.planora.backend.service.NotificationService;
 
 @Controller
 public class ChatController {
@@ -75,6 +76,13 @@ public class ChatController {
     @Autowired
     private ChatWebhookService chatWebhookService;
 
+    // ── Added for persistent chat notifications ───────────────────────────────
+    // Injects NotificationService so that DMs and @mentions create bell
+    // notifications visible in the TopBar, not just transient WebSocket events.
+    @Autowired
+    private NotificationService notificationService;
+    // ─────────────────────────────────────────────────────────────────────────
+
     // This method handles messages sent to "/app/project/{projectId}/chat.sendMessage".
     // The return value is broadcast to all subscribers of "/topic/project/{projectId}/public".
     @MessageMapping("/project/{projectId}/chat.sendMessage")
@@ -118,6 +126,27 @@ public class ChatController {
         publishMentionNotifications(projectId, saved, "PRIVATE");
         chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "PRIVATE", saved);
         publishUnreadBadgesForProject(projectId);
+
+        // ── NOTIFICATION: persistent bell alert for the DM recipient ──────────
+        // This ensures the recipient sees a badge in the TopBar even if they are
+        // not currently on the chat page.  We resolve the recipient entity from
+        // the canonical username and skip if sender == recipient.
+        var senderUser = resolveUserByEmailOrUsername(canonicalSender);
+        var recipientUser = resolveUserByEmailOrUsername(canonicalRecipient);
+        if (recipientUser != null && senderUser != null
+                && !recipientUser.getUserId().equals(senderUser.getUserId())) {
+            // Use the sender's display name in the message text.
+            String senderDisplay = (senderUser.getFullName() != null && !senderUser.getFullName().isBlank())
+                    ? senderUser.getFullName() : senderUser.getUsername();
+            String project = projectRepository.findById(projectId)
+                    .map(p -> p.getName()).orElse("the project");
+            String notifMessage = senderDisplay + " sent you a message in \"" + project + "\"";
+            String notifLink = "/project/" + projectId + "/chat";
+            // createNotificationIfNotDuplicate prevents a flood if the same user
+            // rapidly sends multiple messages before the recipient opens the chat.
+            notificationService.createNotificationIfNotDuplicate(recipientUser, notifMessage, notifLink);
+        }
+        // ─────────────────────────────────────────────────────────────────────
     }
 
     @MessageMapping("/project/{projectId}/room/{roomId}/send")
@@ -511,6 +540,10 @@ public class ChatController {
                 ? senderAliases.getEmail().toLowerCase()
                 : null;
 
+        // Resolve the project name once for use in notification messages.
+        String projectName = projectRepository.findById(projectId)
+                .map(p -> p.getName()).orElse("the project");
+
         var destination = "/queue/project/" + projectId + "/mentions";
         var preview = savedMessage.getContent().length() > 120
                 ? savedMessage.getContent().substring(0, 120)
@@ -544,12 +577,27 @@ public class ChatController {
                     savedMessage.getRoomId(),
                     preview);
 
+            // Send the real-time WebSocket mention event (existing behaviour).
             if (user.getUsername() != null && !user.getUsername().isBlank()) {
                 simpMessagingTemplate.convertAndSendToUser(user.getUsername().toLowerCase(), destination, event);
             }
             if (user.getEmail() != null && !user.getEmail().isBlank()) {
                 simpMessagingTemplate.convertAndSendToUser(user.getEmail().toLowerCase(), destination, event);
             }
+
+            // ── NOTIFICATION: also persist a bell notification for the mention ─
+            // The WebSocket event is ephemeral (lost if the user is offline).
+            // The persistent notification ensures they see it upon next login.
+            // createNotificationIfNotDuplicate guards against duplicate rows when
+            // a user is mentioned multiple times in the same message burst.
+            String senderDisplay = (senderAliases != null
+                    && senderAliases.getFullName() != null
+                    && !senderAliases.getFullName().isBlank())
+                    ? senderAliases.getFullName() : savedMessage.getSender();
+            String notifMessage = senderDisplay + " mentioned you in \"" + projectName + "\" chat";
+            String notifLink = "/project/" + projectId + "/chat";
+            notificationService.createNotificationIfNotDuplicate(user, notifMessage, notifLink);
+            // ─────────────────────────────────────────────────────────────────
         });
     }
 

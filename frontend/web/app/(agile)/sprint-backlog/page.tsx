@@ -317,7 +317,7 @@ export default function SprintBacklogPage() {
 
   const handleTaskStatusChange = async (taskId: number, newStatus: string) => {
     try {
-      await api.patch(`/api/tasks/${taskId}/status?status=${newStatus}`);
+      await api.put(`/api/tasks/${taskId}`, { status: newStatus });
       
       // Update local state in both productTasks and sprints
       setProductTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
@@ -329,6 +329,14 @@ export default function SprintBacklogPage() {
       const axiosErr = err as { response?: { data?: { message?: string } } };
       alert(axiosErr?.response?.data?.message || 'Failed to update status.');
     }
+  };
+
+  const handleSprintDeleted = (sprintId: number, tasks: SprintItem['tasks']) => {
+    setSprints(prev => prev.filter(s => s.id !== sprintId));
+    setProductTasks(prev => [
+      ...prev,
+      ...tasks.map(t => ({ ...t, sprintId: null })),
+    ]);
   };
 
   return (
@@ -371,6 +379,7 @@ export default function SprintBacklogPage() {
                   )
                 );
               }}
+              onSprintDeleted={handleSprintDeleted}
             />
           ))}
 
@@ -383,9 +392,9 @@ export default function SprintBacklogPage() {
             onCreateSprint={createSprint}
             onDropTask={moveTaskToBacklog}
             onStatusChange={handleTaskStatusChange}
-            onAssignTask={(taskId, assigneeName) => {
+            onAssignTask={(taskId, assigneeName, assigneePhotoUrl) => {
               setProductTasks((prev) =>
-                prev.map((t) => t.id === taskId ? { ...t, assigneeName } : t)
+                prev.map((t) => (t.id === taskId ? { ...t, assigneeName, assigneePhotoUrl } : t))
               );
             }}
           />
