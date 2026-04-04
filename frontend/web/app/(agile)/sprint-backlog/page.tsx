@@ -83,7 +83,7 @@ export default function SprintBacklogPage() {
         const [sprintsRes, tasksRes, membersRes] = await Promise.all([
           api.get(`/api/sprints/project/${projectId}`),
           api.get(`/api/tasks/project/${projectId}`),
-          api.get(`/api/project-members/project/${projectId}`),
+          api.get(`/api/projects/${projectId}/members`),
         ]);
 
         const rawSprints = sprintsRes.data as { id: number; name: string; status: string; startDate?: string; endDate?: string }[];
