@@ -59,9 +59,30 @@ export default function RecentSpacesCarousel({ projects, loading, searchQuery }:
 
     if (loading) {
         return (
-            <div className="flex gap-4 overflow-hidden py-4">
+            <div className="flex gap-4 overflow-hidden py-1 w-full hide-scrollbar">
                 {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="skeleton h-[160px] min-w-[280px] rounded-[8px]" />
+                    <div 
+                        key={i} 
+                        className="flex flex-col p-5 h-[160px] min-w-[280px] rounded-[8px] border border-[#E5E7EB] bg-white shadow-sm shrink-0"
+                    >
+                        {/* Skeleton Header: Icon + Type + Star */}
+                        <div className="flex justify-between items-start mb-3">
+                            <div className="flex gap-3 items-center">
+                                <div className="w-8 h-8 rounded-[4px] bg-gray-200 animate-pulse" />
+                                <div className="w-20 h-3 bg-gray-200 rounded animate-pulse" />
+                            </div>
+                            <div className="w-4 h-4 bg-gray-200 rounded animate-pulse" />
+                        </div>
+                        
+                        {/* Skeleton Body: Title */}
+                        <div className="w-2/3 h-5 bg-gray-200 rounded animate-pulse mt-2 mb-auto" />
+                        
+                        {/* Skeleton Footer: Key + Boards */}
+                        <div className="flex justify-between items-center mt-3 pt-3 border-t border-[#F3F4F6]">
+                            <div className="w-12 h-3 bg-gray-200 rounded animate-pulse" />
+                            <div className="w-16 h-3 bg-gray-200 rounded animate-pulse" />
+                        </div>
+                    </div>
                 ))}
             </div>
         );
@@ -95,7 +116,7 @@ export default function RecentSpacesCarousel({ projects, loading, searchQuery }:
                 ref={scrollRef}
                 onScroll={handleScroll}
                 className="flex gap-4 overflow-x-auto pb-6 pt-2 hide-scrollbar scroll-smooth"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', contentVisibility: 'auto', containIntrinsicSize: '0 160px' } as React.CSSProperties}
             >
                 {/* Custom CSS for hiding scrollbar inline as fallback */}
                 <style jsx>{`

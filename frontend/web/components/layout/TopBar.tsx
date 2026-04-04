@@ -186,7 +186,7 @@ function TopBarContent() {
       <Image src={resolvedProfilePicUrl} alt="Profile" width={32} height={32} className="w-full h-full object-cover" unoptimized />
     </div>
   ) : (
-    <div className="w-8 h-8 rounded-full bg-cu-primary border-2 border-white flex items-center justify-center text-white text-[12px] font-bold">
+    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cu-primary to-cu-primary-dark border-2 border-white flex items-center justify-center text-white text-[12px] font-bold shadow-sm">
       {user?.username?.charAt(0).toUpperCase() || 'U'}
     </div>
   );
@@ -230,7 +230,7 @@ function TopBarContent() {
           </button>
 
           {/* Project icon */}
-          <div className="w-10 h-10 bg-cu-primary rounded-lg flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 bg-gradient-to-br from-cu-primary to-cu-primary-dark rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-cu-primary/20">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <path d="M10 2.5L16.6667 6.66667V13.3333L10 17.5L3.33333 13.3333V6.66667L10 2.5Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

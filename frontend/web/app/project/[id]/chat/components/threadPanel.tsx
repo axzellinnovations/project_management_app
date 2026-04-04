@@ -18,14 +18,14 @@ interface ThreadPanelProps {
 const DEFAULT_REACTIONS = ['👍', '🔥', '✅', '🎉'];
 
 const AVATAR_COLORS = [
-  'from-violet-500 to-indigo-600',
+  'from-blue-500 to-blue-600',
   'from-emerald-500 to-teal-600',
-  'from-rose-500 to-pink-600',
-  'from-blue-500 to-indigo-600',
-  'from-orange-500 to-red-600',
-  'from-purple-500 to-violet-700',
+  'from-sky-400 to-blue-500',
+  'from-indigo-500 to-blue-600',
+  'from-teal-400 to-emerald-500',
   'from-cyan-500 to-blue-600',
-  'from-amber-500 to-orange-600',
+  'from-blue-400 to-indigo-500',
+  'from-slate-400 to-slate-500',
 ];
 
 const avatarColor = (name: string) =>

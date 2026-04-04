@@ -124,22 +124,22 @@ button, a {
 .fab {
   position: fixed;
   bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
-  right: 1rem;
+  right: 1.5rem;
   z-index: 105;
   width: 3.5rem;
   height: 3.5rem;
   border-radius: 9999px;
-  background: #155DFC;
+  background: var(--cu-primary);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px -2px rgba(21, 93, 252, 0.45);
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 4px 16px -4px var(--cu-primary);
+  transition: transform 120ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 120ms ease;
 }
 .fab:active {
-  transform: scale(0.93);
-  box-shadow: 0 2px 8px -2px rgba(21, 93, 252, 0.35);
+  transform: scale(0.92);
+  box-shadow: 0 2px 8px -2px var(--cu-primary);
 }
 @media (min-width: 768px) {
   .fab-mobile-only { display: none; }
