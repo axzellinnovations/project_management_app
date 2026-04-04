@@ -2,6 +2,8 @@
 
 import Sidebar from '@/components/layout/Sidebar';
 import BottomNav from './BottomNav';
+import TopBar from '@/components/layout/TopBar';
+import { Suspense } from 'react';
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
     return (
@@ -12,7 +14,12 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 style={{ transition: 'all 300ms cubic-bezier(0.4,0,0.2,1)' }}
             >
                 <div className="flex flex-col flex-1 min-w-0 overflow-hidden main-content-area">
-                    {children}
+                    <Suspense fallback={null}>
+                        <TopBar />
+                    </Suspense>
+                    <div className="flex-1 overflow-y-auto w-full">
+                        {children}
+                    </div>
                 </div>
             </div>
             <BottomNav />

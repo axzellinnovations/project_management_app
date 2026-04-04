@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
-const VISIBLE_TABS_SM = 5;
+const VISIBLE_TABS_SM = 4;
 
 export function TabBar({
   tabs,
@@ -17,10 +17,11 @@ export function TabBar({
 }) {
   const [isSm, setIsSm] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
   const moreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const check = () => setIsSm(window.innerWidth < 640);
+    const check = () => setIsSm(window.innerWidth < 768);
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
@@ -42,29 +43,47 @@ export function TabBar({
   const activeInOverflow = overflowTabs.some(t => t.id === activeTab);
 
   return (
-    <div className="h-[45px] bg-white border-b border-cu-border flex items-end">
-      <div className="flex-1 overflow-x-auto no-scrollbar scroll-smooth px-4 sm:px-8">
-        <div className="flex items-end gap-4 sm:gap-8 min-w-max">
+    <div className="h-[44px] flex items-center relative">
+      <div className="flex-1 overflow-x-auto no-scrollbar scroll-smooth h-full">
+        <div className="flex items-center h-full gap-1">
           {visibleTabs.map((tab) => (
             <Link
               key={tab.id}
               href={getTabHref(tab.id)}
-              className="relative pb-3 px-1 shrink-0"
+              onMouseEnter={() => setHoveredTab(tab.id)}
+              onMouseLeave={() => setHoveredTab(null)}
+              className="relative h-full flex items-center px-3.5 sm:px-4 shrink-0 group transition-all duration-300"
             >
+              {/* Hover effect background */}
+              <AnimatePresence>
+                {hoveredTab === tab.id && (
+                  <motion.div
+                    layoutId="hoverBackground"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="absolute inset-x-1 inset-y-1.5 bg-slate-100/80 rounded-lg -z-10"
+                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                  />
+                )}
+              </AnimatePresence>
+
               <span
-                className={`font-inter text-[13px] sm:text-[14px] leading-[20px] transition-colors duration-200 ${
+                className={`font-outfit text-[13.5px] font-bold transition-colors duration-300 whitespace-nowrap ${
                   activeTab === tab.id
-                    ? 'text-cu-text-primary font-semibold'
-                    : 'text-cu-text-muted font-medium hover:text-cu-text-primary'
+                    ? 'text-blue-600'
+                    : 'text-slate-500 group-hover:text-slate-800'
                 }`}
               >
                 {tab.label}
               </span>
+
+              {/* Active indicator */}
               {activeTab === tab.id && (
                 <motion.div
-                  layoutId="activeTab"
-                  className="absolute bottom-0 left-0 right-0 h-[2px] bg-cu-primary rounded-t-[2px]"
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  layoutId="activeTabIndicator"
+                  className="absolute bottom-0 left-2 right-2 h-[3px] bg-blue-600 rounded-t-[3px] shadow-[0_-1px_6px_rgba(37,99,235,0.3)]"
+                  transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                 />
               )}
             </Link>
@@ -73,41 +92,57 @@ export function TabBar({
       </div>
 
       {overflowTabs.length > 0 && (
-        <div ref={moreRef} className="relative pb-3 pr-4 flex-shrink-0 self-end">
+        <div ref={moreRef} className="relative flex items-center h-full pl-2 border-l border-slate-100 ml-1">
           <button
             onClick={() => setMoreOpen(p => !p)}
-            className={`flex items-center gap-1 font-inter text-[13px] font-medium transition-colors duration-200 ${
-              activeInOverflow || moreOpen ? 'text-cu-text-primary font-semibold' : 'text-cu-text-muted hover:text-cu-text-primary'
+            className={`flex items-center gap-1.5 px-3 h-[30px] rounded-lg transition-all duration-300 font-outfit text-[13px] font-bold ${
+              activeInOverflow || moreOpen 
+                ? 'text-blue-600 bg-blue-50' 
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
             }`}
           >
             More
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className={`transition-transform duration-200 ${moreOpen ? 'rotate-180' : ''}`}>
-              <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <svg 
+              width="12" height="12" viewBox="0 0 12 12" fill="none" 
+              className={`transition-transform duration-300 ${moreOpen ? 'rotate-180' : ''}`}
+            >
+              <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
-          {activeInOverflow && (
-            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-cu-primary rounded-t-[2px]" />
+          
+          {activeInOverflow && !moreOpen && (
+             <motion.div
+                layoutId="activeTabIndicator"
+                className="absolute bottom-0 left-4 right-4 h-[3px] bg-blue-600 rounded-t-[3px] shadow-[0_-1px_6px_rgba(37,99,235,0.3)]"
+             />
           )}
-          {moreOpen && (
-            <div className="absolute top-full right-0 mt-2 z-[200] bg-white/95 backdrop-blur-2xl border border-cu-border/50 rounded-2xl shadow-2xl py-1.5 min-w-[160px]"
-              style={{ animation: 'dropdownIn 180ms cubic-bezier(0.4, 0, 0.2, 1) forwards' }}
-            >
-              {overflowTabs.map((tab) => (
-                <Link
-                  key={tab.id}
-                  href={getTabHref(tab.id)}
-                  onClick={() => setMoreOpen(false)}
-                  className={`block px-4 py-2 text-[13.5px] transition-all duration-150 mx-1 rounded-lg ${
-                    activeTab === tab.id
-                      ? 'text-cu-primary font-semibold bg-cu-primary/8'
-                      : 'text-cu-text-secondary hover:bg-cu-hover hover:text-cu-text-primary'
-                  }`}
-                >
-                  {tab.label}
-                </Link>
-              ))}
-            </div>
-          )}
+
+          <AnimatePresence>
+            {moreOpen && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="absolute top-full right-0 mt-1 z-[200] bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 min-w-[160px] overflow-hidden"
+              >
+                {overflowTabs.map((tab) => (
+                  <Link
+                    key={tab.id}
+                    href={getTabHref(tab.id)}
+                    onClick={() => setMoreOpen(false)}
+                    className={`block px-4 py-2.5 text-[13px] transition-all duration-200 font-outfit font-bold ${
+                      activeTab === tab.id
+                        ? 'text-blue-600 bg-blue-50'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    {tab.label}
+                  </Link>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+﻿import { useState, useRef, useCallback } from 'react';
 import * as chatApi from '@/services/chat-service';
-import type { ChatMessage } from '@/app/project/[id]/chat/components/chat';
+import type { ChatMessage } from '@/app/(project)/project/[id]/chat/components/chat';
 import { mergeMessage } from './chat-utils';
 
 export function useChatThreads(projectId: string) {
@@ -85,3 +85,4 @@ export function useChatThreads(projectId: string) {
     sendThreadReply,
   };
 }
+

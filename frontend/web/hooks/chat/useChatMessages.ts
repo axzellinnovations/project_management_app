@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
+﻿import { useState, useCallback } from 'react';
 import * as chatApi from '@/services/chat-service';
-import type { ChatMessage } from '@/app/project/[id]/chat/components/chat';
+import type { ChatMessage } from '@/app/(project)/project/[id]/chat/components/chat';
 import { mergeMessage, isSameIdentity } from './chat-utils';
 
 export function useChatMessages(projectId: string) {
@@ -292,3 +292,4 @@ export function useChatMessages(projectId: string) {
     deleteMessage,
   };
 }
+

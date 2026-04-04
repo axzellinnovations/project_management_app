@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
+﻿import { useState, useCallback, useRef } from 'react';
 import * as chatApi from '@/services/chat-service';
-import type { ChatReactionSummary, ChatMessage } from '@/app/project/[id]/chat/components/chat';
+import type { ChatReactionSummary, ChatMessage } from '@/app/(project)/project/[id]/chat/components/chat';
 import { MAX_REACTION_HYDRATION_MESSAGES, REACTION_RETRY_BACKOFF_MS } from './chat-utils';
 
 export function useChatReactions(projectId: string) {
@@ -69,3 +69,4 @@ export function useChatReactions(projectId: string) {
     hydrateReactions,
   };
 }
+

@@ -7,17 +7,16 @@ import api from '@/lib/axios';
 
 /* ── Hooks ── */
 import { useSidebarProjects } from '@/hooks/useSidebarProjects';
-import { useFolderStats } from '@/hooks/useFolderStats';
 
 /* ── Sub-components ── */
 import { SidebarHeader, CollapseButton } from './sidebar/SidebarHeader';
 import { SidebarFooter } from './sidebar/SidebarFooter';
-import { NavRow, FolderNavRow, SectionHeader } from './sidebar/NavRows';
+import { NavRow } from './sidebar/NavRows';
 import { ProjectDropdown } from './sidebar/ProjectDropdown';
 import { InboxDropdown } from './sidebar/InboxDropdown';
 import {
   HomeIcon, StarIcon, ClockIcon, ProfileIcon,
-  FolderIcon, UsersIcon, TrashIcon, InboxIcon,
+  InboxIcon,
   MessageSquareIcon, UserIcon,
 } from './sidebar/SidebarIcons';
 
@@ -90,7 +89,6 @@ export default function Sidebar() {
     handleToggleFavourite,
   } = useSidebarProjects(pathname);
 
-  const folderStats = useFolderStats(currentProjectId, user?.username, pathname);
 
   const [chatSummaries, setChatSummaries] = useState<ChatSummaries | null>(null);
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -121,7 +119,6 @@ export default function Sidebar() {
   const [recentOpen, setRecentOpen] = useState(false);
   const [favSearch, setFavSearch] = useState('');
   const [recentSearch, setRecentSearch] = useState('');
-  const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
 
   const favRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
@@ -373,32 +370,7 @@ export default function Sidebar() {
               onClick={() => { closeDropdowns(); router.push('/profile'); }}
             />
 
-            {/* Divider + Folders: only visible when a project is active */}
-            {currentProjectId && (<>
-            {/* Divider */}
-            <div className="my-2 mx-1 border-t border-cu-border-light" />
 
-            {/* Folders section */}
-            <SectionHeader
-              label="FOLDERS"
-              collapsed={collapsed}
-              expanded={isFoldersExpanded}
-              onToggle={() => setIsFoldersExpanded(p => !p)}
-            />
-            <div
-              className="flex flex-col gap-0.5 overflow-hidden"
-              style={{
-                maxHeight: isFoldersExpanded ? '300px' : '0',
-                transition: 'max-height 250ms cubic-bezier(0.4,0,0.2,1)',
-              }}
-            >
-              <FolderNavRow icon={<FolderIcon />} label="View all"   href="/folders/view-all"  badge={folderStats.viewAll || undefined}   active={pathname === '/folders/view-all'}   collapsed={collapsed} />
-              <FolderNavRow icon={<ClockIcon />}  label="Recent"     href="/folders/recent"    badge={folderStats.recent || undefined}    active={pathname === '/folders/recent'}    collapsed={collapsed} />
-              <FolderNavRow icon={<StarIcon />}   label="Favourites" href="/folders/favorites" badge={folderStats.favorites || undefined} active={pathname === '/folders/favorites'} collapsed={collapsed} />
-              <FolderNavRow icon={<UsersIcon />}  label="Shared"     href="/folders/shared"    badge={folderStats.shared || undefined}    active={pathname === '/folders/shared'}    collapsed={collapsed} />
-              <FolderNavRow icon={<TrashIcon />}  label="Trash"      href="/folders/trash"     badge={folderStats.trash || undefined}     active={pathname === '/folders/trash'}     collapsed={collapsed} />
-            </div>
-            </>)}
           </div>
 
           {/* User section */}

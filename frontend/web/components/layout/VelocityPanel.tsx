@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import VelocityChart from '@/app/(agile)/sprint-backlog/components/VelocityChart';
+import VelocityChart from '@/app/(project)/(agile)/sprint-backlog/components/VelocityChart';
 import api from '@/lib/axios';
 import type { SprintItem, TaskItem } from '@/types';
 

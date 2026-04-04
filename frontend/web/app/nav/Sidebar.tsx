@@ -105,9 +105,6 @@ export default function Sidebar() {
     const [favSearch, setFavSearch] = useState('');
     const [recentSearch, setRecentSearch] = useState('');
 
-    /* folders */
-    const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
-    const [folderStats, setFolderStats] = useState({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 });
 
     /* agile analytics */
     const [currentProjectType, setCurrentProjectType] = useState<string | null>(null);
@@ -215,33 +212,12 @@ export default function Sidebar() {
             || (recentProjects.length > 0 ? recentProjects[0].id.toString() : null);
 
         if (!projectId) { 
-            setFolderStats({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 }); 
             setChatSummaries(null);
             return; 
         }
 
         const pid = parseInt(projectId);
         void fetchChatSummaries(pid);
-
-        Promise.all([
-            api.get(`/api/projects/${projectId}/documents?includeDeleted=false`),
-            api.get(`/api/projects/${projectId}/documents?includeDeleted=true`),
-        ]).then(([docsRes, trashRes]) => {
-            const docs = Array.isArray(docsRes.data) ? docsRes.data : [];
-            const allDocs = Array.isArray(trashRes.data) ? trashRes.data : [];
-            const recentWindow = 14 * 24 * 60 * 60 * 1000;
-            const now = Date.now();
-            const raw = typeof window !== 'undefined' ? localStorage.getItem('dmsFavoriteDocumentIds') : null;
-            let favoriteIds: number[] = [];
-            if (raw) { try { favoriteIds = JSON.parse(raw); } catch {} }
-            setFolderStats({
-                viewAll: docs.length,
-                recent: docs.filter((d: { createdAt: string }) => now - new Date(d.createdAt).getTime() <= recentWindow).length,
-                favorites: docs.filter((d: { id: number }) => favoriteIds.includes(d.id)).length,
-                shared: user?.username ? docs.filter((d: { uploadedByName: string }) => d.uploadedByName !== user.username).length : 0,
-                trash: allDocs.filter((d: { status?: string }) => d.status === 'SOFT_DELETED').length,
-            });
-        }).catch(() => setFolderStats({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 }));
     }, [pathname, user, recentProjects, fetchChatSummaries]);
 
     /* click-outside to close dropdowns */
@@ -471,29 +447,7 @@ export default function Sidebar() {
                         onClick={() => { setFavOpen(false); setRecentOpen(false); router.push('/profile'); }}
                     />
 
-                    {/* Divider */}
-                    <div className="my-2 mx-1 border-t border-[#F2F4F7]" />
 
-                    {/* Folders section */}
-                    <SectionHeader
-                        label="FOLDERS"
-                        collapsed={collapsed}
-                        expanded={isFoldersExpanded}
-                        onToggle={() => setIsFoldersExpanded(p => !p)}
-                    />
-                    <div
-                        className="flex flex-col gap-0.5 overflow-hidden"
-                        style={{
-                            maxHeight: isFoldersExpanded ? '300px' : '0',
-                            transition: 'max-height 250ms cubic-bezier(0.4,0,0.2,1)',
-                        }}
-                    >
-                        <FolderNavRow icon={<FolderIcon />} label="View all"   href="/folders/view-all"  badge={folderStats.viewAll || undefined}    active={pathname === '/folders/view-all'}    collapsed={collapsed} />
-                        <FolderNavRow icon={<ClockIcon />}  label="Recent"     href="/folders/recent"    badge={folderStats.recent || undefined}     active={pathname === '/folders/recent'}     collapsed={collapsed} />
-                        <FolderNavRow icon={<StarIcon />}   label="Favourites" href="/folders/favorites" badge={folderStats.favorites || undefined}  active={pathname === '/folders/favorites'}  collapsed={collapsed} />
-                        <FolderNavRow icon={<UsersIcon />}  label="Shared"     href="/folders/shared"    badge={folderStats.shared || undefined}     active={pathname === '/folders/shared'}     collapsed={collapsed} />
-                        <FolderNavRow icon={<TrashIcon />}  label="Trash"      href="/folders/trash"     badge={folderStats.trash || undefined}      active={pathname === '/folders/trash'}      collapsed={collapsed} />
-                    </div>
 
                     {/* ── Agile Analytics section (AGILE projects only) ── */}
                     {currentProjectType === 'AGILE' && (
@@ -788,42 +742,6 @@ function NavRow({
 }
 
 /* ─────────────────────────────────────────────
-   Folder Nav Row
-───────────────────────────────────────────── */
-function FolderNavRow({
-    icon, label, href, badge, active, collapsed,
-}: {
-    icon: React.ReactNode; label: string; href: string;
-    badge?: number; active: boolean; collapsed: boolean;
-}) {
-    return (
-        <Link
-            href={href}
-            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 ${
-                active ? 'bg-[#EFF6FF] text-[#155DFC]' : 'text-[#4A5565] hover:bg-[#F5F7FA] hover:text-[#101828]'
-            }`}
-        >
-            <span className="flex-shrink-0 w-[18px] flex items-center justify-center">{icon}</span>
-            <span
-                className="font-arimo text-[13.5px] font-medium flex-1 whitespace-nowrap overflow-hidden"
-                style={{
-                    maxWidth: collapsed ? '0px' : '130px',
-                    opacity: collapsed ? 0 : 1,
-                    transition: 'max-width 280ms cubic-bezier(0.4,0,0.2,1), opacity 200ms',
-                }}
-            >
-                {label}
-            </span>
-            {badge !== undefined && badge > 0 && !collapsed && (
-                <span className="ml-auto bg-[#F2F4F7] text-[#4A5565] text-[11px] px-1.5 py-0.5 rounded min-w-[20px] text-center font-medium">
-                    {badge}
-                </span>
-            )}
-        </Link>
-    );
-}
-
-/* ─────────────────────────────────────────────
    Section Header
 ───────────────────────────────────────────── */
 function SectionHeader({ label, collapsed, expanded, onToggle }: {
@@ -1089,25 +1007,6 @@ function ClockIcon({ className = '', size = 16 }: { className?: string; size?: n
 const ProfileIcon = () => (
     <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="10" cy="6" r="3" /><path d="M4 16c1.2-2.7 3.5-4 6-4s4.8 1.3 6 4" />
-    </svg>
-);
-const FolderIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2.5 6.5A1.5 1.5 0 0 1 4 5h4l1.5 2h6.5A1.5 1.5 0 0 1 17.5 8.5v6A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5v-8z" />
-    </svg>
-);
-const UsersIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="7" cy="7" r="2.5" /><circle cx="13.5" cy="8" r="2" />
-        <path d="M3.5 15c.8-2 2.5-3 4.7-3s3.9 1 4.7 3" />
-        <path d="M12.2 14.5c.5-1.2 1.5-1.9 2.9-1.9 1.4 0 2.4.7 2.9 1.9" />
-    </svg>
-);
-const TrashIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3.5 5.5h13" /><path d="M7.5 5.5V4a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5" />
-        <path d="M6 5.5v10a1.5 1.5 0 0 0 1.5 1.5h5A1.5 1.5 0 0 0 14 15.5v-10" />
-        <path d="M8.5 8.5v5M11.5 8.5v5" />
     </svg>
 );
 const LogoutIcon = () => (
