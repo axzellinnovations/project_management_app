@@ -614,7 +614,7 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
                       alt={m.user.fullName || m.user.email}
                       width={36}
                       height={36}
-                      unoptimized
+                      unoptimized={true}
                       className="w-9 h-9 rounded-full object-cover"
                       onError={() => setBrokenProfileImages(prev => ({ ...prev, [`${avatarKey}:${resolvedProfilePicUrl}`]: true }))}
                     />

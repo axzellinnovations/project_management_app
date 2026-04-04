@@ -33,7 +33,6 @@ export function NotificationBell() {
     load();
     const intervalId = setInterval(() => void load(), 30_000);
     return () => { cancelled = true; clearInterval(intervalId); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const markAsRead = async (id: number) => {

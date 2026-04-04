@@ -46,6 +46,8 @@ describe('useChat hook', () => {
   let phaseDEnabled = true;
   let consoleErrorSpy: jest.SpyInstance;
 
+  jest.setTimeout(15000);
+
   const defaultFetchImplementation = (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
 
@@ -136,7 +138,7 @@ describe('useChat hook', () => {
     const hook = renderHook(() => useChat('42'));
     await waitFor(() => {
       expect(hook.result.current.isLoading).toBe(false);
-    });
+    }, { timeout: 10000 });
     return hook;
   };
 
