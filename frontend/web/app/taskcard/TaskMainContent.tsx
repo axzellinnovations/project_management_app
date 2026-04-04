@@ -1,8 +1,9 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
-import { Paperclip, CheckSquare, Link, Edit2, AlertCircle } from 'lucide-react';
+import { Paperclip, CheckSquare, Link, Edit2, AlertCircle, Download, Trash2, FileText, Image, File as FileIcon, Loader2 } from 'lucide-react';
 import SubtaskList from './SubtaskList';
 import CommentSection from './CommentSection';
+import { useTaskAttachments } from '@/hooks/useTaskAttachments';
 
 interface Dependency {
   id: number;
@@ -37,8 +38,10 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
   const [editedTitle, setEditedTitle] = useState(title);
   const [editedDescription, setEditedDescription] = useState(description);
   const [subtaskAddTrigger, setSubtaskAddTrigger] = useState(0);
-  const _attachInputRef = useRef<HTMLInputElement>(null);
-  const [attachMsg, setAttachMsg] = useState<string | null>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
+
+  // Attachment management via dedicated hook
+  const { attachments, isUploading, error: attachError, uploadFile, removeFile } = useTaskAttachments(taskId);
 
   // Update local state when props change
   useEffect(() => {
@@ -97,11 +100,20 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
       {/* Action Bar */}
       <div className="flex flex-wrap gap-2 mb-6">
         <ActionButton
-          icon={<Paperclip size={14} />}
-          label="Attach"
-          onClick={() => {
-            setAttachMsg('File attachments are coming soon.');
-            setTimeout(() => setAttachMsg(null), 3000);
+          icon={isUploading ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />}
+          label={isUploading ? 'Uploading...' : 'Attach'}
+          onClick={() => !isUploading && attachInputRef.current?.click()}
+        />
+        <input
+          ref={attachInputRef}
+          type="file"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              await uploadFile(file);
+              e.target.value = '';
+            }
           }}
         />
         <ActionButton
@@ -111,8 +123,42 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
         />
         <ActionButton icon={<Link size={14} />} label="Link issue" />
       </div>
-      {attachMsg && (
-        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded mb-4">{attachMsg}</p>
+      {attachError && (
+        <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded mb-4">{attachError}</p>
+      )}
+
+      {/* Attachments List */}
+      {attachments.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-sm font-bold text-gray-800 mb-3">Attachments</h3>
+          <div className="space-y-2">
+            {attachments.map((att) => (
+              <div key={att.id} className="flex items-center gap-3 p-2.5 border border-gray-100 rounded-lg hover:bg-gray-50 transition-colors group">
+                <AttachmentIcon contentType={att.contentType} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{att.fileName}</p>
+                  <p className="text-xs text-gray-400">{formatFileSize(att.fileSize)} · {att.uploadedByName}</p>
+                </div>
+                <a
+                  href={att.downloadUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"
+                  title="Download"
+                >
+                  <Download size={14} />
+                </a>
+                <button
+                  onClick={() => removeFile(att.id)}
+                  className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                  title="Delete"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Description */}
@@ -208,5 +254,19 @@ const ActionButton = ({ icon, label, onClick }: { icon: React.ReactNode; label: 
     {icon} {label}
   </button>
 );
+
+// Returns an icon based on file content type
+const AttachmentIcon = ({ contentType }: { contentType: string }) => {
+  if (contentType.startsWith('image/')) return <Image size={18} className="text-purple-500 shrink-0" />;
+  if (contentType === 'application/pdf') return <FileText size={18} className="text-red-500 shrink-0" />;
+  return <FileIcon size={18} className="text-blue-500 shrink-0" />;
+};
+
+// Format bytes to human-readable size
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
 
 export default TaskMainContent;

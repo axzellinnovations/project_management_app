@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import api from '@/lib/axios';
+import * as notificationsApi from '@/services/notifications-service';
 import { Bell } from 'lucide-react';
 
 export function NotificationBell() {
@@ -13,10 +13,12 @@ export function NotificationBell() {
 
   const fetchNotifications = async () => {
     try {
-      const response = await api.get('/api/notifications');
-      setNotifications(response.data);
-      const countRes = await api.get('/api/notifications/unread-count');
-      setUnreadCount(countRes.data.count);
+      const [notifs, count] = await Promise.all([
+        notificationsApi.fetchNotifications(),
+        notificationsApi.fetchUnreadCount(),
+      ]);
+      setNotifications(notifs);
+      setUnreadCount(count);
     } catch (e) {
       console.error(e);
     }
@@ -37,7 +39,7 @@ export function NotificationBell() {
 
   const markAsRead = async (id: number) => {
     try {
-      await api.patch(`/api/notifications/${id}/read`);
+      await notificationsApi.markNotificationRead(id);
       void fetchNotifications();
     } catch (e) {
       console.error(e);
@@ -46,7 +48,7 @@ export function NotificationBell() {
 
   const markAllAsRead = async () => {
     try {
-      await api.patch('/api/notifications/read-all');
+      await notificationsApi.markAllNotificationsRead();
       void fetchNotifications();
     } catch (e) {
       console.error(e);

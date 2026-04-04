@@ -5,6 +5,10 @@ import { getUserFromToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import api from '@/lib/axios';
 
+/* ── Hooks ── */
+import { useSidebarProjects } from '@/hooks/useSidebarProjects';
+import { useFolderStats } from '@/hooks/useFolderStats';
+
 /* ── Sub-components ── */
 import { SidebarHeader, CollapseButton } from './sidebar/SidebarHeader';
 import { SidebarFooter } from './sidebar/SidebarFooter';
@@ -30,11 +34,6 @@ interface DirectMessageSummary {
 interface ChatSummaries {
   rooms: ChatRoomSummary[];
   directMessages: DirectMessageSummary[];
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return 'Unknown error';
 }
 
 /* storage sync helper */
@@ -79,10 +78,17 @@ export default function Sidebar() {
     return `${API_BASE_URL}${profilePicUrl}`;
   }, [profilePicUrl, API_BASE_URL]);
 
-  const [recentProjects, setRecentProjects] = useState<Project[]>([]);
-  const [favoriteProjects, setFavoriteProjects] = useState<Project[]>([]);
-  const [loadingProjects, setLoadingProjects] = useState(true);
-  const [togglingFavoriteId, setTogglingFavoriteId] = useState<number | null>(null);
+  /* ── Project & folder data (extracted hooks) ── */
+  const {
+    recentProjects,
+    favoriteProjects,
+    loading: loadingProjects,
+    togglingFavoriteId,
+    handleProjectClick: rawProjectClick,
+    handleToggleFavourite,
+  } = useSidebarProjects(pathname);
+
+  const folderStats = useFolderStats(currentProjectId, user?.username, pathname);
 
   const [chatSummaries, setChatSummaries] = useState<ChatSummaries | null>(null);
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -114,28 +120,11 @@ export default function Sidebar() {
   const [favSearch, setFavSearch] = useState('');
   const [recentSearch, setRecentSearch] = useState('');
   const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
-  const [folderStats, setFolderStats] = useState({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 });
 
   const favRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
   const inboxRef = useRef<HTMLDivElement>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-
-  /* ── fetch projects ── */
-  const fetchProjects = useCallback(async () => {
-    try {
-      const [recentRes, favRes] = await Promise.all([
-        api.get('/api/projects/recent?limit=10'),
-        api.get('/api/projects/favorites'),
-      ]);
-      setRecentProjects(recentRes.data);
-      setFavoriteProjects(favRes.data);
-    } catch (error: unknown) {
-      console.error('Sidebar: failed to fetch projects', getErrorMessage(error));
-    } finally {
-      setLoadingProjects(false);
-    }
-  }, []);
 
   /* ── fetch chats ── */
   const fetchChatSummaries = useCallback(async (projId: number) => {
@@ -165,30 +154,6 @@ export default function Sidebar() {
     }
   }, []);
 
-  useEffect(() => { void fetchProjects(); }, [fetchProjects]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => void fetchProjects(), 600);
-    return () => clearTimeout(timer);
-  }, [pathname, fetchProjects]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    let debounceTimer: ReturnType<typeof setTimeout>;
-    const handleFavToggled = () => void fetchProjects();
-    const handleProjectAccessed = () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => void fetchProjects(), 400);
-    };
-    window.addEventListener('planora:favorite-toggled', handleFavToggled);
-    window.addEventListener('planora:project-accessed', handleProjectAccessed);
-    return () => {
-      clearTimeout(debounceTimer);
-      window.removeEventListener('planora:favorite-toggled', handleFavToggled);
-      window.removeEventListener('planora:project-accessed', handleProjectAccessed);
-    };
-  }, [fetchProjects]);
-
   useEffect(() => {
     const projectId =
       (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('projectId'))
@@ -196,34 +161,12 @@ export default function Sidebar() {
       || (recentProjects.length > 0 ? recentProjects[0].id.toString() : null);
 
     if (!projectId) {
-      setFolderStats({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 });
       setChatSummaries(null);
       return;
     }
 
-    const pid = parseInt(projectId);
-    void fetchChatSummaries(pid);
-
-    Promise.all([
-      api.get(`/api/projects/${projectId}/documents?includeDeleted=false`),
-      api.get(`/api/projects/${projectId}/documents?includeDeleted=true`),
-    ]).then(([docsRes, trashRes]) => {
-      const docs = Array.isArray(docsRes.data) ? docsRes.data : [];
-      const allDocs = Array.isArray(trashRes.data) ? trashRes.data : [];
-      const recentWindow = 14 * 24 * 60 * 60 * 1000;
-      const now = Date.now();
-      const raw = typeof window !== 'undefined' ? localStorage.getItem('dmsFavoriteDocumentIds') : null;
-      let favoriteIds: number[] = [];
-      if (raw) { try { favoriteIds = JSON.parse(raw); } catch {} }
-      setFolderStats({
-        viewAll: docs.length,
-        recent: docs.filter((d: { createdAt: string }) => now - new Date(d.createdAt).getTime() <= recentWindow).length,
-        favorites: docs.filter((d: { id: number }) => favoriteIds.includes(d.id)).length,
-        shared: user?.username ? docs.filter((d: { uploadedByName: string }) => d.uploadedByName !== user.username).length : 0,
-        trash: allDocs.filter((d: { status?: string }) => d.status === 'SOFT_DELETED').length,
-      });
-    }).catch(() => setFolderStats({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 }));
-  }, [pathname, user, recentProjects, fetchChatSummaries]);
+    void fetchChatSummaries(parseInt(projectId));
+  }, [pathname, fetchChatSummaries]);
 
   /* click-outside to close dropdowns */
   useEffect(() => {
@@ -288,25 +231,9 @@ export default function Sidebar() {
   const handleLogout = () => { localStorage.removeItem('token'); router.push('/login'); };
 
   const handleProjectClick = async (project: Project) => {
-    localStorage.setItem('currentProjectName', project.name);
-    localStorage.setItem('currentProjectId', project.id.toString());
-    try { await api.post(`/api/projects/${project.id}/access`); } catch {}
-    window.dispatchEvent(new CustomEvent('planora:project-accessed'));
+    await rawProjectClick(project);
     setFavOpen(false);
     setRecentOpen(false);
-  };
-
-  const handleToggleFavourite = async (e: React.MouseEvent, project: Project) => {
-    e.preventDefault(); e.stopPropagation();
-    if (togglingFavoriteId === project.id) return;
-    setTogglingFavoriteId(project.id);
-    setFavoriteProjects(prev => prev.filter(p => p.id !== project.id));
-    try {
-      await api.post(`/api/projects/${project.id}/favorite`);
-      window.dispatchEvent(new CustomEvent('planora:favorite-toggled'));
-      await fetchProjects();
-    } catch { await fetchProjects(); }
-    finally { setTogglingFavoriteId(null); }
   };
 
   const toggleCollapsed = () => {
