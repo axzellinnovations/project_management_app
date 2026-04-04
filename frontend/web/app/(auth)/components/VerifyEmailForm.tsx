@@ -56,10 +56,10 @@ export default function VerifyEmailForm() {
       const response = await api.post('/api/auth/resend', { email });
       setError('');
       
-      const successMsg = typeof response.data === 'string'
-        ? response.data
-        : 'New OTP sent to your email.';
-      alert(successMsg);
+      let successMsg = 'New OTP sent to your email.';
+      if (typeof response.data === 'string') {
+        successMsg = response.data;
+      }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error("Resend error:", err);

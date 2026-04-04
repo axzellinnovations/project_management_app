@@ -7,6 +7,8 @@ import Link from 'next/link';
 import api from '@/lib/axios';
 import { useRouter } from 'next/navigation';
 import RecentSpacesCarousel from './components/RecentSpacesCarousel';
+import DashboardTable from './components/DashboardTable';
+import WelcomeGreeting from '@/components/ui/WelcomeGreeting';
 
 interface ProjectSummary {
     id: number;
@@ -19,9 +21,13 @@ interface ProjectSummary {
 export default function DashboardPage() {
     const router = useRouter();
     const [user, setUser] = useState<User | null>(null);
-    const [activeTab, setActiveTab] = useState('worked-on');
+    const [activeTab, setActiveTab] = useState('assigned-to-me');
     const [projects, setProjects] = useState<{ recent: ProjectSummary[], favorites: ProjectSummary[] }>({ recent: [], favorites: [] });
     const [loading, setLoading] = useState(true);
+    const [dashboardSearch, setDashboardSearch] = useState('');
+    const [assignedCount, setAssignedCount] = useState(0);
+    const [mobileSecondaryTab, setMobileSecondaryTab] = useState('worked-on');
+    const [mobileTertiaryTab, setMobileTertiaryTab] = useState('favorites');
 
     useEffect(() => {
         const userData = getUserFromToken();
@@ -82,9 +88,9 @@ export default function DashboardPage() {
     );
 
     return (
-        <div className="flex flex-col gap-4 w-full max-w-[1200px] mx-auto pb-12 mt-2">
-            {/* Header */}
-            <div className="w-full mt-2 lg:mt-0 flex items-center gap-3">
+        <div className="flex flex-col gap-4 w-full max-w-[1200px] mx-auto pb-12 mt-0">
+            {/* Header fold: Tightened gap */}
+            <div className="w-full mt-1 lg:mt-0 flex items-center gap-3">
                 <button 
                     onClick={() => window.dispatchEvent(new CustomEvent('planora:sidebar:toggle'))}
                     className="md:hidden p-1.5 -ml-1.5 text-[#4B5563] rounded-md hover:bg-gray-100 transition-colors"
@@ -95,17 +101,15 @@ export default function DashboardPage() {
                         <line x1="3" y1="18" x2="21" y2="18"></line>
                     </svg>
                 </button>
-                <h1 className="font-arimo text-[16px] xl:text-[20px] leading-[24px] text-[#101828] font-semibold">
-                    Welcome Back, {user?.username || 'User'}.
-                </h1>
+                <WelcomeGreeting username={user?.username || 'User'} />
             </div>
 
             {/* Recent Spaces Section */}
-            <div className="flex flex-col gap-4 pb-[0.8px] bg-white relative">
-                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 w-full mt-2">
-                    <div className="flex justify-between items-center w-full md:w-auto">
-                        <h2 className="font-arimo text-[15px] font-semibold text-[#101828]">Recent spaces</h2>
-                        <Link href="/spaces" className="md:hidden font-arimo text-[13px] font-medium text-[#0052CC] hover:text-[#0042a3]">View all</Link>
+            <div className="flex flex-col gap-4 pb-[0.8px] bg-white relative mt-1">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 w-full mt-1">
+                    <div className="flex justify-between items-center w-full md:w-auto pl-1 h-5">
+                        <h2 className="font-arimo text-[15px] font-bold text-[#101828] m-0 flex items-center h-full">Recent spaces</h2>
+                        <Link href="/spaces" className="md:hidden font-arimo text-[13px] font-bold text-[#0052CC] hover:text-[#0042a3] m-0 flex items-center h-full leading-none">View all</Link>
                     </div>
                     
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
@@ -134,7 +138,7 @@ export default function DashboardPage() {
                                 </button>
                                 <button
                                     onClick={() => setRecentFilter('favorites')}
-                                    className={`flex-1 sm:flex-none px-3 py-1.5 rounded-[4px] font-arimo text-[13px] font-semibold transition-all ${recentFilter === 'favorites'
+                                    className={`flex-1 sm:flex-none px-3 py-1.5 h-[34px] rounded-[4px] font-arimo text-[13px] font-semibold transition-all ${recentFilter === 'favorites'
                                             ? 'bg-white sm:bg-[#EAF2FF] text-[#0052CC] shadow-sm sm:shadow-none border border-gray-200/60 sm:border-transparent'
                                             : 'text-[#4B5563] hover:text-[#0052CC] border border-transparent'
                                         }`}
@@ -155,65 +159,140 @@ export default function DashboardPage() {
                 />
             </div>
 
-            {/* Boards Section */}
-            <div className="flex flex-col gap-4 md:gap-6 mt-2 md:mt-0">
+            {/* Desktop View: Tabs */}
+            <div className="hidden md:flex flex-col gap-4 md:gap-6 mt-2 md:mt-0">
                 <div className="flex flex-col md:flex-row md:justify-between items-start md:items-end border-b-[0.8px] border-[#E5E7EB] pb-0 gap-4 md:gap-0">
-                    <div className="flex items-center gap-4 md:gap-6 w-full md:w-auto overflow-x-auto custom-scrollbar pb-1 md:pb-0 whitespace-nowrap">
-                        {['Worked on', 'Viewed', 'Assigned to me', 'Starred'].map((tab) => (
+                    <Link 
+                        href="/createProject" 
+                        className="order-last w-auto bg-transparent text-[#0052CC] font-arimo text-[14px] font-semibold hover:underline mb-2 shrink-0 flex items-center justify-center p-0 rounded-none shadow-none transition-all"
+                    >
+                        + Create new project
+                    </Link>
+                    <div className="flex flex-nowrap items-center gap-6 w-auto overflow-x-auto no-scrollbar pb-0">
+                        {['Worked on', 'Viewed', 'Assigned to me', 'Favorites', 'Boards'].map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab.toLowerCase().replaceAll(' ', '-'))}
-                                className={`pb-2 relative font-arimo text-[15px] md:text-[16px] transition-colors ${activeTab === tab.toLowerCase().replaceAll(' ', '-')
-                                    ? 'text-[#0052CC] font-medium'
-                                    : 'text-[#4A5565] hover:text-[#101828]'
+                                className={`pb-3 relative font-arimo text-[14px] transition-all duration-200 
+                                    ${activeTab === tab.toLowerCase().replaceAll(' ', '-')
+                                    ? 'text-[#101828] font-bold'
+                                    : 'text-[#4A5565] hover:text-[#101828] font-medium'
                                     }`}
                             >
-                                {tab}
+                                <span className="whitespace-nowrap">{tab}</span>
                                 {tab === 'Assigned to me' && (
-                                    <span className="ml-2 bg-[#E5E7EB] text-[#364153] text-[12px] px-1.5 rounded">0</span>
+                                    <span className="ml-2 bg-[#E5E7EB] text-[#364153] text-[12px] px-1.5 rounded font-medium inline-block align-middle">{assignedCount}</span>
                                 )}
                                 {activeTab === tab.toLowerCase().replaceAll(' ', '-') && (
-                                    <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#0052CC]" />
+                                    <div className="absolute bottom-[-1px] left-0 right-0 h-[2.5px] bg-[#0052CC] rounded-full" />
                                 )}
                             </button>
                         ))}
                     </div>
-                    <Link href="/createProject" className="text-[#0052CC] font-arimo text-[15px] md:text-[16px] font-medium hover:underline mb-2 shrink-0">+ Create new project</Link>
                 </div>
 
-                {/* Sub-header: Search */}
-                <div className="relative w-full sm:w-[320px] shrink-0">
+                <div className="relative w-[320px] shrink-0">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#99A1AF" strokeWidth="1.5"><circle cx="7" cy="7" r="5" /><path d="M11 11L14 14" /></svg>
                     </div>
                     <input
                         type="text"
-                        placeholder="Search boards"
-                        className="block w-full pl-10 pr-3 py-2 border border-[#D1D5DC] rounded-[4px] leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-arimo"
+                        placeholder="Search items..."
+                        value={dashboardSearch}
+                        onChange={(e) => setDashboardSearch(e.target.value)}
+                        className="block w-full pl-10 pr-3 py-2 h-[38px] border border-[#D1D5DC] rounded-[6px] leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-arimo shadow-sm"
                     />
                 </div>
 
-                {/* Table */}
-                <div className="w-full">
-                    <table className="min-w-full">
-                        <thead>
-                            <tr className="border-b-[0.8px] border-[#E5E7EB]">
-                                <th className="py-2 w-[48px] text-left">
-                                    <div className="w-5 h-5 bg-[#F0B100] border-2 border-[#F0B100] rounded-[2px]" />
-                                </th>
-                                <th className="py-2 text-left font-arimo text-[16px] font-bold text-[#364153]">Name</th>
-                                <th className="py-2 text-left font-arimo text-[16px] font-bold text-[#364153]">Location</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {/* Empty State for Table */}
-                            <tr>
-                                <td colSpan={3} className="py-8 text-center border-b-[0.8px] border-[#E5E7EB]">
-                                    <p className="font-arimo text-[14px] text-[#6A7282]">No boards found</p>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <DashboardTable 
+                    activeTab={activeTab} 
+                    searchQuery={dashboardSearch} 
+                    setDashboardAssignedCount={setAssignedCount} 
+                />
+            </div>
+
+            {/* Mobile View: Priority Multi-section */}
+            <div className="md:hidden flex flex-col gap-6 mt-4">
+                <Link 
+                    href="/createProject" 
+                    className="w-full bg-[#0052CC] text-white font-arimo text-[15px] font-bold flex items-center justify-center py-3 rounded-[10px] shadow-md transition-all active:scale-[0.98]"
+                >
+                    + Create new project
+                </Link>
+
+                {/* Section 1: Assigned to Me (Static) */}
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between pb-1">
+                        <h2 className="font-arimo text-[16px] font-bold text-[#101828]">Assigned to me</h2>
+                        <span className="bg-[#EAF2FF] text-[#0052CC] text-[12px] px-2 py-0.5 rounded-full font-bold">{assignedCount} pending</span>
+                    </div>
+                    <DashboardTable 
+                        activeTab="assigned-to-me"
+                        searchQuery="" // Keep primary section clean on mobile
+                        setDashboardAssignedCount={setAssignedCount}
+                    />
+                </div>
+
+                {/* Section 2: Recent Activity Toggle */}
+                <div className="flex flex-col gap-4 pt-4 border-t border-gray-100">
+                    <div className="flex items-center justify-between px-1">
+                        <h2 className="font-arimo text-[15px] font-bold text-[#101828]">Recent Activity</h2>
+                    </div>
+                    <div className="flex items-center justify-center bg-gray-100/60 p-1 rounded-xl gap-1">
+                        <button
+                            onClick={() => setMobileSecondaryTab('worked-on')}
+                            className={`flex-1 py-2.5 rounded-lg font-arimo text-[13px] font-bold transition-all ${mobileSecondaryTab === 'worked-on'
+                                    ? 'bg-white text-[#101828] shadow-sm'
+                                    : 'text-[#6B7280]'
+                                }`}
+                        >
+                            Worked on
+                        </button>
+                        <button
+                            onClick={() => setMobileSecondaryTab('viewed')}
+                            className={`flex-1 py-2.5 rounded-lg font-arimo text-[13px] font-bold transition-all ${mobileSecondaryTab === 'viewed'
+                                    ? 'bg-white text-[#101828] shadow-sm'
+                                    : 'text-[#6B7280]'
+                                }`}
+                        >
+                            Recently Viewed
+                        </button>
+                    </div>
+                    <DashboardTable 
+                        activeTab={mobileSecondaryTab} 
+                        searchQuery={dashboardSearch} 
+                    />
+                </div>
+
+                {/* Section 3: Organization Toggle */}
+                <div className="flex flex-col gap-4 pt-6 border-t border-gray-100">
+                    <div className="flex items-center justify-between px-1">
+                        <h2 className="font-arimo text-[15px] font-bold text-[#101828]">Quick Access</h2>
+                    </div>
+                    <div className="flex items-center justify-center bg-gray-100/60 p-1 rounded-xl gap-1">
+                        <button
+                            onClick={() => setMobileTertiaryTab('favorites')}
+                            className={`flex-1 py-2.5 rounded-lg font-arimo text-[13px] font-bold transition-all ${mobileTertiaryTab === 'favorites'
+                                    ? 'bg-white text-[#101828] shadow-sm'
+                                    : 'text-[#6B7280]'
+                                }`}
+                        >
+                            Favorites
+                        </button>
+                        <button
+                            onClick={() => setMobileTertiaryTab('boards')}
+                            className={`flex-1 py-2.5 rounded-lg font-arimo text-[13px] font-bold transition-all ${mobileTertiaryTab === 'boards'
+                                    ? 'bg-white text-[#101828] shadow-sm'
+                                    : 'text-[#6B7280]'
+                                }`}
+                        >
+                            Boards
+                        </button>
+                    </div>
+                    <DashboardTable 
+                        activeTab={mobileTertiaryTab} 
+                        searchQuery="" 
+                    />
                 </div>
             </div>
         </div>

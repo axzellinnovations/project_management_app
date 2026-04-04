@@ -37,14 +37,14 @@ interface ChatSidebarProps {
 }
 
 const AVATAR_COLORS = [
-  'from-violet-500 to-indigo-600',
+  'from-blue-500 to-blue-600',
   'from-emerald-500 to-teal-600',
-  'from-rose-500 to-pink-600',
-  'from-blue-500 to-indigo-600',
-  'from-orange-500 to-red-600',
-  'from-purple-500 to-violet-700',
+  'from-sky-400 to-blue-500',
+  'from-indigo-500 to-blue-600',
+  'from-teal-400 to-emerald-500',
   'from-cyan-500 to-blue-600',
-  'from-amber-500 to-orange-600',
+  'from-blue-400 to-indigo-500',
+  'from-slate-400 to-slate-500',
 ];
 
 const avatarColor = (name: string) =>
@@ -149,7 +149,7 @@ export const ChatSidebar = ({
       {/* Header */}
       <div className="px-4 pt-5 pb-3 flex items-center justify-between border-b border-gray-100/80">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cu-primary to-blue-600 flex items-center justify-center shadow-sm">
             <MessageCircle size={15} className="text-white" strokeWidth={2.5} />
           </div>
           <span className="font-semibold text-[15px] text-gray-900 tracking-tight">Messages</span>

@@ -305,10 +305,10 @@ export default function MembersPage() {
 
   const ROLE_COLOR: Record<string, string> = {
     OWNER: "bg-amber-100 text-amber-700 border-amber-200",
-    ADMIN: "bg-purple-100 text-purple-700 border-purple-200",
-    MEMBER: "bg-blue-100 text-blue-700 border-blue-200",
+    ADMIN: "bg-cu-primary/10 text-cu-primary border-cu-primary/20",
+    MEMBER: "bg-blue-50 text-blue-600 border-blue-100",
     VIEWER: "bg-gray-100 text-gray-600 border-gray-200",
-    PENDING: "bg-yellow-100 text-yellow-700 border-yellow-200",
+    PENDING: "bg-amber-50 text-amber-600 border-amber-100",
   };
 
   const filteredMembers = members.filter((m) => {
@@ -364,7 +364,7 @@ export default function MembersPage() {
           </h1>
           <button
             onClick={() => setInviteSheetOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 h-11 min-h-[44px] rounded-xl bg-[#155DFC] text-white text-sm font-semibold shadow-sm active:scale-95 transition-transform"
+            className="flex items-center gap-1.5 px-3.5 h-11 min-h-[44px] rounded-xl bg-cu-primary text-white text-sm font-semibold shadow-sm active:scale-95 transition-transform"
           >
             <UserPlus size={15} />
             <span>Invite</span>
@@ -380,7 +380,7 @@ export default function MembersPage() {
             placeholder="Search members…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-gray-200 rounded-2xl pl-10 pr-12 py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#155DFC]/30 shadow-[0_4px_10px_rgba(0,0,0,0.03)]"
+            className="w-full bg-white border border-gray-200 rounded-2xl pl-10 pr-12 py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-cu-primary/30 shadow-[0_4px_10px_rgba(0,0,0,0.03)]"
           />
           {searchQuery && (
             <button
@@ -407,7 +407,7 @@ export default function MembersPage() {
                 onClick={() => setActiveFilter(f)}
                 className={`flex-shrink-0 h-10 min-w-[44px] px-3.5 rounded-full text-xs font-semibold border transition-colors shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${
                   activeFilter === f
-                    ? "bg-[#155DFC] text-white border-[#155DFC]"
+                    ? "bg-cu-primary text-white border-[#155DFC]"
                     : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
                 }`}
               >
@@ -435,7 +435,7 @@ export default function MembersPage() {
           action={
             <button
               onClick={() => setInviteSheetOpen(true)}
-              className="px-4 py-2 rounded-xl bg-[#155DFC] text-white text-sm font-semibold"
+              className="px-4 py-2 rounded-xl bg-cu-primary text-white text-sm font-semibold"
             >
               Invite Member
             </button>
@@ -480,7 +480,7 @@ export default function MembersPage() {
                         }
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cu-primary to-blue-600 flex items-center justify-center text-white font-bold text-sm">
                         {getInitials(m.user.fullName, m.user.email)}
                       </div>
                     )}
@@ -621,13 +621,13 @@ export default function MembersPage() {
                 }}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-colors ${
                   roleSheetMember.role === role
-                    ? "border-[#155DFC] bg-blue-50 text-[#155DFC]"
+                    ? "border-cu-primary bg-blue-50 text-cu-primary"
                     : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
                 }`}
               >
                 {role.charAt(0) + role.slice(1).toLowerCase()}
                 {roleSheetMember.role === role && (
-                  <span className="text-[#155DFC] text-lg">✓</span>
+                  <span className="text-cu-primary text-lg">✓</span>
                 )}
               </button>
             ))}
@@ -749,7 +749,7 @@ function InviteForm({
         </label>
         <input
           type="email"
-          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#155DFC]/30"
+          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-cu-primary/30"
           placeholder="colleague@company.com"
           value={inviteEmail}
           onChange={(e) => setInviteEmail(e.target.value)}
@@ -761,7 +761,7 @@ function InviteForm({
           Role <span className="text-red-500">*</span>
         </label>
         <select
-          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#155DFC]/30 bg-white"
+          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-cu-primary/30 bg-white"
           value={inviteRole}
           onChange={(e) => setInviteRole(e.target.value)}
           required

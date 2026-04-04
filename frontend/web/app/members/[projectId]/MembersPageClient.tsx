@@ -7,10 +7,10 @@ import { useMembersSync, type MemberPayload } from "./useMembersSync";
 const ICONS = {
   members: <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 20h5v-2a4 4 0 0 0-3-3.87M9 20H4v-2a4 4 0 0 1 3-3.87M16 3.13a4 4 0 1 1-8 0M12 7a4 4 0 0 1 4-4" /></svg>,
   active: <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3" /></svg>,
-  admin: <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 20h14M12 4v16m0-16l4 4m-4-4l-4 4" /></svg>,
+  admin: <svg className="w-6 h-6 text-cu-primary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 20h14M12 4v16m0-16l4 4m-4-4l-4 4" /></svg>,
   pending: <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3" /></svg>,
   owner: <svg className="w-4 h-4 inline text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l2.39 4.84 5.34.78-3.87 3.77.91 5.33L10 13.27l-4.77 2.51.91-5.33-3.87-3.77 5.34-.78L10 2z" /></svg>,
-  adminRole: <svg className="w-4 h-4 inline text-purple-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l2.39 4.84 5.34.78-3.87 3.77.91 5.33L10 13.27l-4.77 2.51.91-5.33-3.87-3.77 5.34-.78L10 2z" /></svg>,
+  adminRole: <svg className="w-4 h-4 inline text-cu-primary" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l2.39 4.84 5.34.78-3.87 3.77.91 5.33L10 13.27l-4.77 2.51.91-5.33-3.87-3.77 5.34-.78L10 2z" /></svg>,
   member: <svg className="w-4 h-4 inline text-blue-500" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" /></svg>,
   viewer: <svg className="w-4 h-4 inline text-gray-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M2.05 12a9.94 9.94 0 0 1 19.9 0 9.94 9.94 0 0 1-19.9 0z" /></svg>,
 };
@@ -57,8 +57,8 @@ const ROLE_LABELS: Record<string, string> = {
 
 const ROLE_COLORS: Record<string, string> = {
   OWNER: "bg-yellow-100 text-yellow-700",
-  ADMIN: "bg-purple-100 text-purple-700",
-  MEMBER: "bg-blue-100 text-blue-700",
+  ADMIN: "bg-cu-primary/10 text-cu-primary",
+  MEMBER: "bg-blue-50 text-blue-700",
   VIEWER: "bg-gray-100 text-gray-700",
 };
 
@@ -441,8 +441,8 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
           <div className="text-gray-500 mt-1">Manage your team and their permissions</div>
         </div>
         <button
-          className="flex items-center gap-2 px-5 py-1.5 rounded-[12px] bg-[#185ADB] text-white font-medium text-base shadow-md hover:bg-[#185ADB] focus:outline-none focus:ring-2 focus:ring-blue-300"
-          style={{ boxShadow: '0 2px 8px 0 rgba(24,90,219,0.10)' }}
+          className="flex items-center gap-2 px-5 py-1.5 rounded-[12px] bg-cu-primary text-white font-medium text-base shadow-md hover:bg-cu-primary-dark focus:outline-none focus:ring-2 focus:ring-blue-300"
+          style={{ boxShadow: '0 2px 8px 0 rgba(21,93,252,0.1)' }}
           onClick={() => setShowModal(true)}
         >
           {/* User Plus Icon (smaller, white, left-aligned) */}
@@ -507,9 +507,9 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
             <div className="text-gray-500 text-sm mb-1">Admins</div>
             <div className="text-xl font-semibold text-gray-900">{adminCount}</div>
           </div>
-          <div className="bg-[#F3EFFF] rounded-[16px] p-3 flex items-center justify-center">
-            {/* Classic crown icon, purple, smaller size */}
-            <svg className="w-6 h-6 text-[#A259FF]" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 32 32">
+          <div className="bg-cu-primary/10 rounded-[16px] p-3 flex items-center justify-center">
+            {/* Classic crown icon, blue, smaller size */}
+            <svg className="w-6 h-6 text-cu-primary" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 32 32">
               <polyline points="8,20 12,12 16,18 20,12 24,20" />
               <line x1="10" y1="24" x2="22" y2="24" />
               <line x1="12" y1="22" x2="20" y2="22" />
@@ -536,7 +536,7 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
       <div className="flex flex-col md:flex-row gap-2 mb-4">
         <input
           type="text"
-          className="flex-1 border rounded px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+          className="flex-1 border rounded px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cu-primary/20"
           placeholder="Search members by name or email..."
           value={search}
           onChange={e => setSearch(e.target.value)}
@@ -619,7 +619,7 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
                       onError={() => setBrokenProfileImages(prev => ({ ...prev, [`${avatarKey}:${resolvedProfilePicUrl}`]: true }))}
                     />
                   ) : (
-                    <div className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-base">
+                    <div className="w-9 h-9 rounded-full bg-cu-primary flex items-center justify-center text-white font-bold text-base">
                       {m.user.fullName ? m.user.fullName.split(" ").map(n => n[0]).join("") : m.user.email[0]?.toUpperCase()}
                     </div>
                   )}
@@ -750,7 +750,7 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center justify-center"
+                  className="flex-1 py-2 rounded bg-cu-primary text-white hover:bg-cu-primary-dark flex items-center justify-center"
                   disabled={inviteLoading}
                 >
                   {inviteLoading ? "Sending..." : (<><span className="mr-2">✉️</span>Send Invite</>)}

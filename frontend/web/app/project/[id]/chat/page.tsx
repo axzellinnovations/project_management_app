@@ -184,9 +184,9 @@ export default function ChatInterface() {
 
   /* ── Header info ── */
   const AVATAR_COLORS = [
-    'from-violet-500 to-indigo-600', 'from-emerald-500 to-teal-600', 'from-rose-500 to-pink-600',
-    'from-blue-500 to-indigo-600', 'from-orange-500 to-red-600', 'from-purple-500 to-violet-700',
-    'from-cyan-500 to-blue-600', 'from-amber-500 to-orange-600',
+    'from-blue-500 to-blue-600', 'from-emerald-500 to-teal-600', 'from-sky-400 to-blue-500',
+    'from-indigo-500 to-blue-600', 'from-teal-400 to-emerald-500', 'from-cyan-500 to-blue-600',
+    'from-blue-400 to-indigo-500', 'from-slate-400 to-slate-500',
   ];
   const avatarColor = (name: string) => AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
 
@@ -432,7 +432,7 @@ export default function ChatInterface() {
                 <button
                   onClick={executeSearch}
                   disabled={isSearchLoading || !searchQuery.trim()}
-                  className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-[12.5px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 rounded-xl bg-cu-primary hover:bg-cu-primary-dark text-white text-[12.5px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   aria-label="Submit search"
                 >
                   {isSearchLoading ? '…' : 'Search'}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef } from 'react';
 import { getUserFromToken, User } from '@/lib/auth';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import api from '@/lib/axios';
 
 /* ── Sub-components ── */
@@ -14,6 +14,7 @@ import { InboxDropdown } from './sidebar/InboxDropdown';
 import {
   HomeIcon, StarIcon, ClockIcon, ProfileIcon,
   FolderIcon, UsersIcon, TrashIcon, InboxIcon,
+  MessageSquareIcon, UserIcon,
 } from './sidebar/SidebarIcons';
 
 /* ── Types ── */
@@ -54,6 +55,7 @@ const subscribeToBrowserStorage = (onChange: () => void) => {
 export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const token = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
@@ -327,6 +329,25 @@ export default function Sidebar() {
     p.name.toLowerCase().includes(recentSearch.toLowerCase()) ||
     (p.projectKey || '').toLowerCase().includes(recentSearch.toLowerCase())
   );
+  
+  const totalUnseen = useMemo(() => {
+    if (!chatSummaries) return 0;
+    return [
+      ...(chatSummaries.rooms || []),
+      ...(chatSummaries.directMessages || [])
+    ].reduce((acc, c) => acc + (c.unseenCount || 0), 0);
+  }, [chatSummaries]);
+
+  const inboxItems = useMemo(() => {
+    if (!chatSummaries) return [];
+    const all = [
+      ...(chatSummaries.rooms || []).map(r => ({ ...r, type: 'ROOM' })),
+      ...(chatSummaries.directMessages || []).map(d => ({ ...d, type: 'DM' })),
+    ];
+    const unread = all.filter(c => (c.unseenCount || 0) > 0);
+    if (unread.length > 0) return unread.slice(0, 5);
+    return all.slice(0, 2);
+  }, [chatSummaries]);
 
   const closeDropdowns = () => { setFavOpen(false); setRecentOpen(false); };
 
@@ -342,13 +363,13 @@ export default function Sidebar() {
       )}
 
       <div
-        className={`h-screen flex-shrink-0 z-[100] bg-white transition-all duration-300 ease-in-out ${isMobile ? 'fixed left-0 top-0' : 'relative'} ${isMobile && collapsed ? 'pointer-events-none' : ''}`}
+        className={`h-screen flex-shrink-0 z-[100] bg-[#F9FAFB] transition-all duration-300 ease-in-out ${isMobile ? 'fixed left-0 top-0' : 'relative'} ${isMobile && collapsed ? 'pointer-events-none' : ''}`}
         style={{
           width: isMobile ? (collapsed ? '0px' : '260px') : (collapsed ? '64px' : '240px'),
           opacity: isMobile && collapsed ? 0 : 1
         }}
       >
-        <div className="h-full bg-white border-r border-cu-border flex flex-col overflow-x-hidden w-[240px] md:w-[inherit]">
+        <div className="h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col overflow-x-hidden w-[240px] md:w-[inherit]">
 
           {/* Header */}
           <SidebarHeader collapsed={collapsed} />
@@ -396,12 +417,22 @@ export default function Sidebar() {
             {/* Inbox row + dropdown */}
             <div ref={inboxRef} className="relative">
               <NavRow
-                icon={<InboxIcon />}
+                icon={
+                  <div className="relative">
+                    <InboxIcon />
+                    {totalUnseen > 0 && (
+                      <span className="absolute -top-1 -right-1.5 bg-cu-primary text-white text-[9px] font-bold px-1 rounded-full border border-white">
+                        {totalUnseen > 9 ? '9+' : totalUnseen}
+                      </span>
+                    )}
+                  </div>
+                }
                 label="Inbox"
                 collapsed={collapsed}
                 active={inboxOpen}
                 hasChevron
                 chevronOpen={inboxOpen}
+                badge={totalUnseen}
                 onClick={openInboxDropdown}
               />
             </div>

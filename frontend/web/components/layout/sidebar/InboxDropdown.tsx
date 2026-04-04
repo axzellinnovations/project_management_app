@@ -11,6 +11,7 @@ interface ChatRoomSummary {
   roomName?: string;
   lastMessage?: string;
   lastMessageSender?: string;
+  lastMessageTimestamp?: string;
   unseenCount?: number;
 }
 
@@ -18,6 +19,7 @@ interface DirectMessageSummary {
   username: string;
   lastMessage?: string;
   lastMessageSender?: string;
+  lastMessageTimestamp?: string;
   unseenCount?: number;
 }
 
@@ -74,13 +76,28 @@ export function InboxDropdown({
   const router = useRouter();
   const pid = typeof window !== 'undefined' ? localStorage.getItem('currentProjectId') : null;
 
-  const filteredRooms = (summaries?.rooms || []).filter((r: ChatRoomSummary) =>
-    (r.roomName || '').toLowerCase().includes(search.toLowerCase())
-  ).slice(0, 3);
+  const allItems = [
+    ...(summaries?.rooms || []).map(r => ({ ...r, type: 'ROOM' as const })),
+    ...(summaries?.directMessages || []).map(d => ({ ...d, type: 'DM' as const })),
+  ];
 
-  const filteredDirects = (summaries?.directMessages || []).filter((d: DirectMessageSummary) =>
-    d.username.toLowerCase().includes(search.toLowerCase())
-  ).slice(0, 3);
+  // 1. Filter to only chats that have at least one message
+  const activeItems = allItems.filter(item => item.lastMessageTimestamp != null);
+
+  // 2. Sort strictly chronologically
+  const sortedActiveItems = activeItems.sort((a, b) => {
+    const timeA = new Date(a.lastMessageTimestamp!).getTime();
+    const timeB = new Date(b.lastMessageTimestamp!).getTime();
+    return timeB - timeA;
+  });
+
+  // 3. Limit to top 3 items consistently
+  const displayItems = search 
+    ? sortedActiveItems.filter(item => {
+        const label = item.type === 'ROOM' ? (item as ChatRoomSummary).roomName : (item as DirectMessageSummary).username;
+        return (label || '').toLowerCase().includes(search.toLowerCase());
+      }).slice(0, 3)
+    : sortedActiveItems.slice(0, 3);
 
   return (
     <div
@@ -123,41 +140,32 @@ export function InboxDropdown({
           </div>
         ) : (
           <>
-            {filteredDirects.length > 0 && (
-              <div className="mb-2">
-                <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-cu-text-muted uppercase tracking-wider">Direct Messages</div>
-                {filteredDirects.map((dm: DirectMessageSummary) => (
-                  <InboxDropdownItem
-                    key={`dm-${dm.username}`}
-                    item={dm}
-                    icon={<UserIcon size={14} />}
-                    label={dm.username}
-                    onClick={() => {
-                      router.push(`/projects/${pid}/chat?with=${dm.username}`);
-                      onClose();
-                    }}
-                  />
-                ))}
+            {displayItems.length > 0 ? (
+              <div className="mb-1">
+                <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-cu-text-muted uppercase tracking-wider">
+                  {search ? 'Search Results' : 'Recent Activity'}
+                </div>
+                {displayItems.map((item) => {
+                  const isRoom = item.type === 'ROOM';
+                  const label = isRoom ? (item as ChatRoomSummary).roomName || 'General' : (item as DirectMessageSummary).username;
+                  return (
+                    <InboxDropdownItem
+                      key={isRoom ? `room-${(item as ChatRoomSummary).roomId}` : `dm-${(item as DirectMessageSummary).username}`}
+                      item={item}
+                      icon={isRoom ? <MessageSquareIcon size={14} /> : <UserIcon size={14} />}
+                      label={label}
+                      onClick={() => {
+                        const url = isRoom 
+                          ? `/projects/${pid}/chat?roomId=${(item as ChatRoomSummary).roomId}`
+                          : `/projects/${pid}/chat?with=${(item as DirectMessageSummary).username}`;
+                        router.push(url);
+                        onClose();
+                      }}
+                    />
+                  );
+                })}
               </div>
-            )}
-            {filteredRooms.length > 0 && (
-              <div>
-                <div className="px-3 pt-1 pb-1 text-[10px] font-bold text-cu-text-muted uppercase tracking-wider">Group Chats</div>
-                {filteredRooms.map((room: ChatRoomSummary) => (
-                  <InboxDropdownItem
-                    key={`room-${room.roomId}`}
-                    item={room}
-                    icon={<MessageSquareIcon size={14} />}
-                    label={room.roomName || 'General'}
-                    onClick={() => {
-                      router.push(`/projects/${pid}/chat?roomId=${room.roomId}`);
-                      onClose();
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-            {filteredRooms.length === 0 && filteredDirects.length === 0 && (
+            ) : (
               <div className="px-3 py-6 text-center">
                 <div className="text-[12px] text-cu-text-muted font-medium">No recent messages</div>
                 <div className="text-[10px] text-cu-text-muted mt-0.5">Start a conversation in your project chat</div>
@@ -174,7 +182,7 @@ export function InboxDropdown({
           onClick={onClose}
           className="flex items-center justify-between w-full text-[12px] font-medium text-cu-primary hover:text-cu-primary-dark transition-colors"
         >
-          <span>Go to project chat</span>
+          <span>View All</span>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
             <path d="M3 6h6M7 4l2 2-2 2" />
           </svg>

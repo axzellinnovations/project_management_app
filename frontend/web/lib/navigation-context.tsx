@@ -14,20 +14,13 @@ const NavigationContext = createContext<NavigationContextType | undefined>(undef
 export function NavigationProvider({ children }: { children: React.ReactNode }) {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
     const pathname = usePathname();
-    const [prevPathname, setPrevPathname] = useState(pathname);
 
     const toggleSidebar = () => setSidebarOpen((prev) => !prev);
 
-    // Automatically close sidebar on navigation (mobile).
-    // State is adjusted during render (not inside an effect) to avoid cascading renders.
-    // See: https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
-    if (prevPathname !== pathname) {
-        setPrevPathname(pathname);
-        setSidebarOpen(false);
-    }
-
-    // Dispatch event so the Sidebar component's own collapsed state also closes
+    // Automatically close sidebar on navigation (mobile)
     useEffect(() => {
+        setSidebarOpen(false);
+        // Dispatch event so the Sidebar component's own collapsed state also closes
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('planora:sidebar:close'));
         }

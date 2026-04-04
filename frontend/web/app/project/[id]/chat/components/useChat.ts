@@ -90,33 +90,14 @@ const mergeMessage = (list: ChatMessage[], incoming: ChatMessage): ChatMessage[]
     return [...list, incoming];
   }
 
-  // 1. Exact ID match (e.g. edits/deletes)
   const index = list.findIndex(item => item.id === incoming.id);
-  if (index !== -1) {
-    const next = [...list];
-    next[index] = { ...next[index], ...incoming };
-    return next;
+  if (index === -1) {
+    return [...list, incoming];
   }
 
-  // 2. Optimistic match reconciliation:
-  // If we optimistically added a message without an ID, replace it with the real one.
-  let optimisticIndex = -1;
-  for (let i = list.length - 1; i >= 0; i--) {
-    const item = list[i];
-    if (!item.id && item.sender === incoming.sender && item.content === incoming.content) {
-      optimisticIndex = i;
-      break;
-    }
-  }
-
-  if (optimisticIndex !== -1) {
-    const next = [...list];
-    next[optimisticIndex] = { ...next[optimisticIndex], ...incoming };
-    return next;
-  }
-
-  // 3. New message append
-  return [...list, incoming];
+  const next = [...list];
+  next[index] = { ...next[index], ...incoming };
+  return next;
 };
 
 const normalizeRoom = (room: ChatRoom): ChatRoom => ({
@@ -361,76 +342,42 @@ export const useChat = (projectId: string) => {
     );
   }, [projectId]);
 
-  const updateMessageEverywhere = useCallback((incoming: ChatMessage, isOptimistic = false) => {
+  const updateMessageEverywhere = useCallback((incoming: ChatMessage) => {
     const mergeTopLevel = (list: ChatMessage[], inc: ChatMessage) => {
-      // Don't leak thread replies to top level lists
-      if (inc.parentMessageId) {
-        return list;
-      }
-      
-      if (!inc.id) {
-        return isOptimistic ? [...list, inc] : list;
-      }
-
-      // Reconcile optimistic or edit update
+      if (!inc.id) return list;
       const index = list.findIndex(item => item.id === inc.id);
       if (index !== -1) {
         const next = [...list];
         next[index] = { ...next[index], ...inc };
         return next;
       }
-      
-      // We only append as brand new if we explicitly want optimistic sends,
-      // because incoming webhook edits shouldn't blindly append if missing!
-      if (isOptimistic) {
-        return [...list, inc];
+      if (inc.parentMessageId) {
+        return list;
       }
-      
-      return list;
+      return [...list, inc];
     };
 
-    // Safely route the message exclusively to its exact domain, avoiding cross-contamination
-    if (!incoming.roomId && !incoming.recipient && !incoming.parentMessageId) {
-      setMessages(prev => mergeTopLevel(prev, incoming));
-    }
-    
-    if (incoming.roomId) {
-      setRoomMessages(prev => {
-        const next = { ...prev };
-        const roomId = Number(incoming.roomId);
-        next[roomId] = mergeTopLevel(next[roomId] || [], incoming);
-        return next;
-      });
-    }
+    setMessages(prev => mergeTopLevel(prev, incoming));
 
-    if (incoming.recipient) {
-      setPrivateMessages(prev => {
-        const next = { ...prev };
-        const partner = [incoming.sender, incoming.recipient].find(u => u && !isSameIdentity(u, currentUser)) || incoming.recipient;
-        if (partner) {
-           const normPartner = normalizeIdentity(partner);
-           next[normPartner] = mergeTopLevel(next[normPartner] || [], incoming);
-        }
-        return next;
+    setPrivateMessages(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach(key => {
+        next[key] = mergeTopLevel(next[key] || [], incoming);
       });
-    }
-
-    setThreadMessages(prev => {
-      if (!incoming.id) {
-         return isOptimistic && incoming.parentMessageId ? [...prev, incoming] : prev;
-      }
-      const index = prev.findIndex(item => item.id === incoming.id);
-      if (index !== -1) {
-        const next = [...prev];
-        next[index] = { ...next[index], ...incoming };
-        return next;
-      }
-      if (isOptimistic && incoming.parentMessageId) {
-        return [...prev, incoming];
-      }
-      return prev;
+      return next;
     });
-  }, [currentUser]);
+
+    setRoomMessages(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach(key => {
+        const roomId = Number(key);
+        next[roomId] = mergeTopLevel(next[roomId] || [], incoming);
+      });
+      return next;
+    });
+
+    setThreadMessages(prev => mergeMessage(prev, incoming));
+  }, []);
 
   const loadMessageReactions = useCallback(async (messageId: number) => {
     if (Date.now() < reactionFetchBackoffUntilRef.current) {
@@ -480,8 +427,8 @@ export const useChat = (projectId: string) => {
     const selection = selectedRoomId !== null && Number.isFinite(selectedRoomId)
       ? { type: 'room', value: selectedRoomId }
       : selectedUser
-        ? { type: 'private', value: selectedUser }
-        : { type: 'team', value: null };
+      ? { type: 'private', value: selectedUser }
+      : { type: 'team', value: null };
 
     window.sessionStorage.setItem(selectionStorageKey, JSON.stringify(selection));
   }, [selectedRoomId, selectedUser, selectionStorageKey, hasRestoredSelection]);
@@ -587,10 +534,10 @@ export const useChat = (projectId: string) => {
       setTeamLastMessage(
         teamSummary?.lastMessage
           ? {
-            sender: teamSummary.lastMessageSender || '',
-            content: teamSummary.lastMessage,
-            timestamp: teamSummary.lastMessageTimestamp || undefined
-          }
+              sender: teamSummary.lastMessageSender || '',
+              content: teamSummary.lastMessage,
+              timestamp: teamSummary.lastMessageTimestamp || undefined
+            }
           : null
       );
 
@@ -617,10 +564,10 @@ export const useChat = (projectId: string) => {
             summary.username.toLowerCase(),
             summary.lastMessage
               ? {
-                sender: summary.lastMessageSender || summary.username.toLowerCase(),
-                content: summary.lastMessage,
-                timestamp: summary.lastMessageTimestamp || undefined
-              }
+                  sender: summary.lastMessageSender || summary.username.toLowerCase(),
+                  content: summary.lastMessage,
+                  timestamp: summary.lastMessageTimestamp || undefined
+                }
               : null
           ])
         )
@@ -632,11 +579,11 @@ export const useChat = (projectId: string) => {
             Number(summary.roomId),
             summary.lastMessage
               ? {
-                sender: summary.lastMessageSender || '',
-                content: summary.lastMessage,
-                timestamp: summary.lastMessageTimestamp || undefined,
-                roomId: Number(summary.roomId)
-              }
+                  sender: summary.lastMessageSender || '',
+                  content: summary.lastMessage,
+                  timestamp: summary.lastMessageTimestamp || undefined,
+                  roomId: Number(summary.roomId)
+                }
               : null
           ])
         )
@@ -890,17 +837,32 @@ export const useChat = (projectId: string) => {
     }
   }, [projectId]);
 
+  const scheduleHistorySync = useCallback((recipient?: string | null, roomId?: number | null) => {
+    window.setTimeout(() => {
+      if (roomId !== null && roomId !== undefined) {
+        loadRoomHistory(roomId);
+        return;
+      }
+
+      if (recipient) {
+        loadPrivateHistory(recipient);
+        return;
+      }
+
+      loadHistory();
+    }, 450);
+  }, [loadHistory, loadPrivateHistory, loadRoomHistory]);
+
   const connectToChat = useCallback((token: string, username: string, aliases: string[]) => {
     try {
       const client = Stomp.over(() => new SockJS('http://localhost:8080/ws'));
-      client.debug = () => { };
+      client.debug = () => {};
       client.reconnect_delay = 5000;
       const normalizedAliases = new Set(aliases.map(alias => alias.toLowerCase()));
 
       client.connect({ Authorization: `Bearer ${token}` }, () => {
         stompClientRef.current = client;
         setIsSocketConnected(true);
-        setError('');
 
         client.subscribe(`/topic/project/${projectId}/public`, payload => {
           const incoming: ChatMessage = JSON.parse(payload.body);
@@ -938,7 +900,7 @@ export const useChat = (projectId: string) => {
           if (!partner) {
             return;
           }
-
+          
           if (incoming.parentMessageId) return;
 
           setPrivateMessages(prev => {
@@ -1070,10 +1032,10 @@ export const useChat = (projectId: string) => {
           const context = mention.scope === 'ROOM'
             ? 'group chat'
             : mention.scope === 'PRIVATE'
-              ? 'direct chat'
-              : mention.scope === 'THREAD'
-                ? 'thread'
-                : 'team chat';
+            ? 'direct chat'
+            : mention.scope === 'THREAD'
+            ? 'thread'
+            : 'team chat';
           showCommandNotice(`You are mentioned by ${mention.sender} in ${context}.`);
           trackTelemetry('chat_mention_received', mention.scope || 'chat', `messageId=${mention.messageId || ''}`);
 
@@ -1353,22 +1315,16 @@ export const useChat = (projectId: string) => {
     }
 
     if (recipient) {
-      const message = { sender: currentUser, content: normalizedContent, recipient, type: 'CHAT', formatType: 'PLAIN', timestamp: new Date().toISOString() };
+      const message = { sender: currentUser, content: normalizedContent, recipient, type: 'CHAT', formatType: 'PLAIN' };
       stompClientRef.current?.send(`/app/project/${projectId}/chat.sendPrivateMessage`, {}, JSON.stringify(message));
       trackTelemetry('chat_private_message_sent', 'private');
-      
-      // Optimistic rendering
-      updateMessageEverywhere(message as ChatMessage, true);
       return;
     }
 
-    const message = { sender: currentUser, content: normalizedContent, type: 'CHAT', formatType: 'PLAIN', timestamp: new Date().toISOString() };
+    const message = { sender: currentUser, content: normalizedContent, type: 'CHAT', formatType: 'PLAIN' };
     stompClientRef.current?.send(`/app/project/${projectId}/chat.sendMessage`, {}, JSON.stringify(message));
     trackTelemetry('chat_team_message_sent', 'team');
-
-    // Optimistic rendering
-    updateMessageEverywhere(message as ChatMessage, true);
-  }, [currentUser, projectId, trackTelemetry, updateMessageEverywhere]);
+  }, [currentUser, projectId, trackTelemetry]);
 
   const sendRoomMessage = useCallback((content: string, roomId: number) => {
     const normalizedContent = content.trim();
@@ -1381,13 +1337,10 @@ export const useChat = (projectId: string) => {
       return;
     }
 
-    const message = { sender: currentUser, content: normalizedContent, roomId, type: 'CHAT', formatType: 'PLAIN', timestamp: new Date().toISOString() };
+    const message = { sender: currentUser, content: normalizedContent, roomId, type: 'CHAT', formatType: 'PLAIN' };
     stompClientRef.current?.send(`/app/project/${projectId}/room/${roomId}/send`, {}, JSON.stringify(message));
     trackTelemetry('chat_room_message_sent', 'room', `roomId=${roomId}`);
-
-    // Optimistic rendering
-    updateMessageEverywhere(message as ChatMessage, true);
-  }, [currentUser, projectId, trackTelemetry, updateMessageEverywhere]);
+  }, [currentUser, projectId, trackTelemetry]);
 
   const sendThreadReply = useCallback(async (content: string) => {
     if (!activeThreadRoot?.id) {
@@ -1400,11 +1353,8 @@ export const useChat = (projectId: string) => {
     }
 
     if (isStompConnected()) {
-      const message = { sender: currentUser, content: normalizedContent, type: 'CHAT', formatType: 'PLAIN', parentMessageId: activeThreadRoot.id, timestamp: new Date().toISOString() };
+      const message = { sender: currentUser, content: normalizedContent, type: 'CHAT', formatType: 'PLAIN' };
       stompClientRef.current?.send(`/app/project/${projectId}/thread/${activeThreadRoot.id}/send`, {}, JSON.stringify(message));
-      
-      // Optimistic rendering
-      updateMessageEverywhere(message as ChatMessage, true);
       return;
     }
 
@@ -1575,7 +1525,6 @@ export const useChat = (projectId: string) => {
     trackTelemetry,
     addTeam,
     isLoading,
-    isSocketConnected,
     error,
     roomMentionCounts,
     teamMentionCount,
