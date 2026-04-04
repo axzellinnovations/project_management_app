@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ArrowRight } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 import api from '@/lib/axios';
 
@@ -76,8 +76,16 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
     }
   }, [isStatusOpen, isPriorityOpen]);
 
-  const statusOptions = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
+  const priorityConfig: Record<string, { text: string; bg: string; hover: string; dot: string }> = {
+    URGENT: { text: 'text-red-600', bg: 'bg-red-50', hover: 'hover:bg-red-100', dot: 'bg-red-500' },
+    HIGH:   { text: 'text-orange-600', bg: 'bg-orange-50', hover: 'hover:bg-orange-100', dot: 'bg-orange-500' },
+    MEDIUM: { text: 'text-amber-600', bg: 'bg-amber-50', hover: 'hover:bg-amber-100', dot: 'bg-amber-400' },
+    LOW:    { text: 'text-gray-500', bg: 'bg-gray-100', hover: 'hover:bg-gray-200', dot: 'bg-gray-400' },
+  };
+
+  const getPriorityStyle = (p: string) => priorityConfig[p] ?? priorityConfig.LOW;
   const priorityOptions = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+  const statusOptions = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
 
   const handleStatusChange = (newStatus: string) => {
     onUpdateStatus?.(newStatus);
@@ -244,13 +252,14 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
                     e.stopPropagation();
                     setIsPriorityOpen(!isPriorityOpen);
                   }}
-                  className="flex items-center gap-2 text-red-600 text-sm font-medium bg-red-50 px-2 py-1 rounded w-fit cursor-pointer hover:bg-red-100 transition-colors"
+                  className={`flex items-center gap-2 text-sm font-semibold px-2 py-1 rounded w-fit cursor-pointer transition-colors ${getPriorityStyle(priority).text} ${getPriorityStyle(priority).bg} ${getPriorityStyle(priority).hover}`}
                 >
-                  <ArrowRight size={14} className="-rotate-45" />
+                  <span className={`w-2 h-2 rounded-full ${getPriorityStyle(priority).dot}`} />
                   {priority}
+                  <ChevronDown size={12} className="opacity-60" />
                 </div>
                 {isPriorityOpen && (
-                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-10 min-w-[120px]">
+                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[130px] overflow-hidden">
                     {priorityOptions.map((option) => (
                       <button
                         key={option}
@@ -258,8 +267,9 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
                           e.stopPropagation();
                           handlePriorityChange(option);
                         }}
-                        className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm text-gray-700 border-b border-gray-100 last:border-b-0 hover:text-blue-600 transition-colors"
+                        className={`w-full text-left px-3 py-2 text-sm border-b border-gray-50 last:border-b-0 flex items-center gap-2 transition-colors ${getPriorityStyle(option).hover} ${getPriorityStyle(option).text} font-medium`}
                       >
+                        <span className={`w-2 h-2 rounded-full ${getPriorityStyle(option).dot}`} />
                         {option}
                       </button>
                     ))}

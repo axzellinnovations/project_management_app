@@ -1,10 +1,12 @@
 package com.planora.backend.controller;
 
 import com.planora.backend.dto.CommentRequestDTO;
+import com.planora.backend.dto.TaskActivityResponseDTO;
 import com.planora.backend.dto.TaskRequestDTO;
 import com.planora.backend.dto.TaskResponseDTO;
 import com.planora.backend.model.Task;
 import com.planora.backend.model.UserPrincipal;
+import com.planora.backend.service.TaskActivityService;
 import com.planora.backend.service.TaskService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -21,6 +23,9 @@ public class TaskController {
 
     @Autowired
     TaskService service;
+
+    @Autowired
+    TaskActivityService activityService;
 
     @PostMapping
     public ResponseEntity<TaskResponseDTO> createTask(
@@ -153,5 +158,24 @@ public class TaskController {
         Long currentUserId = currentUser.getUserId();
         service.assignUser(taskID,userId,currentUserId);
         return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    @PatchMapping("/{taskId}/priority")
+    public ResponseEntity<TaskResponseDTO> updatePriority(
+            @PathVariable Long taskId,
+            @RequestBody java.util.Map<String, String> body,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ){
+        Long currentUserId = currentUser.getUserId();
+        String priority = body.get("priority");
+        return new ResponseEntity<>(service.updatePriority(taskId, priority, currentUserId), HttpStatus.OK);
+    }
+
+    @GetMapping("/{taskId}/activities")
+    public ResponseEntity<List<TaskActivityResponseDTO>> getActivities(
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ){
+        return new ResponseEntity<>(activityService.getActivities(taskId), HttpStatus.OK);
     }
 }

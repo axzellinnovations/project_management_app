@@ -8,6 +8,7 @@ import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import { useNavigation } from '@/lib/navigation-context';
 import { Menu } from 'lucide-react';
 import api from '@/lib/axios';
+import * as projectsApi from '@/services/projects-service';
 
 import { NotificationBell } from './topbar/NotificationBell';
 import { TabBar } from './topbar/TabBar';
@@ -104,8 +105,8 @@ function TopBarContent() {
     const fetchProjectStatus = async () => {
       if (!projectId) { setIsFavorite(false); return; }
       try {
-        const response = await api.get(`/api/projects/${projectId}`);
-        setIsFavorite(Boolean(response.data?.isFavorite));
+        const projectData = await projectsApi.fetchProjectDetails(projectId);
+        setIsFavorite(Boolean(projectData?.isFavorite));
       } catch { setIsFavorite(false); }
     };
     void fetchProjectStatus();
@@ -140,8 +141,8 @@ function TopBarContent() {
   const handleOpenProjectDropdown = async () => {
     if (projectsOpen) { setProjectsOpen(false); return; }
     try {
-      const res = await api.get<{ id: number; name: string }[]>('/api/projects/recent?limit=5');
-      setRecentProjectsList(res.data);
+      const res = await projectsApi.fetchRecentProjects(5);
+      setRecentProjectsList(res as { id: number; name: string }[]);
     } catch {}
     setProjectsOpen(true);
   };
@@ -273,7 +274,7 @@ function TopBarContent() {
                   const nextState = !isFavorite;
                   setIsFavorite(nextState);
                   try {
-                    await api.post(`/api/projects/${projectId}/favorite`);
+                    await projectsApi.toggleFavorite(projectId);
                     window.dispatchEvent(new CustomEvent('planora:favorite-toggled'));
                   } catch { setIsFavorite(!nextState); }
                 }}

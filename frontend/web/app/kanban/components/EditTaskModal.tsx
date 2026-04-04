@@ -25,6 +25,7 @@ export default function EditTaskModal({
   const [title, setTitle] = useState('');
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [assignee, setAssignee] = useState<number | ''>('');
+  const [priority, setPriority] = useState<string>('MEDIUM');
   const [teamMembers, setTeamMembers] = useState<{ id: number; name: string }[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +39,7 @@ export default function EditTaskModal({
       setTitle(task.title || '');
       setDueDate(task.dueDate ? new Date(task.dueDate) : null);
       setAssignee(task.assigneeId || '');
+      setPriority(task.priority || 'MEDIUM');
       setError(null);
       setSubmitError(null);
     }
@@ -57,6 +59,7 @@ export default function EditTaskModal({
       title: title.trim(),
       dueDate: dueDate ? dueDate.toISOString().split('T')[0] : undefined,
       assigneeId: assignee || undefined,
+      priority,
     };
 
     try {
@@ -233,6 +236,36 @@ export default function EditTaskModal({
                 Loading team members...
               </div>
             )}
+          </div>
+
+          {/* Priority Section */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <span className="text-xs">🏷️</span>
+              Priority
+            </label>
+            <div className="grid grid-cols-4 gap-1">
+              {(['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const).map((p) => {
+                const colors: Record<string, string> = {
+                  LOW: 'border-gray-300 text-gray-500 bg-gray-50 data-[active=true]:bg-gray-200 data-[active=true]:border-gray-500 data-[active=true]:text-gray-700',
+                  MEDIUM: 'border-amber-300 text-amber-600 bg-amber-50 data-[active=true]:bg-amber-200 data-[active=true]:border-amber-500',
+                  HIGH: 'border-orange-300 text-orange-600 bg-orange-50 data-[active=true]:bg-orange-200 data-[active=true]:border-orange-500',
+                  URGENT: 'border-red-300 text-red-600 bg-red-50 data-[active=true]:bg-red-200 data-[active=true]:border-red-500',
+                };
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    data-active={priority === p}
+                    onClick={() => setPriority(p)}
+                    className={`px-2 py-1.5 text-xs font-semibold rounded-lg border-2 transition-all ${colors[p]}`}
+                    disabled={loading}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Error Message */}

@@ -15,7 +15,7 @@ import com.planora.backend.repository.SprintRepository;
 import com.planora.backend.repository.TaskRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
+import com.planora.backend.service.TaskActivityService;import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -51,6 +51,8 @@ class TaskServiceTest {
     private SprintRepository sprintRepository;
     @Mock
     private NotificationService notificationService;
+    @Mock
+    private TaskActivityService taskActivityService;
 
     @InjectMocks
     private TaskService taskService;
