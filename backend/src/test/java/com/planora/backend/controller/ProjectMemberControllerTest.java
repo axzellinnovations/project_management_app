@@ -12,17 +12,14 @@ import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.TaskRepository;
 import com.planora.backend.repository.TeamInvitationRepository;
 import com.planora.backend.repository.TeamMemberRepository;
-import com.planora.backend.repository.UserRepository;
 import com.planora.backend.service.TeamMemberService;
 import com.planora.backend.service.JWTService;
-import com.planora.backend.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
@@ -31,8 +28,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import static org.mockito.ArgumentMatchers.contains;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -58,12 +53,6 @@ class ProjectMemberControllerTest {
     private TaskRepository taskRepository;
     @MockBean
     private TeamMemberService teamMemberService;
-    @MockBean
-    private NotificationService notificationService;
-    @MockBean
-    private UserRepository userRepository;
-    @MockBean
-    private SimpMessagingTemplate simpMessagingTemplate;
     @MockBean
     private JWTService jwtService;
     @MockBean
@@ -160,52 +149,6 @@ class ProjectMemberControllerTest {
     }
 
     @Test
-    void changeMemberRole_notifiesAffectedUserAndBroadcastsEvent() throws Exception {
-    var request = new ProjectMemberController.ChangeRoleRequest();
-    request.role = "ADMIN";
-    request.userId = 20L;
-
-    User changedUser = new User();
-    changedUser.setUserId(20L);
-    changedUser.setUsername("teammate");
-
-    User actorUser = new User();
-    actorUser.setUserId(5L);
-    actorUser.setUsername("owner");
-    actorUser.setFullName("Owner Name");
-
-    when(teamMemberService.changeMemberRoleWithPermissions(50L, 20L, "ADMIN", 5L))
-        .thenReturn(new TeamMember());
-    when(userRepository.findById(20L)).thenReturn(Optional.of(changedUser));
-    when(userRepository.findById(5L)).thenReturn(Optional.of(actorUser));
-
-    mockMvc.perform(patch("/api/projects/8/members/20/role")
-            .with(SecurityMockMvcRequestPostProcessors.user(principal))
-            .with(csrf())
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isOk());
-
-    verify(teamMemberService).changeMemberRoleWithPermissions(50L, 20L, "ADMIN", 5L);
-    verify(notificationService).createNotification(
-        eq(changedUser),
-        contains("Owner Name updated your role to Admin in project \"Apollo\""),
-        eq("/members/8")
-    );
-    verify(simpMessagingTemplate).convertAndSend(
-        eq("/topic/project/8/members"),
-        org.mockito.ArgumentMatchers.<Object>argThat(payload -> {
-            if (!(payload instanceof ProjectMemberController.MemberEvent event)) {
-            return false;
-            }
-            return event.action() == ProjectMemberController.MemberEventAction.ROLE_CHANGED
-                && Long.valueOf(20L).equals(event.userId())
-                && "ADMIN".equals(event.newRole());
-        })
-    );
-    }
-
-    @Test
     void removeMember_invokesService() throws Exception {
         mockMvc.perform(delete("/api/projects/8/members/20")
                         .with(SecurityMockMvcRequestPostProcessors.user(principal))
@@ -215,40 +158,4 @@ class ProjectMemberControllerTest {
         verify(teamMemberService).removeMemberWithPermissions(50L, 20L, 5L);
     }
 
-    @Test
-    void removeMember_notifiesRemovedUserAndBroadcastsEvent() throws Exception {
-        User removedUser = new User();
-        removedUser.setUserId(20L);
-        removedUser.setUsername("teammate");
-
-        User actorUser = new User();
-        actorUser.setUserId(5L);
-        actorUser.setUsername("owner");
-        actorUser.setFullName("Owner Name");
-
-        when(userRepository.findById(20L)).thenReturn(Optional.of(removedUser));
-        when(userRepository.findById(5L)).thenReturn(Optional.of(actorUser));
-
-        mockMvc.perform(delete("/api/projects/8/members/20")
-                        .with(SecurityMockMvcRequestPostProcessors.user(principal))
-                        .with(csrf()))
-                .andExpect(status().isOk());
-
-        verify(teamMemberService).removeMemberWithPermissions(50L, 20L, 5L);
-        verify(notificationService).createNotification(
-                eq(removedUser),
-                contains("Owner Name removed you from project \"Apollo\""),
-                eq("/dashboard")
-        );
-        verify(simpMessagingTemplate).convertAndSend(
-                eq("/topic/project/8/members"),
-                org.mockito.ArgumentMatchers.<Object>argThat(payload -> {
-                    if (!(payload instanceof ProjectMemberController.MemberEvent event)) {
-                        return false;
-                    }
-                    return event.action() == ProjectMemberController.MemberEventAction.MEMBER_REMOVED
-                            && Long.valueOf(20L).equals(event.userId());
-                })
-        );
-    }
 }

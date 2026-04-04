@@ -1,16 +1,16 @@
 package com.planora.backend.service;
 
-import com.planora.backend.dto.SprintboardResponseDTO;
-import com.planora.backend.dto.SprintboardTaskResponseDTO;
-import com.planora.backend.dto.SprintcolumnDTO;
-import com.planora.backend.dto.DashboardBoardDTO;
-import com.planora.backend.model.*;
-import com.planora.backend.repository.*;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.planora.backend.dto.DashboardBoardDTO;
 import com.planora.backend.dto.SprintboardResponseDTO;
 import com.planora.backend.dto.SprintboardTaskResponseDTO;
 import com.planora.backend.dto.SprintcolumnDTO;
