@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import BacklogCard from './components/BacklogCard';
 import ProductBacklogSection from './components/ProductBacklogSection';
 import api from '@/lib/axios';
+import { getUserFromToken } from '@/lib/auth';
 
 export interface TaskItem {
   id: number;
@@ -50,6 +51,7 @@ export default function SprintBacklogPage() {
   const [error, setError] = useState<string | null>(null);
   const [productTasks, setProductTasks] = useState<TaskItem[]>([]);
   const [sprints, setSprints] = useState<SprintItem[]>([]);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
   const mapRawTask = (raw: RawTask, index: number): TaskItem => ({
     id: raw.id,
@@ -74,13 +76,36 @@ export default function SprintBacklogPage() {
 
     const fetchData = async () => {
       try {
-        const [sprintsRes, tasksRes] = await Promise.all([
+        const [sprintsRes, tasksRes, membersRes] = await Promise.all([
           api.get(`/api/sprints/project/${projectId}`),
           api.get(`/api/tasks/project/${projectId}`),
+          api.get(`/api/project-members/project/${projectId}`),
         ]);
 
         const rawSprints = sprintsRes.data as { id: number; name: string; status: string; startDate?: string; endDate?: string }[];
         const rawTasks = tasksRes.data as RawTask[];
+
+        interface ProjectMember {
+          user: {
+            userId: number;
+            email?: string;
+          };
+          role: string;
+        }
+
+        const membersData = membersRes.data as ProjectMember[];
+
+        // Determine user role
+        const currentUser = getUserFromToken();
+        if (currentUser && membersData) {
+          const projectMember = membersData.find((m: ProjectMember) => 
+            m.user.userId === currentUser.userId || (currentUser.email && m.user.email?.toLowerCase() === currentUser.email.toLowerCase())
+          );
+          if (projectMember) {
+            setCurrentUserRole(projectMember.role);
+          }
+        }
+
         const mappedTasks = rawTasks.map((t, i) => mapRawTask(t, i));
 
         const backlogTasks = mappedTasks.filter((t) => !t.sprintId);
@@ -348,67 +373,76 @@ export default function SprintBacklogPage() {
   };
 
   return (
-    <div className="mobile-page-padding flex flex-col gap-6 pb-28 sm:pb-8">
-      {loading && (
-        <div className="space-y-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="skeleton rounded-xl h-32" />
-          ))}
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-[#F8F9FB]">
+      <div className="flex-1 overflow-auto p-4 sm:p-6 custom-scrollbar">
+        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 pb-28 sm:pb-8">
+          {loading && (
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="skeleton rounded-xl h-32" />
+              ))}
+            </div>
+          )}
+
+          {!loading && error && (
+            <div className="flex flex-col items-center justify-center h-64 gap-4">
+              <p className="text-red-500 text-lg font-semibold">{error}</p>
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Go to Dashboard
+              </button>
+            </div>
+          )}
+
+          {!loading && !error && (
+            <>
+              {sprints.map((sprint) => (
+                <BacklogCard
+                  key={sprint.id}
+                  sprint={sprint}
+                  projectId={projectId!}
+                  currentUserRole={currentUserRole}
+                  onDropTask={moveTaskToSprint}
+                  onCreateTask={createSprintTask}
+                  onToggleTask={toggleTaskSelection}
+                  onDeleteTask={(taskId, sprintId) => {
+                    setSprints((prev) =>
+                      prev.map((s) =>
+                        s.id === sprintId
+                          ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }
+                          : s
+                      )
+                    );
+                  }}
+                  onSprintDeleted={handleSprintDeleted}
+                />
+              ))}
+
+              <ProductBacklogSection
+                tasks={productTasks}
+                projectId={projectId!}
+                currentUserRole={currentUserRole}
+                onToggleTask={toggleTaskSelection}
+                onStoryPointsChange={updateTaskStoryPoints}
+                onCreateTask={createTask}
+                onDeleteTask={(taskId) => {
+                  setProductTasks((prev) => prev.filter((t) => t.id !== taskId));
+                }}
+                onCreateSprint={createSprint}
+                onDropTask={moveTaskToBacklog}
+                onStatusChange={handleTaskStatusChange}
+                onAssignTask={(taskId, assigneeName, assigneePhotoUrl) => {
+                  setProductTasks((prev) =>
+                    prev.map((t) => (t.id === taskId ? { ...t, assigneeName, assigneePhotoUrl } : t))
+                  );
+                }}
+              />
+            </>
+          )}
         </div>
-      )}
-
-      {!loading && error && (
-        <div className="flex flex-col items-center justify-center h-64 gap-4">
-          <p className="text-red-500 text-lg font-semibold">{error}</p>
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Go to Dashboard
-          </button>
-        </div>
-      )}
-
-      {!loading && !error && (
-        <>
-          {sprints.map((sprint) => (
-            <BacklogCard
-              key={sprint.id}
-              sprint={sprint}
-              projectId={projectId!}
-              onDropTask={moveTaskToSprint}
-              onCreateTask={createSprintTask}
-              onToggleTask={toggleTaskSelection}
-              onDeleteTask={(taskId, sprintId) => {
-                setSprints((prev) =>
-                  prev.map((s) =>
-                    s.id === sprintId
-                      ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }
-                      : s
-                  )
-                );
-              }}
-              onSprintDeleted={handleSprintDeleted}
-            />
-          ))}
-
-          <ProductBacklogSection
-            tasks={productTasks}
-            projectId={projectId!}
-            onToggleTask={toggleTaskSelection}
-            onStoryPointsChange={updateTaskStoryPoints}
-            onCreateTask={createTask}
-            onCreateSprint={createSprint}
-            onDropTask={moveTaskToBacklog}
-            onStatusChange={handleTaskStatusChange}
-            onAssignTask={(taskId, assigneeName, assigneePhotoUrl) => {
-              setProductTasks((prev) =>
-                prev.map((t) => (t.id === taskId ? { ...t, assigneeName, assigneePhotoUrl } : t))
-              );
-            }}
-          />
-        </>
-      )}
+      </div>
     </div>
   );
 }
