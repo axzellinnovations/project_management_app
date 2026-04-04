@@ -21,9 +21,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8
 
 // ── Priority helpers ──────────────────────────────────────────────────────────
 const PRIORITY_CONFIG: Record<string, { color: string; icon: React.ElementType; label: string }> = {
+    URGENT: { color: '#DC2626', icon: ArrowUp,    label: 'Urgent' },
     HIGH:   { color: '#EF4444', icon: ArrowUp,    label: 'High'   },
     MEDIUM: { color: '#F59E0B', icon: ArrowRight, label: 'Medium' },
     LOW:    { color: '#22C55E', icon: ArrowDown,  label: 'Low'    },
+    NONE:   { color: '#9CA3AF', icon: Minus,      label: 'None'   },
 };
 
 const STATUS_COLOR: Record<string, string> = {

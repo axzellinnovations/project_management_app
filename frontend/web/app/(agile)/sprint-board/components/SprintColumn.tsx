@@ -14,11 +14,13 @@ import { Plus } from 'lucide-react';
 interface SprintColumnProps {
   column: Sprintcolumn;
   onCreateTask?: (status: string) => void;
+  onOpenTask?: (taskId: number) => void;
 }
 
 export default function SprintColumn({
   column,
   onCreateTask,
+  onOpenTask,
 }: SprintColumnProps) {
   const { setNodeRef } = useDroppable({
     id: column.columnStatus,
@@ -90,6 +92,7 @@ export default function SprintColumn({
               <SprintCard
                 key={task.taskId}
                 task={task}
+                onOpenTask={onOpenTask}
               />
             ))
           ) : (

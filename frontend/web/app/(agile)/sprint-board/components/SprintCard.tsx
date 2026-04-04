@@ -9,9 +9,10 @@ import AssigneeAvatar from '../../sprint-backlog/components/AssigneeAvatar';
 
 interface SprintCardProps {
   task: SprintboardTask;
+  onOpenTask?: (taskId: number) => void;
 }
 
-export default function SprintCard({ task }: SprintCardProps) {
+export default function SprintCard({ task, onOpenTask }: SprintCardProps) {
   const {
     attributes,
     listeners,
@@ -56,6 +57,7 @@ export default function SprintCard({ task }: SprintCardProps) {
       style={style}
       {...attributes}
       {...listeners}
+      onClick={() => !isDragging && onOpenTask?.(task.taskId)}
       className={`
         rounded-xl border border-[#EAECF0] bg-white p-4 shadow-sm
         hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing

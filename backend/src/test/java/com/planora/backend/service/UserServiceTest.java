@@ -1,5 +1,6 @@
 package com.planora.backend.service;
 
+import com.planora.backend.dto.LoginRequest;
 import com.planora.backend.dto.LoginResponse;
 import com.planora.backend.model.User;
 import com.planora.backend.model.VerificationToken;
@@ -88,7 +89,7 @@ public class UserServiceTest {
 
         // Assert
         assertEquals("OTP send successfully", result);
-        verify(tokenRepository).deleteByUser(testUser);
+        verify(tokenRepository).deleteByUserAndTokenType(testUser, VerificationToken.TokenType.VERIFICATION);
         verify(tokenRepository).save(any(VerificationToken.class));
         verify(emailService).sendVerificationEmail(eq("test@example.com"), anyString());
     }
@@ -145,10 +146,12 @@ public class UserServiceTest {
         when(authentication.isAuthenticated()).thenReturn(true);
         when(authenticationManager.authenticate(any())).thenReturn(authentication);
         when(userRepository.findByEmailIgnoreCase(any())).thenReturn(Optional.of(testUser));
-        when(jwtService.generateToken(anyString(), anyString())).thenReturn("mock-jwt-token");
+        when(jwtService.generateToken(anyString(), anyString(), anyBoolean())).thenReturn("mock-jwt-token");
+
+        LoginRequest loginRequest = new LoginRequest("test@example.com", "password123", false);
 
         // Act
-        LoginResponse result = userService.loginUser(testUser);
+        LoginResponse result = userService.loginUser(loginRequest);
 
         // Assert
         assertTrue(result.isSuccess());
