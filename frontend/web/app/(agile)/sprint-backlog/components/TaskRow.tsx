@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronDown, Pencil, Trash2, UserPlus } from 'lucide-react';
 import AssigneeAvatar from './AssigneeAvatar';
+import { hexToLabelStyle } from '@/components/shared/LabelPicker';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,7 @@ export interface TaskRowTask {
   status: string;
   dueDate?: string;
   priority?: string;
+  labels?: Array<{ id: number; name: string; color?: string }>;
 }
 
 export interface TaskRowTeamMember {
@@ -231,7 +233,7 @@ function TaskRow({
 
       {/* Title */}
       <div
-        className="flex-1 min-w-0 px-2 py-2.5 flex items-center"
+        className="flex-1 min-w-0 px-2 py-2 flex flex-col justify-center"
         onClick={(e) => e.stopPropagation()}
       >
         {renaming ? (
@@ -248,12 +250,27 @@ function TaskRow({
             className="w-full border-b-2 border-[#175CD3] bg-transparent text-[13px] font-semibold text-[#101828] outline-none"
           />
         ) : (
-          <span
-            className={`text-[13px] font-semibold text-[#101828] truncate ${validStatus === 'DONE' ? 'line-through opacity-60' : ''}`}
-            onClick={(e) => { e.stopPropagation(); onOpenTask?.(task.id); }}
-          >
-            {task.title}
-          </span>
+          <>
+            <span
+              className={`text-[13px] font-semibold text-[#101828] truncate ${validStatus === 'DONE' ? 'line-through opacity-60' : ''}`}
+              onClick={(e) => { e.stopPropagation(); onOpenTask?.(task.id); }}
+            >
+              {task.title}
+            </span>
+            {task.labels && task.labels.length > 0 && (
+              <div className="flex gap-1 mt-0.5 flex-wrap">
+                {task.labels.slice(0, 3).map((l) => (
+                  <span
+                    key={l.id}
+                    style={hexToLabelStyle(l.color ?? '#6366F1')}
+                    className="px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                  >
+                    {l.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 

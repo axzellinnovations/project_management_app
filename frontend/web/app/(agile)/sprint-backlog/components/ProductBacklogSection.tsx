@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  ChevronDown,
-  ChevronRight,
-  Rocket,  Trash2,  CornerDownLeft,
+  ChevronDown,
+  ChevronRight,
+  Rocket, Trash2,
 } from 'lucide-react';
+import CreateTaskModal, { type CreateTaskData } from '@/components/shared/CreateTaskModal';
 import type { TaskItem } from '@/types';
 import api from '@/lib/axios';
 import { toast } from '@/components/ui';
@@ -25,7 +26,7 @@ interface ProductBacklogSectionProps {
   currentUserRole?: string | null;
   onToggleTask: (id: number) => void;
   onStoryPointsChange: (id: number, points: number) => void;
-  onCreateTask: (title: string) => void;
+  onCreateTask: (data: CreateTaskData) => Promise<void>;
   onDeleteTask?: (id: number) => void;
   onCreateSprint: (name: string) => void;
   onDropTask: (taskId: number) => void;
@@ -51,9 +52,8 @@ export default function ProductBacklogSection({
   onStatusChange,
 }: ProductBacklogSectionProps) {
   const [isOpen, setIsOpen] = useState(true);
-  const [showCreateTaskBox, setShowCreateTaskBox] = useState(false);
-  const [newTaskName, setNewTaskName] = useState('');
-const [taskToDeleteId, setTaskToDeleteId] = useState<number | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [taskToDeleteId, setTaskToDeleteId] = useState<number | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMemberInfo[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
@@ -62,29 +62,10 @@ const [taskToDeleteId, setTaskToDeleteId] = useState<number | null>(null);
 
   const getMemberDisplayName = (member: TeamMemberInfo) => member.user.fullName || member.user.username;
 
-  const createTaskRef = useRef<HTMLFormElement | null>(null);
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (createTaskRef.current && !createTaskRef.current.contains(event.target as Node)) {
-        setShowCreateTaskBox(false);
-        setNewTaskName('');
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    void fetchTeamMembers(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
-
   useEffect(() => {
-    if (showCreateTaskBox) {
-      createTaskRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }, [showCreateTaskBox]);
-
+    void fetchTeamMembers(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
   const fetchTeamMembers = async (showError = true) => {
     if (loadingMembers) return;
 
@@ -140,16 +121,6 @@ const [taskToDeleteId, setTaskToDeleteId] = useState<number | null>(null);
     const inProgress = tasks.filter(t => t.status === 'IN_PROGRESS' || t.status === 'IN_REVIEW').length;
     const done = tasks.filter(t => t.status === 'DONE').length;
     return { total, inProgress, done, count: tasks.length };  }, [tasks]);
-  const handleCreateTask = () => {
-    onCreateTask(newTaskName);
-    setNewTaskName('');
-    setShowCreateTaskBox(false);
-  };
-
-  const openCreateTaskBox = () => {
-    setIsOpen(true);
-    setShowCreateTaskBox(true);
-  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -169,7 +140,7 @@ const [taskToDeleteId, setTaskToDeleteId] = useState<number | null>(null);
       onDrop={handleDrop}
       className="rounded-xl border border-[#E4E7EC] bg-[#F8F9FB] p-5 shadow-sm"
     >
-<div className="flex h-10 items-center justify-between border-b border-[#EAECF0] pb-3 mb-3 gap-3">
+<div className="flex h-10 items-center border-b border-[#EAECF0] pb-3 mb-3 gap-3">
         {/* Left: collapse toggle + title + task count */}
         <div className="flex items-center gap-2 min-w-0">
           <button
@@ -200,10 +171,10 @@ const [taskToDeleteId, setTaskToDeleteId] = useState<number | null>(null);
           )}
         </div>
 
-        {/* Right: action buttons */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        {/* Action buttons */}
+        <div className="flex items-center gap-2">
           <button
-            onClick={openCreateTaskBox}
+            onClick={() => { setIsOpen(true); setShowCreateModal(true); }}
             className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-2.5 py-1.5 text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] shadow-sm transition-all active:scale-95"
           >
             + Task
@@ -245,26 +216,15 @@ const [taskToDeleteId, setTaskToDeleteId] = useState<number | null>(null);
           </div>
 
 
-          {showCreateTaskBox && (
-            <form
-              ref={createTaskRef}
-              onSubmit={(e) => { e.preventDefault(); handleCreateTask(); }}
-              className="flex items-center gap-2 rounded-xl border border-[#E4E7EC] bg-white px-3 py-2 mt-2"
-            >
-              <input
-                autoFocus
-                value={newTaskName}
-                onChange={(e) => setNewTaskName(e.target.value)}
-                placeholder="Task name..."
-                className="flex-1 bg-transparent text-[13px] text-[#101828] outline-none placeholder:text-[#98A2B3]"
-              />
-              <button type="submit" className="flex h-6 w-6 items-center justify-center rounded-lg bg-white border border-[#D0D5DD] text-[#344054] hover:bg-[#F9FAFB]">
-                <CornerDownLeft size={12} />
-              </button>
-            </form>
-          )}
+           {/* ── Create Task Modal ── */}
+          <CreateTaskModal
+            isOpen={showCreateModal}
+            onClose={() => setShowCreateModal(false)}
+            onCreateTask={onCreateTask}
+            projectId={parseInt(projectId, 10)}
+          />
 
-          {/* ── Task Delete Confirmation Modal ── */}
+          {/* ── Task Delete Confirmation Modal ── */}
           <ConfirmModal
             open={taskToDeleteId !== null}
             onCancel={() => setTaskToDeleteId(null)}

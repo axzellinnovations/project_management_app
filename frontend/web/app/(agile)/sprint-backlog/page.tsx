@@ -13,6 +13,7 @@ import { getUserFromToken } from '@/lib/auth';
 import { toast } from '@/components/ui';
 import type { TaskItem, SprintItem } from '@/types';
 import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
+import { type CreateTaskData } from '@/components/shared/CreateTaskModal';
 
 type RawTask = {
   id: number;
@@ -238,15 +239,18 @@ export default function SprintBacklogPage() {
     }
   };
 
-  const createTask = async (title: string) => {
-    const trimmed = title.trim();
+  const createTask = async (data: CreateTaskData) => {
+    const trimmed = data.title.trim();
     if (!trimmed || !projectId) return;
 
     try {
       const response = await api.post('/api/tasks', {
         projectId: Number(projectId),
         title: trimmed,
-        storyPoint: 0,
+        storyPoint: data.storyPoint ?? 0,
+        priority: data.priority ?? 'MEDIUM',
+        assigneeId: data.assigneeId,
+        labelIds: data.labelIds,
       });
       const raw = response.data as RawTask;
       const newTask: TaskItem = {

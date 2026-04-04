@@ -12,6 +12,8 @@ import {
     ArrowUp, ArrowRight, ArrowDown, Minus,
     Check, Trash2, MoreHorizontal, GripVertical
 } from 'lucide-react';
+import CreateTaskModal, { type CreateTaskData } from '@/components/shared/CreateTaskModal';
+import { hexToLabelStyle } from '@/components/shared/LabelPicker';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import EmptyState from '@/components/shared/EmptyState';
 import BottomSheet from '@/components/shared/BottomSheet';
@@ -114,7 +116,7 @@ function SwipeableTaskRow({
                 }}
                 className="relative bg-white rounded-xl border border-[#E5E7EB] cursor-pointer select-none"
             >
-                <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 min-h-[60px]">
+                <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 min-h-[52px]">
                     {/* Drag handle (desktop) */}
                     <GripVertical size={14} className="hidden sm:block text-[#D1D5DB] shrink-0 cursor-grab" />
 
@@ -140,7 +142,7 @@ function SwipeableTaskRow({
                         {task.labels && task.labels.length > 0 && (
                             <div className="flex gap-1 mt-1 flex-wrap">
                                 {task.labels.slice(0, 3).map((l) => (
-                                    <span key={l.id} className="px-1.5 py-0.5 rounded-full bg-[#EEF2FF] text-[#4F46E5] text-[10px] font-medium">
+                                    <span key={l.id} style={hexToLabelStyle(l.color ?? '#6366F1')} className="px-1.5 py-0.5 rounded-full text-[10px] font-medium">
                                         {l.name}
                                     </span>
                                 ))}
@@ -231,59 +233,6 @@ function SwipeableTaskRow({
     );
 }
 
-// ── Add Task inline row ───────────────────────────────────────────────────────
-function AddTaskRow({ onAdd }: { onAdd: (title: string) => Promise<void> }) {
-    const [editing, setEditing] = useState(false);
-    const [value, setValue] = useState('');
-    const [saving, setSaving] = useState(false);
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    const submit = async () => {
-        const trimmed = value.trim();
-        if (!trimmed) { setEditing(false); return; }
-        setSaving(true);
-        await onAdd(trimmed);
-        setValue('');
-        setSaving(false);
-        setEditing(false);
-    };
-
-    if (!editing) {
-        return (
-            <button
-                onClick={() => { setEditing(true); setTimeout(() => inputRef.current?.focus(), 50); }}
-                className="flex items-center gap-2 w-full px-4 py-3 text-[13px] text-[#6A7282] hover:text-[#155DFC] hover:bg-[#F8FAFF] rounded-xl border border-dashed border-[#D1D5DB] hover:border-[#155DFC] transition-colors"
-            >
-                <Plus size={15} />
-                Add task
-            </button>
-        );
-    }
-
-    return (
-        <div className="flex gap-2 items-center px-4 py-2 bg-white rounded-xl border border-[#A5B4FC]">
-            <input
-                ref={inputRef}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') void submit(); if (e.key === 'Escape') setEditing(false); }}
-                placeholder="Task title…"
-                className="flex-1 text-[13px] outline-none text-[#101828] placeholder-[#9CA3AF] bg-transparent"
-            />
-            <button
-                onClick={() => void submit()}
-                disabled={saving || !value.trim()}
-                className="px-3 py-1 bg-[#155DFC] text-white text-[12px] font-medium rounded-lg disabled:opacity-50 transition-opacity"
-            >
-                {saving ? '…' : 'Add'}
-            </button>
-            <button onClick={() => setEditing(false)} className="text-[#9CA3AF] hover:text-[#374151] p-1">
-                <Minus size={14} />
-            </button>
-        </div>
-    );
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function BacklogPage() {
     const searchParams = useSearchParams();
@@ -294,9 +243,8 @@ export default function BacklogPage() {
     const [error,    setError]   = useState<string | null>(null);
     const [collapsed, setCollapsed] = useState(false);
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-    const [showCreateSheet, setShowCreateSheet] = useState(false);
-    const [createTitle, setCreateTitle] = useState('');
     const [selectedTaskIdForModal, setSelectedTaskIdForModal] = useState<number | null>(null);
+    const [showCreateModal, setShowCreateModal] = useState(false);
     const [usersMap, setUsersMap] = useState<Record<string, string | null>>({});
 
     // Fetch user avatar map
@@ -330,12 +278,6 @@ export default function BacklogPage() {
 
     useEffect(() => { void loadTasks(); }, [loadTasks]);
 
-    useEffect(() => {
-        const handler = () => setShowCreateSheet(true);
-        document.addEventListener('backlog:open-create', handler);
-        return () => document.removeEventListener('backlog:open-create', handler);
-    }, []);
-
     const handleMarkDone = useCallback(async (id: number) => {
         setTasks((prev) => prev.map((t) => t.id === id ? { ...t, status: 'DONE' } : t));
         try {
@@ -355,10 +297,17 @@ export default function BacklogPage() {
         }
     }, [loadTasks]);
 
-    const handleAddTask = useCallback(async (title: string) => {
+    const handleAddTask = useCallback(async (data: CreateTaskData) => {
         if (!projectId) return;
         try {
-            const res = await api.post('/api/tasks', { projectId: parseInt(projectId, 10), title, storyPoint: 0 });
+            const res = await api.post('/api/tasks', {
+                projectId: parseInt(projectId, 10),
+                title: data.title,
+                storyPoint: data.storyPoint,
+                priority: data.priority,
+                assigneeId: data.assigneeId,
+                labelIds: data.labelIds,
+            });
             setTasks((prev) => [...prev, res.data as Task]);
         } catch (err) {
             console.error('Failed to create task:', err);
@@ -406,7 +355,7 @@ export default function BacklogPage() {
     return (
         <div className="mobile-page-padding max-w-[900px] mx-auto pb-28 sm:pb-8">
             {/* ── Header ── */}
-            <div className="sticky-section-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-4 flex items-center justify-between gap-3 flex-wrap">
+            <div className="sticky-section-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-4 flex items-center gap-3 flex-wrap">
                 <div>
                     <h1 className="text-[18px] sm:text-xl font-bold text-[#101828]">Product Backlog</h1>
                     <p className="text-[12px] text-[#6A7282] mt-0.5 hidden sm:block">
@@ -414,11 +363,11 @@ export default function BacklogPage() {
                     </p>
                 </div>
                 <button
-                    onClick={() => document.dispatchEvent(new CustomEvent('backlog:open-create'))}
+                    onClick={() => setShowCreateModal(true)}
                     className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-[#155DFC] text-white text-[13px] font-medium rounded-lg hover:bg-[#0042A8] transition-colors"
                 >
                     <Plus size={15} />
-                    Create Issue
+                    Create Task
                 </button>
             </div>
 
@@ -466,24 +415,29 @@ export default function BacklogPage() {
                                     subtitle="Create your first issue to get started."
                                 />
                             ) : (
-                                <div className="flex flex-col gap-0 divide-y divide-[#F3F4F6] px-3 pt-2">
+                                <div className="flex flex-col divide-y divide-[#F3F4F6] px-3 pt-1">
                                     {tasks.map((task) => (
-                                        <div key={task.id} className="py-1">
-                                            <SwipeableTaskRow
-                                                task={task}
-                                                onMarkDone={handleMarkDone}
-                                                onDelete={handleDelete}
-                                                onClick={setSelectedTask}
-                                                onStatusChange={handleStatusChange}
-                                                onOpenModal={setSelectedTaskIdForModal}
-                                                usersMap={usersMap}
-                                            />
-                                        </div>
+                                        <SwipeableTaskRow
+                                            key={task.id}
+                                            task={task}
+                                            onMarkDone={handleMarkDone}
+                                            onDelete={handleDelete}
+                                            onClick={setSelectedTask}
+                                            onStatusChange={handleStatusChange}
+                                            onOpenModal={setSelectedTaskIdForModal}
+                                            usersMap={usersMap}
+                                        />
                                     ))}
                                 </div>
                             )}
-                            <div className="px-3 py-3">
-                                <AddTaskRow onAdd={handleAddTask} />
+                            <div className="px-3 py-2">
+                                <button
+                                    onClick={() => setShowCreateModal(true)}
+                                    className="flex items-center gap-2 w-full px-4 py-2.5 text-[13px] text-[#6A7282] hover:text-[#155DFC] hover:bg-[#F8FAFF] rounded-xl border border-dashed border-[#D1D5DB] hover:border-[#155DFC] transition-colors"
+                                >
+                                    <Plus size={15} />
+                                    Add task
+                                </button>
                             </div>
                         </motion.div>
                     )}
@@ -493,8 +447,8 @@ export default function BacklogPage() {
             {/* ── Mobile FAB ── */}
             <button
                 className="fab md:hidden flex items-center justify-center"
-                aria-label="Create Issue"
-                onClick={() => document.dispatchEvent(new CustomEvent('backlog:open-create'))}
+                aria-label="Create Task"
+                onClick={() => setShowCreateModal(true)}
             >
                 <Plus size={24} strokeWidth={2.5} />
             </button>
@@ -578,43 +532,15 @@ export default function BacklogPage() {
                 )}
             </BottomSheet>
 
-            {/* ── Create issue bottom sheet ── */}
-            <BottomSheet
-                isOpen={showCreateSheet}
-                onClose={() => { setShowCreateSheet(false); setCreateTitle(''); }}
-                title="Create Issue"
-                snapPoint="half"
-            >
-                <div className="flex flex-col gap-4 pt-1">
-                    <input
-                        autoFocus
-                        value={createTitle}
-                        onChange={(e) => setCreateTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && createTitle.trim()) {
-                                void handleAddTask(createTitle.trim());
-                                setCreateTitle('');
-                                setShowCreateSheet(false);
-                            }
-                        }}
-                        placeholder="Issue title…"
-                        className="w-full px-4 py-3 border border-[#E5E7EB] rounded-xl text-[14px] text-[#101828] placeholder-[#9CA3AF] outline-none focus:border-[#155DFC] focus:ring-2 focus:ring-[#EAF2FF] transition-all"
-                    />
-                    <button
-                        onClick={() => {
-                            if (!createTitle.trim()) return;
-                            void handleAddTask(createTitle.trim());
-                            setCreateTitle('');
-                            setShowCreateSheet(false);
-                        }}
-                        disabled={!createTitle.trim()}
-                        className="flex items-center justify-center gap-2 w-full py-3 bg-[#155DFC] text-white rounded-xl font-medium text-[14px] disabled:opacity-50 active:scale-[0.98] transition-transform"
-                    >
-                        <Plus size={16} />
-                        Create Issue
-                    </button>
-                </div>
-            </BottomSheet>
+            {/* ── Create Task Modal ── */}
+            {projectId && (
+                <CreateTaskModal
+                    isOpen={showCreateModal}
+                    onClose={() => setShowCreateModal(false)}
+                    onCreateTask={handleAddTask}
+                    projectId={parseInt(projectId, 10)}
+                />
+            )}
 
             {/* ── Desktop Task Card Modal ── */}
             {selectedTaskIdForModal !== null && (

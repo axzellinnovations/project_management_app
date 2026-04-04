@@ -108,6 +108,14 @@ public class TaskService {
                     .orElseThrow(()-> new EntityNotFoundException("Entity not found"));
             task.setSprint(sprint);
         }
+
+        // handle labels
+        if (request.getLabelIds() != null && !request.getLabelIds().isEmpty()) {
+            for (Long labelId : request.getLabelIds()) {
+                labelRepository.findById(labelId).ifPresent(label -> task.getLabels().add(label));
+            }
+        }
+
         //validate and assign users
         Long teamId = project.getTeam().getId();
 
@@ -556,7 +564,7 @@ public class TaskService {
         // Map labels
         if(task.getLabels() != null){
             dto.setLabels(task.getLabels().stream()
-                .map(l -> new LabelDTO(l.getId(), l.getName()))
+                .map(l -> new TaskResponseDTO.LabelDTO(l.getId(), l.getName(), l.getColor()))
                 .collect(Collectors.toList()));
         }
 
