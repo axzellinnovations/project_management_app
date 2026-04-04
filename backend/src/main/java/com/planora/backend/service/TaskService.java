@@ -10,6 +10,9 @@ import org.springframework.stereotype.Service;
 import com.planora.backend.dto.CommentRequestDTO;
 import com.planora.backend.dto.TaskRequestDTO;
 import com.planora.backend.dto.TaskResponseDTO;
+import com.planora.backend.dto.TaskResponseDTO.DependencyDTO;
+import com.planora.backend.dto.TaskResponseDTO.LabelDTO;
+import com.planora.backend.dto.TaskResponseDTO.SubtaskDTO;
 import com.planora.backend.model.Comment;
 import com.planora.backend.model.Label;
 import com.planora.backend.model.Priority;
@@ -371,21 +374,21 @@ public class TaskService {
         // Map subtasks
         if(task.getSubTasks() != null){
             dto.setSubtasks(task.getSubTasks().stream()
-                .map(st -> new TaskResponseDTO.SubtaskDTO(st.getId(), st.getTitle(), st.getStatus()))
+                .map(st -> new SubtaskDTO(st.getId(), st.getTitle(), st.getStatus()))
                 .collect(Collectors.toList()));
         }
 
         // Map labels
         if(task.getLabels() != null){
             dto.setLabels(task.getLabels().stream()
-                .map(l -> new TaskResponseDTO.LabelDTO(l.getId(), l.getName()))
+                .map(l -> new LabelDTO(l.getId(), l.getName()))
                 .collect(Collectors.toList()));
         }
 
         // Map dependencies
         if(task.getDependencies() != null){
             dto.setDependencies(task.getDependencies().stream()
-                .map(d -> new TaskResponseDTO.DependencyDTO(d.getId(), d.getTitle(), "BLOCKED_BY"))
+                .map(d -> new DependencyDTO(d.getId(), d.getTitle(), "BLOCKED_BY"))
                 .collect(Collectors.toList()));
         }
 

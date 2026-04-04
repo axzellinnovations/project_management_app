@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Pencil, Trash2, MessageSquare, Pin, PinOff, FileText, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatMessage, ChatReactionSummary } from './chat';
@@ -166,6 +166,12 @@ export const ChatMessages = ({
   const [loadingFileId, setLoadingFileId] = useState<number | null>(null);
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
   const [messageToDelete, setMessageToDelete] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, typingUser, activeRoomId, isPrivateChat]);
 
   const handleDocumentClick = async (
     e: React.MouseEvent<HTMLAnchorElement>,

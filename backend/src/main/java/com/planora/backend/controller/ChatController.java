@@ -13,6 +13,8 @@ import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+import org.springframework.beans.factory.annotation.Qualifier;
+import java.util.concurrent.Executor;
 
 import com.planora.backend.model.ChatMessage;
 import com.planora.backend.model.ChatMessage.ChatType;
@@ -53,6 +55,10 @@ public class ChatController {
     private SimpMessagingTemplate simpMessagingTemplate;
 
     @Autowired
+    @Qualifier("chatTaskExecutor")
+    private Executor chatTaskExecutor;
+
+    @Autowired
     private ChatService chatService;
 
     @Autowired
@@ -83,11 +89,8 @@ public class ChatController {
     private NotificationService notificationService;
     // ─────────────────────────────────────────────────────────────────────────
 
-    // This method handles messages sent to "/app/project/{projectId}/chat.sendMessage".
-    // The return value is broadcast to all subscribers of "/topic/project/{projectId}/public".
     @MessageMapping("/project/{projectId}/chat.sendMessage")
-    @SendTo("/topic/project/{projectId}/public")
-    public ChatMessage sendMessage(@DestinationVariable Long projectId,
+    public void sendMessage(@DestinationVariable Long projectId,
                                    @Payload ChatMessage chatMessage,
                                    SimpMessageHeaderAccessor headerAccessor) {
         String username = requireAuthenticatedUsername(headerAccessor);
@@ -99,10 +102,14 @@ public class ChatController {
         chatMessage.setChatType(ChatType.GROUP);
 
         ChatMessage saved = chatService.saveMessage(chatMessage);
-        publishMentionNotifications(projectId, saved, "TEAM");
-        chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "TEAM", saved);
-        publishUnreadBadgesForProject(projectId);
-        return saved;
+        
+        simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/public", saved);
+
+        chatTaskExecutor.execute(() -> {
+            publishMentionNotifications(projectId, saved, "TEAM");
+            chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "TEAM", saved);
+            publishUnreadBadgesForProject(projectId);
+        });
     }
     @MessageMapping("/project/{projectId}/chat.sendPrivateMessage")
     public void sendPrivateMessage(@DestinationVariable Long projectId, @Payload ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
@@ -123,35 +130,30 @@ public class ChatController {
         // persist private message as well
         ChatMessage saved = chatService.saveMessage(chatMessage);
         sendPrivateMessageToConversationParticipants(projectId, Objects.requireNonNull(saved));
-        publishMentionNotifications(projectId, saved, "PRIVATE");
-        chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "PRIVATE", saved);
-        publishUnreadBadgesForProject(projectId);
+        
+        chatTaskExecutor.execute(() -> {
+            publishMentionNotifications(projectId, saved, "PRIVATE");
+            chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "PRIVATE", saved);
+            publishUnreadBadgesForProject(projectId);
 
-        // ── NOTIFICATION: persistent bell alert for the DM recipient ──────────
-        // This ensures the recipient sees a badge in the TopBar even if they are
-        // not currently on the chat page.  We resolve the recipient entity from
-        // the canonical username and skip if sender == recipient.
-        var senderUser = resolveUserByEmailOrUsername(canonicalSender);
-        var recipientUser = resolveUserByEmailOrUsername(canonicalRecipient);
-        if (recipientUser != null && senderUser != null
-                && !recipientUser.getUserId().equals(senderUser.getUserId())) {
-            // Use the sender's display name in the message text.
-            String senderDisplay = (senderUser.getFullName() != null && !senderUser.getFullName().isBlank())
-                    ? senderUser.getFullName() : senderUser.getUsername();
-            String project = projectRepository.findById(projectId)
-                    .map(p -> p.getName()).orElse("the project");
-            String notifMessage = senderDisplay + " sent you a message in \"" + project + "\"";
-            String notifLink = "/project/" + projectId + "/chat";
-            // createNotificationIfNotDuplicate prevents a flood if the same user
-            // rapidly sends multiple messages before the recipient opens the chat.
-            notificationService.createNotificationIfNotDuplicate(recipientUser, notifMessage, notifLink);
-        }
-        // ─────────────────────────────────────────────────────────────────────
+            // ── NOTIFICATION: persistent bell alert for the DM recipient ──────────
+            var senderUser = resolveUserByEmailOrUsername(canonicalSender);
+            var recipientUser = resolveUserByEmailOrUsername(canonicalRecipient);
+            if (recipientUser != null && senderUser != null
+                    && !recipientUser.getUserId().equals(senderUser.getUserId())) {
+                String senderDisplay = (senderUser.getFullName() != null && !senderUser.getFullName().isBlank())
+                        ? senderUser.getFullName() : senderUser.getUsername();
+                String project = projectRepository.findById(projectId)
+                        .map(p -> p.getName()).orElse("the project");
+                String notifMessage = senderDisplay + " sent you a message in \"" + project + "\"";
+                String notifLink = "/project/" + projectId + "/chat";
+                notificationService.createNotificationIfNotDuplicate(recipientUser, notifMessage, notifLink);
+            }
+        });
     }
 
     @MessageMapping("/project/{projectId}/room/{roomId}/send")
-    @SendTo("/topic/project/{projectId}/room/{roomId}")
-    public ChatMessage sendRoomMessage(@DestinationVariable Long projectId,
+    public void sendRoomMessage(@DestinationVariable Long projectId,
                                        @DestinationVariable Long roomId,
                                        @Payload ChatMessage chatMessage,
                                        SimpMessageHeaderAccessor headerAccessor) {
@@ -171,15 +173,17 @@ public class ChatController {
         chatMessage.setChatType(ChatType.GROUP);
 
         ChatMessage saved = chatService.saveMessage(chatMessage);
-        publishMentionNotifications(projectId, saved, "ROOM");
-        chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "ROOM", saved);
-        publishUnreadBadgesForProject(projectId);
-        return saved;
+        simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/room/" + roomId, saved);
+        
+        chatTaskExecutor.execute(() -> {
+            publishMentionNotifications(projectId, saved, "ROOM");
+            chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "ROOM", saved);
+            publishUnreadBadgesForProject(projectId);
+        });
     }
 
     @MessageMapping("/project/{projectId}/thread/{rootMessageId}/send")
-    @SendTo("/topic/project/{projectId}/thread/{rootMessageId}")
-    public ChatMessage sendThreadReply(@DestinationVariable Long projectId,
+    public void sendThreadReply(@DestinationVariable Long projectId,
                                        @DestinationVariable Long rootMessageId,
                                        @Payload ChatMessage chatMessage,
                                        SimpMessageHeaderAccessor headerAccessor) {
@@ -193,9 +197,12 @@ public class ChatController {
         }
 
         var saved = chatService.saveThreadReply(projectId, rootMessageId, chatMessage);
-        publishMentionNotifications(projectId, saved, "THREAD");
-        chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "THREAD", saved);
-        return saved;
+        simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/thread/" + rootMessageId, saved);
+        
+        chatTaskExecutor.execute(() -> {
+            publishMentionNotifications(projectId, saved, "THREAD");
+            chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "THREAD", saved);
+        });
     }
 
     @MessageMapping("/project/{projectId}/messages/{messageId}/edit")
@@ -268,8 +275,7 @@ public class ChatController {
     // It adds the username to the WebSocket session and broadcasts the join
     // message.
     @MessageMapping("/project/{projectId}/chat.addUser")
-    @SendTo("/topic/project/{projectId}/public")
-    public ChatMessage addUser(@DestinationVariable Long projectId, @Payload ChatMessage chatMessage,
+    public void addUser(@DestinationVariable Long projectId, @Payload ChatMessage chatMessage,
                                SimpMessageHeaderAccessor headerAccessor) {
         String username = requireAuthenticatedUsername(headerAccessor);
         validateProjectMembership(projectId, username);
@@ -292,7 +298,7 @@ public class ChatController {
         if (chatMessage.getType() == null) {
             chatMessage.setType(ChatMessage.MessageType.JOIN);
         }
-        return chatMessage;
+        simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/public", chatMessage);
     }
 
     @MessageMapping("/project/{projectId}/presence.ping")
@@ -401,7 +407,7 @@ public class ChatController {
 
         if (message.getRecipient() != null && !message.getRecipient().isBlank()) {
             sendPrivateMessageToConversationParticipants(projectId, message);
-            chatWebhookService.dispatchMessageEvent(projectId, eventType, "PRIVATE", message);
+            chatTaskExecutor.execute(() -> chatWebhookService.dispatchMessageEvent(projectId, eventType, "PRIVATE", message));
             return;
         }
 
@@ -416,13 +422,15 @@ public class ChatController {
             simpMessagingTemplate.convertAndSend(
                     "/topic/project/" + projectId + "/room/" + message.getRoomId(),
                     message);
-            chatWebhookService.dispatchMessageEvent(projectId, eventType, "ROOM", message);
+            chatTaskExecutor.execute(() -> chatWebhookService.dispatchMessageEvent(projectId, eventType, "ROOM", message));
             return;
         }
 
         simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/public", message);
-        chatWebhookService.dispatchMessageEvent(projectId, eventType, "TEAM", message);
-        publishUnreadBadgesForProject(projectId);
+        chatTaskExecutor.execute(() -> {
+            chatWebhookService.dispatchMessageEvent(projectId, eventType, "TEAM", message);
+            publishUnreadBadgesForProject(projectId);
+        });
     }
 
     private void publishUnreadBadgesForProject(Long projectId) {
