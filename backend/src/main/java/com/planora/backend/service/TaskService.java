@@ -30,6 +30,11 @@ import com.planora.backend.repository.LabelRepository;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.SprintRepository;
 import com.planora.backend.repository.TaskRepository;
+    
+import com.planora.backend.model.TaskAccess;
+import com.planora.backend.repository.TaskAccessRepository;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
 
@@ -62,6 +67,9 @@ public class TaskService {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private TaskAccessRepository taskAccessRepository;
 
     @Autowired
     private TaskActivityService taskActivityService;
@@ -110,6 +118,9 @@ public class TaskService {
 
         //deafult reporter is the creator
         task.setReporter(validateTeamMember(teamId, currentUserId));
+
+        // Set last modified by
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
 
         Task savedTask = taskRepository.save(task);
 
@@ -179,7 +190,8 @@ public class TaskService {
             task.setReporter(newReporter);
         }
 
-        Task saved = taskRepository.save(task);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+    Task saved = taskRepository.save(task);
         User actor = userRepository.findById(currentUserId)
                 .orElse(null);
         String actorName = actor != null ? actor.getUsername() : "Unknown";
@@ -285,6 +297,7 @@ public class TaskService {
 
         Task blocker = taskRepository.findById(blockerId).orElseThrow();
         task.getDependencies().add(blocker);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
     }
 
@@ -296,6 +309,7 @@ public class TaskService {
 
         Task blocker = taskRepository.findById(blockerId).orElseThrow();
         task.getDependencies().remove(blocker);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
     }
 
@@ -309,6 +323,7 @@ public class TaskService {
 
         Label label = labelRepository.findById(labelId).orElseThrow();
         task.getLabels().add(label);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
     }
 
@@ -320,6 +335,7 @@ public class TaskService {
 
         Label label = labelRepository.findById(labelId).orElseThrow();
         task.getLabels().remove(label);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
     }
 
@@ -337,6 +353,9 @@ public class TaskService {
         comment.setAuthor(author);
 
         commentRepository.save(comment);
+
+        task.setLastModifiedBy(author);
+        taskRepository.save(task);
 
         // Log activity
         String preview = request.getContent().length() > 60
@@ -377,6 +396,7 @@ public class TaskService {
 
         TeamMember assignee = validateTeamMember(task.getProject().getTeam().getId(), userId);
         task.setAssignee(assignee);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
 
         User actor = userRepository.findById(currentUserId).orElse(null);
@@ -391,7 +411,48 @@ public class TaskService {
         }
     }
 
-    //13. UPDATE PRIORITY
+    //13. RECORD TASK ACCESS
+    @Transactional
+    public void recordTaskAccess(Long taskId, Long currentUserId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new EntityNotFoundException("Task not found"));
+        User user = userRepository.findById(currentUserId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+
+        TaskAccess access = taskAccessRepository.findByTaskAndUser(task, user)
+                .orElse(new TaskAccess(null, task, user, null));
+        
+        taskAccessRepository.save(access);
+    }
+
+    //14. GET RECENT TASKS
+    public List<TaskResponseDTO> getRecentTasks(Long currentUserId, int limit) {
+        Pageable pageable = PageRequest.of(0, limit);
+        return taskAccessRepository.findByUserUserIdOrderByLastAccessedAtDesc(currentUserId, pageable)
+                .stream()
+                .map(access -> mapToDTO(access.getTask()))
+                .collect(Collectors.toList());
+    }
+
+    //15. GET ASSIGNED TASKS
+    public List<TaskResponseDTO> getAssignedTasks(Long currentUserId, int limit) {
+        Pageable pageable = PageRequest.of(0, limit);
+        return taskRepository.findByAssigneeUserUserIdOrderByUpdatedAtDesc(currentUserId, pageable)
+                .stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    //16. GET WORKED ON TASKS
+    public List<TaskResponseDTO> getWorkedOnTasks(Long currentUserId, int limit) {
+        Pageable pageable = PageRequest.of(0, limit);
+        return taskRepository.findTasksWorkedOnByUser(currentUserId, pageable)
+                .stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    //17. UPDATE PRIORITY
     @Transactional
     public TaskResponseDTO updatePriority(Long taskId, String priority, Long currentUserId) {
         Task task = taskRepository.findById(taskId)
@@ -399,6 +460,7 @@ public class TaskService {
         validatePermission(task.getProject().getTeam().getId(), currentUserId, TeamRole.VIEWER);
         String oldPriority = task.getPriority() != null ? task.getPriority().name() : "NONE";
         task.setPriority(Priority.valueOf(priority));
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         Task saved = taskRepository.save(task);
         User actor = userRepository.findById(currentUserId).orElse(null);
         String actorName = actor != null ? actor.getUsername() : "Unknown";

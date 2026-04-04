@@ -1,5 +1,6 @@
 package com.planora.backend.controller;
 
+import com.planora.backend.dto.DashboardBoardDTO;
 import com.planora.backend.dto.SprintboardResponseDTO;
 import com.planora.backend.dto.SprintboardTaskResponseDTO;
 import com.planora.backend.dto.SprintcolumnDTO;
@@ -16,13 +17,22 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/sprintboards")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin
 public class SprintboardController {
 
     private final SprintboardService sprintboardService;
 
     public SprintboardController(SprintboardService sprintboardService) {
         this.sprintboardService = sprintboardService;
+    }
+
+    // GET recent sprintboards for dashboard
+    @GetMapping("/user/recent")
+    public ResponseEntity<List<DashboardBoardDTO>> getRecentSprintboards(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @RequestParam(defaultValue = "20") int limit) {
+        List<DashboardBoardDTO> sprintboards = sprintboardService.getRecentSprintboardsForUser(currentUser.getUserId(), limit);
+        return new ResponseEntity<>(sprintboards, HttpStatus.OK);
     }
 
     // GET sprintboard by sprint ID
@@ -52,24 +62,13 @@ public class SprintboardController {
     @PutMapping("/tasks/{taskId}/move")
     public ResponseEntity<Void> moveTaskToColumn(
             @PathVariable Long taskId,
-            @RequestBody Map<String, Object> request,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @RequestBody Map<String, Object> request) {
         Long sprintboardId = Long.valueOf(request.get("sprintboardId").toString());
         SprintcolumnStatus newColumnStatus = SprintcolumnStatus.valueOf(request.get("newColumnStatus").toString());
 
         sprintboardService.moveTaskToColumn(taskId, sprintboardId, newColumnStatus, currentUser.getUserId());
         return new ResponseEntity<>(HttpStatus.OK);
-    }
-
-    // ADD column to sprintboard
-    @PostMapping("/{sprintboardId}/columns")
-    public ResponseEntity<SprintcolumnDTO> addColumn(
-            @PathVariable Long sprintboardId,
-            @RequestBody Map<String, String> request,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        String name = request.get("name");
-        String status = request.get("status");
-        return new ResponseEntity<>(sprintboardService.addColumnToSprintboard(sprintboardId, name, status, currentUser.getUserId()), HttpStatus.CREATED);
     }
 
     // DELETE sprintboard

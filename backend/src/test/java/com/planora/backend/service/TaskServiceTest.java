@@ -138,6 +138,7 @@ class TaskServiceTest {
         when(projectRepository.findById(10L)).thenReturn(Optional.of(project));
         when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 100L)).thenReturn(Optional.of(creator));
         when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 200L)).thenReturn(Optional.of(assignee));
+        when(userRepository.findById(100L)).thenReturn(Optional.of(creator.getUser()));
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> {
             Task saved = invocation.getArgument(0);
             saved.setId(999L);

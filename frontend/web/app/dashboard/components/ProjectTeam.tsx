@@ -1,3 +1,63 @@
+
+function TeamMember({
+    initials,
+    gradient,
+    name,
+    role,
+    dueCount,
+    tasksCompleted,
+    totalTasks,
+    percentage,
+    barColor
+}: {
+    initials: string,
+    gradient: string,
+    name: string,
+    role: string,
+    dueCount: number,
+    tasksCompleted: number,
+    totalTasks: number,
+    percentage: number,
+    barColor: string
+}) {
+    return (
+        <div className="mb-6 last:mb-0">
+            <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-arimo text-[16px]" style={{ background: gradient }}>
+                    {initials}
+                </div>
+                <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                        <div>
+                            <h4 className="font-arimo text-[14px] text-[#101828] font-normal leading-[20px]">{name}</h4>
+                            <p className="font-arimo text-[12px] text-[#6A7282]">{role}</p>
+                        </div>
+                        {dueCount > 0 ? (
+                            <span className={`text-[12px] px-2 py-1 rounded-[4px] font-arimo ${dueCount > 2 ? 'bg-[#FFEBE6] text-[#DE350B]' : 'bg-[#E3FCEF] text-[#00875A]'}`}>
+                                Due: {dueCount}
+                            </span>
+                        ) : (
+                            <span className="text-[12px] px-2 py-1 rounded-[4px] font-arimo bg-[#E3FCEF] text-[#00875A]">
+                                Due: 0
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="pl-[52px]">
+                <div className="flex justify-between text-[12px] text-[#4A5565] font-arimo mb-1">
+                    <span>{tasksCompleted}/{totalTasks} tasks</span>
+                    <span>{percentage}%</span>
+                </div>
+                <div className="w-full bg-[#F3F4F6] rounded-full h-2">
+                    <div className="h-2 rounded-full" style={{ width: `${percentage}%`, backgroundColor: barColor }}></div>
+                </div>
+            </div>
+        </div>
+    );
+}
 import MotionWrapper from './MotionWrapper';
 
 export default function ProjectTeam() {

@@ -49,6 +49,16 @@ describe('SprintBacklogPage', () => {
       if (url.includes('/api/tasks/project/')) {
         return Promise.resolve({ data: [] });
       }
+      if (url.includes('/api/project-members/project/')) {
+        return Promise.resolve({
+          data: [
+            {
+              user: { userId: 1, email: 'user@example.com' },
+              role: 'OWNER',
+            },
+          ],
+        });
+      }
       return Promise.reject(new Error('not found'));
     });
 

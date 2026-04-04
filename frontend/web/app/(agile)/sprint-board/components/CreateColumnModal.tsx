@@ -32,7 +32,7 @@ export default function CreateColumnModal({
   const statusOptions = [
     { value: 'TODO', label: 'To Do', color: 'bg-blue-500' },
     { value: 'IN_PROGRESS', label: 'In Progress', color: 'bg-amber-500' },
-    { value: 'IN_REVIEW', label: 'In Review', color: 'bg-purple-500' },
+    { value: 'IN_REVIEW', label: 'In Review', color: 'bg-sky-500' },
     { value: 'DONE', label: 'Done', color: 'bg-emerald-500' },
   ];
 
@@ -58,7 +58,7 @@ export default function CreateColumnModal({
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-[#EAECF0] bg-gray-50/50">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#155DFC]/10 flex items-center justify-center text-[#155DFC]">
+                <div className="w-10 h-10 rounded-xl bg-cu-primary/10 flex items-center justify-center text-cu-primary">
                   <Layout size={20} />
                 </div>
                 <div>
@@ -84,7 +84,7 @@ export default function CreateColumnModal({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   autoFocus
-                  className="w-full px-4 py-3 bg-white border border-[#D0D5DD] rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-[#155DFC]/10 focus:border-[#155DFC] transition-all placeholder-[#98A2B3]"
+                  className="w-full px-4 py-3 bg-white border border-[#D0D5DD] rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-cu-primary/10 focus:border-cu-primary transition-all placeholder-[#98A2B3]"
                   required
                 />
               </div>
@@ -108,12 +108,12 @@ export default function CreateColumnModal({
                       className={`
                         flex items-center gap-3 p-3 rounded-2xl border-2 transition-all text-left
                         ${status === opt.value 
-                          ? 'border-[#155DFC] bg-[#155DFC]/5 shadow-sm ring-4 ring-[#155DFC]/5' 
+                          ? 'border-cu-primary bg-cu-primary/5 shadow-sm ring-4 ring-cu-primary/5' 
                           : 'border-[#EAECF0] bg-white hover:border-[#D0D5DD]'}
                       `}
                     >
                       <div className={`w-2 h-2 rounded-full ${opt.color}`} />
-                      <span className={`text-[13px] font-bold ${status === opt.value ? 'text-[#155DFC]' : 'text-[#344054]'}`}>
+                      <span className={`text-[13px] font-bold ${status === opt.value ? 'text-cu-primary' : 'text-[#344054]'}`}>
                         {opt.label}
                       </span>
                     </button>
@@ -133,7 +133,7 @@ export default function CreateColumnModal({
                 <button
                   type="submit"
                   disabled={loading || !name.trim()}
-                  className="flex-1 px-4 py-3 bg-[#155DFC] hover:bg-[#1149C9] text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-200 transition-all active:scale-95 disabled:opacity-50 disabled:shadow-none"
+                  className="flex-1 px-4 py-3 bg-cu-primary hover:bg-cu-primary-dark text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-200 transition-all active:scale-95 disabled:opacity-50 disabled:shadow-none"
                 >
                   {loading ? (
                     <div className="flex items-center justify-center gap-2">

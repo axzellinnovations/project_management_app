@@ -1,10 +1,11 @@
 package com.planora.backend.service;
 
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
+import com.planora.backend.dto.SprintboardResponseDTO;
+import com.planora.backend.dto.SprintboardTaskResponseDTO;
+import com.planora.backend.dto.SprintcolumnDTO;
+import com.planora.backend.dto.DashboardBoardDTO;
+import com.planora.backend.model.*;
+import com.planora.backend.repository.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -98,6 +99,13 @@ public class SprintboardService {
 
     private void requireViewBoard(Long projectId, Long userId) {
         getRoleForProject(projectId, userId);
+    }
+
+    // ---------- Dashboard Boards APIs ----------
+
+    public List<DashboardBoardDTO> getRecentSprintboardsForUser(Long userId, int limit) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, limit);
+        return sprintboardRepository.findRecentSprintboardsForUser(userId, pageable);
     }
 
     // ---------- Sprintboard APIs ----------
