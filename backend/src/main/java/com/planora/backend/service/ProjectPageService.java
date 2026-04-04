@@ -10,14 +10,17 @@ import com.planora.backend.model.TeamRole;
 import com.planora.backend.repository.ProjectPageRepository;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.TeamMemberRepository;
+import com.planora.backend.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,6 +30,8 @@ public class ProjectPageService {
     private final ProjectPageRepository repository;
     private final ProjectRepository projectRepository;
     private final TeamMemberRepository teamMemberRepository;
+    private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public ProjectPage createPage(Long projectId, PageRequestDto request, Long userId) {
@@ -40,9 +45,13 @@ public class ProjectPageService {
                 .projectId(projectId)
                 .title(request.getTitle())
                 .content(request.getContent())
+            .createdByUserId(userId)
+            .updatedByUserId(userId)
                 .build();
 
-        return repository.save(page);
+        ProjectPage saved = repository.save(page);
+        notifyProjectOwnersAndAdminsOnCreate(project, userId, saved);
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -85,10 +94,18 @@ public class ProjectPageService {
         Project project = findProject(existingPage.getProjectId());
         validateProjectMembership(project.getTeam().getId(), userId, true);
 
+        String oldTitle = existingPage.getTitle();
+        Long oldUpdatedByUserId = existingPage.getUpdatedByUserId();
+
         existingPage.setTitle(request.getTitle());
         existingPage.setContent(request.getContent());
+        existingPage.setUpdatedByUserId(userId);
 
         ProjectPage updatedPage = repository.save(existingPage);
+
+        if (!Objects.equals(oldTitle, updatedPage.getTitle())) {
+            notifyImpactedStakeholdersOnRename(project, updatedPage, userId, oldTitle, oldUpdatedByUserId);
+        }
 
         PageDetailResponseDto dto = new PageDetailResponseDto();
         dto.setId(updatedPage.getId());
@@ -111,7 +128,85 @@ public class ProjectPageService {
         Project project = findProject(existingPage.getProjectId());
         validateProjectMembership(project.getTeam().getId(), userId, true);
 
+        notifyImpactedStakeholdersOnDelete(project, existingPage, userId);
+
         repository.delete(existingPage);
+    }
+
+    private void notifyProjectOwnersAndAdminsOnCreate(Project project, Long actorUserId, ProjectPage page) {
+        Set<TeamRole> roles = Set.of(TeamRole.OWNER, TeamRole.ADMIN);
+        List<TeamMember> recipients = teamMemberRepository
+                .findByTeamIdAndRoleIn(project.getTeam().getId(), roles);
+
+        String actorName = resolveActorName(actorUserId);
+        String message = actorName + " created page: " + page.getTitle();
+        String link = "/pages/" + page.getId() + "?projectId=" + project.getId();
+
+        recipients.stream()
+                .map(TeamMember::getUser)
+                .filter(Objects::nonNull)
+                .filter(user -> !user.getUserId().equals(actorUserId))
+                .forEach(user -> notificationService.createNotification(user, message, link));
+    }
+
+    private void notifyImpactedStakeholdersOnRename(Project project,
+                                                    ProjectPage page,
+                                                    Long actorUserId,
+                                                    String oldTitle,
+                                                    Long oldUpdatedByUserId) {
+        Set<Long> recipientIds = new LinkedHashSet<>();
+        if (page.getCreatedByUserId() != null) {
+            recipientIds.add(page.getCreatedByUserId());
+        }
+        if (oldUpdatedByUserId != null) {
+            recipientIds.add(oldUpdatedByUserId);
+        }
+
+        recipientIds.remove(actorUserId);
+        if (recipientIds.isEmpty()) {
+            return;
+        }
+
+        String actorName = resolveActorName(actorUserId);
+        String before = oldTitle != null ? oldTitle : "Untitled";
+        String after = page.getTitle() != null ? page.getTitle() : "Untitled";
+        String message = actorName + " renamed page from \"" + before + "\" to \"" + after + "\"";
+        String link = "/pages/" + page.getId() + "?projectId=" + project.getId();
+
+        notifyUsersByIds(recipientIds, message, link);
+    }
+
+    private void notifyImpactedStakeholdersOnDelete(Project project, ProjectPage page, Long actorUserId) {
+        Set<Long> recipientIds = new LinkedHashSet<>();
+        if (page.getCreatedByUserId() != null) {
+            recipientIds.add(page.getCreatedByUserId());
+        }
+        if (page.getUpdatedByUserId() != null) {
+            recipientIds.add(page.getUpdatedByUserId());
+        }
+
+        recipientIds.remove(actorUserId);
+        if (recipientIds.isEmpty()) {
+            return;
+        }
+
+        String actorName = resolveActorName(actorUserId);
+        String message = actorName + " deleted page: " + page.getTitle();
+        String link = "/pages?projectId=" + project.getId();
+        notifyUsersByIds(recipientIds, message, link);
+    }
+
+    private String resolveActorName(Long actorUserId) {
+        return userRepository.findById(actorUserId)
+                .map(user -> user.getFullName() != null && !user.getFullName().isBlank()
+                        ? user.getFullName()
+                        : user.getUsername())
+                .orElse("A team member");
+    }
+
+    private void notifyUsersByIds(Set<Long> recipientIds, String message, String link) {
+        userRepository.findAllById(recipientIds)
+                .forEach(user -> notificationService.createNotification(user, message, link));
     }
 
     private ProjectPage findPage(Long pageId) {

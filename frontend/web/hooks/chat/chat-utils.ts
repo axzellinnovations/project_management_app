@@ -13,6 +13,7 @@ export const localPart = (value: string): string => {
 export const isSameIdentity = (left?: string | null, right?: string | null): boolean => {
   const a = normalizeIdentity(left);
   const b = normalizeIdentity(right);
+  if (!a && !b) return true;
   if (!a || !b) return false;
   if (a === b) return true;
   return localPart(a) === localPart(b);
@@ -35,9 +36,9 @@ export const mergeMessage = (list: ChatMessage[], incoming: ChatMessage): ChatMe
   const optimistic = list.findIndex(
     item =>
       !item.id &&
-      item.sender === incoming.sender &&
+      isSameIdentity(item.sender, incoming.sender) &&
       item.content === incoming.content &&
-      item.recipient === incoming.recipient &&
+      isSameIdentity(item.recipient, incoming.recipient) &&
       item.roomId === incoming.roomId,
   );
   if (optimistic !== -1) {

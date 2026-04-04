@@ -12,17 +12,14 @@ import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.TaskRepository;
 import com.planora.backend.repository.TeamInvitationRepository;
 import com.planora.backend.repository.TeamMemberRepository;
-import com.planora.backend.repository.UserRepository;
 import com.planora.backend.service.TeamMemberService;
 import com.planora.backend.service.JWTService;
-import com.planora.backend.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
@@ -31,8 +28,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -59,12 +54,6 @@ class ProjectMemberControllerTest {
     @MockBean
     private TeamMemberService teamMemberService;
     @MockBean
-    private NotificationService notificationService;
-    @MockBean
-    private UserRepository userRepository;
-    @MockBean
-    private SimpMessagingTemplate simpMessagingTemplate;
-    @MockBean
     private JWTService jwtService;
     @MockBean
     private UserDetailsService userDetailsService;
@@ -80,10 +69,13 @@ class ProjectMemberControllerTest {
 
         project = new Project();
         project.setId(8L);
+        project.setName("Apollo");
         project.setTeam(team);
 
         User user = new User();
         user.setUserId(5L);
+        user.setUsername("owner");
+        user.setFullName("Owner Name");
         user.setEmail("owner@example.com");
         principal = new UserPrincipal(user);
 
@@ -165,4 +157,5 @@ class ProjectMemberControllerTest {
 
         verify(teamMemberService).removeMemberWithPermissions(50L, 20L, 5L);
     }
+
 }
