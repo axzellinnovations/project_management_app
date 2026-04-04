@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.planora.backend.dto.LoginRequest;
 import com.planora.backend.dto.LoginResponse;
 import com.planora.backend.dto.OtpRequest;
 import com.planora.backend.dto.ResetPasswordRequest;
@@ -44,8 +45,8 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody User user){
-        LoginResponse response = service.loginUser(user);
+    public ResponseEntity<?> login(@RequestBody LoginRequest request){
+        LoginResponse response = service.loginUser(request);
         if(response.isSuccess()){
             return new ResponseEntity<>(response, HttpStatus.OK);
         } else if("UNVERIFIED_EMAIL".equals(response.getErrorCode())) {

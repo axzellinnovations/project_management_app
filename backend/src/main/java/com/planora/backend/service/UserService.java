@@ -19,6 +19,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.planora.backend.dto.LoginRequest;
 import com.planora.backend.dto.LoginResponse;
 import com.planora.backend.model.User;
 import com.planora.backend.model.VerificationToken;
@@ -74,7 +75,7 @@ public class UserService {
 
         if (existingUser != null) {
             if (!existingUser.isVerified()) {
-                tokenRepository.deleteByUser(existingUser);
+                tokenRepository.deleteByUserAndTokenType(existingUser, VerificationToken.TokenType.VERIFICATION);
                 tokenRepository.flush();
                 user = existingUser;
             } else {
@@ -142,16 +143,16 @@ public class UserService {
     }
 
     @Transactional
-    public LoginResponse loginUser(User user) {
+    public LoginResponse loginUser(LoginRequest request) {
         try {
             Authentication authentication =
                     authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(
-                            user.getEmail().toLowerCase(),
-                            user.getPassword()));
+                            request.getEmail().toLowerCase(),
+                            request.getPassword()));
 
             if (authentication.isAuthenticated()) {
-                User authenticatedUser = userRepository.findByEmailIgnoreCase(user.getEmail().toLowerCase()).orElse(null);
-                String token = jwtService.generateToken(user.getEmail().toLowerCase(), authenticatedUser.getUsername());
+                User authenticatedUser = userRepository.findByEmailIgnoreCase(request.getEmail().toLowerCase()).orElse(null);
+                String token = jwtService.generateToken(request.getEmail().toLowerCase(), authenticatedUser.getUsername(), request.isRememberMe());
                 LoginResponse response = new LoginResponse();
                 response.setSuccess(true);
                 response.setMessage("Login successful");
@@ -197,7 +198,7 @@ public class UserService {
             return "User already verified.";
         }
 
-        tokenRepository.deleteByUser(user);
+        tokenRepository.deleteByUserAndTokenType(user, VerificationToken.TokenType.VERIFICATION);
         tokenRepository.flush();
 
         String otp = String.valueOf(new Random().nextInt(900000) + 100000);
@@ -278,7 +279,7 @@ public class UserService {
 
         user.setPassword(encoder.encode(newPassword));
         verificationToken.setUsed(true);
-        userRepository.save(user);
+        userRepository.saveAndFlush(user);
         tokenRepository.save(verificationToken);
         return true;
     }
