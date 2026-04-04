@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React from 'react';
 import { DragEndEvent } from '@dnd-kit/core';
 import { useSearchParams } from 'next/navigation';
 import DragDropProvider from './components/DragDropProvider';
@@ -10,28 +10,12 @@ import CreateTaskModal from './components/CreateTaskModal';
 import EditTaskModal from './components/EditTaskModal';
 import Sidebar from '../nav/Sidebar';
 import TopBar from '../nav/TopBar';
-// removed DateRangeFilter import per requirements
-import { Task, KanbanColumn as KanbanColumnType, TaskStatus } from './types';
-import { fetchTasksByProject, updateTaskStatus, deleteTask, createTask, updateTask } from './api';
 import { AlertCircle, Loader, CheckCircle2, Plus } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-
-const DEFAULT_COLUMN_CONFIGS: Array<{
-  status: string;
-  title: string;
-}> = [
-  { status: 'TODO', title: 'To Do' },
-  { status: 'IN_PROGRESS', title: 'In Progress' },
-  { status: 'IN_REVIEW', title: 'In Review' },
-  { status: 'DONE', title: 'Done' },
-];
-
-// status order is maintained in state so user can reorder / add columns
-
-
-// helper for moving array items
-import { arrayMove, SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import TaskCardModal from '@/app/taskcard/TaskCardModal';
+import { useKanbanBoard, DEFAULT_COLUMN_CONFIGS } from './useKanbanBoard';
 
 // wrapper to make a column draggable
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,7 +28,6 @@ function SortableColumn({ column, children, width = '350px' }: { column: any; ch
     transform: CSS.Transform.toString(transform),
     transition,
   };
-
   return (
     <div
       ref={setNodeRef}
@@ -59,245 +42,23 @@ function SortableColumn({ column, children, width = '350px' }: { column: any; ch
   );
 }
 
-
 export default function KanbanPage() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get('projectId');
 
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState<string>('');
-
-  // column config state for ordering and dynamic additions
-  const [columnConfigs, setColumnConfigs] = useState(DEFAULT_COLUMN_CONFIGS);
-
-  // Load column configs from localStorage on mount
-  useEffect(() => {
-    if (projectId) {
-      const saved = localStorage.getItem(`kanban-columns-${projectId}`);
-      if (saved) {
-        try {
-          setColumnConfigs(JSON.parse(saved));
-        } catch (e) {
-          console.error('Failed to parse saved columns', e);
-        }
-      }
-    }
-  }, [projectId]);
-
-  // Save column configs to localStorage when they change
-  useEffect(() => {
-    if (projectId) {
-      localStorage.setItem(`kanban-columns-${projectId}`, JSON.stringify(columnConfigs));
-    }
-  }, [columnConfigs, projectId]);
-
-  const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [selectedColumnStatus, setSelectedColumnStatus] = useState<string>('TODO');
-  const [isCreatingTask, setIsCreatingTask] = useState(false);
-  const [completeSuccess, setCompleteSuccess] = useState(false);
-  const [createSuccess, setCreateSuccess] = useState<string>('');
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [isUpdatingTask, setIsUpdatingTask] = useState(false);
-  // Mobile: which column is currently active in the single-column switcher view
-  const [activeMobileColumn, setActiveMobileColumn] = useState<string>(DEFAULT_COLUMN_CONFIGS[0].status);
-
-  // handlers for column interactions
-  const handleAddColumn = () => {
-    const name = prompt('Column name');
-    if (!name) return;
-    const status = name.toUpperCase().replace(/\s+/g, '_');
-    setColumnConfigs((prev) => [...prev, { status, title: name }]);
-  };
-
-  const handleColumnDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    const type = active.data.current?.type;
-    if (type === 'column') {
-      const oldIndex = columnConfigs.findIndex((c) => c.status === active.id);
-      const newIndex = columnConfigs.findIndex((c) => c.status === over?.id);
-      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-        setColumnConfigs((cols) => arrayMove(cols, oldIndex, newIndex));
-      }
-    }
-  };
-
-
-  // Fetch tasks from backend
-  const loadTasks = useCallback(async () => {
-    if (!projectId) {
-      setError('No project ID provided. Use ?projectId=<id> in URL.');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const projectIdNum = parseInt(projectId as string);
-      if (isNaN(projectIdNum)) {
-        throw new Error('Invalid project ID');
-      }
-      const fetchedTasks = await fetchTasksByProject(projectIdNum);
-      setTasks(fetchedTasks);
-    } catch (err) {
-      const errorMsg =
-        err instanceof Error ? err.message : 'Failed to load tasks';
-      setError(errorMsg);
-      console.error('Failed to fetch tasks:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
-
-  // Load tasks on mount
-  useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
-
-  // Filter tasks by date range
-  const filteredTasks = useCallback(() => {
-    if (!searchTerm.trim()) {
-      return tasks;
-    }
-    const term = searchTerm.toLowerCase();
-    return tasks.filter((task) =>
-      task.title.toLowerCase().includes(term)
-    );
-  }, [tasks, searchTerm]);
-
-  // Group tasks by status column according to columnConfigs order
-  const columns: KanbanColumnType[] = columnConfigs.map((config) => ({
-    status: config.status,
-    title: config.title,
-    tasks: filteredTasks().filter((task) => task.status === config.status),
-  }));
-
-
-  // Handle task drag and drop (existing)
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-    const type = active.data.current?.type;
-
-    if (type === 'column') {
-      handleColumnDragEnd(event);
-      return;
-    }
-
-    // task drag logic
-    const taskId = parseInt(active.id as string);
-    const newStatus = over.id as string;
-    const task = tasks.find((t) => t.id === taskId);
-
-    if (!task || task.status === newStatus) return;
-
-    setTasks((prevTasks) =>
-      prevTasks.map((t) =>
-        t.id === taskId ? { ...t, status: newStatus } : t
-      )
-    );
-
-    setUpdatingTaskId(taskId);
-    try {
-      await updateTaskStatus(taskId, newStatus);
-    } catch (err) {
-      setTasks((prevTasks) =>
-        prevTasks.map((t) =>
-          t.id === taskId ? { ...t, status: task.status } : t
-        )
-      );
-      setError(`Failed to update task status: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      console.error('Failed to update task status:', err);
-    } finally {
-      setUpdatingTaskId(null);
-    }
-  };
-
-  // Handle task deletion
-  const handleDeleteTask = async (taskId: number) => {
-    if (!confirm('Are you sure you want to delete this task?')) return;
-
-    // Optimistic delete
-    const originalTasks = tasks;
-    setTasks((prevTasks) => prevTasks.filter((t) => t.id !== taskId));
-
-    try {
-      await deleteTask(taskId);
-    } catch (err) {
-      // Revert on error
-      setTasks(originalTasks);
-      setError(`Failed to delete task: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      console.error('Failed to delete task:', err);
-    }
-  };
-
-  // Handle search term change
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
-  };
-
-  // Handle create task button click
-  const handleCreateTaskClick = (columnStatus: string) => {
-    setSelectedColumnStatus(columnStatus);
-    setIsCreateModalOpen(true);
-  };
-
-  // Handle create task submission
-  const handleCreateTask = async (taskData: Partial<Task>) => {
-    if (!projectId) return;
-
-    setIsCreatingTask(true);
-    try {
-      const newTask = await createTask(taskData);
-      setTasks((prevTasks) => [...prevTasks, newTask]);
-      setIsCreateModalOpen(false);
-      setCreateSuccess('Task created successfully!');
-      setTimeout(() => setCreateSuccess(''), 3000);
-    } catch (err) {
-      console.error('Failed to create task:', err);
-      throw err;
-    } finally {
-      setIsCreatingTask(false);
-    }
-  };
-
-  // Handle edit task button click
-  const handleEditTaskClick = (task: Task) => {
-    setEditingTask(task);
-    setIsEditModalOpen(true);
-  };
-
-  // Handle edit task submission
-  const handleUpdateTask = async (taskId: number, taskData: Partial<Task>) => {
-    setIsUpdatingTask(true);
-    try {
-      const updatedTask = await updateTask(taskId, taskData);
-      setTasks((prevTasks) =>
-        prevTasks.map((t) => (t.id === taskId ? updatedTask : t))
-      );
-      setIsEditModalOpen(false);
-      setEditingTask(null);
-      setCreateSuccess('Task updated successfully!');
-      setTimeout(() => setCreateSuccess(''), 3000);
-    } catch (err) {
-      setError(`Failed to update task: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      console.error('Failed to update task:', err);
-    } finally {
-      setIsUpdatingTask(false);
-    }
-  };
-
-  // Handle complete board
-  const handleCompleteBoard = async () => {
-    if (confirm('Are you sure you want to mark this board as complete? This action cannot be undone.')) {
-      setCompleteSuccess(true);
-      setTimeout(() => setCompleteSuccess(false), 3000);
-    }
-  };
+  const {
+    tasks, loading, error, searchTerm, columnConfigs, columns, updatingTaskId,
+    isCreateModalOpen, setIsCreateModalOpen,
+    selectedColumnStatus, setSelectedColumnStatus,
+    isCreatingTask, completeSuccess, createSuccess,
+    isEditModalOpen, setIsEditModalOpen,
+    editingTask, setEditingTask,
+    isUpdatingTask, selectedTaskIdForModal, setSelectedTaskIdForModal,
+    usersMap, activeMobileColumn, setActiveMobileColumn,
+    loadTasks, handleAddColumn, handleDragEnd, handleDeleteTask,
+    handleSearchChange, handleCreateTaskClick, handleCreateTask,
+    handleEditTaskClick, handleUpdateTask, handleCompleteBoard,
+  } = useKanbanBoard(projectId);
 
   if (!projectId) {
     return (
@@ -426,6 +187,8 @@ export default function KanbanPage() {
                         onDeleteTask={handleDeleteTask}
                         onCreateTask={handleCreateTaskClick}
                         onEditTask={handleEditTaskClick}
+                        onOpenTask={setSelectedTaskIdForModal}
+                        usersMap={usersMap}
                       />
                     </SortableColumn>
                   ))}
@@ -448,6 +211,8 @@ export default function KanbanPage() {
                       onDeleteTask={handleDeleteTask}
                       onCreateTask={handleCreateTaskClick}
                       onEditTask={handleEditTaskClick}
+                      onOpenTask={setSelectedTaskIdForModal}
+                      usersMap={usersMap}
                     />
                   ))}
               </div>
@@ -494,6 +259,13 @@ export default function KanbanPage() {
               onUpdateTask={handleUpdateTask}
               task={editingTask}
               loading={isUpdatingTask}
+            />
+          )}
+
+          {selectedTaskIdForModal !== null && (
+            <TaskCardModal
+              taskId={selectedTaskIdForModal}
+              onClose={() => { setSelectedTaskIdForModal(null); void loadTasks(); }}
             />
           )}
         </div>

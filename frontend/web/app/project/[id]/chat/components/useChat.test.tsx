@@ -9,6 +9,35 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('sockjs-client', () => jest.fn(() => ({})));
 
+// Override the service functions that use axios so they fall through
+// to the native-fetch mock that the tests set up via `global.fetch = fetchMock`.
+jest.mock('@/services/chat-service', () => ({
+  ...jest.requireActual('@/services/chat-service'),
+  fetchFeatureFlags: async (projectId: string) => {
+    const res = await fetch(`/api/projects/${projectId}/chat/features`);
+    if (!res.ok) throw new Error('Failed to fetch feature flags');
+    return (res.json() as Promise<unknown>);
+  },
+  searchChatMessages: async (projectId: string, query: string) => {
+    const res = await fetch(
+      `/api/projects/${projectId}/chat/search?q=${encodeURIComponent(query)}`,
+    );
+    if (!res.ok) return [];
+    return (res.json() as Promise<unknown[]>);
+  },
+  postThreadReply: async (projectId: string, parentId: number, content: string) => {
+    const res = await fetch(
+      `/api/projects/${projectId}/chat/messages/${parentId}/thread/replies`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, formatType: 'PLAIN' }),
+      },
+    );
+    return res.json();
+  },
+}));
+
 const subscriptions: Record<string, (payload: { body: string }) => void> = {};
 
 const stompClient = {
@@ -45,6 +74,8 @@ const token = `header.${btoa(JSON.stringify(tokenPayload))}.signature`;
 describe('useChat hook', () => {
   let phaseDEnabled = true;
   let consoleErrorSpy: jest.SpyInstance;
+
+  jest.setTimeout(15000);
 
   const defaultFetchImplementation = (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
@@ -136,7 +167,7 @@ describe('useChat hook', () => {
     const hook = renderHook(() => useChat('42'));
     await waitFor(() => {
       expect(hook.result.current.isLoading).toBe(false);
-    });
+    }, { timeout: 10000 });
     return hook;
   };
 

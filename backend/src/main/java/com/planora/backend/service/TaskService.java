@@ -16,6 +16,7 @@ import com.planora.backend.model.Priority;
 import com.planora.backend.model.Project;
 import com.planora.backend.model.Sprint;
 import com.planora.backend.model.Task;
+import com.planora.backend.model.TaskActivityType;
 import com.planora.backend.model.TeamMember;
 import com.planora.backend.model.TeamRole;
 import com.planora.backend.model.User;
@@ -24,6 +25,7 @@ import com.planora.backend.repository.LabelRepository;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.SprintRepository;
 import com.planora.backend.repository.TaskRepository;
+    
 import com.planora.backend.model.TaskAccess;
 import com.planora.backend.repository.TaskAccessRepository;
 import org.springframework.data.domain.PageRequest;
@@ -63,6 +65,9 @@ public class TaskService {
 
     @Autowired
     private TaskAccessRepository taskAccessRepository;
+
+    @Autowired
+    private TaskActivityService taskActivityService;
 
 
     // 1. CREATE TASK
@@ -114,6 +119,13 @@ public class TaskService {
 
         Task savedTask = taskRepository.save(task);
 
+        // Log activity using the reporter that was already resolved above
+        String actorName = savedTask.getReporter() != null
+                ? savedTask.getReporter().getUser().getUsername()
+                : "System";
+        taskActivityService.logActivity(savedTask.getId(), TaskActivityType.TASK_CREATED,
+                actorName, "Task created: " + savedTask.getTitle());
+
         // Notify assignee if set and is not the creator
         if (task.getAssignee() != null && !task.getAssignee().getUser().getUserId().equals(currentUserId)) {
             String message = "You were assigned to a new task: " + task.getTitle();
@@ -144,6 +156,10 @@ public class TaskService {
         //validate permission
         validatePermission(teamId, currentUserId, TeamRole.VIEWER);
 
+        // Track old values for activity logging
+        String oldStatus = task.getStatus();
+        Priority oldPriority = task.getPriority();
+
         //update fields-basic
         if(request.getTitle() != null) task.setTitle(request.getTitle());
         if(request.getDescription() != null) task.setDescription(request.getDescription());
@@ -170,7 +186,23 @@ public class TaskService {
         }
 
         task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
-        return mapToDTO(taskRepository.save(task));
+    Task saved = taskRepository.save(task);
+        User actor = userRepository.findById(currentUserId)
+                .orElse(null);
+        String actorName = actor != null ? actor.getUsername() : "Unknown";
+
+        if (request.getStatus() != null && !request.getStatus().equals(oldStatus)) {
+            taskActivityService.logActivity(saved.getId(), TaskActivityType.STATUS_CHANGED,
+                    actorName, "Status changed from " + oldStatus + " to " + request.getStatus());
+        }
+        if (request.getPriority() != null) {
+            String oldPriorityName = oldPriority != null ? oldPriority.name() : "NONE";
+            if (!request.getPriority().equals(oldPriorityName)) {
+                taskActivityService.logActivity(saved.getId(), TaskActivityType.PRIORITY_CHANGED,
+                        actorName, "Priority changed from " + oldPriorityName + " to " + request.getPriority());
+            }
+        }
+        return mapToDTO(saved);
     }
 
     //4. DELETE TASK
@@ -223,8 +255,14 @@ public class TaskService {
         //link parent-child manually
         Task child = taskRepository.findById(childDTO.getId()).orElseThrow();
         child.setParentTask(parent);
+        Task savedChild = taskRepository.save(child);
 
-        return mapToDTO(taskRepository.save(child));
+        User actor = userRepository.findById(currentUserId).orElse(null);
+        String actorName = actor != null ? actor.getUsername() : "Unknown";
+        taskActivityService.logActivity(parentId, TaskActivityType.SUBTASK_ADDED,
+                actorName, actorName + " added subtask: " + savedChild.getTitle());
+
+        return mapToDTO(savedChild);
     }
 
     //DEPENDENCY
@@ -297,6 +335,13 @@ public class TaskService {
         task.setLastModifiedBy(author);
         taskRepository.save(task);
 
+        // Log activity
+        String preview = request.getContent().length() > 60
+                ? request.getContent().substring(0, 60) + "…"
+                : request.getContent();
+        taskActivityService.logActivity(taskId, TaskActivityType.COMMENT_ADDED,
+                author.getUsername(), author.getUsername() + " commented: " + preview);
+
         // Notify assignee if the comment author is not the assignee
         if (task.getAssignee() != null && !task.getAssignee().getUser().getUserId().equals(currentUserId)) {
             String message = author.getUsername() + " commented on task: " + task.getTitle();
@@ -331,6 +376,11 @@ public class TaskService {
         task.setAssignee(assignee);
         task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
+
+        User actor = userRepository.findById(currentUserId).orElse(null);
+        String actorName = actor != null ? actor.getUsername() : "Unknown";
+        taskActivityService.logActivity(task.getId(), TaskActivityType.ASSIGNEE_CHANGED,
+                actorName, actorName + " assigned task to " + assignee.getUser().getUsername());
 
         if (!userId.equals(currentUserId)) {
             String message = "You were assigned to task: " + task.getTitle();
@@ -378,6 +428,23 @@ public class TaskService {
                 .stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
+    }
+
+    //17. UPDATE PRIORITY
+    @Transactional
+    public TaskResponseDTO updatePriority(Long taskId, String priority, Long currentUserId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new EntityNotFoundException("Task not found"));
+        validatePermission(task.getProject().getTeam().getId(), currentUserId, TeamRole.VIEWER);
+        String oldPriority = task.getPriority() != null ? task.getPriority().name() : "NONE";
+        task.setPriority(Priority.valueOf(priority));
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+        Task saved = taskRepository.save(task);
+        User actor = userRepository.findById(currentUserId).orElse(null);
+        String actorName = actor != null ? actor.getUsername() : "Unknown";
+        taskActivityService.logActivity(saved.getId(), TaskActivityType.PRIORITY_CHANGED,
+                actorName, "Priority changed from " + oldPriority + " to " + priority);
+        return mapToDTO(saved);
     }
 
     //---HELPER-01--- : For Permission Checking ---
@@ -447,6 +514,15 @@ public class TaskService {
         if(task.getDependencies() != null){
             dto.setDependencies(task.getDependencies().stream()
                 .map(d -> new TaskResponseDTO.DependencyDTO(d.getId(), d.getTitle(), "BLOCKED_BY"))
+                .collect(Collectors.toList()));
+        }
+
+        // Map attachments
+        if(task.getAttachments() != null){
+            dto.setAttachments(task.getAttachments().stream()
+                .map(a -> new TaskResponseDTO.AttachmentDTO(
+                    a.getId(), a.getFileName(), a.getContentType(),
+                    a.getFileSize(), a.getUploadedBy().getUsername()))
                 .collect(Collectors.toList()));
         }
 

@@ -1,18 +1,41 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task } from '../types';
-import { Flag, User, Calendar, Trash2, Edit2 } from 'lucide-react';
+import { Calendar, Trash2, Edit2 } from 'lucide-react';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+
+function resolveUrl(url?: string | null) {
+    if (!url) return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return `${API_BASE_URL}${url}`;
+}
 
 interface KanbanCardProps {
   task: Task;
   onDelete?: (taskId: number) => void;
   onEdit?: (task: Task) => void;
+  onOpenTask?: (taskId: number) => void;
+  usersMap?: Record<string, string | null>;
 }
 
-export default function KanbanCard({ task, onDelete, onEdit }: KanbanCardProps) {
+export default function KanbanCard({ task, onDelete, onEdit, onOpenTask, usersMap }: KanbanCardProps) {
+  const avatarUrl = task.assigneeName ? resolveUrl(usersMap?.[task.assigneeName] ?? null) : null;
+  const completedSubtasks = task.subtasks?.filter((s) => s.status === 'DONE').length ?? 0;
+  const totalSubtasks = task.subtasks?.length ?? 0;
+
+  const priorityStyle: Record<string, { dot: string; text: string; bg: string }> = {
+    URGENT: { dot: 'bg-red-500', text: 'text-red-600', bg: 'bg-red-50' },
+    HIGH:   { dot: 'bg-orange-500', text: 'text-orange-600', bg: 'bg-orange-50' },
+    MEDIUM: { dot: 'bg-amber-400', text: 'text-amber-600', bg: 'bg-amber-50' },
+    LOW:    { dot: 'bg-gray-400', text: 'text-gray-500', bg: 'bg-gray-100' },
+  };
+  const pStyle = task.priority ? (priorityStyle[task.priority] ?? priorityStyle.LOW) : null;
+
   const {
     attributes,
     listeners,
@@ -45,33 +68,6 @@ export default function KanbanCard({ task, onDelete, onEdit }: KanbanCardProps) 
     }
   };
 
-  // Get priority color
-  const getPriorityColor = (priority?: string) => {
-    switch (priority?.toUpperCase()) {
-      case 'URGENT':
-        return 'bg-red-100 text-red-700 border-red-300';
-      case 'HIGH':
-        return 'bg-orange-100 text-orange-700 border-orange-300';
-      case 'MEDIUM':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-300';
-      case 'LOW':
-        return 'bg-green-100 text-green-700 border-green-300';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-300';
-    }
-  };
-
-  // Get initials from assignee name
-  const getInitials = (name?: string) => {
-    if (!name) return '?';
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
   const dueDateFormatted = formatDate(task.dueDate);
   const isOverdue =
     task.dueDate &&
@@ -84,12 +80,21 @@ export default function KanbanCard({ task, onDelete, onEdit }: KanbanCardProps) 
       style={style}
       {...attributes}
       {...listeners}
-      className={`
+      onClick={() => !isDragging && onOpenTask && onOpenTask(task.id)}
+    className={`
         rounded-lg border border-gray-200 bg-white p-3 shadow-sm
         hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing
         ${isDragging ? 'ring-2 ring-blue-400' : ''}
       `}
     >
+      {/* Priority badge */}
+      {pStyle && task.priority && (
+        <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold mb-1.5 ${pStyle.text} ${pStyle.bg}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${pStyle.dot}`} />
+          {task.priority}
+        </div>
+      )}
+
       {/* Title */}
       <p className="text-sm font-medium text-gray-800 line-clamp-2 mb-2">
         {task.title}
@@ -109,6 +114,32 @@ export default function KanbanCard({ task, onDelete, onEdit }: KanbanCardProps) 
       {task.storyPoint && task.storyPoint > 0 && (
         <div className="inline-block px-2 py-1 rounded text-xs font-semibold bg-blue-100 text-blue-700 mb-2">
           {task.storyPoint}
+        </div>
+      )}
+
+      {/* Assignee + Subtask row */}
+      {(task.assigneeName || totalSubtasks > 0) && (
+        <div className="flex items-center justify-between mt-2">
+          {task.assigneeName ? (
+            <div className="flex items-center gap-1.5">
+              <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center overflow-hidden">
+                {avatarUrl ? (
+                  <Image src={avatarUrl} alt={task.assigneeName} width={20} height={20} className="w-full h-full object-cover" unoptimized />
+                ) : (
+                  task.assigneeName.charAt(0).toUpperCase()
+                )}
+              </div>
+              <span className="text-[11px] text-gray-500 truncate max-w-[80px]">{task.assigneeName}</span>
+            </div>
+          ) : <span />}
+          {totalSubtasks > 0 && (
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-gray-500 font-medium">{completedSubtasks}/{totalSubtasks}</span>
+              <div className="w-14 h-1 rounded-full bg-gray-200 overflow-hidden">
+                <div className="h-full rounded-full bg-blue-500" style={{ width: `${totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0}%` }} />
+              </div>
+            </div>
+          )}
         </div>
       )}
 

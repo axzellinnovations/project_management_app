@@ -37,6 +37,7 @@ public class TaskResponseDTO {
     private List<SubtaskDTO> subtasks;
     private List<LabelDTO> labels;
     private List<DependencyDTO> dependencies;
+    private List<AttachmentDTO> attachments;
 
     @Data
     @AllArgsConstructor
@@ -62,5 +63,16 @@ public class TaskResponseDTO {
         private Long id;
         private String title;
         private String relation;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class AttachmentDTO {
+        private Long id;
+        private String fileName;
+        private String contentType;
+        private Long fileSize;
+        private String uploadedByName;
     }
 }

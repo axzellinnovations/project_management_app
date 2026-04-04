@@ -12,7 +12,7 @@ import java.util.*;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@ToString(exclude = {"project", "sprint", "kanbanColumn", "assignee", "reporter", "parentTask", "subTasks", "labels", "comments", "dependencies", "dependents"}) // Prevent infinite loops in logs
+@ToString(exclude = {"project", "sprint", "kanbanColumn", "assignee", "reporter", "parentTask", "subTasks", "labels", "comments", "dependencies", "dependents", "attachments"}) // Prevent infinite loops in logs
 @Table(name = "tasks")
 public class Task {
     @Id
@@ -93,6 +93,9 @@ public class Task {
 
     @ManyToMany(mappedBy = "dependencies", fetch = FetchType.LAZY)
     private Set<Task> dependents = new HashSet<>();
+
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<TaskAttachment> attachments = new ArrayList<>();
 
     @Override
     public boolean equals(Object o) {

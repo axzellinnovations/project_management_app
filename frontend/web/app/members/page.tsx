@@ -470,7 +470,7 @@ export default function MembersPage() {
                         alt={m.user.fullName || m.user.email}
                         width={48}
                         height={48}
-                        unoptimized
+                        unoptimized={true}
                         className="w-12 h-12 rounded-2xl object-cover"
                         onError={() =>
                           setImgError((errs) => ({

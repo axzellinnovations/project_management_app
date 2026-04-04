@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   MoreHorizontal,
@@ -10,11 +12,12 @@ import {
   Check,
   Trash2,
   UserPlus,
-  Rocket,
   X,
+  Rocket,
   Clock,
+  CornerDownLeft,
 } from 'lucide-react';
-import type { SprintItem } from '../page';
+import type { SprintItem, TaskItem } from '../page';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
 import api from '@/lib/axios';
 import AssigneeAvatar from './AssigneeAvatar';
@@ -30,6 +33,8 @@ interface BacklogCardProps {
   onDropTask: (taskId: number, sprintId: number) => void;
   onCreateTask: (title: string, sprintId: number) => void;
   onDeleteTask: (taskId: number, sprintId: number) => void;
+  onToggleTask: (taskId: number) => void;
+  onSprintDeleted: (sprintId: number, tasks: TaskItem[]) => void;
 }
 
 type SprintStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
@@ -58,7 +63,7 @@ interface LocalSprintTask {
   assigneePhotoUrl?: string | null;
   status: SprintStatus;
   startDate: string;
-  endDate: string;
+  dueDate: string;
   priority: 'Low' | 'Medium' | 'High' | 'Critical';
   subtasks: string;
 }
@@ -70,7 +75,215 @@ const DURATION_PRESETS = [
   { label: '1 Month', days: 30 },
 ];
 
-export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTask, onDeleteTask }: BacklogCardProps) {
+// ── Reusable Confirmation Modal ──────────────────────────────────────────────
+interface ConfirmModalProps {
+  open: boolean;
+  variant: 'danger' | 'warning' | 'success';
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  loading?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ConfirmModal({
+  open,
+  variant,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel = 'Cancel',
+  loading = false,
+  onConfirm,
+  onCancel,
+}: ConfirmModalProps) {
+  if (!open) return null;
+
+  const variantConfig = {
+    danger: {
+      iconBg: 'bg-[#FEF3F2]',
+      iconColor: 'text-[#D92D20]',
+      icon: <Trash2 size={22} />,
+      btnClass: 'bg-[#D92D20] hover:bg-[#B42318] text-white',
+      borderColor: 'border-[#FDA29B]',
+    },
+    warning: {
+      iconBg: 'bg-[#FFFAEB]',
+      iconColor: 'text-[#B54708]',
+      icon: <AlertTriangle size={22} />,
+      btnClass: 'bg-[#DC6803] hover:bg-[#B54708] text-white',
+      borderColor: 'border-[#FEDF89]',
+    },
+    success: {
+      iconBg: 'bg-[#ECFDF3]',
+      iconColor: 'text-[#027A48]',
+      icon: <CheckCircle2 size={22} />,
+      btnClass: 'bg-[#039855] hover:bg-[#027A48] text-white',
+      borderColor: 'border-[#A6F4C5]',
+    },
+  };
+
+  const cfg = variantConfig[variant];
+
+  return (
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(16, 24, 40, 0.6)', backdropFilter: 'blur(4px)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div
+        className="relative w-full max-w-sm mx-4 rounded-2xl border border-[#E4E7EC] bg-white shadow-2xl"
+        style={{ animation: 'confirmSlideIn 0.2s cubic-bezier(0.34,1.56,0.64,1) both' }}
+      >
+        {/* Close */}
+        <button
+          onClick={onCancel}
+          className="absolute right-4 top-4 rounded-lg p-1 text-[#98A2B3] hover:text-[#344054] hover:bg-[#F2F4F7] transition-all duration-150"
+        >
+          <X size={16} />
+        </button>
+
+        <div className="p-6">
+          {/* Icon */}
+          <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl border ${cfg.borderColor} ${cfg.iconBg} ${cfg.iconColor}`}>
+            {cfg.icon}
+          </div>
+
+          {/* Title & Message */}
+          <h3 className="text-[16px] font-bold text-[#101828] mb-1">{title}</h3>
+          <p className="text-[13.5px] text-[#475467] leading-relaxed">{message}</p>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2.5 border-t border-[#F2F4F7] px-6 py-4">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="rounded-lg border border-[#D0D5DD] bg-white px-4 py-2.5 text-[13.5px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-all duration-150 disabled:opacity-50"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-[13.5px] font-semibold shadow-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${cfg.btnClass}`}
+          >
+            {loading && <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
+            {confirmLabel}
+          </button>
+        </div>
+
+        <style>{`
+          @keyframes confirmSlideIn {
+            from { opacity: 0; transform: scale(0.92) translateY(10px); }
+            to   { opacity: 1; transform: scale(1)   translateY(0); }
+          }
+        `}</style>
+      </div>
+    </div>
+  );
+}
+
+// ── Edit Sprint Modal ────────────────────────────────────────────────────────
+interface EditSprintModalProps {
+  open: boolean;
+  sprintName: string;
+  loading: boolean;
+  onConfirm: (name: string) => void;
+  onCancel: () => void;
+}
+
+function EditSprintModal({ open, sprintName, loading, onConfirm, onCancel }: EditSprintModalProps) {
+  const [name, setName] = useState(sprintName);
+  const [prevName, setPrevName] = useState(sprintName);
+
+  if (sprintName !== prevName) {
+    setName(sprintName);
+    setPrevName(sprintName);
+  }
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(16, 24, 40, 0.6)', backdropFilter: 'blur(4px)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div
+        className="relative w-full max-w-sm mx-4 rounded-2xl border border-[#E4E7EC] bg-white shadow-2xl"
+        style={{ animation: 'confirmSlideIn 0.2s cubic-bezier(0.34,1.56,0.64,1) both' }}
+      >
+        <button
+          onClick={onCancel}
+          className="absolute right-4 top-4 rounded-lg p-1 text-[#98A2B3] hover:text-[#344054] hover:bg-[#F2F4F7] transition-all duration-150"
+        >
+          <X size={16} />
+        </button>
+
+        <div className="p-6">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-[#B2DDFF] bg-[#EFF8FF] text-[#175CD3]">
+            <Pencil size={20} />
+          </div>
+          <h3 className="text-[16px] font-bold text-[#101828] mb-1">Edit Sprint</h3>
+          <p className="text-[13px] text-[#475467] mb-4">Update the sprint name.</p>
+
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) onConfirm(name.trim()); }}
+            autoFocus
+            className="w-full rounded-lg border border-[#D0D5DD] px-3 py-2.5 text-[14px] text-[#101828] outline-none focus:border-[#175CD3] focus:ring-2 focus:ring-[#175CD3]/20 transition-all duration-150"
+            placeholder="Sprint name..."
+          />
+        </div>
+
+        <div className="flex items-center justify-end gap-2.5 border-t border-[#F2F4F7] px-6 py-4">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="rounded-lg border border-[#D0D5DD] bg-white px-4 py-2.5 text-[13.5px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-all duration-150 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => { if (name.trim()) onConfirm(name.trim()); }}
+            disabled={loading || !name.trim()}
+            className="flex items-center gap-2 rounded-lg bg-[#175CD3] hover:bg-[#1849A9] px-4 py-2.5 text-[13.5px] font-semibold text-white shadow-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading && <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />}
+            Save Changes
+          </button>
+        </div>
+
+        <style>{`
+          @keyframes confirmSlideIn {
+            from { opacity: 0; transform: scale(0.92) translateY(10px); }
+            to   { opacity: 1; transform: scale(1)   translateY(0); }
+          }
+        `}</style>
+      </div>
+    </div>
+  );
+}
+
+// ── Utility: check if due date is within N days ──────────────────────────────
+function isDueWithinDays(dueDateStr: string, days: number): boolean {
+  if (!dueDateStr) return false;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const due = new Date(dueDateStr);
+  due.setHours(0, 0, 0, 0);
+  const diffMs = due.getTime() - now.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  return diffDays <= days;
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
+export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTask, onDeleteTask, onToggleTask, onSprintDeleted }: BacklogCardProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [showSprintMenu, setShowSprintMenu] = useState(false);
@@ -91,25 +304,23 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
   const [startingSprintLoading, setStartingSprintLoading] = useState(false);
   const [startSprintError, setStartSprintError] = useState<string>('');
 
+  // Confirmation modals state
+  const [confirmDeleteSprint, setConfirmDeleteSprint] = useState(false);
+  const [confirmCompleteSprint, setConfirmCompleteSprint] = useState(false);
+  const [deletingSprintLoading, setDeletingSprintLoading] = useState(false);
+  const [completingSprintLoading, setCompletingSprintLoading] = useState(false);
+
+  // Edit sprint modal state
+  const [showEditSprintModal, setShowEditSprintModal] = useState(false);
+  const [editingSprintLoading, setEditingSprintLoading] = useState(false);
+
   const sprintMenuRef = useRef<HTMLDivElement | null>(null);
   const assignMenuRef = useRef<HTMLDivElement | null>(null);
+  const statusMenuRef = useRef<HTMLDivElement | null>(null);
+  const createTaskRef = useRef<HTMLFormElement | null>(null);
   const dateInputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
 
   const [localTasks, setLocalTasks] = useState<LocalSprintTask[]>([]);
-
-  const assigneeAvatarMap = useMemo(() => {
-    const avatarMap = new Map<string, string | null>();
-
-    teamMembers.forEach((member) => {
-      const keys = [member.user.fullName, member.user.username]
-        .map((value) => value?.trim().toLowerCase())
-        .filter((value): value is string => Boolean(value));
-
-      keys.forEach((key) => avatarMap.set(key, member.user.profilePicUrl ?? null));
-    });
-
-    return avatarMap;
-  }, [teamMembers]);
 
   const getMemberDisplayName = (member: TeamMemberInfo) => member.user.fullName || member.user.username;
 
@@ -125,14 +336,14 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
           taskNo: task.taskNo,
           title: task.title,
           storyPoints: existing?.storyPoints ?? task.storyPoints,
-          selected: task.selected, 
+          selected: task.selected,
           assigneeName: existing?.assigneeName ?? task.assigneeName ?? 'Unassigned',
           assigneePhotoUrl: existing?.assigneePhotoUrl ?? task.assigneePhotoUrl ?? null,
-          status: existing?.status ?? (task.status as SprintStatus) ?? 'TODO',       
-          startDate: existing?.startDate ?? task.startDate ?? '',  
-          endDate: existing?.endDate ?? task.dueDate ?? '',   
-          priority: existing?.priority ?? 'Medium',   
-          subtasks: existing?.subtasks ?? '', 
+          status: existing?.status ?? (task.status as SprintStatus) ?? 'TODO',
+          startDate: task.startDate ?? existing?.startDate ?? '',
+          dueDate: task.dueDate ?? existing?.dueDate ?? '',
+          priority: existing?.priority ?? 'Medium',
+          subtasks: existing?.subtasks ?? '',
         };
       });
     });
@@ -156,6 +367,19 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
         !assignMenuRef.current.contains(event.target as Node)
       ) {
         setAssignMenuTaskId(null);
+      }
+      if (
+        statusMenuRef.current &&
+        !statusMenuRef.current.contains(event.target as Node)
+      ) {
+        setStatusMenuTaskId(null);
+      }
+      if (
+        createTaskRef.current &&
+        !createTaskRef.current.contains(event.target as Node)
+      ) {
+        setShowCreateTaskBox(false);
+        setNewTaskName('');
       }
     };
 
@@ -197,7 +421,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
     try {
       await api.put(`/api/tasks/${taskId}`, payload);
     } catch {
-      alert('Failed to update task.');
+      // silent fail — local state already updated
     }
   };
 
@@ -214,9 +438,9 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
 
   const handleDueDateChange = async (taskId: number, date: string) => {
     const normalizedDate = date ? String(date).slice(0, 10) : '';
-    const previousDate = localTasks.find((task) => task.id === taskId)?.endDate ?? '';
+    const previousDate = localTasks.find((task) => task.id === taskId)?.dueDate ?? '';
 
-    updateTask(taskId, { endDate: normalizedDate });
+    updateTask(taskId, { dueDate: normalizedDate });
 
     try {
       const response = await api.put(`/api/tasks/${taskId}`, {
@@ -227,10 +451,9 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
         ? String(response.data.dueDate).slice(0, 10)
         : '';
 
-      updateTask(taskId, { endDate: serverDueDate });
+      updateTask(taskId, { dueDate: serverDueDate });
     } catch {
-      updateTask(taskId, { endDate: previousDate });
-      alert('Failed to update due date.');
+      updateTask(taskId, { dueDate: previousDate });
     }
   };
 
@@ -245,21 +468,39 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
   };
 
   const handleEditSprint = () => {
-    alert(`Edit ${sprint.name}`);
     setShowSprintMenu(false);
+    setShowEditSprintModal(true);
   };
 
-  const handleCompleteSprint = async () => {
-    if (window.confirm(`Are you sure you want to complete ${sprint.name}?`)) {
-      try {
-        await api.put(`/api/sprints/${sprint.id}`, { status: 'COMPLETED' });
-        window.location.reload();
-      } catch (err: unknown) {
-        const error = err as { response?: { data?: { message?: string } } };
-        alert(error.response?.data?.message || 'Failed to complete sprint.');
-      }
+  const confirmEditSprint = async (newName: string) => {
+    setEditingSprintLoading(true);
+    try {
+      await api.put(`/api/sprints/${sprint.id}`, { name: newName });
+      setShowEditSprintModal(false);
+      window.location.reload();
+    } catch {
+      // silently fail
+    } finally {
+      setEditingSprintLoading(false);
     }
+  };
+
+  const handleCompleteSprint = () => {
     setShowSprintMenu(false);
+    setConfirmCompleteSprint(true);
+  };
+
+  const doCompleteSprint = async () => {
+    setCompletingSprintLoading(true);
+    try {
+      await api.put(`/api/sprints/${sprint.id}`, { status: 'COMPLETED' });
+      setConfirmCompleteSprint(false);
+      window.location.reload();
+    } catch {
+      setConfirmCompleteSprint(false);
+    } finally {
+      setCompletingSprintLoading(false);
+    }
   };
 
   const handleStartSprint = () => {
@@ -318,11 +559,25 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
   };
 
   const handleDeleteSprint = () => {
-    if (window.confirm(`Are you sure you want to delete ${sprint.name}?`)) {
-       // Logic for delete sprint
-       api.delete(`/api/sprints/${sprint.id}`).then(() => window.location.reload());
-    }
     setShowSprintMenu(false);
+    setConfirmDeleteSprint(true);
+  };
+
+  const doDeleteSprint = async () => {
+    setDeletingSprintLoading(true);
+    try {
+      // Move all sprint tasks to backlog before deleting
+      await Promise.all(
+        localTasks.map((task) => api.put(`/api/tasks/${task.id}`, { sprintId: null }))
+      );
+      await api.delete(`/api/sprints/${sprint.id}`);
+      setConfirmDeleteSprint(false);
+      onSprintDeleted(sprint.id, sprint.tasks);
+    } catch {
+      setConfirmDeleteSprint(false);
+    } finally {
+      setDeletingSprintLoading(false);
+    }
   };
 
   const handleRenameTask = async (taskId: number) => {
@@ -334,7 +589,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
         prev.map((t) => (t.id === taskId ? { ...t, title: trimmed } : t))
       );
     } catch {
-      alert('Failed to rename task.');
+      // silent
     } finally {
       setRenamingTaskId(null);
       setRenameValue('');
@@ -347,7 +602,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
       setLocalTasks((prev) => prev.filter((t) => t.id !== taskId));
       onDeleteTask(taskId, sprint.id);
     } catch {
-      alert('Failed to delete task.');
+      // silent
     }
   };
 
@@ -363,7 +618,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
       setTeamMembers(Array.isArray(data) ? data : []);
     } catch {
       if (showError) {
-        alert('Failed to load team members.');
+        // silent, just don't show members
       }
     } finally {
       setLoadingMembers(false);
@@ -378,13 +633,17 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
         setLocalTasks((prev) =>
           prev.map((t) =>
             t.id === taskId
-              ? { ...t, assigneeName: getMemberDisplayName(member) }
+              ? {
+                  ...t,
+                  assigneeName: getMemberDisplayName(member),
+                  assigneePhotoUrl: member.user.profilePicUrl,
+                }
               : t
           )
         );
       }
     } catch {
-      alert('Failed to assign task.');
+      // silent
     } finally {
       setAssignMenuTaskId(null);
     }
@@ -394,85 +653,89 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
     <>
     <div className="rounded-xl border border-[#E4E7EC] bg-[#F8F9FB] p-5 shadow-sm">
       {/* Sprint Header */}
-      <div className="mb-4 flex items-center justify-between border-b border-[#EAECF0] pb-4">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#EAECF0] pb-4 gap-4">
         <div className="flex items-center gap-3">
           <div className="h-5 w-5 rounded border border-[#98A2B3] bg-transparent" />
 
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
-            className="text-[#344054]"
+            className="text-[#344054] p-1 hover:bg-[#F2F4F7] rounded-lg transition-colors duration-150"
           >
             {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
           </button>
 
           <div className="flex items-center gap-2">
-            <span className="text-[16px] font-semibold text-[#101828]">
+            <span className="text-[16px] font-bold text-[#101828]">
               {sprint.name}
             </span>
-            <span className="text-[14px] text-[#667085]">
-              ({localTasks.length} work items)
+            <span className="text-[13px] text-[#667085] bg-white px-2 py-0.5 rounded-full border border-[#EAECF0]">
+              {localTasks.length} items
             </span>
           </div>
         </div>
 
-        <div className="relative flex items-center gap-3" ref={sprintMenuRef}>
-          <div className="flex items-center gap-1.5">
-            <div className="rounded-full bg-[#F2F4F7] px-2.5 py-[2px] text-[11px] font-semibold text-[#344054]" title="To Do">
+        <div className="relative flex flex-wrap items-center gap-3" ref={sprintMenuRef}>
+          <div className="flex items-center gap-1.5 bg-white border border-[#EAECF0] px-2 py-1 rounded-full shadow-sm">
+            <div className="rounded-full bg-[#F2F4F7] px-2 py-[2px] text-[10px] font-bold text-[#344054]" title="To Do">
               {totals.todo}
             </div>
-            <div className="rounded-full bg-[#EFF8FF] px-2.5 py-[2px] text-[11px] font-semibold text-[#175CD3]" title="In Progress">
+            <div className="rounded-full bg-[#EFF8FF] px-2 py-[2px] text-[10px] font-bold text-[#175CD3]" title="In Progress">
               {totals.inprogress}
             </div>
-            <div className="rounded-full bg-[#ECFDF3] px-2.5 py-[2px] text-[11px] font-semibold text-[#027A48]" title="Done">
+            <div className="rounded-full bg-[#ECFDF3] px-2 py-[2px] text-[10px] font-bold text-[#027A48]" title="Done">
               {totals.done}
             </div>
           </div>
 
-          {sprint.status === 'NOT_STARTED' ? (
-            <button
-              onClick={handleStartSprint}
-              className="rounded-lg border border-[#175CD3] bg-[#175CD3] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#1849A9] transition-colors duration-150"
-            >
-              Start Sprint
-            </button>
-          ) : sprint.status === 'ACTIVE' ? (
-            <button
-              onClick={handleCompleteSprint}
-              className="rounded-lg border border-[#175CD3] bg-[#175CD3] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#1849A9] transition-colors duration-150"
-            >
-              Complete Sprint
-            </button>
-          ) : (
-            <span className="rounded-lg border border-[#EAECF0] bg-[#F2F4F7] px-4 py-1.5 text-[13px] font-semibold text-[#667085]">
-              Completed
-            </span>
-          )}
+          <div className="flex items-center gap-2 flex-1 sm:flex-none">
+            {sprint.status === 'NOT_STARTED' ? (
+              <button
+                onClick={handleStartSprint}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg border border-[#175CD3] bg-[#175CD3] px-4 py-2 text-[13px] font-bold text-white hover:bg-[#1849A9] shadow-sm transform active:scale-95 transition-all duration-150"
+              >
+                <Rocket size={14} />
+                Start Sprint
+              </button>
+            ) : sprint.status === 'ACTIVE' ? (
+              <button
+                onClick={handleCompleteSprint}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg border border-[#027A48] bg-[#039855] px-4 py-2 text-[13px] font-bold text-white hover:bg-[#027A48] shadow-sm transform active:scale-95 transition-all duration-150"
+              >
+                <Check size={14} />
+                Complete Sprint
+              </button>
+            ) : (
+              <span className="flex-1 sm:flex-none text-center rounded-lg border border-[#EAECF0] bg-[#F2F4F7] px-4 py-2 text-[13px] font-bold text-[#667085]">
+                Completed
+              </span>
+            )}
 
-          <button
-            type="button"
-            onClick={() => setShowSprintMenu((prev) => !prev)}
-            className="text-[#344054]"
-          >
-            <MoreHorizontal size={20} />
-          </button>
+            <button
+              type="button"
+              onClick={() => setShowSprintMenu((prev) => !prev)}
+              className="p-2 text-[#344054] hover:bg-[#F2F4F7] rounded-lg transition-colors duration-150"
+            >
+              <MoreHorizontal size={20} />
+            </button>
+          </div>
 
           {showSprintMenu && (
-            <div className="absolute right-0 top-12 z-50 w-56 overflow-hidden rounded-xl border border-[#D0D5DD] bg-white shadow-xl">
+            <div className="absolute right-0 top-12 z-50 w-56 overflow-hidden rounded-xl border border-[#D0D5DD] bg-white shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
               <button
                 onClick={handleEditSprint}
-                className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] text-[#101828] hover:bg-[#F9FAFB]"
+                className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] font-bold text-[#101828] hover:bg-[#F9FAFB]"
               >
-                <Pencil size={18} />
+                <Pencil size={18} className="text-[#667085]" />
                 <span>Edit Sprint</span>
               </button>
 
               {sprint.status === 'NOT_STARTED' && (
                 <button
                   onClick={handleStartSprint}
-                  className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] text-[#101828] hover:bg-[#F9FAFB]"
+                  className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] font-bold text-[#101828] hover:bg-[#F9FAFB]"
                 >
-                  <Check size={18} className="text-[#027A48]" />
+                  <Rocket size={18} className="text-[#175CD3]" />
                   <span>Start Sprint</span>
                 </button>
               )}
@@ -480,7 +743,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
               {sprint.status === 'ACTIVE' && (
                 <button
                   onClick={handleCompleteSprint}
-                  className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] text-[#101828] hover:bg-[#F9FAFB]"
+                  className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] font-bold text-[#027A48] hover:bg-[#F9FAFB]"
                 >
                   <Check size={18} />
                   <span>Complete Sprint</span>
@@ -491,7 +754,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
 
               <button
                 onClick={handleDeleteSprint}
-                className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] text-[#F04438] hover:bg-[#FEF3F2]"
+                className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] font-bold text-[#F04438] hover:bg-[#FEF3F2]"
               >
                 <Trash2 size={18} />
                 <span>Delete Sprint</span>
@@ -505,219 +768,248 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
         <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
           <div className="space-y-2">
             {localTasks.length > 0 ? (
-              localTasks.map((task) => (
-                <div
-                  key={task.id}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData('text/plain', String(task.id));
-                  }}
-                  onClick={() => setSelectedTaskId(task.id)}
-                  className="group relative flex items-center gap-4 rounded-lg border border-[#E4E7EC] bg-white px-4 py-3 cursor-grab hover:border-[#175CD3]/30 hover:shadow-md transition-all duration-200 ease-in-out"
-                >
-                  {/* Task type indicator */}
-                  <div className="h-6 w-6 flex-shrink-0 rounded border-2 border-[#175CD3] bg-[#EFF8FF] transition-colors duration-150" />
-
-                  {/* Task number */}
-                  <span className="text-[13px] font-semibold text-[#667085] tabular-nums min-w-[24px]">
-                    {task.taskNo}
-                  </span>
-
-                  {/* Task title / rename input */}
-                  {renamingTaskId === task.id ? (
-                    <input
-                      type="text"
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleRenameTask(task.id);
-                        if (e.key === 'Escape') { setRenamingTaskId(null); setRenameValue(''); }
-                      }}
-                      onBlur={() => handleRenameTask(task.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      autoFocus
-                      className="flex-1 min-w-0 rounded-md border border-[#175CD3] bg-white px-2 py-1 text-[14px] font-medium text-[#101828] outline-none ring-2 ring-[#175CD3]/20 transition-all duration-150"
-                    />
-                  ) : (
-                    <span className="flex-1 min-w-0 truncate text-[14px] font-medium text-[#101828]">
-                      {task.title}
-                    </span>
-                  )}
-
-                  {/* Status dropdown */}
-                  <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      onClick={() => setStatusMenuTaskId(statusMenuTaskId === task.id ? null : task.id)}
-                      className={`flex w-[110px] items-center justify-between gap-1.5 rounded-lg border border-[#EAECF0] px-3 py-1.5 text-[12px] font-semibold transition-all duration-200 hover:border-[#175CD3]/30 hover:shadow-sm ${STATUS_COLORS[task.status]}`}
-                    >
-                      <span>{STATUS_LABELS[task.status]}</span>
-                      <ChevronDown size={12} className="opacity-50" />
-                    </button>
-
-                    {statusMenuTaskId === task.id && (
-                      <div className="absolute left-0 top-9 z-50 w-36 overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-lg animate-in fade-in slide-in-from-top-1 duration-150">
-                        {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                          <button
-                            key={value}
-                            onClick={() => {
-                              handleStatusChange(task.id, value as SprintStatus);
-                              setStatusMenuTaskId(null);
-                            }}
-                            className={`flex w-full items-center px-3 py-2 text-left text-[12px] font-medium transition-colors duration-100 hover:bg-[#F9FAFB] ${
-                              task.status === value ? 'text-[#175CD3] bg-[#EFF8FF]' : 'text-[#344054]'
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Due date */}
-                  <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const input = dateInputRefs.current.get(task.id);
-                        if (input) {
-                          input.showPicker();
-                        }
-                      }}
-                      className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-2.5 py-1.5 text-[12px] font-medium cursor-pointer whitespace-nowrap hover:border-[#98A2B3] transition-colors duration-150"
-                    >
-                      <CalendarDays size={14} className="text-[#667085]" />
-                      <span className={task.endDate ? 'text-[#344054]' : 'text-[#98A2B3]'}>
-                        {formatDate(task.endDate)}
-                      </span>
-                    </button>
-                    <input
-                      ref={(el) => {
-                        if (el) dateInputRefs.current.set(task.id, el);
-                      }}
-                      type="date"
-                      value={task.endDate}
-                      onChange={(e) => handleDueDateChange(task.id, e.target.value)}
-                      className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
-                    />
-                  </div>
-
-                  {/* Story points */}
-                  <input
-                    type="number"
-                    min="0"
-                    value={task.storyPoints}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => handleStoryPointChange(task.id, Number(e.target.value))}
-                    className="w-12 flex-shrink-0 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-1 py-1.5 text-center text-[13px] font-bold text-[#101828] outline-none focus:border-[#175CD3] focus:ring-2 focus:ring-[#175CD3]/20 transition-all duration-150"
-                  />
-
-                  {/* Action icons */}
-                  <div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
-                    {/* Rename */}
-                    <button
-                      type="button"
-                      title="Rename"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setRenameValue(task.title);
-                        setRenamingTaskId(task.id);
-                      }}
-                      className="rounded-md p-1.5 text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF] transition-all duration-150"
-                    >
-                      <Pencil size={15} />
-                    </button>
-
-                    {/* Assign */}
-                    <div className="relative">
+              localTasks.map((task) => {
+                const isNearDue = isDueWithinDays(task.dueDate, 2) && task.status !== 'DONE';
+                return (
+                  <div
+                    key={task.id}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', String(task.id));
+                    }}
+                    onClick={() => setSelectedTaskId(task.id)}
+                    className={`group relative flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl border px-3.5 py-3 sm:px-4 sm:py-3.5 cursor-grab transition-all duration-200 ease-in-out ${
+                      isNearDue
+                        ? 'border-[#FDA29B] bg-[#FEF3F2] hover:border-[#F04438]/50 hover:shadow-lg'
+                        : 'border-[#E4E7EC] bg-white hover:border-[#175CD3]/30 hover:shadow-lg'
+                    }`}
+                  >
+                    {/* Top Row: Checkbox, Number, Title */}
+                    <div className="flex items-center gap-3 min-w-0 w-full sm:flex-1">
+                      {/* Selection checkbox */}
                       <button
                         type="button"
-                        title={task.assigneeName || 'Assign To'}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (assignMenuTaskId === task.id) {
-                            setAssignMenuTaskId(null);
-                          } else {
-                            setAssignMenuTaskId(task.id);
-                            if (teamMembers.length === 0) {
-                              void fetchTeamMembers();
-                            }
-                          }
+                          onToggleTask(task.id);
                         }}
-                        className="rounded-md p-1.5 text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF] transition-all duration-150"
+                        className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg border-2 transition-all duration-200 ${
+                          task.selected
+                            ? (isNearDue ? 'border-[#D92D20] bg-[#D92D20]' : 'border-[#175CD3] bg-[#175CD3]')
+                            : (isNearDue ? 'border-[#D92D20] bg-[#FEF3F2]' : 'border-[#D0D5DD] bg-white hover:border-[#175CD3]')
+                        } shadow-sm`}
                       >
-                        <UserPlus size={16} />
+                        {task.selected && <Check size={14} className="text-white" />}
                       </button>
 
-                      {assignMenuTaskId === task.id && (
-                        <div ref={assignMenuRef} className="absolute right-0 top-9 z-50 w-52 overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-lg animate-in fade-in slide-in-from-top-1 duration-150">
-                          <div className="px-3 py-2 text-[11px] font-semibold text-[#667085] uppercase tracking-wider border-b border-[#F2F4F7]">
-                            Assign To
-                          </div>
-                          {loadingMembers ? (
-                            <div className="px-3 py-3 text-[13px] text-[#667085]">Loading...</div>
-                          ) : teamMembers.length > 0 ? (
-                            <div className="max-h-48 overflow-y-auto">
-                              {teamMembers.map((member) => (
-                                <button
-                                  key={member.user.userId}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleAssignTask(task.id, member.user.userId);
-                                  }}
-                                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-[#344054] hover:bg-[#F9FAFB] transition-colors duration-100"
-                                >
-                                  <AssigneeAvatar
-                                    name={getMemberDisplayName(member)}
-                                    profilePicUrl={member.user.profilePicUrl}
-                                    size={18}
-                                  />
-                                  <span className="truncate">{getMemberDisplayName(member)}</span>
-                                </button>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="px-3 py-3 text-[13px] text-[#667085]">No members found</div>
-                          )}
-                        </div>
+                      {/* Task number */}
+                      <span className={`text-[12px] font-bold tabular-nums min-w-[28px] ${isNearDue ? 'text-[#B42318]' : 'text-[#98A2B3]'}`}>
+                        #{task.taskNo}
+                      </span>
+
+                      {/* Task title / rename input */}
+                      {renamingTaskId === task.id ? (
+                        <input
+                          type="text"
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameTask(task.id);
+                            if (e.key === 'Escape') { setRenamingTaskId(null); setRenameValue(''); }
+                          }}
+                          onBlur={() => handleRenameTask(task.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          autoFocus
+                          className="flex-1 min-w-0 rounded-lg border border-[#175CD3] bg-white px-2 py-1.5 text-[14px] font-bold text-[#101828] outline-none ring-2 ring-[#175CD3]/20 transition-all duration-150"
+                        />
+                      ) : (
+                        <span className={`flex-1 min-w-0 truncate text-[14px] font-bold ${isNearDue ? 'text-[#B42318]' : 'text-[#101828]'}`}>
+                          {task.title}
+                        </span>
+                      )}
+
+                      {/* Near-due badge (Mobile: Only show icon/compact) */}
+                      {isNearDue && (
+                        <span className="flex-shrink-0 flex items-center gap-1 rounded-full border border-[#FDA29B] bg-white px-2 py-0.5 text-[10px] font-bold text-[#D92D20] shadow-sm">
+                          <Clock size={11} strokeWidth={2.5} />
+                          <span className="hidden sm:inline uppercase tracking-tight">Due Soon</span>
+                        </span>
                       )}
                     </div>
 
-                    {/* Delete */}
-                    <button
-                      type="button"
-                      title="Delete"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteTask(task.id);
-                      }}
-                      className="rounded-md p-1.5 text-[#D92D20] hover:text-[#B42318] hover:bg-[#FEF3F2] transition-all duration-150"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
+                    {/* Bottom Row: Metadata & Actions */}
+                    <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 w-full sm:w-auto border-t border-[#F2F4F7] pt-2 sm:border-0 sm:pt-0">
+                      {/* Status dropdown */}
+                      <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => setStatusMenuTaskId(statusMenuTaskId === task.id ? null : task.id)}
+                          className={`flex w-[100px] sm:w-[110px] items-center justify-between gap-1.5 rounded-lg border border-[#EAECF0] px-2 sm:px-3 py-1.5 text-[11px] sm:text-[12px] font-semibold transition-all duration-200 hover:border-[#175CD3]/30 hover:shadow-sm ${STATUS_COLORS[task.status]}`}
+                        >
+                          <span className="truncate">{STATUS_LABELS[task.status]}</span>
+                          <ChevronDown size={11} className="opacity-50" />
+                        </button>
 
-                  {/* Assignee badge - photo only with hover name */}
-                  <div 
-                    className="flex-shrink-0 flex items-center justify-center"
-                    title={task.assigneeName || 'Unassigned'}
-                  >
-                    {task.assigneeName && task.assigneeName !== 'Unassigned' ? (
-                      <AssigneeAvatar
-                        name={task.assigneeName}
-                        profilePicUrl={task.assigneePhotoUrl}
-                        size={24}
-                        className="border border-white ring-2 ring-[#F2F4F7]"
-                      />
-                    ) : (
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F9FAFB] border border-dashed border-[#EAECF0]" title="Unassigned">
-                        <span className="text-[10px] text-[#98A2B3]">?</span>
+                        {statusMenuTaskId === task.id && (
+                          <div ref={statusMenuRef} className="absolute left-0 sm:right-0 sm:left-auto top-9 z-50 w-36 overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-lg animate-in fade-in slide-in-from-top-1 duration-150">
+                            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                              <button
+                                key={value}
+                                onClick={() => {
+                                  handleStatusChange(task.id, value as SprintStatus);
+                                  setStatusMenuTaskId(null);
+                                }}
+                                className={`flex w-full items-center px-3 py-2 text-left text-[12px] font-medium transition-colors duration-100 hover:bg-[#F9FAFB] ${
+                                  task.status === value ? 'text-[#175CD3] bg-[#EFF8FF]' : 'text-[#344054]'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
+
+                      {/* Due date */}
+                      <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const input = dateInputRefs.current.get(task.id);
+                            if (input) {
+                              input.showPicker();
+                            }
+                          }}
+                          className={`inline-flex w-fit items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] sm:text-[12px] font-medium cursor-pointer whitespace-nowrap transition-colors duration-150 ${
+                            isNearDue
+                              ? 'border-[#FDA29B] bg-[#FEF3F2] text-[#B42318] hover:border-[#F04438]'
+                              : 'border-[#E4E7EC] bg-[#F9FAFB] hover:border-[#98A2B3]'
+                          }`}
+                        >
+                          <CalendarDays size={13} className={isNearDue ? 'text-[#D92D20]' : 'text-[#667085]'} />
+                          <span className={task.dueDate ? (isNearDue ? 'text-[#B42318]' : 'text-[#344054]') : 'text-[#98A2B3]'}>
+                            {formatDate(task.dueDate)}
+                          </span>
+                        </button>
+                        <input
+                          ref={(el) => {
+                            if (el) dateInputRefs.current.set(task.id, el);
+                          }}
+                          type="date"
+                          value={task.dueDate}
+                          onChange={(e) => handleDueDateChange(task.id, e.target.value)}
+                          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+                        />
+                      </div>
+
+                      {/* Story points */}
+                      <input
+                        type="number"
+                        min="0"
+                        value={task.storyPoints}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => handleStoryPointChange(task.id, Number(e.target.value))}
+                        className="w-10 sm:w-12 flex-shrink-0 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-1 py-1.5 text-center text-[12px] sm:text-[13px] font-bold text-[#101828] outline-none focus:border-[#175CD3] focus:ring-2 focus:ring-[#175CD3]/20 transition-all duration-150"
+                      />
+
+                      {/* Action icons (Visible on hover desktop, always visible mobile) */}
+                      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
+                        {/* Rename */}
+                        <button
+                          type="button"
+                          title="Rename"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRenameValue(task.title);
+                            setRenamingTaskId(task.id);
+                          }}
+                          className="rounded-md p-1 sm:p-1.5 text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF] transition-all duration-150"
+                        >
+                          <Pencil size={15} />
+                        </button>
+
+                        {/* Assign */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            title={task.assigneeName || 'Assign To'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (assignMenuTaskId === task.id) {
+                                setAssignMenuTaskId(null);
+                              } else {
+                                setAssignMenuTaskId(task.id);
+                                if (teamMembers.length === 0) {
+                                  void fetchTeamMembers();
+                                }
+                              }
+                            }}
+                            className="rounded-md transition-all duration-150 overflow-hidden"
+                          >
+                            {task.assigneeName && task.assigneeName !== 'Unassigned' ? (
+                              <AssigneeAvatar
+                                name={task.assigneeName}
+                                profilePicUrl={task.assigneePhotoUrl}
+                                size={22}
+                              />
+                            ) : (
+                              <div className="rounded-md p-1 sm:p-1.5 text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF]">
+                                <UserPlus size={15} strokeWidth={1.5} />
+                              </div>
+                            )}
+                          </button>
+
+                          {assignMenuTaskId === task.id && (
+                            <div ref={assignMenuRef} className="absolute right-0 top-9 z-50 w-52 overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-lg animate-in fade-in slide-in-from-top-1 duration-150">
+                              <div className="px-3 py-2 text-[11px] font-semibold text-[#667085] uppercase tracking-wider border-b border-[#F2F4F7]">
+                                Assign To
+                              </div>
+                              {loadingMembers ? (
+                                <div className="px-3 py-3 text-[13px] text-[#667085]">Loading...</div>
+                              ) : teamMembers.length > 0 ? (
+                                <div className="max-h-48 overflow-y-auto">
+                                  {teamMembers.map((member) => (
+                                    <button
+                                      key={member.user.userId}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAssignTask(task.id, member.user.userId);
+                                      }}
+                                      className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-[#344054] hover:bg-[#F9FAFB] transition-colors duration-100"
+                                    >
+                                      <AssigneeAvatar
+                                        name={getMemberDisplayName(member)}
+                                        profilePicUrl={member.user.profilePicUrl}
+                                        size={18}
+                                      />
+                                      <span className="truncate">{getMemberDisplayName(member)}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="px-3 py-3 text-[13px] text-[#667085]">No members found</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Delete */}
+                        <button
+                          type="button"
+                          title="Delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteTask(task.id);
+                          }}
+                          className="rounded-lg p-1.5 text-[#D92D20] hover:text-[#B42318] hover:bg-[#FEF3F2] transition-all duration-150"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="rounded-lg border-2 border-dashed border-[#D0D5DD] bg-[#F9FAFB] px-4 py-10 text-center text-[13px] text-[#667085]">
                 Drag tasks here from Product Backlog
@@ -726,55 +1018,54 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
           </div>
 
           {!showCreateTaskBox ? (
-            <button
-              onClick={() => setShowCreateTaskBox(true)}
-              className="mt-3 flex items-center gap-2 text-[16px] font-medium text-[#667085] hover:text-[#344054]"
-            >
-              <span className="text-[28px] leading-none">+</span>
-              <span>Create</span>
-            </button>
+            <div className="mt-2 flex justify-start">
+              <button
+                onClick={() => setShowCreateTaskBox(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-3 py-1.5 text-[13px] font-medium text-[#344054] shadow-sm hover:bg-[#F9FAFB] transition-colors duration-150"
+              >
+                <span className="text-[18px] leading-none mb-0.5">+</span>
+                Create Task
+              </button>
+            </div>
           ) : (
-            <div className="mt-4 rounded-lg border border-[#D0D5DD] bg-white p-4">
-              <h3 className="mb-3 text-[15px] font-semibold text-[#101828]">Create Task</h3>
+            <form 
+              ref={createTaskRef}
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newTaskName.trim()) { setShowCreateTaskBox(false); return; }
+                onCreateTask(newTaskName.trim(), sprint.id);
+                setNewTaskName('');
+                setShowCreateTaskBox(false);
+              }}
+              className="mt-2 group relative flex items-center gap-4 rounded-lg border-2 border-[#175CD3] bg-white px-4 py-2 transition-all duration-200"
+            >
+              <div className="h-6 w-6 flex-shrink-0 rounded border-2 border-[#D0D5DD] opacity-50" />
+              <ChevronDown size={18} className="text-[#98A2B3] opacity-50" />
+
               <input
                 type="text"
                 value={newTaskName}
                 onChange={(e) => setNewTaskName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    if (!newTaskName.trim()) return;
-                    onCreateTask(newTaskName.trim(), sprint.id);
-                    setNewTaskName('');
+                  if (e.key === 'Escape') {
                     setShowCreateTaskBox(false);
+                    setNewTaskName('');
                   }
                 }}
-                placeholder="Enter task name"
+                placeholder="Task name"
                 autoFocus
-                className="w-full rounded-md border border-[#D0D5DD] px-3 py-2 text-sm text-[#101828] outline-none"
+                className="flex-1 min-w-0 bg-transparent text-[14px] font-medium text-[#101828] outline-none placeholder-[#98A2B3]"
               />
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    if (!newTaskName.trim()) return;
-                    onCreateTask(newTaskName.trim(), sprint.id);
-                    setNewTaskName('');
-                    setShowCreateTaskBox(false);
-                  }}
-                  className="rounded-md bg-[#175CD3] px-4 py-2 text-sm font-medium text-white hover:bg-[#1849A9]"
-                >
-                  Create Task
-                </button>
-                <button
-                  onClick={() => {
-                    setShowCreateTaskBox(false);
-                    setNewTaskName('');
-                  }}
-                  className="rounded-md border border-[#D0D5DD] bg-white px-4 py-2 text-sm font-medium text-[#344054] hover:bg-[#F9FAFB]"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+              
+              <button
+                type="submit"
+                disabled={!newTaskName.trim()}
+                className="flex items-center gap-1.5 flex-shrink-0 rounded-md bg-[#175CD3] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#1849A9] disabled:opacity-50 transition-colors duration-150"
+              >
+                Create
+                <CornerDownLeft size={16} />
+              </button>
+            </form>
           )}
         </div>
       )}
@@ -946,6 +1237,39 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
         `}</style>
       </div>
     )}
+
+    {/* ── Edit Sprint Modal ── */}
+    <EditSprintModal
+      open={showEditSprintModal}
+      sprintName={sprint.name}
+      loading={editingSprintLoading}
+      onConfirm={confirmEditSprint}
+      onCancel={() => setShowEditSprintModal(false)}
+    />
+
+    {/* ── Delete Sprint Confirmation ── */}
+    <ConfirmModal
+      open={confirmDeleteSprint}
+      variant="danger"
+      title="Delete Sprint"
+      message={`Are you sure you want to delete "${sprint.name}"? This action cannot be undone. All tasks will be moved back to the backlog.`}
+      confirmLabel="Delete Sprint"
+      loading={deletingSprintLoading}
+      onConfirm={doDeleteSprint}
+      onCancel={() => setConfirmDeleteSprint(false)}
+    />
+
+    {/* ── Complete Sprint Confirmation ── */}
+    <ConfirmModal
+      open={confirmCompleteSprint}
+      variant="success"
+      title="Complete Sprint"
+      message={`Mark "${sprint.name}" as completed? Incomplete tasks will remain in the backlog for the next sprint.`}
+      confirmLabel="Complete Sprint"
+      loading={completingSprintLoading}
+      onConfirm={doCompleteSprint}
+      onCancel={() => setConfirmCompleteSprint(false)}
+    />
   </>
   );
 }

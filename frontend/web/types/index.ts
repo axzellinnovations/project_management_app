@@ -65,6 +65,14 @@ export interface Dependency {
   relation: string;
 }
 
+export interface TaskAttachmentSummary {
+  id: number;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  uploadedByName: string;
+}
+
 export interface Task {
   id: number;
   title: string;
@@ -87,6 +95,15 @@ export interface Task {
   labels?: Label[];
   subtasks?: Subtask[];
   dependencies?: Dependency[];
+  attachments?: TaskAttachmentSummary[];
+}
+
+export interface TaskActivity {
+  id: number;
+  activityType: string;
+  actorName: string;
+  description: string;
+  createdAt: string;
 }
 
 export interface TaskData {
@@ -106,6 +123,7 @@ export interface TaskData {
   dueDate: string;
   subtasks: Subtask[];
   dependencies: Dependency[];
+  attachments?: TaskAttachmentSummary[];
 }
 
 // ── Kanban ─────────────────────────────────────────
