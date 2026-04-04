@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import api from '@/lib/axios';
 import { getUserFromToken } from '@/lib/auth';
+import ActivityFeed from './ActivityFeed';
 
 interface Comment {
   id: number;
@@ -198,30 +199,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ taskId }) => {
 
       {/* History Tab */}
       {activeTab === 'History' && (
-        <div className="mt-4">
-          {comments.length > 0 ? (
-            <div className="relative pl-4 border-l-2 border-gray-100 space-y-4">
-              {comments.map((comment) => (
-                <div key={comment.id} className="relative">
-                  <div className="absolute -left-[21px] w-4 h-4 rounded-full bg-blue-100 border-2 border-blue-400 flex items-center justify-center">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  </div>
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-sm font-semibold text-gray-800">{comment.authorName}</span>
-                    <span className="text-xs text-gray-400">commented</span>
-                    <span className="text-xs text-gray-400">{new Date(comment.createdAt).toLocaleString()}</span>
-                  </div>
-                  <p className="text-sm text-gray-500 bg-gray-50 rounded px-3 py-2 border border-gray-100">{comment.text}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-              <p className="text-gray-500 text-sm font-medium mb-1">No activity yet</p>
-              <p className="text-gray-400 text-xs">Changes to this task will appear here.</p>
-            </div>
-          )}
-        </div>
+        <ActivityFeed taskId={taskId} />
       )}
     </div>
   );
