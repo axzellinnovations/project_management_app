@@ -89,18 +89,18 @@ export function TabBar({
             <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-cu-primary rounded-t-[2px]" />
           )}
           {moreOpen && (
-            <div className="absolute top-full right-0 mt-1 z-[200] bg-white/90 backdrop-blur-xl border border-cu-border rounded-xl shadow-xl py-1 min-w-[140px]"
-              style={{ animation: 'dropdownIn 150ms ease forwards' }}
+            <div className="absolute top-full right-0 mt-2 z-[200] bg-white/95 backdrop-blur-2xl border border-cu-border/50 rounded-2xl shadow-2xl py-1.5 min-w-[160px]"
+              style={{ animation: 'dropdownIn 180ms cubic-bezier(0.4, 0, 0.2, 1) forwards' }}
             >
               {overflowTabs.map((tab) => (
                 <Link
                   key={tab.id}
                   href={getTabHref(tab.id)}
                   onClick={() => setMoreOpen(false)}
-                  className={`block px-4 py-2 text-[13px] transition-colors ${
+                  className={`block px-4 py-2 text-[13.5px] transition-all duration-150 mx-1 rounded-lg ${
                     activeTab === tab.id
-                      ? 'text-cu-primary font-semibold bg-cu-primary/5'
-                      : 'text-cu-text-secondary hover:bg-gray-50'
+                      ? 'text-cu-primary font-semibold bg-cu-primary/8'
+                      : 'text-cu-text-secondary hover:bg-cu-hover hover:text-cu-text-primary'
                   }`}
                 >
                   {tab.label}

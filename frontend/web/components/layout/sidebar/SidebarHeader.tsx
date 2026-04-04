@@ -14,7 +14,7 @@ export function SidebarHeader({
     >
       <div className="flex items-center gap-2 min-w-0">
         {/* Logo */}
-        <div className="w-8 h-8 flex-shrink-0 rounded-lg bg-gradient-to-br from-cu-primary to-[#6558d3] flex items-center justify-center shadow-sm shadow-cu-primary/20">
+        <div className="w-8 h-8 flex-shrink-0 rounded-lg bg-gradient-to-br from-cu-primary to-cu-primary-dark flex items-center justify-center shadow-sm shadow-cu-primary/20">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
             <path d="M12 2L20 7V17L12 22L4 17V7L12 2Z" fill="white" fillOpacity="0.9" />
             <path d="M12 6L16 8.5V13.5L12 16L8 13.5V8.5L12 6Z" fill="white" fillOpacity="0.45" />
@@ -22,7 +22,7 @@ export function SidebarHeader({
         </div>
         {/* Wordmark */}
         <span
-          className="font-bold text-[16px] bg-gradient-to-r from-cu-primary to-[#6558d3] bg-clip-text text-transparent whitespace-nowrap overflow-hidden"
+          className="font-bold text-[16px] bg-gradient-to-r from-cu-primary to-cu-primary-dark bg-clip-text text-transparent whitespace-nowrap overflow-hidden"
           style={{
             maxWidth: collapsed ? '0px' : '120px',
             opacity: collapsed ? 0 : 1,

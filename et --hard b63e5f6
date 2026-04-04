@@ -1,0 +1,11 @@
+
+[33mcommit b63e5f6cda04de907b5b7a6d60e8a2df43cfc5b2[m
+Author: thuvarahan-t <thuvarahan2003@gmail.com>
+Date:   Sat Apr 4 04:59:53 2026 +0530
+
+    dashboard updates
+
+ .../java/com/planora/backend/controller/ProjectMemberController.java    | 2 [32m+[m[31m-[m
+ .../main/java/com/planora/backend/controller/SprintboardController.java | 2 [32m+[m[31m-[m
+ backend/src/main/java/com/planora/backend/model/VerificationToken.java  | 2 [32m++[m
+ 3 files changed, 4 insertions(+), 2 deletions(-)

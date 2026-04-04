@@ -5,6 +5,7 @@ import TaskHeader from './TaskHeader';
 import TaskMainContent from './TaskMainContent';
 import TaskSidebar from './TaskSidebar';
 import api from '@/lib/axios';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface TaskData {
   id: number;
@@ -74,15 +75,21 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[9999]" onClick={onClose}>
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" />
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        exit={{ opacity: 0 }} 
+        className="absolute inset-0 bg-black/30 backdrop-blur-sm" 
+      />
       {/* Slide-over panel */}
-      <div
-        className="absolute inset-y-0 right-0 w-full md:w-[900px] bg-white shadow-2xl flex flex-col font-sans overflow-hidden"
+      <motion.div
+        initial={{ x: '100%', boxShadow: '-10px 0 30px rgba(0,0,0,0)' }}
+        animate={{ x: 0, boxShadow: '-10px 0 30px rgba(0,0,0,0.1)' }}
+        exit={{ x: '100%', boxShadow: '-10px 0 30px rgba(0,0,0,0)' }}
+        transition={{ type: 'spring', damping: 26, stiffness: 220 }}
+        className="absolute inset-y-0 right-0 w-full md:w-[900px] bg-white flex flex-col font-sans overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {loading && (
@@ -147,7 +154,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
             </div>
           </>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

@@ -30,6 +30,7 @@ interface TeamMemberInfo {
 interface BacklogCardProps {
   sprint: SprintItem;
   projectId: string;
+  currentUserRole?: string | null;
   onDropTask: (taskId: number, sprintId: number) => void;
   onCreateTask: (title: string, sprintId: number) => void;
   onDeleteTask: (taskId: number, sprintId: number) => void;
@@ -283,7 +284,7 @@ function isDueWithinDays(dueDateStr: string, days: number): boolean {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTask, onDeleteTask, onToggleTask, onSprintDeleted }: BacklogCardProps) {
+export default function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateTask, onDeleteTask, onToggleTask, onSprintDeleted }: BacklogCardProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [showSprintMenu, setShowSprintMenu] = useState(false);
@@ -296,6 +297,9 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
   const [teamMembers, setTeamMembers] = useState<TeamMemberInfo[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
+  const canDeleteSprint = currentUserRole === 'OWNER' || currentUserRole === 'ADMIN';
+  const canDeleteTask = currentUserRole !== 'VIEWER';
+
   // Start Sprint Modal state
   const [showStartSprintModal, setShowStartSprintModal] = useState(false);
   const [selectedDuration, setSelectedDuration] = useState<number>(14);
@@ -307,6 +311,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
   // Confirmation modals state
   const [confirmDeleteSprint, setConfirmDeleteSprint] = useState(false);
   const [confirmCompleteSprint, setConfirmCompleteSprint] = useState(false);
+  const [taskToDeleteId, setTaskToDeleteId] = useState<number | null>(null);
   const [deletingSprintLoading, setDeletingSprintLoading] = useState(false);
   const [completingSprintLoading, setCompletingSprintLoading] = useState(false);
 
@@ -669,9 +674,6 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
             <span className="text-[16px] font-bold text-[#101828]">
               {sprint.name}
             </span>
-            <span className="text-[13px] text-[#667085] bg-white px-2 py-0.5 rounded-full border border-[#EAECF0]">
-              {localTasks.length} items
-            </span>
           </div>
         </div>
 
@@ -692,7 +694,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
             {sprint.status === 'NOT_STARTED' ? (
               <button
                 onClick={handleStartSprint}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg border border-[#175CD3] bg-[#175CD3] px-4 py-2 text-[13px] font-bold text-white hover:bg-[#1849A9] shadow-sm transform active:scale-95 transition-all duration-150"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg border border-[#175CD3] bg-[#175CD3] px-2.5 py-2 text-[13px] font-bold text-white hover:bg-[#1849A9] shadow-sm transform active:scale-95 transition-all duration-150"
               >
                 <Rocket size={14} />
                 Start Sprint
@@ -700,13 +702,13 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
             ) : sprint.status === 'ACTIVE' ? (
               <button
                 onClick={handleCompleteSprint}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg border border-[#027A48] bg-[#039855] px-4 py-2 text-[13px] font-bold text-white hover:bg-[#027A48] shadow-sm transform active:scale-95 transition-all duration-150"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg border border-[#027A48] bg-[#039855] px-2.5 py-2 text-[13px] font-bold text-white hover:bg-[#027A48] shadow-sm transform active:scale-95 transition-all duration-150"
               >
                 <Check size={14} />
                 Complete Sprint
               </button>
             ) : (
-              <span className="flex-1 sm:flex-none text-center rounded-lg border border-[#EAECF0] bg-[#F2F4F7] px-4 py-2 text-[13px] font-bold text-[#667085]">
+              <span className="flex-1 sm:flex-none text-center rounded-lg border border-[#EAECF0] bg-[#F2F4F7] px-2.5 py-2 text-[13px] font-bold text-[#667085]">
                 Completed
               </span>
             )}
@@ -754,10 +756,21 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
 
               <button
                 onClick={handleDeleteSprint}
-                className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] font-bold text-[#F04438] hover:bg-[#FEF3F2]"
+                disabled={!canDeleteSprint}
+                className={`flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] font-bold ${
+                  canDeleteSprint ? 'text-[#F04438] hover:bg-[#FEF3F2]' : 'text-[#98A2B3] cursor-not-allowed'
+                }`}
+                title={!canDeleteSprint ? "Only an Admin or Owner can delete a sprint" : ""}
               >
                 <Trash2 size={18} />
-                <span>Delete Sprint</span>
+                <div className="flex flex-col">
+                  <span>Delete Sprint</span>
+                  {!canDeleteSprint && (
+                    <span className="text-[10px] font-medium text-[#98A2B3]">
+                      Admin/Owner only
+                    </span>
+                  )}
+                </div>
               </button>
             </div>
           )}
@@ -778,234 +791,164 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
                       e.dataTransfer.setData('text/plain', String(task.id));
                     }}
                     onClick={() => setSelectedTaskId(task.id)}
-                    className={`group relative flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl border px-3.5 py-3 sm:px-4 sm:py-3.5 cursor-grab transition-all duration-200 ease-in-out ${
-                      isNearDue
-                        ? 'border-[#FDA29B] bg-[#FEF3F2] hover:border-[#F04438]/50 hover:shadow-lg'
-                        : 'border-[#E4E7EC] bg-white hover:border-[#175CD3]/30 hover:shadow-lg'
-                    }`}
+                    className={`group relative flex items-center justify-between gap-3 border-b border-[#F2F4F7] bg-white px-3 py-2 cursor-grab transition-all duration-200 hover:bg-[#F9FAFB] ${
+                      isNearDue ? 'bg-[#FEF3F2]' : ''
+                    } ${assignMenuTaskId === task.id || statusMenuTaskId === task.id ? '!overflow-visible z-50' : ''}`}
                   >
-                    {/* Top Row: Checkbox, Number, Title */}
-                    <div className="flex items-center gap-3 min-w-0 w-full sm:flex-1">
-                      {/* Selection checkbox */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleTask(task.id);
-                        }}
-                        className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg border-2 transition-all duration-200 ${
-                          task.selected
-                            ? (isNearDue ? 'border-[#D92D20] bg-[#D92D20]' : 'border-[#175CD3] bg-[#175CD3]')
-                            : (isNearDue ? 'border-[#D92D20] bg-[#FEF3F2]' : 'border-[#D0D5DD] bg-white hover:border-[#175CD3]')
-                        } shadow-sm`}
-                      >
-                        {task.selected && <Check size={14} className="text-white" />}
-                      </button>
-
-                      {/* Task number */}
-                      <span className={`text-[12px] font-bold tabular-nums min-w-[28px] ${isNearDue ? 'text-[#B42318]' : 'text-[#98A2B3]'}`}>
-                        #{task.taskNo}
-                      </span>
-
-                      {/* Task title / rename input */}
-                      {renamingTaskId === task.id ? (
-                        <input
-                          type="text"
-                          value={renameValue}
-                          onChange={(e) => setRenameValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleRenameTask(task.id);
-                            if (e.key === 'Escape') { setRenamingTaskId(null); setRenameValue(''); }
-                          }}
-                          onBlur={() => handleRenameTask(task.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          autoFocus
-                          className="flex-1 min-w-0 rounded-lg border border-[#175CD3] bg-white px-2 py-1.5 text-[14px] font-bold text-[#101828] outline-none ring-2 ring-[#175CD3]/20 transition-all duration-150"
-                        />
-                      ) : (
-                        <span className={`flex-1 min-w-0 truncate text-[14px] font-bold ${isNearDue ? 'text-[#B42318]' : 'text-[#101828]'}`}>
-                          {task.title}
+                    {/* Centered Scrollable Row for everything */}
+                    <div className={`flex flex-1 items-center gap-3 no-scrollbar ${assignMenuTaskId === task.id || statusMenuTaskId === task.id ? 'overflow-visible' : 'overflow-x-auto'}`} onClick={(e) => e.stopPropagation()}>
+                      {/* Task number & Title */}
+                      <div className="flex shrink-0 min-w-[140px] items-center gap-2">
+                        <span className={`text-[11px] font-bold tabular-nums shrink-0 ${isNearDue ? 'text-[#B42318]' : 'text-[#98A2B3]'}`}>
+                          #{task.taskNo}
                         </span>
-                      )}
-
-                      {/* Near-due badge (Mobile: Only show icon/compact) */}
-                      {isNearDue && (
-                        <span className="flex-shrink-0 flex items-center gap-1 rounded-full border border-[#FDA29B] bg-white px-2 py-0.5 text-[10px] font-bold text-[#D92D20] shadow-sm">
-                          <Clock size={11} strokeWidth={2.5} />
-                          <span className="hidden sm:inline uppercase tracking-tight">Due Soon</span>
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Bottom Row: Metadata & Actions */}
-                    <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 w-full sm:w-auto border-t border-[#F2F4F7] pt-2 sm:border-0 sm:pt-0">
-                      {/* Status dropdown */}
-                      <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => setStatusMenuTaskId(statusMenuTaskId === task.id ? null : task.id)}
-                          className={`flex w-[100px] sm:w-[110px] items-center justify-between gap-1.5 rounded-lg border border-[#EAECF0] px-2 sm:px-3 py-1.5 text-[11px] sm:text-[12px] font-semibold transition-all duration-200 hover:border-[#175CD3]/30 hover:shadow-sm ${STATUS_COLORS[task.status]}`}
-                        >
-                          <span className="truncate">{STATUS_LABELS[task.status]}</span>
-                          <ChevronDown size={11} className="opacity-50" />
-                        </button>
-
-                        {statusMenuTaskId === task.id && (
-                          <div ref={statusMenuRef} className="absolute left-0 sm:right-0 sm:left-auto top-9 z-50 w-36 overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-lg animate-in fade-in slide-in-from-top-1 duration-150">
-                            {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                              <button
-                                key={value}
-                                onClick={() => {
-                                  handleStatusChange(task.id, value as SprintStatus);
-                                  setStatusMenuTaskId(null);
-                                }}
-                                className={`flex w-full items-center px-3 py-2 text-left text-[12px] font-medium transition-colors duration-100 hover:bg-[#F9FAFB] ${
-                                  task.status === value ? 'text-[#175CD3] bg-[#EFF8FF]' : 'text-[#344054]'
-                                }`}
-                              >
-                                {label}
-                              </button>
-                            ))}
-                          </div>
+                        {renamingTaskId === task.id ? (
+                          <input
+                            type="text"
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleRenameTask(task.id);
+                              if (e.key === 'Escape') { setRenamingTaskId(null); setRenameValue(''); }
+                            }}
+                            onBlur={() => handleRenameTask(task.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            autoFocus
+                            className="flex-1 min-w-0 border-b-2 border-[#175CD3] bg-transparent text-[13px] font-bold text-[#101828] outline-none"
+                          />
+                        ) : (
+                          <span className={`flex-1 min-w-0 truncate text-[13px] font-bold ${isNearDue ? 'text-[#B42318]' : 'text-[#101828]'} ${task.status === 'DONE' ? 'line-through opacity-60' : ''}`}>
+                            {task.title}
+                          </span>
                         )}
                       </div>
 
-                      {/* Due date */}
-                      <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const input = dateInputRefs.current.get(task.id);
-                            if (input) {
-                              input.showPicker();
-                            }
-                          }}
-                          className={`inline-flex w-fit items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] sm:text-[12px] font-medium cursor-pointer whitespace-nowrap transition-colors duration-150 ${
-                            isNearDue
-                              ? 'border-[#FDA29B] bg-[#FEF3F2] text-[#B42318] hover:border-[#F04438]'
-                              : 'border-[#E4E7EC] bg-[#F9FAFB] hover:border-[#98A2B3]'
-                          }`}
-                        >
-                          <CalendarDays size={13} className={isNearDue ? 'text-[#D92D20]' : 'text-[#667085]'} />
-                          <span className={task.dueDate ? (isNearDue ? 'text-[#B42318]' : 'text-[#344054]') : 'text-[#98A2B3]'}>
-                            {formatDate(task.dueDate)}
-                          </span>
-                        </button>
-                        <input
-                          ref={(el) => {
-                            if (el) dateInputRefs.current.set(task.id, el);
-                          }}
-                          type="date"
-                          value={task.dueDate}
-                          onChange={(e) => handleDueDateChange(task.id, e.target.value)}
-                          className="absolute top-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
-                        />
-                      </div>
-
-                      {/* Story points */}
-                      <input
-                        type="number"
-                        min="0"
-                        value={task.storyPoints}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleStoryPointChange(task.id, Number(e.target.value))}
-                        className="w-10 sm:w-12 flex-shrink-0 rounded-lg border border-[#E4E7EC] bg-[#F9FAFB] px-1 py-1.5 text-center text-[12px] sm:text-[13px] font-bold text-[#101828] outline-none focus:border-[#175CD3] focus:ring-2 focus:ring-[#175CD3]/20 transition-all duration-150"
-                      />
-
-                      {/* Action icons (Visible on hover desktop, always visible mobile) */}
-                      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
-                        {/* Rename */}
-                        <button
-                          type="button"
-                          title="Rename"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRenameValue(task.title);
-                            setRenamingTaskId(task.id);
-                          }}
-                          className="rounded-md p-1 sm:p-1.5 text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF] transition-all duration-150"
-                        >
-                          <Pencil size={15} />
-                        </button>
-
-                        {/* Assign */}
-                        <div className="relative">
+                      {/* Unified Scrollable Metadata/Actions */}
+                      <div className="flex items-center gap-3 py-0.5">
+                        {/* Status dropdown */}
+                        <div className="relative shrink-0">
                           <button
                             type="button"
-                            title={task.assigneeName || 'Assign To'}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (assignMenuTaskId === task.id) {
-                                setAssignMenuTaskId(null);
-                              } else {
-                                setAssignMenuTaskId(task.id);
-                                if (teamMembers.length === 0) {
-                                  void fetchTeamMembers();
-                                }
-                              }
-                            }}
-                            className="rounded-md transition-all duration-150 overflow-hidden"
+                            onClick={() => setStatusMenuTaskId(statusMenuTaskId === task.id ? null : task.id)}
+                            className={`flex h-7 min-w-[80px] items-center justify-between gap-1 rounded-lg border border-[#EAECF0] px-2 text-[10px] font-bold transition-all ${STATUS_COLORS[task.status]}`}
                           >
-                            {task.assigneeName && task.assigneeName !== 'Unassigned' ? (
-                              <AssigneeAvatar
-                                name={task.assigneeName}
-                                profilePicUrl={task.assigneePhotoUrl}
-                                size={22}
-                              />
-                            ) : (
-                              <div className="rounded-md p-1 sm:p-1.5 text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF]">
-                                <UserPlus size={15} strokeWidth={1.5} />
-                              </div>
-                            )}
+                            <span className="truncate uppercase">{STATUS_LABELS[task.status]}</span>
+                            <ChevronDown size={10} className="shrink-0 opacity-50" />
                           </button>
-
-                          {assignMenuTaskId === task.id && (
-                            <div ref={assignMenuRef} className="absolute right-0 top-9 z-50 w-52 overflow-hidden rounded-lg border border-[#E4E7EC] bg-white shadow-lg animate-in fade-in slide-in-from-top-1 duration-150">
-                              <div className="px-3 py-2 text-[11px] font-semibold text-[#667085] uppercase tracking-wider border-b border-[#F2F4F7]">
-                                Assign To
-                              </div>
-                              {loadingMembers ? (
-                                <div className="px-3 py-3 text-[13px] text-[#667085]">Loading...</div>
-                              ) : teamMembers.length > 0 ? (
-                                <div className="max-h-48 overflow-y-auto">
-                                  {teamMembers.map((member) => (
-                                    <button
-                                      key={member.user.userId}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleAssignTask(task.id, member.user.userId);
-                                      }}
-                                      className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] text-[#344054] hover:bg-[#F9FAFB] transition-colors duration-100"
-                                    >
-                                      <AssigneeAvatar
-                                        name={getMemberDisplayName(member)}
-                                        profilePicUrl={member.user.profilePicUrl}
-                                        size={18}
-                                      />
-                                      <span className="truncate">{getMemberDisplayName(member)}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="px-3 py-3 text-[13px] text-[#667085]">No members found</div>
-                              )}
+                          {statusMenuTaskId === task.id && (
+                            <div ref={statusMenuRef} className="absolute right-0 top-8 z-50 w-32 overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-xl">
+                              {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                                <button
+                                  key={value}
+                                  onClick={() => { handleStatusChange(task.id, value as SprintStatus); setStatusMenuTaskId(null); }}
+                                  className="w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-[#F9FAFB]"
+                                >
+                                  {label}
+                                </button>
+                              ))}
                             </div>
                           )}
                         </div>
 
-                        {/* Delete */}
+                        {/* Due date */}
+                        <div className="relative shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => dateInputRefs.current.get(task.id)?.showPicker()}
+                            className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[10px] font-bold whitespace-nowrap ${
+                              isNearDue ? 'bg-[#FEF3F2] text-[#B42318] border-[#FDA29B]' : 'bg-[#F9FAFB] text-[#344054] border-[#EAECF0]'
+                            }`}
+                          >
+                            <CalendarDays size={11} />
+                            <span>{formatDate(task.dueDate)}</span>
+                          </button>
+                          <input
+                            ref={(el) => { if (el) dateInputRefs.current.set(task.id, el); }}
+                            type="date"
+                            value={task.dueDate}
+                            onChange={(e) => handleDueDateChange(task.id, e.target.value)}
+                            className="absolute bottom-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
+                          />
+                        </div>
+
+                        {/* Points badge */}
+                        <div className="flex shrink-0 items-center justify-center h-7 w-7 bg-[#F9FAFB] border border-[#EAECF0] rounded-lg shadow-sm">
+                          <input
+                            type="number"
+                            min="0"
+                            value={task.storyPoints}
+                            onChange={(e) => handleStoryPointChange(task.id, Number(e.target.value))}
+                            className="w-full text-center text-[11px] font-bold text-[#101828] outline-none bg-transparent"
+                          />
+                        </div>
+
+                        {/* Edit Pencil */}
                         <button
                           type="button"
-                          title="Delete"
-                          onClick={(e) => {
+                          onClick={(e) => { 
                             e.stopPropagation();
-                            handleDeleteTask(task.id);
+                            setRenameValue(task.title); 
+                            setRenamingTaskId(task.id); 
                           }}
-                          className="rounded-lg p-1.5 text-[#D92D20] hover:text-[#B42318] hover:bg-[#FEF3F2] transition-all duration-150"
+                          className="flex h-7 w-7 shrink-0 items-center justify-center text-[#667085] hover:text-[#175CD3]"
                         >
-                          <Trash2 size={15} />
+                          <Pencil size={13} />
                         </button>
+
+                        {/* Assignee */}
+                        <div className="relative shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (assignMenuTaskId === task.id) {
+                                setAssignMenuTaskId(null);
+                              } else {
+                                setAssignMenuTaskId(task.id);
+                                if (teamMembers.length === 0) void fetchTeamMembers();
+                              }
+                            }}
+                            className="flex items-center justify-center h-7 w-7 transition-all"
+                          >
+                            {task.assigneeName && task.assigneeName !== 'Unassigned' ? (
+                              <AssigneeAvatar name={task.assigneeName} profilePicUrl={task.assigneePhotoUrl} size={22} />
+                            ) : (
+                              <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-dashed border-[#EAECF0]">
+                                <UserPlus size={12} className="text-[#667085]" />
+                              </div>
+                            )}
+                          </button>
+                          {assignMenuTaskId === task.id && (
+                            <div ref={assignMenuRef} className="absolute right-0 top-8 z-50 w-48 overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-xl">
+                              {teamMembers.map((member) => (
+                                <button
+                                  key={member.user.userId}
+                                  onClick={() => handleAssignTask(task.id, member.user.userId)}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-[11px] hover:bg-[#F9FAFB]"
+                                >
+                                  <AssigneeAvatar name={getMemberDisplayName(member)} profilePicUrl={member.user.profilePicUrl} size={18} />
+                                  <span className="truncate font-bold">{getMemberDisplayName(member)}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
+                    </div>
+
+                    {/* Fixed Actions (Delete) */}
+                    <div className="flex shrink-0 items-center pl-2 border-l border-[#F2F4F7]" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => canDeleteTask && setTaskToDeleteId(task.id)}
+                        disabled={!canDeleteTask}
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center transition-colors duration-150 ${
+                          canDeleteTask 
+                          ? 'text-[#667085] hover:text-[#D92D20]' 
+                          : 'text-[#D0D5DD] cursor-not-allowed'
+                        }`}
+                        title={!canDeleteTask ? "Viewers cannot delete tasks" : "Delete Task"}
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   </div>
                 );
@@ -1021,7 +964,7 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
             <div className="mt-2 flex justify-start">
               <button
                 onClick={() => setShowCreateTaskBox(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-3 py-1.5 text-[13px] font-medium text-[#344054] shadow-sm hover:bg-[#F9FAFB] transition-colors duration-150"
+                className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-2.5 py-1.5 text-[13px] font-medium text-[#344054] shadow-sm hover:bg-[#F9FAFB] transition-colors duration-150"
               >
                 <span className="text-[18px] leading-none mb-0.5">+</span>
                 Create Task
@@ -1037,10 +980,10 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
                 setNewTaskName('');
                 setShowCreateTaskBox(false);
               }}
-              className="mt-2 group relative flex items-center gap-4 rounded-lg border-2 border-[#175CD3] bg-white px-4 py-2 transition-all duration-200"
+              className="mt-2 group relative flex items-center gap-3 rounded-lg border-2 border-[#175CD3] bg-white px-3 py-1.5 transition-all duration-200"
             >
-              <div className="h-6 w-6 flex-shrink-0 rounded border-2 border-[#D0D5DD] opacity-50" />
-              <ChevronDown size={18} className="text-[#98A2B3] opacity-50" />
+              <div className="h-5 w-5 flex-shrink-0 rounded border-2 border-[#D0D5DD] opacity-50" />
+              <ChevronDown size={16} className="text-[#98A2B3] opacity-50" />
 
               <input
                 type="text"
@@ -1054,16 +997,16 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
                 }}
                 placeholder="Task name"
                 autoFocus
-                className="flex-1 min-w-0 bg-transparent text-[14px] font-medium text-[#101828] outline-none placeholder-[#98A2B3]"
+                className="flex-1 min-w-0 bg-transparent text-[13px] font-medium text-[#101828] outline-none placeholder-[#98A2B3]"
               />
               
               <button
                 type="submit"
                 disabled={!newTaskName.trim()}
-                className="flex items-center gap-1.5 flex-shrink-0 rounded-md bg-[#175CD3] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#1849A9] disabled:opacity-50 transition-colors duration-150"
+                className="flex h-7 w-7 items-center justify-center shrink-0 rounded-md bg-[#175CD3] text-white hover:bg-[#1849A9] disabled:opacity-50 transition-colors duration-150"
+                title="Create Task"
               >
-                Create
-                <CornerDownLeft size={16} />
+                <CornerDownLeft size={14} />
               </button>
             </form>
           )}
@@ -1071,12 +1014,29 @@ export default function BacklogCard({ sprint, projectId, onDropTask, onCreateTas
       )}
     </div>
 
-    {selectedTaskId !== null && (
+    {selectedTaskId !== null && renamingTaskId === null && (
       <TaskCardModal
         taskId={selectedTaskId}
         onClose={() => setSelectedTaskId(null)}
       />
     )}
+
+    {/* ── Task Delete Confirmation Modal ── */}
+    <ConfirmModal
+      open={taskToDeleteId !== null}
+      onCancel={() => setTaskToDeleteId(null)}
+      onConfirm={() => {
+        if (taskToDeleteId) {
+          handleDeleteTask(taskToDeleteId);
+          setTaskToDeleteId(null);
+        }
+      }}
+      title="Delete Task"
+      message="Are you sure you want to delete this task? This action cannot be undone."
+      confirmLabel="Delete"
+      loading={false}
+      variant="danger"
+    />
 
     {/* ── Start Sprint Modal ── */}
     {showStartSprintModal && (

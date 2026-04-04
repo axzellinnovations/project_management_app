@@ -116,21 +116,26 @@ function SwipeableTaskRow({
                 }}
                 className="relative bg-white rounded-xl border border-[#E5E7EB] cursor-pointer select-none"
             >
-                <div className="flex items-center gap-3 px-4 py-3 min-h-[60px]">
+                <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 min-h-[60px]">
                     {/* Drag handle (desktop) */}
                     <GripVertical size={14} className="hidden sm:block text-[#D1D5DB] shrink-0 cursor-grab" />
 
-                    {/* Priority dot */}
-                    <span className="shrink-0 w-2 h-2 rounded-full" style={{ background: priorityColor }} />
+                    {/* Priority dot (mobile: larger/styled indicator) */}
+                    <span className="shrink-0 w-1.5 sm:w-2 h-7 sm:h-2 rounded-full sm:rounded-full" style={{ background: priorityColor }} />
 
                     {/* Task ID */}
-                    <span className="hidden sm:block text-[11px] font-mono text-[#9CA3AF] shrink-0 w-14">
+                    <span className="hidden md:block text-[11px] font-mono text-[#9CA3AF] shrink-0 w-14">
                         #{task.id}
                     </span>
 
                     {/* Title + description */}
                     <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium text-[#101828] truncate">{task.title}</p>
+                        <div className="flex items-center gap-1.5">
+                            <span className="sm:hidden text-[11px] font-mono text-[#9CA3AF] shrink-0">
+                                #{task.id}
+                            </span>
+                            <p className="text-[13px] font-medium text-[#101828] truncate">{task.title}</p>
+                        </div>
                         {task.description && (
                             <p className="text-[12px] text-[#6A7282] truncate mt-0.5">{task.description}</p>
                         )}
@@ -146,10 +151,10 @@ function SwipeableTaskRow({
                     </div>
 
                     {/* Right side: assignee + points + status + menu */}
-                    <div className="shrink-0 flex items-center gap-2">
+                    <div className="shrink-0 flex items-center gap-1.5 sm:gap-2">
                         {/* Assignee avatar */}
                         {task.assigneeName && (
-                            <div className="hidden sm:flex w-6 h-6 rounded-full bg-[#155DFC] text-white text-[10px] font-bold items-center justify-center uppercase overflow-hidden shrink-0">
+                            <div className="flex w-6 h-6 rounded-full bg-[#155DFC] text-white text-[10px] font-bold items-center justify-center uppercase overflow-hidden shrink-0">
                                 {avatarUrl ? (
                                     <Image src={avatarUrl} alt={task.assigneeName} width={24} height={24} className="w-full h-full object-cover" unoptimized />
                                 ) : (
@@ -158,7 +163,7 @@ function SwipeableTaskRow({
                             </div>
                         )}
                         {task.storyPoint != null && (
-                            <span className="hidden sm:block text-[11px] font-semibold text-[#374151] bg-[#F3F4F6] rounded px-1.5 py-0.5">
+                            <span className="text-[11px] font-semibold text-[#374151] bg-[#F3F4F6] rounded px-1.5 py-0.5">
                                 {task.storyPoint}
                             </span>
                         )}
@@ -167,10 +172,12 @@ function SwipeableTaskRow({
                         <div className="relative" ref={statusRef}>
                             <button
                                 onClick={(e) => { e.stopPropagation(); setStatusOpen(s => !s); }}
-                                className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${statusClass}`}
+                                className={`text-[10px] sm:text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${statusClass} whitespace-nowrap`}
                             >
-                                {task.status?.replace(/_/g, ' ')}
-                                <ChevronDown size={10} />
+                                <span className="max-w-[60px] sm:max-w-none truncate sm:overflow-visible">
+                                    {task.status?.replace(/_/g, ' ')}
+                                </span>
+                                <ChevronDown size={10} className="shrink-0" />
                             </button>
                             {statusOpen && (
                                 <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-[#E5E7EB] rounded-xl shadow-lg py-1 min-w-[130px]">
