@@ -76,6 +76,11 @@ button, a {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+.mask-fade {
+  -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  mask-image: linear-gradient(to right, black 85%, transparent 100%);
+}
+
 /* ── Glass panel — glassmorphism card ── */
 .glass-panel {
   background: hsla(0, 0%, 100%, 0.72);
