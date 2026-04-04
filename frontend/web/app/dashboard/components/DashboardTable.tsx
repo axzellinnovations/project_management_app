@@ -25,7 +25,7 @@ interface DashboardTableProps {
     setDashboardAssignedCount?: (count: number) => void;
 }
 
-const mapProjectToDashboard = (p: any): DashboardItem => ({
+const mapProjectToDashboard = (p: { id: number; type?: string; name: string; projectKey?: string; updatedAt?: string; createdAt?: string }): DashboardItem => ({
      id: `P-${p.id}`,
      realId: p.id,
      type: p.type === 'KANBAN' ? 'PROJECT_KANBAN' : 'PROJECT_AGILE',
@@ -34,7 +34,7 @@ const mapProjectToDashboard = (p: any): DashboardItem => ({
      timestamp: p.updatedAt || p.createdAt || new Date().toISOString()
 });
 
-const mapTaskToDashboard = (t: any): DashboardItem => {
+const mapTaskToDashboard = (t: { id: number; projectId?: number; title: string; projectName?: string; status?: string; updatedAt?: string; createdAt?: string }): DashboardItem => {
     let normalizedStatus = t.status ? t.status.toUpperCase() : 'TODO';
     if (!['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'].includes(normalizedStatus)) {
         normalizedStatus = 'TODO';
@@ -51,7 +51,7 @@ const mapTaskToDashboard = (t: any): DashboardItem => {
     };
 };
 
-const mapBoardToDashboard = (b: any): DashboardItem => ({
+const mapBoardToDashboard = (b: { id: number; projectId: number; name: string; projectName: string; updatedAt?: string }): DashboardItem => ({
      id: `B-${b.id}`,
      realId: b.projectId, 
      type: 'BOARD', 
@@ -113,7 +113,7 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
         if (setDashboardAssignedCount) {
             api.get('/api/tasks/assigned?limit=100').then(res => {
                 if (isMounted && res.data) {
-                    const pendingCount = res.data.filter((task: any) => task.status !== 'DONE').length;
+                    const pendingCount = res.data.filter((task: { status?: string }) => task.status !== 'DONE').length;
                     setDashboardAssignedCount(pendingCount);
                 }
             }).catch(() => {});
@@ -139,7 +139,7 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
                     if(isMounted) {
                         setItems(taskItems);
                         if(setDashboardAssignedCount) {
-                            setDashboardAssignedCount(taskItems.filter((t: any) => t.status !== 'DONE').length);
+                            setDashboardAssignedCount(taskItems.filter((t: { status?: string }) => t.status !== 'DONE').length);
                         }
                     }
                 } else if (activeTab === 'worked-on') {
@@ -266,7 +266,7 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
         <div className="w-full flex flex-col-reverse lg:flex-row gap-6 lg:gap-8 items-start">
             <motion.div 
                 layout 
-                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 500px' } as any}
+                style={{ contentVisibility: 'auto', containIntrinsicSize: '0 500px' } as React.CSSProperties}
                 className="w-full flex-1 overflow-x-auto custom-scrollbar"
             >
                 <table className="min-w-full border-separate border-spacing-0">

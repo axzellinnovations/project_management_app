@@ -168,7 +168,7 @@ export default function Sidebar() {
     }
 
     void fetchChatSummaries(parseInt(projectId));
-  }, [pathname, fetchChatSummaries]);
+  }, [pathname, fetchChatSummaries, recentProjects]);
 
   /* click-outside to close dropdowns */
   useEffect(() => {

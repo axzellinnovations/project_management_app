@@ -4,34 +4,50 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState, useMemo } from 'react';
 
 interface StatusDonutChartProps {
-    items: any[];
+    items: { status?: string | null }[];
     onHover: (status: string | null) => void;
 }
 
-export default function StatusDonutChart({ items, onHover }: StatusDonutChartProps) {
-    const statuses = [
-        { key: 'TODO', label: 'To Do', color: '#D1D5DB' },
-        { key: 'IN_PROGRESS', label: 'In Progress', color: '#3B82F6' },
-        { key: 'IN_REVIEW', label: 'In Review', color: '#F59E0B' }
-    ];
+const STATUSES = [
+    { key: 'TODO', label: 'To Do', color: '#D1D5DB' },
+    { key: 'IN_PROGRESS', label: 'In Progress', color: '#3B82F6' },
+    { key: 'IN_REVIEW', label: 'In Review', color: '#F59E0B' }
+];
 
+const RADIUS = 64;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+export default function StatusDonutChart({ items, onHover }: StatusDonutChartProps) {
     const data = useMemo(() => {
-        const counts = statuses.map(s => ({
+        const itemsData = items || [];
+        const counts = STATUSES.map(s => ({
             ...s,
-            count: items.filter(i => i.status === s.key).length
+            count: itemsData.filter(i => i.status === s.key).length
         }));
         const total = counts.reduce((acc, curr) => acc + curr.count, 0);
-        return { counts, total };
+
+        const slicesWithOrigin = counts.map((slice, index, arr) => {
+            const proportion = total > 0 ? slice.count / total : 0;
+            const currentOrigin = arr.slice(0, index).reduce((sum, s) => sum + (total > 0 ? s.count / total : 0), 0);
+            return {
+                ...slice,
+                proportion,
+                currentOrigin,
+                dashLength: proportion * CIRCUMFERENCE
+            };
+        });
+
+        return { counts, total, slicesWithOrigin };
     }, [items]);
 
     // Counter Snap Animation
     const [displayCount, setDisplayCount] = useState(0);
     useEffect(() => {
         if (data.total === 0) {
-            setDisplayCount(0);
-            return;
+            const t = setTimeout(() => setDisplayCount(0), 0);
+            return () => clearTimeout(t);
         }
-        let start = 0;
+        const start = 0;
         const end = data.total;
         const duration = 600; // 600ms to 1200ms range roughly
         const startTime = performance.now();
@@ -51,10 +67,6 @@ export default function StatusDonutChart({ items, onHover }: StatusDonutChartPro
         return () => clearTimeout(timer);
     }, [data.total]);
 
-    const radius = 64;
-    const circumference = 2 * Math.PI * radius;
-    let accumulatedDashOrigin = 0;
-
     const [hoveredSlice, setHoveredSlice] = useState<string | null>(null);
 
     const handleHover = (status: string | null) => {
@@ -68,7 +80,7 @@ export default function StatusDonutChart({ items, onHover }: StatusDonutChartPro
                 <div className="relative flex items-center justify-center w-40 h-40">
                     <svg className="w-full h-full" viewBox="0 0 160 160">
                         <circle 
-                            cx="80" cy="80" r={radius} 
+                            cx="80" cy="80" r={RADIUS} 
                             fill="none" stroke="#E5E7EB" strokeWidth="14" 
                             strokeDasharray="4 8" strokeLinecap="round" 
                         />
@@ -102,7 +114,7 @@ export default function StatusDonutChart({ items, onHover }: StatusDonutChartPro
                         <motion.circle 
                             cx="80" 
                             cy="80" 
-                            r={radius} 
+                            r={RADIUS} 
                             fill="none" 
                             stroke="#F3F4F6" 
                             strokeWidth="14"
@@ -112,13 +124,7 @@ export default function StatusDonutChart({ items, onHover }: StatusDonutChartPro
                         />
                         
                         {/* Data Segments */}
-                        {data.counts.map((slice, index) => {
-                            const proportion = slice.count / data.total;
-                            const dashLength = proportion * circumference;
-                            const currentOrigin = accumulatedDashOrigin;
-                            
-                            accumulatedDashOrigin += proportion; // next offset
-    
+                        {data.slicesWithOrigin.map((slice, index) => {
                             if (slice.count === 0) return null;
     
                             return (
@@ -126,15 +132,15 @@ export default function StatusDonutChart({ items, onHover }: StatusDonutChartPro
                                     key={slice.key}
                                     cx="80"
                                     cy="80"
-                                    r={radius}
+                                    r={RADIUS}
                                     fill="none"
                                     stroke={slice.color}
                                     strokeWidth="14"
                                     strokeLinecap="round"
-                                    strokeDasharray={`${dashLength} ${circumference}`}
-                                    strokeDashoffset={-currentOrigin * circumference}
-                                    initial={{ strokeDasharray: `0 ${circumference}` }}
-                                    animate={{ strokeDasharray: `${dashLength} ${circumference}` }}
+                                    strokeDasharray={`${slice.dashLength} ${CIRCUMFERENCE}`}
+                                    strokeDashoffset={-slice.currentOrigin * CIRCUMFERENCE}
+                                    initial={{ strokeDasharray: `0 ${CIRCUMFERENCE}` }}
+                                    animate={{ strokeDasharray: `${slice.dashLength} ${CIRCUMFERENCE}` }}
                                     transition={{
                                         duration: 0.9,
                                         delay: 0.3 + (index * 0.15), // Staggered entry logic

@@ -699,7 +699,7 @@ export const useChat = (projectId: string) => {
       if (inc.id) loadMsgReactions(inc.id);
     });
     return () => sub.unsubscribe();
-  }, [projectId, isSocketConnected, threads.activeThreadRoot, setThreadMessages, loadMsgReactions]);
+  }, [projectId, isSocketConnected, threads.activeThreadRootRef, setThreadMessages, loadMsgReactions]);
 
   // ── Per-message reaction subscriptions ──
   useEffect(() => {

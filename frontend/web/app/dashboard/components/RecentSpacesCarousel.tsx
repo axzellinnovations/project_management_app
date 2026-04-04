@@ -116,7 +116,7 @@ export default function RecentSpacesCarousel({ projects, loading, searchQuery }:
                 ref={scrollRef}
                 onScroll={handleScroll}
                 className="flex gap-4 overflow-x-auto pb-6 pt-2 hide-scrollbar scroll-smooth"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', contentVisibility: 'auto', containIntrinsicSize: '0 160px' } as any}
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', contentVisibility: 'auto', containIntrinsicSize: '0 160px' } as React.CSSProperties}
             >
                 {/* Custom CSS for hiding scrollbar inline as fallback */}
                 <style jsx>{`

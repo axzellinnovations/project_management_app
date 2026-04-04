@@ -14,13 +14,16 @@ export default function WelcomeGreeting({ username }: WelcomeGreetingProps) {
         const hour = new Date().getHours();
         const capitalizedName = username.charAt(0).toUpperCase() + username.slice(1);
         
-        if (hour >= 0 && hour < 12) {
-            setTimeData({ period: 'morning', text: `Good Morning, ${capitalizedName}!` });
-        } else if (hour >= 12 && hour < 17) {
-            setTimeData({ period: 'afternoon', text: `Good Afternoon, ${capitalizedName}!` });
-        } else {
-            setTimeData({ period: 'evening', text: `Good Evening, ${capitalizedName}!` });
-        }
+        const timer = setTimeout(() => {
+            if (hour >= 0 && hour < 12) {
+                setTimeData({ period: 'morning', text: `Good Morning, ${capitalizedName}!` });
+            } else if (hour >= 12 && hour < 17) {
+                setTimeData({ period: 'afternoon', text: `Good Afternoon, ${capitalizedName}!` });
+            } else {
+                setTimeData({ period: 'evening', text: `Good Evening, ${capitalizedName}!` });
+            }
+        }, 0);
+        return () => clearTimeout(timer);
     }, [username]);
 
     if (!timeData) return <h1 className="font-arimo text-[16px] xl:text-[20px] leading-[24px] text-transparent font-semibold invisible">Loading</h1>;
