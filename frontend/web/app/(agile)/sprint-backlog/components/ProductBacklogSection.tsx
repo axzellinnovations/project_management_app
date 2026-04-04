@@ -13,6 +13,7 @@ import {
 import type { TaskItem } from '../page';
 import api from '@/lib/axios';
 import AssigneeAvatar from './AssigneeAvatar';
+import TaskCardModal from '@/app/taskcard/TaskCardModal';
 
 interface TeamMemberInfo {
   id: number;
@@ -65,6 +66,7 @@ export default function ProductBacklogSection({
   const [statusMenuTaskId, setStatusMenuTaskId] = useState<number | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMemberInfo[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
 
   const assignMenuRef = useRef<HTMLDivElement | null>(null);
   const statusMenuRef = useRef<HTMLDivElement | null>(null);
@@ -237,14 +239,15 @@ export default function ProductBacklogSection({
                 key={task.id}
                 draggable
                 onDragStart={(e) => e.dataTransfer.setData('text/plain', String(task.id))}
-                className="group relative flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl border border-[#E4E7EC] bg-white px-3.5 py-3 sm:px-4 sm:py-3.5 cursor-grab hover:border-[#175CD3]/30 hover:shadow-lg transition-all duration-200 ease-in-out"
+                onClick={() => setSelectedTaskId(task.id)}
+                className="group relative flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl border border-[#E4E7EC] bg-white px-3.5 py-3 sm:px-4 sm:py-3.5 cursor-pointer hover:border-[#175CD3]/30 hover:shadow-lg transition-all duration-200 ease-in-out"
               >
                 {/* Selection & Title Row */}
                 <div className="flex items-center gap-3 min-w-0 w-full sm:flex-1">
                   {/* Selection checkbox */}
                   <button
                     type="button"
-                    onClick={() => onToggleTask(task.id)}
+                    onClick={(e) => { e.stopPropagation(); onToggleTask(task.id); }}
                     className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg border-2 transition-all duration-200 ${
                       task.selected
                         ? 'border-[#175CD3] bg-[#175CD3] shadow-sm'
@@ -304,6 +307,7 @@ export default function ProductBacklogSection({
                       type="number"
                       min="0"
                       value={task.storyPoints}
+                      onClick={(e) => e.stopPropagation()}
                       onChange={(e) =>
                         onStoryPointsChange(task.id, Number(e.target.value))
                       }
@@ -494,6 +498,13 @@ export default function ProductBacklogSection({
             </form>
           )}
         </div>
+      )}
+
+      {selectedTaskId !== null && (
+        <TaskCardModal
+          taskId={selectedTaskId}
+          onClose={() => setSelectedTaskId(null)}
+        />
       )}
     </div>
   );

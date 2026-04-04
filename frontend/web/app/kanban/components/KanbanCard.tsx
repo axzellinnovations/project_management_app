@@ -29,12 +29,14 @@ export default function KanbanCard({ task, onDelete, onEdit, onOpenTask, usersMa
   const totalSubtasks = task.subtasks?.length ?? 0;
 
   const priorityStyle: Record<string, { dot: string; text: string; bg: string }> = {
-    URGENT: { dot: 'bg-red-500', text: 'text-red-600', bg: 'bg-red-50' },
+    URGENT: { dot: 'bg-red-600', text: 'text-red-700', bg: 'bg-red-50' },
     HIGH:   { dot: 'bg-orange-500', text: 'text-orange-600', bg: 'bg-orange-50' },
     MEDIUM: { dot: 'bg-amber-400', text: 'text-amber-600', bg: 'bg-amber-50' },
     LOW:    { dot: 'bg-gray-400', text: 'text-gray-500', bg: 'bg-gray-100' },
   };
-  const pStyle = task.priority ? (priorityStyle[task.priority] ?? priorityStyle.LOW) : null;
+  const pStyle = task.priority
+    ? (priorityStyle[task.priority] ?? priorityStyle.LOW)
+    : priorityStyle.LOW;
 
   const {
     attributes,
@@ -88,12 +90,10 @@ export default function KanbanCard({ task, onDelete, onEdit, onOpenTask, usersMa
       `}
     >
       {/* Priority badge */}
-      {pStyle && task.priority && (
-        <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold mb-1.5 ${pStyle.text} ${pStyle.bg}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${pStyle.dot}`} />
-          {task.priority}
-        </div>
-      )}
+      <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold mb-1.5 ${pStyle.text} ${pStyle.bg}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${pStyle.dot}`} />
+        {task.priority ?? 'LOW'}
+      </div>
 
       {/* Title */}
       <p className="text-sm font-medium text-gray-800 line-clamp-2 mb-2">
