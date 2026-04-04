@@ -226,11 +226,9 @@ public class UserService {
         if (user == null)
             return "If that email exists, an OTP has been sent.";
 
-        // Delete existing password reset tokens for this user
-        VerificationToken existingToken = tokenRepository.findByUserAndTokenType(user, VerificationToken.TokenType.PASSWORD_RESET);
-        if (existingToken != null) {
-            tokenRepository.delete(existingToken);
-        }
+        // Delete ALL existing password reset tokens for this user to prevent
+        // NonUniqueResultException on subsequent queries
+        tokenRepository.deleteByUserAndTokenType(user, VerificationToken.TokenType.PASSWORD_RESET);
         tokenRepository.flush();
 
         String otp = String.valueOf(new Random().nextInt(900000) + 100000);
@@ -262,23 +260,27 @@ public class UserService {
         return true;
     }
 
-    // Deprecated: Use resetPassword(token, newPassword) instead
+    // This method is called by the /api/auth/reset endpoint.
+    // It validates the OTP by email+tokenType to avoid NonUniqueResultException.
     @Transactional
-    @Deprecated
     public boolean resetPassword(String email, String otp, String newPassword) {
         User user = userRepository.findByEmail(email.toLowerCase());
-        VerificationToken verificationToken = tokenRepository.findByUser(user);
+        if (user == null) return false;
 
-        if (verificationToken != null && verificationToken.getToken().equals(otp) && !verificationToken.isExpired()
-                && verificationToken.getTokenType() == VerificationToken.TokenType.PASSWORD_RESET) {
-            user.setPassword(encoder.encode(newPassword));
-            verificationToken.setUsed(true);
-            userRepository.save(user);
-            tokenRepository.save(verificationToken);
-            return true;
-        }
+        // Use tokenType-aware query to avoid ambiguity when user has multiple tokens
+        VerificationToken verificationToken =
+                tokenRepository.findByUserAndTokenType(user, VerificationToken.TokenType.PASSWORD_RESET);
 
-        return false;
+        if (verificationToken == null) return false;
+        if (verificationToken.isUsed()) return false;
+        if (verificationToken.isExpired()) return false;
+        if (!verificationToken.getToken().equals(otp)) return false;
+
+        user.setPassword(encoder.encode(newPassword));
+        verificationToken.setUsed(true);
+        userRepository.save(user);
+        tokenRepository.save(verificationToken);
+        return true;
     }
 
     public java.util.List<User> getAllUsers() {

@@ -69,10 +69,10 @@ public class UserController {
     public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request){
         boolean isSuccess = service.resetPassword(request.getEmail(), request.getOtp(), request.getNewPassword());
         if(isSuccess){
-            return new ResponseEntity<>("Password reset successfully", HttpStatus.OK);
+            return new ResponseEntity<>(Map.of("message", "Password reset successfully"), HttpStatus.OK);
         }
         else {
-            return new ResponseEntity<>("Invalid or expired OTP", HttpStatus.UNAUTHORIZED);
+            return new ResponseEntity<>(Map.of("message", "Invalid or expired OTP. Please request a new code."), HttpStatus.BAD_REQUEST);
         }
     }
 
