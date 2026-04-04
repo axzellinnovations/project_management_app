@@ -6,7 +6,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.planora.backend.dto.LoginRequest;
 import com.planora.backend.dto.LoginResponse;
 import com.planora.backend.dto.OtpRequest;
 import com.planora.backend.dto.ResetPasswordRequest;
@@ -45,8 +44,8 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request){
-        LoginResponse response = service.loginUser(request);
+    public ResponseEntity<?> login(@RequestBody User user){
+        LoginResponse response = service.loginUser(user);
         if(response.isSuccess()){
             return new ResponseEntity<>(response, HttpStatus.OK);
         } else if("UNVERIFIED_EMAIL".equals(response.getErrorCode())) {
@@ -70,10 +69,10 @@ public class UserController {
     public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request){
         boolean isSuccess = service.resetPassword(request.getEmail(), request.getOtp(), request.getNewPassword());
         if(isSuccess){
-            return new ResponseEntity<>(Map.of("message", "Password reset successfully"), HttpStatus.OK);
+            return new ResponseEntity<>("Password reset successfully", HttpStatus.OK);
         }
         else {
-            return new ResponseEntity<>(Map.of("message", "Invalid or expired OTP. Please request a new code."), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>("Invalid or expired OTP", HttpStatus.UNAUTHORIZED);
         }
     }
 

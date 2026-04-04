@@ -20,7 +20,6 @@ import io.jsonwebtoken.security.Keys;
 public class JWTService {
 
     private static final long ONE_DAY_IN_MS = 1000L * 60 * 60 * 24;
-    private static final long THIRTY_DAYS_IN_MS = ONE_DAY_IN_MS * 30;
 
     @Value("${jwt.secret}")
     private String secretKey;
@@ -40,22 +39,17 @@ public class JWTService {
     }
 
     public String generateToken(String email, String username) {
-        return generateToken(email, username, false);
-    }
-
-    public String generateToken(String email, String username, boolean rememberMe) {
         Map<String, Object> claims = new HashMap<>();
         if (username != null) {
             claims.put("username", username);
         }
-        long expiry = rememberMe ? THIRTY_DAYS_IN_MS : ONE_DAY_IN_MS;
 
         return Jwts.builder()
                 .claims()
                 .subject(email)
                 .add(claims)
                 .issuedAt(new Date(System.currentTimeMillis()))
-            .expiration(new Date(System.currentTimeMillis() + expiry))
+            .expiration(new Date(System.currentTimeMillis() + ONE_DAY_IN_MS))
                 .and()
                 .signWith(getSigningKey())
                 .compact();

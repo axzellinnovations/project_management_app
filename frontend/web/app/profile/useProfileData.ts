@@ -1,7 +1,6 @@
 'use client';
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
-import { validatePassword } from '@/lib/passwordValidation';
 import { AxiosError } from 'axios';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/axios';
@@ -118,8 +117,7 @@ export function useProfileData() {
         setErrorMessage('');
         setSuccessMessage('');
         if (!otp.trim()) { setErrorMessage('Please enter the reset code.'); return; }
-        const pwResult = validatePassword(newPassword);
-        if (!pwResult.valid) { setErrorMessage('Password does not meet the security requirements (min 8 characters, uppercase, lowercase, number, special character).'); return; }
+        if (newPassword.length < 6) { setErrorMessage('Password must be at least 6 characters.'); return; }
         if (newPassword !== confirmPassword) { setErrorMessage('Passwords do not match.'); return; }
         try {
             setIsResettingPw(true);
