@@ -244,17 +244,18 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
             </SidebarField>
           )}
 
-          <SidebarField label="Priority">
+          {priority && (
+            <SidebarField label="Priority">
               <div className="relative">
-                <div
+                <div 
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsPriorityOpen(!isPriorityOpen);
                   }}
-                  className={`flex items-center gap-2 text-sm font-semibold px-2 py-1 rounded w-fit cursor-pointer transition-colors ${getPriorityStyle(priority || 'LOW').text} ${getPriorityStyle(priority || 'LOW').bg} ${getPriorityStyle(priority || 'LOW').hover}`}
+                  className={`flex items-center gap-2 text-sm font-semibold px-2 py-1 rounded w-fit cursor-pointer transition-colors ${getPriorityStyle(priority).text} ${getPriorityStyle(priority).bg} ${getPriorityStyle(priority).hover}`}
                 >
-                  <span className={`w-2 h-2 rounded-full ${getPriorityStyle(priority || 'LOW').dot}`} />
-                  {priority || 'LOW'}
+                  <span className={`w-2 h-2 rounded-full ${getPriorityStyle(priority).dot}`} />
+                  {priority}
                   <ChevronDown size={12} className="opacity-60" />
                 </div>
                 {isPriorityOpen && (
@@ -276,6 +277,7 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
                 )}
               </div>
             </SidebarField>
+          )}
 
         </div>
       </div>
