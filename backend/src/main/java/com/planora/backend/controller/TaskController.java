@@ -11,10 +11,12 @@ import com.planora.backend.service.TaskService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/tasks")
@@ -27,12 +29,19 @@ public class TaskController {
     @Autowired
     TaskActivityService activityService;
 
+    @Autowired
+    SimpMessagingTemplate messagingTemplate;
+
     @PostMapping
     public ResponseEntity<TaskResponseDTO> createTask(
             @RequestBody TaskRequestDTO request,
             @AuthenticationPrincipal UserPrincipal currentUser){
         Long currentUserId = currentUser.getUserId();
-        return new ResponseEntity<>(service.createTask(request, currentUserId), HttpStatus.CREATED);
+        TaskResponseDTO task = service.createTask(request, currentUserId);
+        messagingTemplate.convertAndSend(
+                "/topic/project/" + task.getProjectId() + "/tasks",
+                Map.of("type", "TASK_CREATED", "task", task));
+        return new ResponseEntity<>(task, HttpStatus.CREATED);
     }
 
     @GetMapping("/{taskId}")
@@ -51,7 +60,11 @@ public class TaskController {
             @RequestBody TaskRequestDTO request,
             @AuthenticationPrincipal UserPrincipal currentUser){
         Long currentUserId = currentUser.getUserId();
-        return new ResponseEntity<>(service.updateTask(taskId, request, currentUserId), HttpStatus.OK);
+        TaskResponseDTO task = service.updateTask(taskId, request, currentUserId);
+        messagingTemplate.convertAndSend(
+                "/topic/project/" + task.getProjectId() + "/tasks",
+                Map.of("type", "TASK_UPDATED", "task", task));
+        return new ResponseEntity<>(task, HttpStatus.OK);
     }
 
     @DeleteMapping("/{taskId}")
@@ -59,7 +72,10 @@ public class TaskController {
             @PathVariable Long taskId,
             @AuthenticationPrincipal UserPrincipal currentUser){
         Long currentUserId = currentUser.getUserId();
-        service.deleteTask(taskId, currentUserId);
+        Long projectId = service.deleteTask(taskId, currentUserId);
+        messagingTemplate.convertAndSend(
+                "/topic/project/" + projectId + "/tasks",
+                Map.of("type", "TASK_DELETED", "taskId", taskId));
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 

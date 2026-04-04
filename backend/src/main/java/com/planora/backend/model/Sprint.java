@@ -35,4 +35,7 @@ public class Sprint {
     @Enumerated(EnumType.STRING)
     private SprintStatus status;
 
+    @Column(nullable = true, length = 500)
+    private String goal;
+
 }

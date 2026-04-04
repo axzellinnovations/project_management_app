@@ -190,6 +190,7 @@ export interface SprintItem {
   status: string;
   startDate?: string;
   endDate?: string;
+  goal?: string;
   tasks: TaskItem[];
 }
 
@@ -205,6 +206,7 @@ export interface TaskItem {
   status?: string;
   startDate?: string;
   dueDate?: string;
+  priority?: string;
 }
 
 // ── Burndown ───────────────────────────────────────

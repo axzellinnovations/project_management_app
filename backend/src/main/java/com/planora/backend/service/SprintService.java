@@ -141,6 +141,7 @@ public class SprintService {
         if (updatedSprint.getStartDate() != null) existing.setStartDate(updatedSprint.getStartDate());
         if (updatedSprint.getEndDate() != null) existing.setEndDate(updatedSprint.getEndDate());
         if (updatedSprint.getStatus() != null) existing.setStatus(updatedSprint.getStatus());
+        if (updatedSprint.getGoal() != null) existing.setGoal(updatedSprint.getGoal());
 
         if (existing.getStartDate() != null && existing.getEndDate() != null
                 && existing.getStartDate().isAfter(existing.getEndDate())) {

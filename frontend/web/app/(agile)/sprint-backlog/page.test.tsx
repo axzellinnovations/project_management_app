@@ -49,7 +49,7 @@ describe('SprintBacklogPage', () => {
       if (url.includes('/api/tasks/project/')) {
         return Promise.resolve({ data: [] });
       }
-      if (url.includes('/api/project-members/project/')) {
+      if (url.includes('/api/projects/') && url.includes('/members')) {
         return Promise.resolve({
           data: [
             {
@@ -58,6 +58,9 @@ describe('SprintBacklogPage', () => {
             },
           ],
         });
+      }
+      if (/\/api\/projects\/\d+$/.test(url)) {
+        return Promise.resolve({ data: { id: 123, projectKey: 'TEST', name: 'Test Project', type: 'AGILE' } });
       }
       return Promise.reject(new Error('not found'));
     });

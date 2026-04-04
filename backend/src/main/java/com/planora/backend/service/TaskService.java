@@ -206,12 +206,14 @@ public class TaskService {
     }
 
     //4. DELETE TASK
-    public void deleteTask(Long taskId, Long currentUserId) {
+    @Transactional
+    public Long deleteTask(Long taskId, Long currentUserId) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(()-> new EntityNotFoundException("Task not found"));
 
         //validate user- OWNER
         Long teamId = task.getProject().getTeam().getId();
+        Long projectId = task.getProject().getId();
 
         //fetch user role
         TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId,currentUserId)
@@ -222,6 +224,7 @@ public class TaskService {
         }
 
         taskRepository.delete(task);
+        return projectId;
     }
 
     //5. GET PROJECT BY ID

@@ -6,6 +6,7 @@ import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef
 import { getUserFromToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import api from '@/lib/axios';
+import VelocityPanel from '@/components/layout/VelocityPanel';
 
 /* ─────────────────────────────────────────────
    Types
@@ -108,6 +109,11 @@ export default function Sidebar() {
     const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
     const [folderStats, setFolderStats] = useState({ viewAll: 0, recent: 0, favorites: 0, shared: 0, trash: 0 });
 
+    /* agile analytics */
+    const [currentProjectType, setCurrentProjectType] = useState<string | null>(null);
+    const [showVelocityPanel, setShowVelocityPanel] = useState(false);
+    const [currentSidebarProjectId, setCurrentSidebarProjectId] = useState<string | null>(null);
+
     /* refs for click-outside + anchor position */
     const favRef    = useRef<HTMLDivElement>(null);
     const recentRef = useRef<HTMLDivElement>(null);
@@ -171,6 +177,19 @@ export default function Sidebar() {
         const timer = setTimeout(() => void fetchProjects(), 600);
         return () => clearTimeout(timer);
     }, [pathname, fetchProjects]);
+
+    // Fetch current project type to gate AGILE-only sidebar items.
+    useEffect(() => {
+        const pid =
+            (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('projectId'))
+            || localStorage.getItem('currentProjectId')
+            || (recentProjects.length > 0 ? recentProjects[0].id.toString() : null);
+        if (!pid) { setCurrentProjectType(null); setCurrentSidebarProjectId(null); return; }
+        setCurrentSidebarProjectId(pid);
+        api.get(`/api/projects/${pid}`)
+            .then(res => setCurrentProjectType(res.data?.type ?? null))
+            .catch(() => setCurrentProjectType(null));
+    }, [pathname, recentProjects]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -475,6 +494,26 @@ export default function Sidebar() {
                         <FolderNavRow icon={<UsersIcon />}  label="Shared"     href="/folders/shared"    badge={folderStats.shared || undefined}     active={pathname === '/folders/shared'}     collapsed={collapsed} />
                         <FolderNavRow icon={<TrashIcon />}  label="Trash"      href="/folders/trash"     badge={folderStats.trash || undefined}      active={pathname === '/folders/trash'}      collapsed={collapsed} />
                     </div>
+
+                    {/* ── Agile Analytics section (AGILE projects only) ── */}
+                    {currentProjectType === 'AGILE' && (
+                        <>
+                            <div className="my-2 mx-1 border-t border-[#F2F4F7]" />
+                            <SectionHeader
+                                label="AGILE"
+                                collapsed={collapsed}
+                                expanded={true}
+                                onToggle={() => {}}
+                            />
+                            <NavRow
+                                icon={<BarChart3Icon />}
+                                label="Sprint Velocity"
+                                collapsed={collapsed}
+                                active={showVelocityPanel}
+                                onClick={() => setShowVelocityPanel(true)}
+                            />
+                        </>
+                    )}
                 </div>
 
                 {/* ── User section ── */}
@@ -555,6 +594,12 @@ export default function Sidebar() {
                     search={inboxSearch}
                     onSearch={setInboxSearch}
                     onClose={() => setInboxOpen(false)}
+                />
+            )}
+            {showVelocityPanel && (
+                <VelocityPanel
+                    projectId={currentSidebarProjectId}
+                    onClose={() => setShowVelocityPanel(false)}
                 />
             )}
         </div>
@@ -1089,5 +1134,13 @@ const UserIcon = ({ size = 16 }: { size?: number }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
         <circle cx="12" cy="7" r="4" />
+    </svg>
+);
+
+const BarChart3Icon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
     </svg>
 );

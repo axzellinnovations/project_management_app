@@ -13,6 +13,7 @@ import CreateColumnModal from './components/CreateColumnModal';
 import { Loader, AlertCircle, CheckCircle2, Plus, Check, X } from 'lucide-react';
 import axios from '@/lib/axios';
 import { AxiosError } from 'axios';
+import { toast } from '@/components/ui';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
 
 interface SprintSummary {
@@ -156,7 +157,7 @@ export default function SprintBoardPage() {
     } catch (err: unknown) {
         console.error('Failed to create task:', err);
         const axiosErr = err as AxiosError<{ message?: string }>;
-        alert(axiosErr?.response?.data?.message || 'Failed to create task.');
+        toast(axiosErr?.response?.data?.message || 'Failed to create task.', 'error');
     } finally {
         setIsCreating(false);
     }
@@ -175,7 +176,7 @@ export default function SprintBoardPage() {
       }, 2000);
     } catch (err) {
       console.error('Failed to complete sprint:', err);
-      alert('Failed to complete sprint.');
+      toast('Failed to complete sprint.', 'error');
     } finally {
       setIsUpdating(false);
     }
@@ -197,7 +198,7 @@ export default function SprintBoardPage() {
       console.error('Failed to add column:', err);
       const axiosErr = err as AxiosError<{ message?: string }>;
       const msg = axiosErr?.response?.data?.message || axiosErr?.message || 'Failed to add column.';
-      alert(msg);
+      toast(msg, 'error');
     } finally {
       setIsCreatingColumn(false);
     }

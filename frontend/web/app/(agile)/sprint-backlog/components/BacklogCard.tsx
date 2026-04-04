@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  BarChart3,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
@@ -11,16 +12,16 @@ import {
   Pencil,
   Check,
   Trash2,
-  UserPlus,
   X,
   Rocket,
   Clock,
   CornerDownLeft,
 } from 'lucide-react';
-import type { SprintItem, TaskItem } from '../page';
+import TaskRow from './TaskRow';
+import type { SprintItem, TaskItem } from '@/types';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
 import api from '@/lib/axios';
-import AssigneeAvatar from './AssigneeAvatar';
+import SprintReportModal from './SprintReportModal';
 
 interface TeamMemberInfo {
   id: number;
@@ -39,20 +40,6 @@ interface BacklogCardProps {
 }
 
 type SprintStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
-
-const STATUS_LABELS: Record<SprintStatus, string> = {
-  TODO: 'To Do',
-  IN_PROGRESS: 'In Progress',
-  IN_REVIEW: 'In Review',
-  DONE: 'Done',
-};
-
-const STATUS_COLORS: Record<SprintStatus, string> = {
-  TODO: 'bg-[#F2F4F7] text-[#344054] border-[#D0D5DD]',
-  IN_PROGRESS: 'bg-[#EFF8FF] text-[#175CD3] border-[#B2DDFF]',
-  IN_REVIEW: 'bg-[#FFFAEB] text-[#B54708] border-[#FEDF89]',
-  DONE: 'bg-[#ECFDF3] text-[#027A48] border-[#A6F4C5]',
-};
 
 interface LocalSprintTask {
   id: number;
@@ -271,29 +258,13 @@ function EditSprintModal({ open, sprintName, loading, onConfirm, onCancel }: Edi
   );
 }
 
-// ── Utility: check if due date is within N days ──────────────────────────────
-function isDueWithinDays(dueDateStr: string, days: number): boolean {
-  if (!dueDateStr) return false;
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const due = new Date(dueDateStr);
-  due.setHours(0, 0, 0, 0);
-  const diffMs = due.getTime() - now.getTime();
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-  return diffDays <= days;
-}
-
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateTask, onDeleteTask, onToggleTask, onSprintDeleted }: BacklogCardProps) {
+function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateTask, onDeleteTask, onToggleTask, onSprintDeleted }: BacklogCardProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [showSprintMenu, setShowSprintMenu] = useState(false);
   const [showCreateTaskBox, setShowCreateTaskBox] = useState(false);
   const [newTaskName, setNewTaskName] = useState('');
-  const [renamingTaskId, setRenamingTaskId] = useState<number | null>(null);
-  const [renameValue, setRenameValue] = useState('');
-  const [assignMenuTaskId, setAssignMenuTaskId] = useState<number | null>(null);
-  const [statusMenuTaskId, setStatusMenuTaskId] = useState<number | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMemberInfo[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
@@ -319,11 +290,16 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
   const [showEditSprintModal, setShowEditSprintModal] = useState(false);
   const [editingSprintLoading, setEditingSprintLoading] = useState(false);
 
+  // Sprint goal state
+  const [goalText, setGoalText] = useState(sprint.goal ?? '');
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [savingGoal, setSavingGoal] = useState(false);
+
+  // Sprint report modal state
+  const [showReportModal, setShowReportModal] = useState(false);
+
   const sprintMenuRef = useRef<HTMLDivElement | null>(null);
-  const assignMenuRef = useRef<HTMLDivElement | null>(null);
-  const statusMenuRef = useRef<HTMLDivElement | null>(null);
   const createTaskRef = useRef<HTMLFormElement | null>(null);
-  const dateInputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
 
   const [localTasks, setLocalTasks] = useState<LocalSprintTask[]>([]);
 
@@ -368,18 +344,6 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
         setShowSprintMenu(false);
       }
       if (
-        assignMenuRef.current &&
-        !assignMenuRef.current.contains(event.target as Node)
-      ) {
-        setAssignMenuTaskId(null);
-      }
-      if (
-        statusMenuRef.current &&
-        !statusMenuRef.current.contains(event.target as Node)
-      ) {
-        setStatusMenuTaskId(null);
-      }
-      if (
         createTaskRef.current &&
         !createTaskRef.current.contains(event.target as Node)
       ) {
@@ -388,9 +352,19 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
       }
     };
 
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowSprintMenu(false);
+        setShowCreateTaskBox(false);
+        setNewTaskName('');
+      }
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
     };
   }, []);
 
@@ -462,16 +436,6 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
     }
   };
 
-  const formatDate = (value: string) => {
-    if (!value) return 'Set Date';
-
-    const date = new Date(value);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
   const handleEditSprint = () => {
     setShowSprintMenu(false);
     setShowEditSprintModal(true);
@@ -487,6 +451,18 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
       // silently fail
     } finally {
       setEditingSprintLoading(false);
+    }
+  };
+
+  const saveGoal = async () => {
+    setSavingGoal(true);
+    try {
+      await api.put(`/api/sprints/${sprint.id}`, { goal: goalText.trim() });
+      setEditingGoal(false);
+    } catch {
+      // silently fail
+    } finally {
+      setSavingGoal(false);
     }
   };
 
@@ -585,8 +561,8 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
     }
   };
 
-  const handleRenameTask = async (taskId: number) => {
-    const trimmed = renameValue.trim();
+  const handleRenameTask = async (taskId: number, title: string) => {
+    const trimmed = title.trim();
     if (!trimmed) return;
     try {
       await api.put(`/api/tasks/${taskId}`, { title: trimmed });
@@ -595,19 +571,18 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
       );
     } catch {
       // silent
-    } finally {
-      setRenamingTaskId(null);
-      setRenameValue('');
     }
   };
 
   const handleDeleteTask = async (taskId: number) => {
+    const saved = localTasks.find((t) => t.id === taskId);
+    setLocalTasks((prev) => prev.filter((t) => t.id !== taskId));
+    onDeleteTask(taskId, sprint.id);
     try {
       await api.delete(`/api/tasks/${taskId}`);
-      setLocalTasks((prev) => prev.filter((t) => t.id !== taskId));
-      onDeleteTask(taskId, sprint.id);
     } catch {
-      // silent
+      // Revert on failure
+      if (saved) setLocalTasks((prev) => [...prev, saved]);
     }
   };
 
@@ -649,8 +624,6 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
       }
     } catch {
       // silent
-    } finally {
-      setAssignMenuTaskId(null);
     }
   };
 
@@ -716,6 +689,9 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
             <button
               type="button"
               onClick={() => setShowSprintMenu((prev) => !prev)}
+              aria-haspopup="true"
+              aria-expanded={showSprintMenu}
+              aria-label="Sprint actions"
               className="p-2 text-[#344054] hover:bg-[#F2F4F7] rounded-lg transition-colors duration-150"
             >
               <MoreHorizontal size={20} />
@@ -723,7 +699,7 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
           </div>
 
           {showSprintMenu && (
-            <div className="absolute right-0 top-12 z-50 w-56 overflow-hidden rounded-xl border border-[#D0D5DD] bg-white shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
+            <div role="menu" className="absolute right-0 top-12 z-50 w-56 overflow-hidden rounded-xl border border-[#D0D5DD] bg-white shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
               <button
                 onClick={handleEditSprint}
                 className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] font-bold text-[#101828] hover:bg-[#F9FAFB]"
@@ -752,6 +728,14 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
                 </button>
               )}
 
+              <button
+                onClick={() => { setShowReportModal(true); setShowSprintMenu(false); }}
+                className="flex w-full items-center gap-3 px-5 py-4 text-left text-[14px] font-bold text-[#101828] hover:bg-[#F9FAFB]"
+              >
+                <BarChart3 size={18} className="text-[#667085]" />
+                <span>View Report</span>
+              </button>
+
               <div className="border-t border-[#EAECF0]" />
 
               <button
@@ -777,182 +761,78 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
         </div>
       </div>
 
+      {/* Sprint Goal */}
+      {isOpen && (
+        <div className="mb-3 px-1">
+          {editingGoal ? (
+            <div className="flex items-start gap-2">
+              <textarea
+                value={goalText}
+                onChange={(e) => setGoalText(e.target.value)}
+                placeholder="Define the sprint goal..."
+                className="flex-1 rounded-lg border border-[#D0D5DD] bg-white px-3 py-2 text-[13px] text-[#344054] placeholder:text-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#155DFC]/20 focus:border-[#155DFC] resize-none"
+                rows={2}
+                maxLength={500}
+              />
+              <button
+                onClick={saveGoal}
+                disabled={savingGoal}
+                className="rounded-lg bg-[#155DFC] px-3 py-2 text-[12px] font-bold text-white hover:bg-[#1149C9] disabled:opacity-50 transition-colors"
+              >
+                {savingGoal ? '...' : 'Save'}
+              </button>
+              <button
+                onClick={() => { setEditingGoal(false); setGoalText(sprint.goal ?? ''); }}
+                className="rounded-lg border border-[#D0D5DD] px-3 py-2 text-[12px] font-bold text-[#344054] hover:bg-[#F2F4F7] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditingGoal(true)}
+              className="group flex items-center gap-2 text-[13px] text-[#667085] hover:text-[#344054] transition-colors"
+            >
+              <span className="font-medium">Goal:</span>
+              <span className={goalText ? 'text-[#344054]' : 'italic'}>
+                {goalText || 'Click to set a sprint goal...'}
+              </span>
+              <Pencil size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+          )}
+        </div>
+      )}
+
       {isOpen && (
         <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
-          <div className="space-y-2">
+          <div className="space-y-0 rounded-lg overflow-hidden border border-[#EAECF0]">
             {localTasks.length > 0 ? (
-              localTasks.map((task) => {
-                const isNearDue = isDueWithinDays(task.dueDate, 2) && task.status !== 'DONE';
-                return (
+              localTasks.map((task) => (
                   <div
                     key={task.id}
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData('text/plain', String(task.id));
                     }}
-                    onClick={() => setSelectedTaskId(task.id)}
-                    className={`group relative flex items-center justify-between gap-3 border-b border-[#F2F4F7] bg-white px-3 py-2 cursor-grab transition-all duration-200 hover:bg-[#F9FAFB] ${
-                      isNearDue ? 'bg-[#FEF3F2]' : ''
-                    } ${assignMenuTaskId === task.id || statusMenuTaskId === task.id ? '!overflow-visible z-50' : ''}`}
                   >
-                    {/* Centered Scrollable Row for everything */}
-                    <div className={`flex flex-1 items-center gap-3 no-scrollbar ${assignMenuTaskId === task.id || statusMenuTaskId === task.id ? 'overflow-visible' : 'overflow-x-auto'}`} onClick={(e) => e.stopPropagation()}>
-                      {/* Task number & Title */}
-                      <div className="flex shrink-0 min-w-[140px] items-center gap-2">
-                        <span className={`text-[11px] font-bold tabular-nums shrink-0 ${isNearDue ? 'text-[#B42318]' : 'text-[#98A2B3]'}`}>
-                          #{task.taskNo}
-                        </span>
-                        {renamingTaskId === task.id ? (
-                          <input
-                            type="text"
-                            value={renameValue}
-                            onChange={(e) => setRenameValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleRenameTask(task.id);
-                              if (e.key === 'Escape') { setRenamingTaskId(null); setRenameValue(''); }
-                            }}
-                            onBlur={() => handleRenameTask(task.id)}
-                            onClick={(e) => e.stopPropagation()}
-                            autoFocus
-                            className="flex-1 min-w-0 border-b-2 border-[#175CD3] bg-transparent text-[13px] font-bold text-[#101828] outline-none"
-                          />
-                        ) : (
-                          <span className={`flex-1 min-w-0 truncate text-[13px] font-bold ${isNearDue ? 'text-[#B42318]' : 'text-[#101828]'} ${task.status === 'DONE' ? 'line-through opacity-60' : ''}`}>
-                            {task.title}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Unified Scrollable Metadata/Actions */}
-                      <div className="flex items-center gap-3 py-0.5">
-                        {/* Status dropdown */}
-                        <div className="relative shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => setStatusMenuTaskId(statusMenuTaskId === task.id ? null : task.id)}
-                            className={`flex h-7 min-w-[80px] items-center justify-between gap-1 rounded-lg border border-[#EAECF0] px-2 text-[10px] font-bold transition-all ${STATUS_COLORS[task.status]}`}
-                          >
-                            <span className="truncate uppercase">{STATUS_LABELS[task.status]}</span>
-                            <ChevronDown size={10} className="shrink-0 opacity-50" />
-                          </button>
-                          {statusMenuTaskId === task.id && (
-                            <div ref={statusMenuRef} className="absolute right-0 top-8 z-50 w-32 overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-xl">
-                              {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                                <button
-                                  key={value}
-                                  onClick={() => { handleStatusChange(task.id, value as SprintStatus); setStatusMenuTaskId(null); }}
-                                  className="w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-[#F9FAFB]"
-                                >
-                                  {label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Due date */}
-                        <div className="relative shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => dateInputRefs.current.get(task.id)?.showPicker()}
-                            className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[10px] font-bold whitespace-nowrap ${
-                              isNearDue ? 'bg-[#FEF3F2] text-[#B42318] border-[#FDA29B]' : 'bg-[#F9FAFB] text-[#344054] border-[#EAECF0]'
-                            }`}
-                          >
-                            <CalendarDays size={11} />
-                            <span>{formatDate(task.dueDate)}</span>
-                          </button>
-                          <input
-                            ref={(el) => { if (el) dateInputRefs.current.set(task.id, el); }}
-                            type="date"
-                            value={task.dueDate}
-                            onChange={(e) => handleDueDateChange(task.id, e.target.value)}
-                            className="absolute bottom-0 left-0 w-0 h-0 opacity-0 pointer-events-none"
-                          />
-                        </div>
-
-                        {/* Points badge */}
-                        <div className="flex shrink-0 items-center justify-center h-7 w-7 bg-[#F9FAFB] border border-[#EAECF0] rounded-lg shadow-sm">
-                          <input
-                            type="number"
-                            min="0"
-                            value={task.storyPoints}
-                            onChange={(e) => handleStoryPointChange(task.id, Number(e.target.value))}
-                            className="w-full text-center text-[11px] font-bold text-[#101828] outline-none bg-transparent"
-                          />
-                        </div>
-
-                        {/* Edit Pencil */}
-                        <button
-                          type="button"
-                          onClick={(e) => { 
-                            e.stopPropagation();
-                            setRenameValue(task.title); 
-                            setRenamingTaskId(task.id); 
-                          }}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center text-[#667085] hover:text-[#175CD3]"
-                        >
-                          <Pencil size={13} />
-                        </button>
-
-                        {/* Assignee */}
-                        <div className="relative shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (assignMenuTaskId === task.id) {
-                                setAssignMenuTaskId(null);
-                              } else {
-                                setAssignMenuTaskId(task.id);
-                                if (teamMembers.length === 0) void fetchTeamMembers();
-                              }
-                            }}
-                            className="flex items-center justify-center h-7 w-7 transition-all"
-                          >
-                            {task.assigneeName && task.assigneeName !== 'Unassigned' ? (
-                              <AssigneeAvatar name={task.assigneeName} profilePicUrl={task.assigneePhotoUrl} size={22} />
-                            ) : (
-                              <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-dashed border-[#EAECF0]">
-                                <UserPlus size={12} className="text-[#667085]" />
-                              </div>
-                            )}
-                          </button>
-                          {assignMenuTaskId === task.id && (
-                            <div ref={assignMenuRef} className="absolute right-0 top-8 z-50 w-48 overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-xl">
-                              {teamMembers.map((member) => (
-                                <button
-                                  key={member.user.userId}
-                                  onClick={() => handleAssignTask(task.id, member.user.userId)}
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-[11px] hover:bg-[#F9FAFB]"
-                                >
-                                  <AssigneeAvatar name={getMemberDisplayName(member)} profilePicUrl={member.user.profilePicUrl} size={18} />
-                                  <span className="truncate font-bold">{getMemberDisplayName(member)}</span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Fixed Actions (Delete) */}
-                    <div className="flex shrink-0 items-center pl-2 border-l border-[#F2F4F7]" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => canDeleteTask && setTaskToDeleteId(task.id)}
-                        disabled={!canDeleteTask}
-                        className={`flex h-7 w-7 shrink-0 items-center justify-center transition-colors duration-150 ${
-                          canDeleteTask 
-                          ? 'text-[#667085] hover:text-[#D92D20]' 
-                          : 'text-[#D0D5DD] cursor-not-allowed'
-                        }`}
-                        title={!canDeleteTask ? "Viewers cannot delete tasks" : "Delete Task"}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+                    <TaskRow
+                      task={task}
+                      teamMembers={teamMembers}
+                      loadingMembers={loadingMembers}
+                      canDelete={canDeleteTask}
+                      showCheckbox
+                      onToggle={onToggleTask}
+                      onStatusChange={(id, status) => handleStatusChange(id, status as SprintStatus)}
+                      onStoryPointsChange={handleStoryPointChange}
+                      onRenameTask={handleRenameTask}
+                      onAssignTask={handleAssignTask}
+                      onDueDateChange={handleDueDateChange}
+                      onDeleteTask={(id) => setTaskToDeleteId(id)}
+                      onOpenTask={(id) => setSelectedTaskId(id)}
+                    />
                   </div>
-                );
-              })
+              ))
             ) : (
               <div className="rounded-lg border-2 border-dashed border-[#D0D5DD] bg-[#F9FAFB] px-4 py-10 text-center text-[13px] text-[#667085]">
                 Drag tasks here from Product Backlog
@@ -1014,7 +894,7 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
       )}
     </div>
 
-    {selectedTaskId !== null && renamingTaskId === null && (
+    {selectedTaskId !== null && (
       <TaskCardModal
         taskId={selectedTaskId}
         onClose={() => setSelectedTaskId(null)}
@@ -1230,6 +1110,15 @@ export default function BacklogCard({ sprint, projectId, currentUserRole, onDrop
       onConfirm={doCompleteSprint}
       onCancel={() => setConfirmCompleteSprint(false)}
     />
+
+    {/* ── Sprint Report Modal ── */}
+    <SprintReportModal
+      sprint={sprint}
+      isOpen={showReportModal}
+      onClose={() => setShowReportModal(false)}
+    />
   </>
   );
 }
+
+export default React.memo(BacklogCard);

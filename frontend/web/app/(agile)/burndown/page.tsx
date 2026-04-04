@@ -5,6 +5,7 @@ import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ChevronDown, TrendingDown, BarChart2, CalendarDays } from 'lucide-react';
 import api from '@/lib/axios';
+import { toast } from '@/components/ui';
 import BurndownChart, { type BurndownPoint } from './components/BurndownChart';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -187,7 +188,7 @@ function BurndownContent() {
       if (field === 'start') setFilterFrom(normalized || '');
       if (field === 'end') setFilterTo(normalized || '');
     } catch {
-      alert('Failed to save sprint date');
+      toast('Failed to save sprint date', 'error');
     }
   };
 
