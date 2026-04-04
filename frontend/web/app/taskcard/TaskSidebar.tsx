@@ -85,6 +85,7 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
 
   const getPriorityStyle = (p: string) => priorityConfig[p] ?? priorityConfig.LOW;
   const priorityOptions = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+  const statusOptions = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
 
   const handleStatusChange = (newStatus: string) => {
     onUpdateStatus?.(newStatus);
