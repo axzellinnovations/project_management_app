@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import SockJS from 'sockjs-client';
 import { CompatClient, Stomp } from '@stomp/stompjs';
@@ -47,7 +47,9 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    loadInitialData();
+    queueMicrotask(() => {
+      void loadInitialData();
+    });
 
     const client = Stomp.over(() => new SockJS('http://localhost:8080/ws'));
     client.debug = () => {}; 
