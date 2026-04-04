@@ -84,12 +84,21 @@ export default function SprintBacklogPage() {
 
         const rawSprints = sprintsRes.data as { id: number; name: string; status: string; startDate?: string; endDate?: string }[];
         const rawTasks = tasksRes.data as RawTask[];
-        const membersData = membersRes.data as any[];
+
+        interface ProjectMember {
+          user: {
+            userId: number;
+            email?: string;
+          };
+          role: string;
+        }
+
+        const membersData = membersRes.data as ProjectMember[];
 
         // Determine user role
         const currentUser = getUserFromToken();
         if (currentUser && membersData) {
-          const projectMember = membersData.find((m: any) => 
+          const projectMember = membersData.find((m: ProjectMember) => 
             m.user.userId === currentUser.userId || (currentUser.email && m.user.email?.toLowerCase() === currentUser.email.toLowerCase())
           );
           if (projectMember) {
