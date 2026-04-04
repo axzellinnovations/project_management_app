@@ -52,7 +52,7 @@ interface LocalSprintTask {
   status: SprintStatus;
   startDate: string;
   dueDate: string;
-  priority: string;
+  priority: 'Low' | 'Medium' | 'High' | 'Critical';
   subtasks: string;
 }
 
@@ -323,7 +323,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
           status: existing?.status ?? (task.status as SprintStatus) ?? 'TODO',
           startDate: task.startDate ?? existing?.startDate ?? '',
           dueDate: task.dueDate ?? existing?.dueDate ?? '',
-          priority: existing?.priority ?? (task.priority ? task.priority.toUpperCase() : 'LOW'),
+          priority: existing?.priority ?? 'Medium',
           subtasks: existing?.subtasks ?? '',
         };
       });

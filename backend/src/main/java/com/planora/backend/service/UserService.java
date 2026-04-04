@@ -19,7 +19,6 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import com.planora.backend.dto.LoginRequest;
 import com.planora.backend.dto.LoginResponse;
 import com.planora.backend.model.User;
 import com.planora.backend.model.VerificationToken;
@@ -75,7 +74,7 @@ public class UserService {
 
         if (existingUser != null) {
             if (!existingUser.isVerified()) {
-                tokenRepository.deleteByUserAndTokenType(existingUser, VerificationToken.TokenType.VERIFICATION);
+                tokenRepository.deleteByUser(existingUser);
                 tokenRepository.flush();
                 user = existingUser;
             } else {
@@ -143,16 +142,16 @@ public class UserService {
     }
 
     @Transactional
-    public LoginResponse loginUser(LoginRequest request) {
+    public LoginResponse loginUser(User user) {
         try {
             Authentication authentication =
                     authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(
-                            request.getEmail().toLowerCase(),
-                            request.getPassword()));
+                            user.getEmail().toLowerCase(),
+                            user.getPassword()));
 
             if (authentication.isAuthenticated()) {
-                User authenticatedUser = userRepository.findByEmailIgnoreCase(request.getEmail().toLowerCase()).orElse(null);
-                String token = jwtService.generateToken(request.getEmail().toLowerCase(), authenticatedUser.getUsername(), request.isRememberMe());
+                User authenticatedUser = userRepository.findByEmailIgnoreCase(user.getEmail().toLowerCase()).orElse(null);
+                String token = jwtService.generateToken(user.getEmail().toLowerCase(), authenticatedUser.getUsername());
                 LoginResponse response = new LoginResponse();
                 response.setSuccess(true);
                 response.setMessage("Login successful");
@@ -198,7 +197,7 @@ public class UserService {
             return "User already verified.";
         }
 
-        tokenRepository.deleteByUserAndTokenType(user, VerificationToken.TokenType.VERIFICATION);
+        tokenRepository.deleteByUser(user);
         tokenRepository.flush();
 
         String otp = String.valueOf(new Random().nextInt(900000) + 100000);
@@ -227,9 +226,11 @@ public class UserService {
         if (user == null)
             return "If that email exists, an OTP has been sent.";
 
-        // Delete ALL existing password reset tokens for this user to prevent
-        // NonUniqueResultException on subsequent queries
-        tokenRepository.deleteByUserAndTokenType(user, VerificationToken.TokenType.PASSWORD_RESET);
+        // Delete existing password reset tokens for this user
+        VerificationToken existingToken = tokenRepository.findByUserAndTokenType(user, VerificationToken.TokenType.PASSWORD_RESET);
+        if (existingToken != null) {
+            tokenRepository.delete(existingToken);
+        }
         tokenRepository.flush();
 
         String otp = String.valueOf(new Random().nextInt(900000) + 100000);
@@ -261,27 +262,23 @@ public class UserService {
         return true;
     }
 
-    // This method is called by the /api/auth/reset endpoint.
-    // It validates the OTP by email+tokenType to avoid NonUniqueResultException.
+    // Deprecated: Use resetPassword(token, newPassword) instead
     @Transactional
+    @Deprecated
     public boolean resetPassword(String email, String otp, String newPassword) {
         User user = userRepository.findByEmail(email.toLowerCase());
-        if (user == null) return false;
+        VerificationToken verificationToken = tokenRepository.findByUser(user);
 
-        // Use tokenType-aware query to avoid ambiguity when user has multiple tokens
-        VerificationToken verificationToken =
-                tokenRepository.findByUserAndTokenType(user, VerificationToken.TokenType.PASSWORD_RESET);
+        if (verificationToken != null && verificationToken.getToken().equals(otp) && !verificationToken.isExpired()
+                && verificationToken.getTokenType() == VerificationToken.TokenType.PASSWORD_RESET) {
+            user.setPassword(encoder.encode(newPassword));
+            verificationToken.setUsed(true);
+            userRepository.save(user);
+            tokenRepository.save(verificationToken);
+            return true;
+        }
 
-        if (verificationToken == null) return false;
-        if (verificationToken.isUsed()) return false;
-        if (verificationToken.isExpired()) return false;
-        if (!verificationToken.getToken().equals(otp)) return false;
-
-        user.setPassword(encoder.encode(newPassword));
-        verificationToken.setUsed(true);
-        userRepository.saveAndFlush(user);
-        tokenRepository.save(verificationToken);
-        return true;
+        return false;
     }
 
     public java.util.List<User> getAllUsers() {

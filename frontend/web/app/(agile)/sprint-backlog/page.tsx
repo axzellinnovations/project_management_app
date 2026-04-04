@@ -24,8 +24,6 @@ type RawTask = {
   status?: string;
   startDate?: string;
   dueDate?: string;
-  priority?: string;
-  taskNo?: number;
 };
 
 export default function SprintBacklogPage() {
@@ -75,7 +73,7 @@ export default function SprintBacklogPage() {
 
   const mapRawTask = (raw: RawTask, index: number): TaskItem => ({
     id: raw.id,
-    taskNo: raw.taskNo ?? index + 1,
+    taskNo: index + 1,
     title: raw.title,
     storyPoints: raw.storyPoint,
     selected: false,
@@ -85,7 +83,6 @@ export default function SprintBacklogPage() {
     status: raw.status ?? 'TODO',
     startDate: raw.startDate ?? '',
     dueDate: raw.dueDate ?? '',
-    priority: raw.priority ?? 'LOW',
   });
 
   useEffect(() => {

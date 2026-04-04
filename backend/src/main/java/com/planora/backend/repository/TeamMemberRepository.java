@@ -1,11 +1,13 @@
 package com.planora.backend.repository;
 
-import com.planora.backend.model.TeamMember;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-import java.util.Optional;
+import com.planora.backend.model.TeamMember;
 
 @Repository
 public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
@@ -16,4 +18,6 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
     List<TeamMember> findByUserUserId(Long currentUserId);
     // Get all members of a team
     List<TeamMember> findByTeamId(Long teamId);
+
+    List<TeamMember> findByTeamIdAndRoleIn(Long teamId, Set<com.planora.backend.model.TeamRole> roles);
 }

@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { DragEndEvent } from '@dnd-kit/core';
 import { useSearchParams } from 'next/navigation';
+import Sidebar from '../../nav/Sidebar';
+import TopBar from '../../nav/TopBar';
 import { Sprintboard, SprintboardTask } from './types';
 import { fetchSprintboardBySprintId, moveTaskToColumn, fetchSprintsByProject, completeSprint, addColumn } from './api';
 import SprintBoardHeader from './components/SprintBoardHeader';
@@ -42,7 +44,6 @@ export default function SprintBoardPage() {
   const [selectedColumn, setSelectedColumn] = useState('TODO');
   const [isCreating, setIsCreating] = useState(false);
   const [isCreatingColumn, setIsCreatingColumn] = useState(false);
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
 
   const fetchActiveSprintAndBoard = useCallback(async () => {
     if (!projectIdStr) return;
@@ -218,20 +219,26 @@ export default function SprintBoardPage() {
 
   if (!isAgile) {
     return (
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="text-center p-10 bg-white rounded-3xl shadow-sm border border-[#EAECF0] max-w-lg">
-          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
-             <AlertCircle className="w-8 h-8 text-[#155DFC]" />
+      <div className="flex h-screen bg-gray-50 flex-col">
+        <Sidebar /><TopBar />
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center p-10 bg-white rounded-3xl shadow-sm border border-[#EAECF0] max-w-lg">
+            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
+               <AlertCircle className="w-8 h-8 text-[#155DFC]" />
+            </div>
+            <h2 className="text-2xl font-bold text-[#101828]">Kanban Projects don&apos;t have Sprints</h2>
+            <p className="text-[#475467] mt-3">The Sprint Board is exclusive to <span className="font-bold text-[#155DFC]">Agile</span> projects. Please switch to the regular Kanban Board for this project.</p>
           </div>
-          <h2 className="text-2xl font-bold text-[#101828]">Kanban Projects don&apos;t have Sprints</h2>
-          <p className="text-[#475467] mt-3">The Sprint Board is exclusive to <span className="font-bold text-[#155DFC]">Agile</span> projects. Please switch to the regular Kanban Board for this project.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex h-screen bg-[#F9FAFB] overflow-hidden">
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-w-0">
+        <TopBar />
         
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
@@ -294,7 +301,6 @@ export default function SprintBoardPage() {
                           setSelectedColumn(status);
                           setIsCreateModalOpen(true);
                       }}
-                      onOpenTask={(taskId: number) => setSelectedTaskId(taskId)}
                     />
                   ))}
                   
@@ -389,15 +395,9 @@ export default function SprintBoardPage() {
                 onCreateColumn={finalizeAddColumn} 
                 loading={isCreatingColumn}
             />
-
-            {selectedTaskId !== null && (
-              <TaskCardModal
-                taskId={selectedTaskId}
-                onClose={() => { setSelectedTaskId(null); fetchActiveSprintAndBoard(); }}
-              />
-            )}
           </>
         )}
+      </div>
     </div>
   );
 }

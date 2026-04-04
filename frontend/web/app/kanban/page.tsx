@@ -8,6 +8,8 @@ import DragDropProvider from './components/DragDropProvider';
 import KanbanColumn from './components/KanbanColumn';
 import CreateTaskModal from './components/CreateTaskModal';
 import EditTaskModal from './components/EditTaskModal';
+import Sidebar from '../nav/Sidebar';
+import TopBar from '../nav/TopBar';
 import { AlertCircle, Loader, CheckCircle2, Plus } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -75,9 +77,14 @@ export default function KanbanPage() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-gray-100">
+    <div className="flex h-screen bg-gray-100">
+      {/* Sidebar */}
+      <Sidebar />
+      
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {/* TopBar */}
+        <TopBar />
         
         {/* Content Area */}
         <div className="flex-1 overflow-auto p-3 md:p-6">

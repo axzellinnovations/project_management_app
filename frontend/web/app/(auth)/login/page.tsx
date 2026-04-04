@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/axios';
 
 
@@ -12,18 +11,8 @@ export default function LoginPage() {
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-    const [rememberMe, setRememberMe] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-
-    useEffect(() => {
-        const rememberedEmail = localStorage.getItem('rememberedEmail');
-        if (rememberedEmail) {
-            setEmail(rememberedEmail);
-            setRememberMe(true);
-        }
-    }, []);
 
     const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -35,8 +24,7 @@ export default function LoginPage() {
             // 1. Sign in using backend API
             const response = await api.post('/api/auth/login', {
                 email: email.toLowerCase(),
-                password: password,
-                rememberMe: rememberMe
+                password: password
             });
 
             // 2. Check if login was successful
@@ -44,13 +32,6 @@ export default function LoginPage() {
                 // Store token
                 console.log("Login successful:", response.data);
                 localStorage.setItem('token', response.data.token);
-
-                // Persist or clear remembered email
-                if (rememberMe) {
-                    localStorage.setItem('rememberedEmail', email.toLowerCase());
-                } else {
-                    localStorage.removeItem('rememberedEmail');
-                }
 
                 // 3. Redirect to dashboard
                 router.push('/dashboard');
@@ -155,34 +136,19 @@ export default function LoginPage() {
                     {/* Password Input */}
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">Password</label>
-                        <div className="relative">
-                            <input
-                                type={showPassword ? 'text' : 'password'}
-                                className="w-full px-4 py-3 pr-11 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
-                                placeholder="Enter your password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword((v) => !v)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition-colors"
-                                aria-label="Toggle password visibility"
-                            >
-                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
-                        </div>
+                        <input
+                            type="password"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
+                            placeholder="Enter your password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                        />
                     </div>
 
                     {/* Remember & Forgot Links */}
                     <div className="flex items-center justify-between mt-2">
                         <label className="flex items-center cursor-pointer">
-                            <input
-                                type="checkbox"
-                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                checked={rememberMe}
-                                onChange={(e) => setRememberMe(e.target.checked)}
-                            />
+                            <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                             <span className="ml-2 text-gray-500 text-xs">Remember me</span>
                         </label>
                         <Link href="/forgot-password" className="text-blue-600 hover:text-blue-700 font-semibold text-xs">

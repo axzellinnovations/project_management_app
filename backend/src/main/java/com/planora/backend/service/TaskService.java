@@ -1,7 +1,9 @@
 package com.planora.backend.service;
 
 import java.time.LocalDate;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +12,9 @@ import org.springframework.stereotype.Service;
 import com.planora.backend.dto.CommentRequestDTO;
 import com.planora.backend.dto.TaskRequestDTO;
 import com.planora.backend.dto.TaskResponseDTO;
+import com.planora.backend.dto.TaskResponseDTO.DependencyDTO;
+import com.planora.backend.dto.TaskResponseDTO.LabelDTO;
+import com.planora.backend.dto.TaskResponseDTO.SubtaskDTO;
 import com.planora.backend.model.Comment;
 import com.planora.backend.model.Label;
 import com.planora.backend.model.Priority;
@@ -190,16 +195,26 @@ public class TaskService {
         User actor = userRepository.findById(currentUserId)
                 .orElse(null);
         String actorName = actor != null ? actor.getUsername() : "Unknown";
+        String taskLink = "/taskcard?taskId=" + saved.getId();
 
         if (request.getStatus() != null && !request.getStatus().equals(oldStatus)) {
             taskActivityService.logActivity(saved.getId(), TaskActivityType.STATUS_CHANGED,
                     actorName, "Status changed from " + oldStatus + " to " + request.getStatus());
+
+            String fromStatus = oldStatus != null ? oldStatus : "NONE";
+            String message = actorName + " changed task status for \"" + saved.getTitle()
+                + "\" from " + fromStatus + " to " + request.getStatus();
+            notifyTaskStakeholders(saved, currentUserId, message, taskLink);
         }
         if (request.getPriority() != null) {
             String oldPriorityName = oldPriority != null ? oldPriority.name() : "NONE";
             if (!request.getPriority().equals(oldPriorityName)) {
                 taskActivityService.logActivity(saved.getId(), TaskActivityType.PRIORITY_CHANGED,
                         actorName, "Priority changed from " + oldPriorityName + " to " + request.getPriority());
+
+            String message = actorName + " changed task priority for \"" + saved.getTitle()
+                + "\" from " + oldPriorityName + " to " + request.getPriority();
+            notifyTaskStakeholders(saved, currentUserId, message, taskLink);
             }
         }
         return mapToDTO(saved);
@@ -222,6 +237,13 @@ public class TaskService {
         if(member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN){
             throw new RuntimeException("Access Denied: Only Project Owners /Admins can delete tasks.");
         }
+
+        String taskLink = "/taskcard?taskId=" + task.getId();
+        String actorName = userRepository.findById(currentUserId)
+                .map(User::getUsername)
+                .orElse("Unknown");
+        String message = actorName + " deleted task: " + task.getTitle();
+        notifyTaskStakeholders(task, currentUserId, message, taskLink);
 
         taskRepository.delete(task);
         return projectId;
@@ -445,9 +467,34 @@ public class TaskService {
         Task saved = taskRepository.save(task);
         User actor = userRepository.findById(currentUserId).orElse(null);
         String actorName = actor != null ? actor.getUsername() : "Unknown";
-        taskActivityService.logActivity(saved.getId(), TaskActivityType.PRIORITY_CHANGED,
-                actorName, "Priority changed from " + oldPriority + " to " + priority);
+
+        if (!priority.equals(oldPriority)) {
+            taskActivityService.logActivity(saved.getId(), TaskActivityType.PRIORITY_CHANGED,
+                    actorName, "Priority changed from " + oldPriority + " to " + priority);
+            String message = actorName + " changed task priority for \"" + saved.getTitle()
+                    + "\" from " + oldPriority + " to " + priority;
+            notifyTaskStakeholders(saved, currentUserId, message, "/taskcard?taskId=" + saved.getId());
+        }
         return mapToDTO(saved);
+    }
+
+    private void notifyTaskStakeholders(Task task, Long actorUserId, String message, String link) {
+        Set<Long> recipientIds = new LinkedHashSet<>();
+
+        if (task.getAssignee() != null && task.getAssignee().getUser() != null) {
+            recipientIds.add(task.getAssignee().getUser().getUserId());
+        }
+        if (task.getReporter() != null && task.getReporter().getUser() != null) {
+            recipientIds.add(task.getReporter().getUser().getUserId());
+        }
+
+        recipientIds.remove(actorUserId);
+        if (recipientIds.isEmpty()) {
+            return;
+        }
+
+        userRepository.findAllById(recipientIds)
+                .forEach(user -> notificationService.createNotification(user, message, link));
     }
 
     //---HELPER-01--- : For Permission Checking ---
@@ -502,21 +549,21 @@ public class TaskService {
         // Map subtasks
         if(task.getSubTasks() != null){
             dto.setSubtasks(task.getSubTasks().stream()
-                .map(st -> new TaskResponseDTO.SubtaskDTO(st.getId(), st.getTitle(), st.getStatus()))
+                .map(st -> new SubtaskDTO(st.getId(), st.getTitle(), st.getStatus()))
                 .collect(Collectors.toList()));
         }
 
         // Map labels
         if(task.getLabels() != null){
             dto.setLabels(task.getLabels().stream()
-                .map(l -> new TaskResponseDTO.LabelDTO(l.getId(), l.getName()))
+                .map(l -> new LabelDTO(l.getId(), l.getName()))
                 .collect(Collectors.toList()));
         }
 
         // Map dependencies
         if(task.getDependencies() != null){
             dto.setDependencies(task.getDependencies().stream()
-                .map(d -> new TaskResponseDTO.DependencyDTO(d.getId(), d.getTitle(), "BLOCKED_BY"))
+                .map(d -> new DependencyDTO(d.getId(), d.getTitle(), "BLOCKED_BY"))
                 .collect(Collectors.toList()));
         }
 

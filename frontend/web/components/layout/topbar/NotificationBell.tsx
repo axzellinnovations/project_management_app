@@ -1,59 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import * as notificationsApi from '@/services/notifications-service';
 import { Bell } from 'lucide-react';
+import { useGlobalNotifications } from '@/components/providers/GlobalNotificationProvider';
 
 export function NotificationBell() {
-  const [unreadCount, setUnreadCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [notifications, setNotifications] = useState<any[]>([]);
-
-  const fetchNotifications = async () => {
-    try {
-      const [notifs, count] = await Promise.all([
-        notificationsApi.fetchNotifications(),
-        notificationsApi.fetchUnreadCount(),
-      ]);
-      setNotifications(notifs);
-      setUnreadCount(count);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    let cancelled = false;
-    const load = async () => {
-      if (cancelled) return;
-      await fetchNotifications();
-    };
-    load();
-    const intervalId = setInterval(() => void load(), 30_000);
-    return () => { cancelled = true; clearInterval(intervalId); };
-  }, []);
-
-  const markAsRead = async (id: number) => {
-    try {
-      await notificationsApi.markNotificationRead(id);
-      void fetchNotifications();
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const markAllAsRead = async () => {
-    try {
-      await notificationsApi.markAllNotificationsRead();
-      void fetchNotifications();
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useGlobalNotifications();
 
   return (
     <div className="relative">
@@ -79,18 +33,17 @@ export function NotificationBell() {
             {notifications.length === 0 ? (
               <div className="p-6 text-center text-cu-text-muted text-sm">You have no notifications</div>
             ) : (
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              notifications.map((notif: any) => (
+              notifications.map((notif) => (
                 <Link
-                  href={notif.link}
+                  href={notif.link || '#'}
                   key={notif.id}
                   onClick={() => markAsRead(notif.id)}
-                  className={`block p-4 border-b last:border-0 border-gray-50 hover:bg-white/60 transition-colors ${!notif.isRead ? 'bg-cu-primary/5' : ''}`}
+                  className={`block p-4 border-b last:border-0 border-gray-50 hover:bg-white/60 transition-colors ${!notif.read ? 'bg-cu-primary/5' : ''}`}
                 >
                   <div className="flex gap-3">
-                    <div className={`w-2 h-2 mt-1.5 rounded-full shrink-0 ${!notif.isRead ? 'bg-cu-primary' : 'bg-transparent'}`} />
+                    <div className={`w-2 h-2 mt-1.5 rounded-full shrink-0 ${!notif.read ? 'bg-cu-primary' : 'bg-transparent'}`} />
                     <div>
-                      <p className={`text-sm ${!notif.isRead ? 'text-cu-text-primary font-medium' : 'text-cu-text-secondary'}`}>
+                      <p className={`text-sm ${!notif.read ? 'text-cu-text-primary font-medium' : 'text-cu-text-secondary'}`}>
                         {notif.message}
                       </p>
                       <span className="text-xs text-cu-text-muted mt-1 block">

@@ -295,68 +295,68 @@ const [taskToDeleteId, setTaskToDeleteId] = useState<number | null>(null);
 
 // ── Reusable Confirmation Modal ──────────────────────────────────────────────
 interface ConfirmModalProps {
-  open: boolean;
-  variant: 'danger' | 'warning' | 'success';
-  title: string;
-  message: string;
-  confirmLabel: string;
-  cancelLabel?: string;
-  loading?: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
+  open: boolean;
+  variant: 'danger' | 'warning' | 'success';
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  loading?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
 }
 
 function ConfirmModal({
-  open,
-  variant,
-  title,
-  message,
-  confirmLabel,
-  cancelLabel = 'Cancel',
-  loading = false,
-  onConfirm,
-  onCancel,
+  open,
+  variant,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel = 'Cancel',
+  loading = false,
+  onConfirm,
+  onCancel,
 }: ConfirmModalProps) {
-  if (!open) return null;
+  if (!open) return null;
 
-  const iconColor =
-    variant === 'danger' ? 'bg-red-50 text-red-600' :
-      variant === 'warning' ? 'bg-amber-50 text-amber-600' :
-        'bg-emerald-50 text-emerald-600';
+  const iconColor =
+    variant === 'danger' ? 'bg-red-50 text-red-600' :
+      variant === 'warning' ? 'bg-amber-50 text-amber-600' :
+        'bg-emerald-50 text-emerald-600';
 
-  const confirmBtnColor =
-    variant === 'danger' ? 'bg-[#D92D20] hover:bg-[#B42318]' :
-      variant === 'warning' ? 'bg-amber-600 hover:bg-amber-700' :
-        'bg-emerald-600 hover:bg-emerald-700';
+  const confirmBtnColor =
+    variant === 'danger' ? 'bg-[#D92D20] hover:bg-[#B42318]' :
+      variant === 'warning' ? 'bg-amber-600 hover:bg-amber-700' :
+        'bg-emerald-600 hover:bg-emerald-700';
 
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-[400px] rounded-2xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
-        <div className="mb-4 flex flex-col items-center text-center">
-          <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-full ${iconColor}`}>
-            <Trash2 size={28} />
-          </div>
-          <h3 className="text-xl font-bold text-[#101828]">{title}</h3>
-          <p className="mt-2 text-sm text-[#667085]">{message}</p>
-        </div>
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="w-full max-w-[400px] rounded-2xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div className="mb-4 flex flex-col items-center text-center">
+          <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-full ${iconColor}`}>
+            <Trash2 size={28} />
+          </div>
+          <h3 className="text-xl font-bold text-[#101828]">{title}</h3>
+          <p className="mt-2 text-sm text-[#667085]">{message}</p>
+        </div>
 
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            disabled={loading}
-            className="flex-1 rounded-xl border border-[#D0D5DD] bg-white px-4 py-2.5 text-sm font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all disabled:opacity-50"
-          >
-            {cancelLabel}
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition-all shadow-sm disabled:opacity-50 ${confirmBtnColor}`}
-          >
-            {loading ? 'Processing...' : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="flex-1 rounded-xl border border-[#D0D5DD] bg-white px-4 py-2.5 text-sm font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all disabled:opacity-50"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition-all shadow-sm disabled:opacity-50 ${confirmBtnColor}`}
+          >
+            {loading ? 'Processing...' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
