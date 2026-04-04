@@ -3,13 +3,13 @@ package com.planora.backend.controller;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
-import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
@@ -107,6 +107,7 @@ public class ChatController {
 
         chatTaskExecutor.execute(() -> {
             publishMentionNotifications(projectId, saved, "TEAM");
+            publishTeamChatNotifications(projectId, saved);
             chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "TEAM", saved);
             publishUnreadBadgesForProject(projectId);
         });
@@ -177,6 +178,7 @@ public class ChatController {
         
         chatTaskExecutor.execute(() -> {
             publishMentionNotifications(projectId, saved, "ROOM");
+            publishRoomChatNotifications(projectId, roomId, saved);
             chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "ROOM", saved);
             publishUnreadBadgesForProject(projectId);
         });
@@ -607,6 +609,109 @@ public class ChatController {
             notificationService.createNotificationIfNotDuplicate(user, notifMessage, notifLink);
             // ─────────────────────────────────────────────────────────────────
         });
+    }
+
+    private void publishTeamChatNotifications(Long projectId, ChatMessage savedMessage) {
+        if (savedMessage == null || savedMessage.getSender() == null || savedMessage.getSender().isBlank()) {
+            return;
+        }
+
+        var project = projectRepository.findById(projectId).orElse(null);
+        if (project == null || project.getTeam() == null) {
+            return;
+        }
+
+        var senderUser = resolveUserByEmailOrUsername(savedMessage.getSender());
+        var senderAlias = savedMessage.getSender();
+        var senderDisplay = senderUser != null && senderUser.getFullName() != null && !senderUser.getFullName().isBlank()
+                ? senderUser.getFullName()
+                : senderAlias;
+        var projectName = project.getName() != null && !project.getName().isBlank()
+                ? project.getName()
+                : "the project";
+        var message = senderDisplay + " sent a message in \"" + projectName + "\" team chat: "
+                + buildNotificationPreview(savedMessage.getContent());
+        var link = "/project/" + projectId + "/chat";
+
+        teamMemberRepository.findByTeamId(project.getTeam().getId()).stream()
+                .map(com.planora.backend.model.TeamMember::getUser)
+                .filter(Objects::nonNull)
+                .filter(recipient -> !isSender(recipient, senderUser, senderAlias))
+                .forEach(recipient -> notificationService.createNotification(recipient, message, link));
+    }
+
+    private void publishRoomChatNotifications(Long projectId, Long roomId, ChatMessage savedMessage) {
+        if (savedMessage == null || savedMessage.getSender() == null || savedMessage.getSender().isBlank()) {
+            return;
+        }
+
+        var room = chatRoomRepository.findById(roomId).orElse(null);
+        if (room == null) {
+            return;
+        }
+
+        var senderUser = resolveUserByEmailOrUsername(savedMessage.getSender());
+        var senderAlias = savedMessage.getSender();
+        var senderDisplay = senderUser != null && senderUser.getFullName() != null && !senderUser.getFullName().isBlank()
+                ? senderUser.getFullName()
+                : senderAlias;
+        var roomName = room.getName() != null && !room.getName().isBlank() ? room.getName() : "group";
+        var message = senderDisplay + " posted in #" + roomName + ": "
+                + buildNotificationPreview(savedMessage.getContent());
+        var link = "/project/" + projectId + "/chat";
+
+        Set<Long> recipientIds = new LinkedHashSet<>();
+        chatRoomMemberRepository.findByChatRoomId(roomId).stream()
+                .map(roomMember -> roomMember.getUser())
+                .filter(Objects::nonNull)
+                .map(com.planora.backend.model.User::getUserId)
+                .filter(Objects::nonNull)
+                .forEach(recipientIds::add);
+
+        var creatorUser = resolveUserByEmailOrUsername(room.getCreatedBy());
+        if (creatorUser != null && creatorUser.getUserId() != null) {
+            recipientIds.add(creatorUser.getUserId());
+        }
+
+        if (senderUser != null && senderUser.getUserId() != null) {
+            recipientIds.remove(senderUser.getUserId());
+        }
+
+        if (recipientIds.isEmpty()) {
+            return;
+        }
+
+        userRepository.findAllById(recipientIds)
+                .forEach(recipient -> notificationService.createNotification(recipient, message, link));
+    }
+
+    private String buildNotificationPreview(String content) {
+        if (content == null || content.isBlank()) {
+            return "New message";
+        }
+
+        var normalized = content.trim().replaceAll("\\s+", " ");
+        return normalized.length() > 80 ? normalized.substring(0, 80) + "..." : normalized;
+    }
+
+    private boolean isSender(com.planora.backend.model.User recipient,
+                             com.planora.backend.model.User senderUser,
+                             String senderAlias) {
+        if (recipient == null) {
+            return false;
+        }
+
+        if (senderUser != null && recipient.getUserId() != null && recipient.getUserId().equals(senderUser.getUserId())) {
+            return true;
+        }
+
+        if (senderAlias == null || senderAlias.isBlank()) {
+            return false;
+        }
+
+        var normalizedAlias = senderAlias.toLowerCase();
+        return (recipient.getUsername() != null && recipient.getUsername().equalsIgnoreCase(normalizedAlias))
+                || (recipient.getEmail() != null && recipient.getEmail().equalsIgnoreCase(normalizedAlias));
     }
 
     private String requireAuthenticatedUsername(SimpMessageHeaderAccessor headerAccessor) {

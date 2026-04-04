@@ -1,17 +1,34 @@
 package com.planora.backend.service;
 
-import com.planora.backend.dto.SprintboardResponseDTO;
-import com.planora.backend.dto.SprintboardTaskResponseDTO;
-import com.planora.backend.dto.SprintcolumnDTO;
-import com.planora.backend.model.*;
-import com.planora.backend.repository.*;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.stream.Collectors;
+import com.planora.backend.dto.SprintboardResponseDTO;
+import com.planora.backend.dto.SprintboardTaskResponseDTO;
+import com.planora.backend.dto.SprintcolumnDTO;
+import com.planora.backend.model.Project;
+import com.planora.backend.model.Sprint;
+import com.planora.backend.model.Sprintboard;
+import com.planora.backend.model.Sprintcolumn;
+import com.planora.backend.model.SprintcolumnStatus;
+import com.planora.backend.model.Task;
+import com.planora.backend.model.TeamMember;
+import com.planora.backend.model.TeamRole;
+import com.planora.backend.model.User;
+import com.planora.backend.repository.ProjectRepository;
+import com.planora.backend.repository.SpringcolumnRepository;
+import com.planora.backend.repository.SprintRepository;
+import com.planora.backend.repository.SprintboardRepository;
+import com.planora.backend.repository.TaskRepository;
+import com.planora.backend.repository.TeamMemberRepository;
+import com.planora.backend.repository.UserRepository;
 
 @Service
 public class SprintboardService {
@@ -24,6 +41,7 @@ public class SprintboardService {
     private final TeamMemberRepository teamMemberRepository;
     private final UserRepository userRepository;
     private final SpringcolumnService springcolumnService;
+    private final NotificationService notificationService;
 
     public SprintboardService(SprintboardRepository sprintboardRepository,
                               SpringcolumnRepository springcolumnRepository,
@@ -32,7 +50,8 @@ public class SprintboardService {
                               ProjectRepository projectRepository,
                               TeamMemberRepository teamMemberRepository,
                               UserRepository userRepository,
-                              SpringcolumnService springcolumnService) {
+                              SpringcolumnService springcolumnService,
+                              NotificationService notificationService) {
         this.sprintboardRepository = sprintboardRepository;
         this.springcolumnRepository = springcolumnRepository;
         this.sprintRepository = sprintRepository;
@@ -41,6 +60,7 @@ public class SprintboardService {
         this.teamMemberRepository = teamMemberRepository;
         this.userRepository = userRepository;
         this.springcolumnService = springcolumnService;
+        this.notificationService = notificationService;
     }
 
 
@@ -189,10 +209,42 @@ public class SprintboardService {
             throw new RuntimeException("Task is not assigned to this sprint");
         }
 
+        String oldStatus = task.getStatus();
         // Update task status to match the column
         task.setStatus(newStatus.toString());
 
         taskRepository.save(task);
+
+        String nextStatus = newStatus.toString();
+        if (oldStatus == null || !oldStatus.equalsIgnoreCase(nextStatus)) {
+            String actorName = userRepository.findById(currentUserId)
+                    .map(User::getUsername)
+                    .orElse("Unknown");
+            String message = actorName + " moved task \"" + task.getTitle()
+                    + "\" from " + (oldStatus != null ? oldStatus : "NONE")
+                    + " to " + nextStatus;
+            notifyTaskStakeholders(task, currentUserId, message);
+        }
+    }
+
+    private void notifyTaskStakeholders(Task task, Long actorUserId, String message) {
+        Set<Long> recipientIds = new LinkedHashSet<>();
+
+        if (task.getAssignee() != null && task.getAssignee().getUser() != null) {
+            recipientIds.add(task.getAssignee().getUser().getUserId());
+        }
+        if (task.getReporter() != null && task.getReporter().getUser() != null) {
+            recipientIds.add(task.getReporter().getUser().getUserId());
+        }
+
+        recipientIds.remove(actorUserId);
+        if (recipientIds.isEmpty()) {
+            return;
+        }
+
+        String link = "/taskcard?taskId=" + task.getId();
+        userRepository.findAllById(recipientIds)
+                .forEach(user -> notificationService.createNotification(user, message, link));
     }
 
     @Transactional

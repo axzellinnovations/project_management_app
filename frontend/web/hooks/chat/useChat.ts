@@ -430,9 +430,10 @@ export const useChat = (projectId: string) => {
         client.debug = () => {};
         client.reconnect_delay = 5000;
         const normalizedAliases = new Set(aliases.map(a => a.toLowerCase()));
+        
+        stompClientRef.current = client;
 
         client.connect({ Authorization: `Bearer ${token}` }, () => {
-          stompClientRef.current = client;
           setIsSocketConnected(true);
           setError('');
 

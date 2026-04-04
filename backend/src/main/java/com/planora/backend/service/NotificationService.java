@@ -6,6 +6,7 @@ import com.planora.backend.model.User;
 import com.planora.backend.repository.NotificationRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,9 @@ public class NotificationService {
 
     @Autowired
     private NotificationRepository notificationRepository;
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
 
     /**
      * Unconditionally creates and persists a notification.
@@ -32,7 +36,21 @@ public class NotificationService {
         notification.setLink(link);
         notification.setRead(false);
         notification.setCreatedAt(LocalDateTime.now());
-        notificationRepository.save(notification);
+        notification = notificationRepository.save(notification);
+
+        // Disptach via websocket for global realtime overlay
+        NotificationResponseDTO dto = NotificationResponseDTO.builder()
+                .id(notification.getId())
+                .message(notification.getMessage())
+                .link(notification.getLink())
+                .isRead(notification.isRead())
+                .createdAt(notification.getCreatedAt())
+                .build();
+        messagingTemplate.convertAndSendToUser(
+                recipient.getUsername(),
+                "/queue/notifications",
+                dto
+        );
     }
 
     /**
