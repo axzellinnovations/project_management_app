@@ -108,6 +108,14 @@ public class TaskService {
                     .orElseThrow(()-> new EntityNotFoundException("Entity not found"));
             task.setSprint(sprint);
         }
+
+        // handle labels
+        if (request.getLabelIds() != null && !request.getLabelIds().isEmpty()) {
+            for (Long labelId : request.getLabelIds()) {
+                labelRepository.findById(labelId).ifPresent(label -> task.getLabels().add(label));
+            }
+        }
+
         //validate and assign users
         Long teamId = project.getTeam().getId();
 
@@ -221,12 +229,14 @@ public class TaskService {
     }
 
     //4. DELETE TASK
-    public void deleteTask(Long taskId, Long currentUserId) {
+    @Transactional
+    public Long deleteTask(Long taskId, Long currentUserId) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(()-> new EntityNotFoundException("Task not found"));
 
         //validate user- OWNER
         Long teamId = task.getProject().getTeam().getId();
+        Long projectId = task.getProject().getId();
 
         //fetch user role
         TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId,currentUserId)
@@ -244,6 +254,7 @@ public class TaskService {
         notifyTaskStakeholders(task, currentUserId, message, taskLink);
 
         taskRepository.delete(task);
+        return projectId;
     }
 
     //5. GET PROJECT BY ID
@@ -553,7 +564,7 @@ public class TaskService {
         // Map labels
         if(task.getLabels() != null){
             dto.setLabels(task.getLabels().stream()
-                .map(l -> new LabelDTO(l.getId(), l.getName()))
+                .map(l -> new TaskResponseDTO.LabelDTO(l.getId(), l.getName(), l.getColor()))
                 .collect(Collectors.toList()));
         }
 

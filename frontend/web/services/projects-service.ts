@@ -1,10 +1,12 @@
 import api from '@/lib/axios';
+import type { ProjectType } from '@/types';
 
 // ── Types ──
 
 export interface ProjectSummary {
   id: number;
   name: string;
+  type?: ProjectType;
   isFavorite?: boolean;
   [key: string]: unknown;
 }

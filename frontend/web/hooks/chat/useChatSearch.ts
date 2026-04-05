@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
+﻿import { useState, useCallback } from 'react';
 import * as chatApi from '@/services/chat-service';
-import type { ChatSearchResult } from '@/app/project/[id]/chat/components/chat';
+import type { ChatSearchResult } from '@/app/(project)/project/[id]/chat/components/chat';
 
 export function useChatSearch(projectId: string) {
   const [searchResults, setSearchResults] = useState<ChatSearchResult[]>([]);
@@ -30,3 +30,4 @@ export function useChatSearch(projectId: string) {
 
   return { searchResults, isSearchLoading, searchMessages };
 }
+

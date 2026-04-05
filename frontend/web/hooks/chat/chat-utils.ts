@@ -1,4 +1,4 @@
-import type { ChatMessage } from '@/app/project/[id]/chat/components/chat';
+import type { ChatMessage } from '@/app/(project)/project/[id]/chat/components/chat';
 
 // ── Identity helpers ──
 

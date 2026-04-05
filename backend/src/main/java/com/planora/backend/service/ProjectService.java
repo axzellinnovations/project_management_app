@@ -7,6 +7,7 @@ import com.planora.backend.model.*;
 import com.planora.backend.repository.ProjectAccessRepository;
 import com.planora.backend.repository.ProjectFavoriteRepository;
 import com.planora.backend.repository.ProjectRepository;
+import com.planora.backend.repository.SprintRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.TeamRepository;
 import com.planora.backend.repository.UserRepository;
@@ -29,6 +30,7 @@ public class ProjectService {
     private final TeamRepository teamRepository;
     private final ProjectAccessRepository projectAccessRepository;
     private final ProjectFavoriteRepository projectFavoriteRepository;
+    private final SprintRepository sprintRepository;
 
     public boolean checkKeyExists(String key) {
         return projectRepository.existsByProjectKey(key);
@@ -100,6 +102,13 @@ public class ProjectService {
         project.setTeam(team);
 
         Project savedProject = projectRepository.save(project);
+        if (ProjectType.AGILE.equals(savedProject.getType())) {
+            Sprint initialSprint = new Sprint();
+            initialSprint.setProId(savedProject.getId());
+            initialSprint.setName(savedProject.getProjectKey() + " Sprint 1");
+            initialSprint.setStatus(SprintStatus.NOT_STARTED);
+            sprintRepository.save(initialSprint);
+        }
         return convertToResponseDTO(savedProject, dto.getOwnerId());
     }
 

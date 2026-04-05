@@ -54,6 +54,7 @@ public class TaskResponseDTO {
     public static class LabelDTO {
         private Long id;
         private String name;
+        private String color;
     }
 
     @Data

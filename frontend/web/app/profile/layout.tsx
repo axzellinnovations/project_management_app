@@ -1,8 +1,7 @@
 'use client';
 
-import { Suspense } from 'react';
-import SidebarLayout from '../nav/SidebarLayout';
-import TopBar from '../nav/TopBar';
+import React from 'react';
+import SidebarLayout from '@/navBar/SidebarLayout';
 
 export default function ProfileLayout({
     children,
@@ -11,9 +10,6 @@ export default function ProfileLayout({
 }) {
     return (
         <SidebarLayout>
-            <Suspense fallback={null}>
-                <TopBar />
-            </Suspense>
             <main className="flex-1 overflow-y-auto bg-[#F7F8FA]">
                 {children}
             </main>

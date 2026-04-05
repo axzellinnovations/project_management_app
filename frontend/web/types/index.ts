@@ -50,7 +50,7 @@ export interface Assignee {
 export interface Label {
   id: number;
   name: string;
-  color?: string;
+  color: string;
 }
 
 export interface Subtask {
@@ -83,6 +83,7 @@ export interface Task {
   dueDate?: string;
   startDate?: string;
   createdAt?: string;
+  completedAt?: string;
   updatedAt?: string;
   assignee?: Assignee;
   assigneeId?: number;
@@ -190,6 +191,7 @@ export interface SprintItem {
   status: string;
   startDate?: string;
   endDate?: string;
+  goal?: string;
   tasks: TaskItem[];
 }
 
@@ -205,6 +207,8 @@ export interface TaskItem {
   status?: string;
   startDate?: string;
   dueDate?: string;
+  priority?: string;
+  labels?: Label[];
 }
 
 // ── Burndown ───────────────────────────────────────
