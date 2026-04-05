@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import SidebarLayout from '../nav/SidebarLayout';
+import SidebarLayout from '@/navBar/SidebarLayout';
 
 export default function DocumentationLayout({
     children,

@@ -287,13 +287,13 @@ export default function Sidebar() {
       )}
 
       <div
-        className={`h-screen flex-shrink-0 z-[100] bg-[#F9FAFB] transition-all duration-300 ease-in-out ${isMobile ? 'fixed left-0 top-0' : 'relative'} ${isMobile && collapsed ? 'pointer-events-none' : ''}`}
+        className={`h-screen flex-shrink-0 z-[500] bg-[#F9FAFB] transition-all duration-300 ease-in-out ${isMobile ? 'fixed left-0 top-0' : 'relative'} ${isMobile && collapsed ? 'pointer-events-none' : ''}`}
         style={{
           width: isMobile ? (collapsed ? '0px' : '260px') : (collapsed ? '64px' : '240px'),
           opacity: isMobile && collapsed ? 0 : 1
         }}
       >
-        <div className="h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col overflow-x-hidden w-[240px] md:w-[inherit]">
+        <div className="relative h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col w-[240px] md:w-[inherit]">
 
           {/* Header */}
           <SidebarHeader collapsed={collapsed} />

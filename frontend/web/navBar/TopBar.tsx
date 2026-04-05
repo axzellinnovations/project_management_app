@@ -17,7 +17,7 @@ import { SearchIcon } from './sidebar/SidebarIcons';
 import GlobalSearch from './topbar/GlobalSearch';
 
 const subscribeToBrowserStorage = (onStoreChange: () => void) => {
-  if (typeof window === 'undefined') return () => {};
+  if (typeof window === 'undefined') return () => { };
   const handler = () => onStoreChange();
   window.addEventListener('storage', handler);
   window.addEventListener('focus', handler);
@@ -145,7 +145,7 @@ function TopBarContent() {
             (u: UserSummary) => u.email.toLowerCase() === user.email.toLowerCase()
           );
           if (currentUser?.profilePicUrl) setProfilePicUrl(currentUser.profilePicUrl);
-        } catch {}
+        } catch { }
       };
       void loadProfilePic();
     }
@@ -163,11 +163,11 @@ function TopBarContent() {
 
   const handleOpenProjectDropdown = async () => {
     if (projectsOpen) { setProjectsOpen(false); return; }
-    
+
     // Set position and open immediately
     if (switcherRef.current) {
-        const rect = switcherRef.current.getBoundingClientRect();
-        setDropdownPos({ top: rect.bottom + 8, left: rect.left });
+      const rect = switcherRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 8, left: rect.left });
     }
     setProjectsOpen(true);
     setProjectsSearch('');
@@ -227,35 +227,15 @@ function TopBarContent() {
     </div>
   );
 
-  /* ── Non-project page TopBar ── */
-  if (!isProjectPage) {
-    return (
-      <div className="w-full h-[64px] bg-white border-b border-slate-200 px-4 sm:px-8 flex items-center justify-between shrink-0 sticky top-0 z-[100]">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent('planora:sidebar:toggle'))}
-            className="lg:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors"
-            aria-label="Toggle Sidebar"
-          >
-            <Menu size={20} />
-          </button>
-          <span className="text-[17px] font-bold text-slate-900 tracking-tight font-outfit">Dashboard</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <NotificationBell />
-          <div className="flex -space-x-1">
-            {profileAvatar}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  /* ── Non-project page: no TopBar (greeting is in page content) ── */
+  if (!isProjectPage) return null;
+
 
   /* ── Project page TopBar ── */
   return (
-    <div className="w-full h-[108px] relative flex flex-col shrink-0 bg-white border-b border-slate-200 sticky top-0 z-[100]">
+    <div className="w-full h-[120px] relative flex flex-col shrink-0 bg-white border-b border-slate-200 sticky top-0 z-[100]">
       {/* Top Header Section */}
-      <div className="flex-1 px-4 sm:px-8 flex items-center justify-between">
+      <div className="flex-1 px-4 sm:px-8 flex items-center justify-between pt-2">
         <div className="flex items-center gap-4">
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('planora:sidebar:toggle'))}
@@ -266,30 +246,29 @@ function TopBarContent() {
           </button>
 
           {/* Project animated icon */}
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-all duration-500 ${
-            isAgile 
-              ? 'bg-gradient-to-br from-blue-600 to-blue-800' 
-              : 'bg-gradient-to-br from-indigo-500 to-indigo-700'
-          }`}>
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-all duration-500 ${isAgile
+            ? 'bg-blue-600'
+            : 'bg-indigo-600'
+            }`}>
             {isAgile ? (
-              <motion.svg 
+              <motion.svg
                 animate={{ rotate: 360 }}
                 transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
                 width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
               >
-                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
               </motion.svg>
             ) : (
               <div className="relative w-4 h-4">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="3" width="18" height="18" rx="2" ry="2" className="opacity-30" />
                 </svg>
-                <motion.div 
+                <motion.div
                   animate={{ y: [0, -3, 0] }}
                   transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
                   className="absolute left-[4px] top-[5px] w-[2.5px] h-[6px] bg-white rounded-full"
                 />
-                <motion.div 
+                <motion.div
                   animate={{ y: [0, 3, 0] }}
                   transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 1 }}
                   className="absolute left-[10px] top-[5px] w-[2.5px] h-[6px] bg-white rounded-full opacity-80"
@@ -298,14 +277,14 @@ function TopBarContent() {
             )}
           </div>
 
-          <div className="flex flex-col justify-center">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 tracking-wider leading-none mb-1 cursor-default uppercase font-outfit">
+          <div className="flex flex-col justify-center gap-0.5 ml-1">
+            <div className="flex items-center gap-1 text-[11px] font-bold text-slate-400 tracking-[0.05em] leading-tight cursor-default uppercase font-outfit">
               <span>Project</span>
-              <span className="text-slate-200">/</span>
+              <span className="text-slate-300 font-medium">/</span>
             </div>
-            
-            <div className="flex items-center gap-3">
-              <h1 className="text-[17px] font-bold text-slate-900 whitespace-nowrap leading-none font-outfit tracking-tight">
+
+            <div className="flex items-center gap-2">
+              <h1 className="text-[18px] font-bold text-slate-900 whitespace-nowrap leading-tight font-outfit tracking-tight">
                 {projectName}
               </h1>
 
@@ -328,7 +307,7 @@ function TopBarContent() {
                   aria-label="Switch project"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
-                    <path d="m6 9 6 6 6-6"/>
+                    <path d="m6 9 6 6 6-6" />
                   </svg>
                 </button>
                 {projectsOpen && (
@@ -359,14 +338,14 @@ function TopBarContent() {
                     window.dispatchEvent(new CustomEvent('planora:favorite-toggled'));
                   } catch { setIsFavorite(!nextState); }
                 }}
-                className="p-1 rounded-full hover:bg-slate-50 transition-colors group flex items-center justify-center ml--1"
+                className="p-1 rounded-full hover:bg-slate-50 transition-colors group flex items-center justify-center -ml-1"
               >
                 <svg
-                  width="17" height="17" viewBox="0 0 24 24" 
-                  fill={isFavorite ? '#EAB308' : 'none'} 
-                  stroke={isFavorite ? '#EAB308' : '#94A3B8'} 
-                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                  className={`transition-all duration-300 ${isFavorite ? 'scale-110 drop-shadow-[0_0_8px_rgba(234,179,8,0.3)]' : 'group-hover:stroke-slate-500'}`}
+                  width="18" height="18" viewBox="0 0 24 24"
+                  fill={isFavorite ? '#EAB308' : 'none'}
+                  stroke={isFavorite ? '#EAB308' : '#94A3B8'}
+                  strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                  className={`transition-all duration-300 ${isFavorite ? 'scale-110 drop-shadow-[0_4px_10px_rgba(234,179,8,0.4)]' : 'group-hover:stroke-slate-500'}`}
                 >
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
@@ -377,51 +356,51 @@ function TopBarContent() {
 
         {/* Right Side Actions */}
         <div className="flex items-center gap-4 flex-1 justify-end max-w-[900px] ml-auto">
-          
+
           {/* Global Search Bar - Hidden on small screens to save space */}
           <div className="flex-1 max-w-[400px] hidden md:block">
-             <GlobalSearch />
+            <GlobalSearch />
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-              {isAgile && (
-                <button 
-                  onClick={() => {
-                    if (!projectId) return;
-                    router.push(`/sprint-backlog?projectId=${projectId}&action=create-sprint`);
-                  }}
-                  className="hidden sm:flex items-center justify-center px-3.5 h-[34px] bg-white hover:bg-slate-50 rounded-lg text-[13px] font-bold text-slate-700 transition-all border border-slate-200 active:scale-95 shadow-sm font-outfit"
-                >
-                    New Sprint
-                </button>
-              )}
-              
-              <button 
+          <div className="flex items-center gap-2.5 shrink-0">
+            {isAgile && (
+              <button
                 onClick={() => {
                   if (!projectId) return;
-                  const path = isAgile ? '/sprint-backlog' : '/backlog';
-                  router.push(`${path}?projectId=${projectId}&action=add-task`);
+                  router.push(`/sprint-backlog?projectId=${projectId}&action=create-sprint`);
                 }}
-                className="hidden min-[500px]:flex items-center justify-center px-4 h-[34px] bg-blue-600 text-white rounded-lg text-[13px] font-bold hover:bg-blue-700 transition-all font-outfit gap-1.5 shadow-sm shadow-blue-200 active:scale-95"
+                className="hidden sm:flex items-center justify-center px-3.5 h-[34px] bg-white hover:bg-slate-50 rounded-lg text-[13px] font-bold text-slate-700 transition-all border border-slate-200 active:scale-95 shadow-sm font-outfit"
               >
-                  <Plus size={16} strokeWidth={2.5} />
-                  Add Task
+                New Sprint
               </button>
+            )}
+
+            <button
+              onClick={() => {
+                if (!projectId) return;
+                const path = isAgile ? '/sprint-backlog' : '/backlog';
+                router.push(`${path}?projectId=${projectId}&action=add-task`);
+              }}
+              className="flex items-center justify-center px-4 h-[34px] bg-blue-600 text-white rounded-lg text-[13px] font-bold hover:bg-blue-700 transition-all font-outfit gap-1.5 shadow-sm shadow-blue-200 active:scale-95"
+            >
+              <Plus size={16} strokeWidth={2.5} />
+              New Task
+            </button>
           </div>
 
           <div className="w-[1px] h-6 bg-slate-200 mx-1 hidden lg:block" />
 
           <div className="flex items-center gap-4 shrink-0">
-              <NotificationBell />
-              <div className="flex">
-                {profileAvatar}
-              </div>
+            <NotificationBell />
+            <div className="flex">
+              {profileAvatar}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Tab bar */}
-      <div className="px-4 sm:px-8">
+      <div className="px-4 sm:px-8 mt-1 mb-0.5">
         <TabBar tabs={tabs} activeTab={activeTab} getTabHref={getTabHref} />
       </div>
     </div>

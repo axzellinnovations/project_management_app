@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import SidebarLayout from '../nav/SidebarLayout';
+import SidebarLayout from '@/navBar/SidebarLayout';
 import api from '@/lib/axios';
 
 /**

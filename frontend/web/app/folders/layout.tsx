@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
-import SidebarLayout from '@/app/nav/SidebarLayout';
+import SidebarLayout from '@/navBar/SidebarLayout';
 
 export default function FoldersLayout({ children }: { children: React.ReactNode }) {
     return (

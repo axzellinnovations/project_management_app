@@ -1,8 +1,8 @@
 'use client';
 
-import Sidebar from '@/components/layout/Sidebar';
+import Sidebar from './Sidebar';
 import BottomNav from './BottomNav';
-import TopBar from '@/components/layout/TopBar';
+import TopBar from './TopBar';
 import { Suspense } from 'react';
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { NotificationBell } from '@/components/layout/topbar/NotificationBell';
+import { NotificationBell } from '@/navBar/topbar/NotificationBell';
 import type { Notification } from '@/services/notifications-service';
 
 jest.mock('next/link', () => ({

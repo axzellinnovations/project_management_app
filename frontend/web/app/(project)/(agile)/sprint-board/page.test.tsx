@@ -30,7 +30,7 @@ jest.mock('./components/SprintColumn', () => ({
   default: ({ column }: { column: { name: string } }) => <div data-testid="board-column">{column.name}</div>,
 }));
 
-jest.mock('../../nav/Sidebar', () => ({
+jest.mock('@/navBar/Sidebar', () => ({
   __esModule: true,
   default: () => <div data-testid="sidebar">Sidebar</div>,
 }));

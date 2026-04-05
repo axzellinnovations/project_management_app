@@ -52,40 +52,46 @@ export function TabBar({
               href={getTabHref(tab.id)}
               onMouseEnter={() => setHoveredTab(tab.id)}
               onMouseLeave={() => setHoveredTab(null)}
-              className="relative h-full flex items-center px-3.5 sm:px-4 shrink-0 group transition-all duration-300"
+              className="relative h-full flex items-center px-5 shrink-0 group transition-all duration-300"
             >
-              {/* Hover effect background */}
+              {/* Liquid Glass active background */}
+              {activeTab === tab.id && (
+                <motion.div
+                  layoutId="activeTabPill"
+                  className="absolute inset-x-1 inset-y-1.5 bg-gradient-to-b from-white/95 to-blue-50/90 backdrop-blur-lg rounded-xl border border-blue-400/30 shadow-[0_4px_20px_rgba(37,99,235,0.15)] z-0"
+                  transition={{
+                    type: "spring",
+                    stiffness: 410,
+                    damping: 24,
+                    mass: 0.8
+                  }}
+                />
+              )}
+
+              {/* Hover effect background (subtler) */}
               <AnimatePresence>
-                {hoveredTab === tab.id && (
+                {hoveredTab === tab.id && activeTab !== tab.id && (
                   <motion.div
                     layoutId="hoverBackground"
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="absolute inset-x-1 inset-y-1.5 bg-slate-100/80 rounded-lg -z-10"
-                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                    className="absolute inset-x-1.5 inset-y-2.5 bg-slate-100/50 rounded-lg -z-10"
+                    transition={{ type: 'spring', stiffness: 450, damping: 30 }}
                   />
                 )}
               </AnimatePresence>
 
               <span
-                className={`font-outfit text-[13.5px] font-bold transition-colors duration-300 whitespace-nowrap ${
+                className={`font-outfit text-[14px] font-bold transition-all duration-300 whitespace-nowrap relative z-10 ${
                   activeTab === tab.id
-                    ? 'text-blue-600'
+                    ? 'text-blue-600 scale-[1.02]'
                     : 'text-slate-500 group-hover:text-slate-800'
                 }`}
               >
                 {tab.label}
               </span>
 
-              {/* Active indicator */}
-              {activeTab === tab.id && (
-                <motion.div
-                  layoutId="activeTabIndicator"
-                  className="absolute bottom-0 left-2 right-2 h-[3px] bg-blue-600 rounded-t-[3px] shadow-[0_-1px_6px_rgba(37,99,235,0.3)]"
-                  transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-                />
-              )}
             </Link>
           ))}
         </div>
@@ -110,12 +116,6 @@ export function TabBar({
             </svg>
           </button>
           
-          {activeInOverflow && !moreOpen && (
-             <motion.div
-                layoutId="activeTabIndicator"
-                className="absolute bottom-0 left-4 right-4 h-[3px] bg-blue-600 rounded-t-[3px] shadow-[0_-1px_6px_rgba(37,99,235,0.3)]"
-             />
-          )}
 
           <AnimatePresence>
             {moreOpen && (
@@ -124,7 +124,7 @@ export function TabBar({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
-                className="absolute top-full right-0 mt-1 z-[200] bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 min-w-[160px] overflow-hidden"
+                className="absolute top-full right-0 mt-2 z-[200] bg-white border border-slate-200 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.12)] py-1.5 min-w-[160px] overflow-hidden"
               >
                 {overflowTabs.map((tab) => (
                   <Link
