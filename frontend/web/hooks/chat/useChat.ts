@@ -101,7 +101,7 @@ export const useChat = (projectId: string) => {
 
   // â”€â”€ Stable setter/callback destructuring (prevents dep-array identity loops) â”€â”€
   const { setMessages, setPrivateMessages, setRoomMessages, setTeamLastMessage,
-          setPrivateLastMessages, setRoomLastMessages, mergePrivateMessage,
+          setRoomLastMessages, mergePrivateMessage,
           sendMessage: msgSend, sendRoomMessage: msgSendRoom,
           editMessage: msgEdit, deleteMessage: msgDelete,
           loadRoomHistory: msgLoadRoom, loadPrivateHistory: msgLoadPrivate } = msg;
@@ -567,12 +567,12 @@ export const useChat = (projectId: string) => {
             }
           });
 
-          // â”€â”€ Join + presence ping â”€â”€
+          // ——— Join + presence ping ———
           client.send(`/app/project/${projectId}/presence.ping`, {}, JSON.stringify({}));
-        }, (connectError: any) => {
+        }, (error: unknown) => {
           setIsSocketConnected(false);
 
-          const errorMessage = typeof connectError === 'string' ? connectError : (connectError?.headers?.message || '');
+          const errorMessage = typeof error === 'string' ? error : ((error as { headers?: { message?: string } })?.headers?.message || '');
           const isAuthError = errorMessage.toLowerCase().includes('auth') ||
                              errorMessage.toLowerCase().includes('jwt') ||
                              errorMessage.toLowerCase().includes('expired') ||
@@ -586,7 +586,7 @@ export const useChat = (projectId: string) => {
           }
 
           setError('Connection failed. Is the backend running?');
-          console.error('[chat-ws] Connection error:', connectError);
+          console.error('[chat-ws] Connection error:', error);
         });
       } catch (err) {
         setIsSocketConnected(false);

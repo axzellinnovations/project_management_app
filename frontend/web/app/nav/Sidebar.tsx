@@ -171,23 +171,8 @@ export default function Sidebar() {
         return () => clearTimeout(timer);
     }, [pathname, fetchProjects]);
 
-    /* useEffect for project type removed */
-
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-        let debounceTimer: ReturnType<typeof setTimeout>;
-        const handleFavToggled = () => void fetchProjects();
-        const handleProjectAccessed = () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => void fetchProjects(), 400);
-        };
-        window.addEventListener('planora:favorite-toggled', handleFavToggled);
-        window.addEventListener('planora:project-accessed', handleProjectAccessed);
-        return () => {
-            clearTimeout(debounceTimer);
-            window.removeEventListener('planora:favorite-toggled', handleFavToggled);
-            window.removeEventListener('planora:project-accessed', handleProjectAccessed);
-        };
+        void fetchProjects();
     }, [fetchProjects]);
 
     useEffect(() => {
@@ -209,28 +194,17 @@ export default function Sidebar() {
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             const target = e.target as Node;
-            // check if click is inside either anchor OR inside a fixed dropdown
             const inFav    = favRef.current?.contains(target);
             const inRecent = recentRef.current?.contains(target);
             const inInbox  = inboxRef.current?.contains(target);
-            // also check if click is inside a fixed dropdown portal (data attribute)
             const inDropdown = (target as Element)?.closest?.('[data-sidebar-dropdown]');
             if (!inFav && !inDropdown)    setFavOpen(false);
             if (!inRecent && !inDropdown) setRecentOpen(false);
             if (!inInbox && !inDropdown)  setInboxOpen(false);
         };
         document.addEventListener('mousedown', handleClickOutside);
-        
-        const handleToggle = () => setCollapsed(prev => !prev);
-        // Close sidebar on mobile when navigation happens (dispatched by NavigationContext)
-        const handleClose = () => { if (window.innerWidth < 768) setCollapsed(true); };
-        window.addEventListener('planora:sidebar:toggle', handleToggle);
-        window.addEventListener('planora:sidebar:close', handleClose);
-        
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
-            window.removeEventListener('planora:sidebar:toggle', handleToggle);
-            window.removeEventListener('planora:sidebar:close', handleClose);
         };
     }, []);
 
@@ -516,7 +490,6 @@ export default function Sidebar() {
                     onClose={() => setInboxOpen(false)}
                 />
             )}
-            {/* Velocity Panel removed as requested */}
         </div>
         </>
     );
@@ -698,82 +671,6 @@ function NavRow({
                     <path d="M4.5 3L8 6.5L4.5 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             )}
-        </button>
-    );
-}
-
-/* ─────────────────────────────────────────────
-   Section Header
-───────────────────────────────────────────── */
-function SectionHeader({ label, collapsed, expanded, onToggle }: {
-    label: string; collapsed: boolean; expanded: boolean; onToggle: () => void;
-}) {
-    return (
-        <button onClick={onToggle} className="w-full flex items-center gap-2 px-2.5 py-1.5 mb-0.5 group">
-            <svg
-                width="9" height="9" viewBox="0 0 10 10" fill="none"
-                className="text-[#B0B8C4] flex-shrink-0 transition-transform duration-200"
-                style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
-            >
-                <path d="M3.5 2L6.5 5L3.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span
-                className="font-arimo text-[10.5px] font-bold text-[#B0B8C4] uppercase tracking-widest whitespace-nowrap overflow-hidden"
-                style={{
-                    maxWidth: collapsed ? '0px' : '150px',
-                    opacity: collapsed ? 0 : 1,
-                    transition: 'max-width 280ms cubic-bezier(0.4,0,0.2,1), opacity 200ms',
-                }}
-            >
-                {label}
-            </span>
-        </button>
-    );
-}
-
-/* ─────────────────────────────────────────────
-   Inbox Nav Row (with unread dot)
-   ───────────────────────────────────────────── */
-function InboxNavRow({
-    icon, label, subtitle, unseenCount, collapsed, onClick,
-}: {
-    icon: React.ReactNode;
-    label: string;
-    subtitle?: string;
-    unseenCount: number;
-    collapsed: boolean;
-    onClick: () => void;
-}) {
-    return (
-        <button
-            onClick={onClick}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-all duration-150 text-left hover:bg-[#F5F7FA] group"
-        >
-            <span className="flex-shrink-0 w-4 flex items-center justify-center text-[#94A3B8] group-hover:text-[#64748B]">
-                {icon}
-            </span>
-            <div
-                className="flex flex-col flex-1 min-w-0"
-                style={{
-                    maxWidth: collapsed ? '0px' : '160px',
-                    opacity: collapsed ? 0 : 1,
-                    transition: 'max-width 280ms cubic-bezier(0.4,0,0.2,1), opacity 200ms',
-                }}
-            >
-                <div className="flex items-center gap-1.5">
-                    <span className={`font-arimo text-[12.5px] truncate font-medium ${unseenCount > 0 ? 'text-[#101828]' : 'text-[#4A5565]'}`}>
-                        {label}
-                    </span>
-                    {unseenCount > 0 && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] shadow-[0_0_8px_rgba(16,185,129,0.4)] animate-pulse flex-shrink-0" title={`${unseenCount} unread messages`} />
-                    )}
-                </div>
-                {subtitle && (
-                    <span className="font-arimo text-[10.5px] text-[#94A3B8] truncate leading-tight group-hover:text-[#64748B]">
-                        {subtitle}
-                    </span>
-                )}
-            </div>
         </button>
     );
 }

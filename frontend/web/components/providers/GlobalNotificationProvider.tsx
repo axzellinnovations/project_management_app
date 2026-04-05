@@ -90,8 +90,8 @@ export function GlobalNotificationProvider({ children }: { children: React.React
           );
         }
       });
-    }, (error: any) => {
-      const errorMessage = typeof error === 'string' ? error : (error?.headers?.message || '');
+    }, (error: unknown) => {
+      const errorMessage = typeof error === 'string' ? error : ((error as { headers?: { message?: string } })?.headers?.message || '');
       const isAuthError = errorMessage.toLowerCase().includes('auth') ||
                          errorMessage.toLowerCase().includes('jwt') ||
                          errorMessage.toLowerCase().includes('expired') ||

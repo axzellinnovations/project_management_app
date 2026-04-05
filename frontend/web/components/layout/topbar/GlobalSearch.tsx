@@ -143,7 +143,7 @@ export default function GlobalSearch() {
                 ))
               ) : (
                 <div className="px-4 py-8 text-center">
-                  <div className="text-slate-400 text-sm italic">No results found for "{query}"</div>
+                  <div className="text-slate-400 text-sm italic">No results found for &quot;{query}&quot;</div>
                 </div>
               )}
             </div>

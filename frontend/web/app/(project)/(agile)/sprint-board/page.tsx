@@ -14,7 +14,6 @@ import { Loader, AlertCircle, CheckCircle2, Plus, Check, X } from 'lucide-react'
 import axios from '@/lib/axios';
 import { AxiosError } from 'axios';
 import { toast } from '@/components/ui';
-import TaskCardModal from '@/app/taskcard/TaskCardModal';
 
 interface SprintSummary {
   id: number;
@@ -180,8 +179,6 @@ export default function SprintBoardPage() {
       setIsUpdating(false);
     }
   };
-
-  // Removing handleAddColumn as it reached deprecation after UI shift.
 
   const finalizeAddColumn = async (name: string, status: string) => {
     if (!sprintboard) return;

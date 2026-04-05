@@ -2,8 +2,7 @@
 
 import Image from "next/image";
 import {
-  useMembersData, timeAgo,
-  type MemberCombined,
+  useMembersData, timeAgo
 } from "./useMembersData";
 
 // Heroicons and custom SVGs for UI icons

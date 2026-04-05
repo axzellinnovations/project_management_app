@@ -26,12 +26,11 @@ export default function VerifyEmailForm() {
       await api.post('/api/auth/reg/verify', { email, otp });
       alert("Email verified successfully! Please login.");
       router.push('/login');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      console.error("Verification error:", err);
+    } catch (_err: unknown) {
+      console.error("Verification error:", _err);
       
       let errorMessage = 'Invalid OTP. Please try again.';
-      const errorData = err.response?.data;
+      const errorData = (_err as any).response?.data;
       
       // Handle different error response formats
       if (typeof errorData === 'string') {
@@ -55,17 +54,13 @@ export default function VerifyEmailForm() {
     try {
       const response = await api.post('/api/auth/resend', { email });
       setError('');
-      
-      let successMsg = 'New OTP sent to your email.';
-      if (typeof response.data === 'string') {
-        successMsg = response.data;
-      }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      console.error("Resend error:", err);
+      const successMsg = typeof response.data === 'string' ? response.data : 'New OTP sent to your email.';
+      alert(successMsg);
+    } catch (_err: any) {
+      console.error("Resend error:", _err);
       
       let errorMessage = 'Failed to resend OTP. Please try again.';
-      const errorData = err.response?.data;
+      const errorData = _err.response?.data;
       
       if (typeof errorData === 'string') {
         errorMessage = errorData;

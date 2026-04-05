@@ -184,10 +184,10 @@ export function useMembersSync(
       },
 
       // ── onError / onDisconnected ─────────────────────────────────────────────
-      (error: any) => {
+      (error: unknown) => {
         if (isUnmountedRef.current) return;
 
-        const errorMessage = typeof error === 'string' ? error : (error?.headers?.message || '');
+        const errorMessage = typeof error === 'string' ? error : ((error as { headers?: { message?: string } })?.headers?.message || '');
         const isAuthError = errorMessage.toLowerCase().includes('auth') ||
                            errorMessage.toLowerCase().includes('jwt') ||
                            errorMessage.toLowerCase().includes('expired') ||

@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import MotionWrapper from './MotionWrapper';
 import { Task, TeamMemberInfo } from '@/types';
 import Link from 'next/link';
@@ -42,7 +43,13 @@ function TeamMemberRow({
         <div className="mb-6 last:mb-0 border-b border-gray-100 last:border-0 pb-4 last:pb-0">
             <div className="flex items-center gap-3 mb-3">
                 {member.user.profilePicUrl ? (
-                    <img src={member.user.profilePicUrl} alt={member.user.username} className="w-10 h-10 rounded-full object-cover" />
+                    <Image
+                        src={member.user.profilePicUrl}
+                        alt={member.user.username || 'Member profile'}
+                        width={40}
+                        height={40}
+                        className="w-10 h-10 rounded-full object-cover"
+                    />
                 ) : (
                     <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-arimo text-[16px]" style={{ background: gradient }}>
                         {initials}

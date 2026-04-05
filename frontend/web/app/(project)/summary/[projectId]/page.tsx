@@ -16,7 +16,6 @@ export default function SummaryPage() {
     const params = useParams();
     const projectId = Number(params.projectId);
 
-    const [project, setProject] = useState<Project | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [sprints, setSprints] = useState<Sprint[]>([]);
     const [members, setMembers] = useState<TeamMemberInfo[]>([]);
@@ -30,7 +29,7 @@ export default function SummaryPage() {
             try {
                 // Fetch all data points concurrently
                 const [
-                    projRes,
+                    _projRes,
                     tasksRes,
                     sprintsRes,
                     membersRes,
@@ -43,7 +42,6 @@ export default function SummaryPage() {
                     api.get(`/api/projects/${projectId}/pages`),
                 ]);
 
-                setProject(projRes.data);
                 setTasks(tasksRes.data);
                 setSprints(sprintsRes.data);
                 setMembers(membersRes.data);

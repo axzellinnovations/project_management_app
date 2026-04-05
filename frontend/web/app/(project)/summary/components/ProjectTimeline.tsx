@@ -19,7 +19,7 @@ export function CurrentSprint({ projectId, sprints = [], tasks = [] }: { project
                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#98A2B3" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3">
                         <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                     </svg>
-                    <p className="font-arimo text-[14px] text-gray-600 mb-4 text-center max-w-[250px]">Start a sprint to unleash your team's tracking capabilities.</p>
+                    <p className="font-arimo text-[14px] text-gray-600 mb-4 text-center max-w-[250px]">Start a sprint to unleash your team&apos;s tracking capabilities.</p>
                     <button className="px-4 py-2 bg-[#0052CC] text-white font-semibold rounded-lg text-sm hover:bg-[#0047b3] transition-colors shadow-sm">
                         Create Sprint
                     </button>
