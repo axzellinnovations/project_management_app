@@ -43,12 +43,19 @@ jest.mock('@/services/notifications-service', () => ({
   markAllNotificationsRead: jest.fn(),
 }));
 
+jest.mock('@/lib/auth', () => ({
+  getValidToken: jest.fn(),
+}));
+
 jest.mock('@/components/ui/Toast', () => ({
   toast: jest.fn(),
 }));
 
+import { getValidToken } from '@/lib/auth';
+
 const mockedApi = notificationsApi as jest.Mocked<typeof notificationsApi>;
 const mockedToast = toast as jest.MockedFunction<typeof toast>;
+const mockedGetValidToken = getValidToken as jest.Mock;
 
 const buildNotification = (
   id: number,
@@ -88,7 +95,7 @@ describe('GlobalNotificationProvider', () => {
     notificationHandler = null;
     currentPathname = '/dashboard';
     window.localStorage.clear();
-    window.localStorage.setItem('token', 'fake-token');
+    mockedGetValidToken.mockReturnValue('fake-token');
 
     mockedApi.fetchNotifications.mockResolvedValue([]);
     mockedApi.fetchUnreadCount.mockResolvedValue(0);

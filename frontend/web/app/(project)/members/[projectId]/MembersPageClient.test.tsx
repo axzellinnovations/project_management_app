@@ -11,6 +11,7 @@ jest.mock('next/image', () => ({
 
 jest.mock('@/lib/auth', () => ({
   getUserFromToken: jest.fn(),
+  getValidToken: jest.fn(),
 }));
 
 jest.mock('@/lib/axios', () => ({

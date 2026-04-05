@@ -35,7 +35,7 @@ jest.mock('@/navBar/Sidebar', () => ({
   default: () => <div data-testid="sidebar">Sidebar</div>,
 }));
 
-jest.mock('../../nav/TopBar', () => ({
+jest.mock('@/navBar/TopBar', () => ({
   __esModule: true,
   default: () => <div data-testid="topbar">TopBar</div>,
 }));
