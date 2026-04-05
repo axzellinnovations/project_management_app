@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic';
 
 import React from 'react';
+import { DragEndEvent } from '@dnd-kit/core';
 import { useSearchParams } from 'next/navigation';
 import DragDropProvider from './components/DragDropProvider';
 import KanbanColumn from './components/KanbanColumn';
@@ -12,7 +13,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
-import { useKanbanBoard } from './useKanbanBoard';
+import { useKanbanBoard, DEFAULT_COLUMN_CONFIGS } from './useKanbanBoard';
 
 // wrapper to make a column draggable
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

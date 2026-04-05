@@ -5,7 +5,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TimelineView from '../kanban/components/TimelineView';
 import { Task } from '../kanban/types';
-import { fetchTasksByProject, updateTask } from '../kanban/api';
+import { fetchTasksByProject } from '../kanban/api';
 import { AlertCircle } from 'lucide-react';
 
 export default function TimelinePage() {
@@ -47,21 +47,6 @@ export default function TimelinePage() {
   useEffect(() => {
     loadTasks();
   }, [loadTasks]);
-
-  // Handle task update
-  const handleTaskUpdate = async (taskId: number, updates: Partial<Task>) => {
-    try {
-      await updateTask(taskId, updates);
-      setTasks((prevTasks) =>
-        prevTasks.map((t) =>
-          t.id === taskId ? { ...t, ...updates } : t
-        )
-      );
-    } catch (err) {
-      setError(`Failed to update task: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      console.error('Failed to update task:', err);
-    }
-  };
 
   if (!projectId) {
     return (
@@ -111,8 +96,6 @@ export default function TimelinePage() {
       ) : (
         <TimelineView
           tasks={tasks}
-          onTaskUpdate={handleTaskUpdate}
-          projectId={parseInt(projectId as string)}
         />
       )}
     </div>

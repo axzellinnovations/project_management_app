@@ -123,6 +123,7 @@ describe('GlobalNotificationProvider', () => {
 
     expect(stompClient.connect).toHaveBeenCalledWith(
       { Authorization: 'Bearer fake-token' },
+      expect.any(Function),
       expect.any(Function)
     );
     expect(stompClient.subscribe).toHaveBeenCalledWith('/user/queue/notifications', expect.any(Function));

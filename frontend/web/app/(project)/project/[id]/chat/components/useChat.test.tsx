@@ -168,6 +168,14 @@ describe('useChat hook', () => {
     await waitFor(() => {
       expect(hook.result.current.isLoading).toBe(false);
     }, { timeout: 10000 });
+    await waitFor(() => {
+      expect(stompClient.connect).toHaveBeenCalled();
+    }, { timeout: 10000 });
+    await waitFor(() => {
+      expect(subscriptions['/topic/project/42/public']).toBeDefined();
+      expect(subscriptions['/user/queue/project/42/messages']).toBeDefined();
+      expect(subscriptions['/user/queue/project/42/mentions']).toBeDefined();
+    }, { timeout: 10000 });
     return hook;
   };
 
