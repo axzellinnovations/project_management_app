@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { usePathname } from 'next/navigation';
 import SockJS from 'sockjs-client';
 import { CompatClient, Stomp } from '@stomp/stompjs';
+import { getValidToken } from '@/lib/auth';
 import * as notificationsApi from '@/services/notifications-service';
 import { Notification } from '@/services/notifications-service';
 import { toast } from '@/components/ui/Toast';
@@ -44,14 +45,15 @@ export function GlobalNotificationProvider({ children }: { children: React.React
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getValidToken();
     if (!token) return;
 
     queueMicrotask(() => {
       void loadInitialData();
     });
 
-    const client = Stomp.over(() => new SockJS('http://localhost:8080/ws'));
+    const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+    const client = Stomp.over(() => new SockJS(`${backendUrl}/ws`));
     client.debug = () => {}; 
     client.reconnect_delay = 5000;
     
@@ -88,6 +90,18 @@ export function GlobalNotificationProvider({ children }: { children: React.React
           );
         }
       });
+    }, (error: any) => {
+      const errorMessage = typeof error === 'string' ? error : (error?.headers?.message || '');
+      const isAuthError = errorMessage.toLowerCase().includes('auth') ||
+                         errorMessage.toLowerCase().includes('jwt') ||
+                         errorMessage.toLowerCase().includes('expired') ||
+                         errorMessage.toLowerCase().includes('invalid');
+
+      if (isAuthError) {
+        console.error('[notifications-ws] Fatal authentication error:', errorMessage);
+        // Don't retry on fatal auth errors
+        return;
+      }
     });
 
     return () => {

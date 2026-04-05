@@ -81,3 +81,19 @@ export function getUserFromToken(): User | null {
         return null;
     }
 }
+
+/**
+ * Returns the JWT token only if it's present and not expired.
+ * Also clears the token from localStorage if it's expired.
+ */
+export function getValidToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+
+    // getUserFromToken() internally clears the token if it's expired or malformed.
+    if (getUserFromToken()) {
+        return localStorage.getItem('token'); // Return the actual token string.
+    }
+    return null;
+}

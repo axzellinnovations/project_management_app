@@ -22,6 +22,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import SockJS from 'sockjs-client';
 import { CompatClient, Stomp } from '@stomp/stompjs';
+import { getValidToken } from '@/lib/auth';
 
 // ── Types that mirror the backend MemberEvent record ───────────────────────────
 
@@ -115,8 +116,11 @@ export function useMembersSync(
   const connect = useCallback(() => {
     if (isUnmountedRef.current) return;
 
-    const token = localStorage.getItem('token');
-    if (!token) return; // Not authenticated yet; will retry on next render.
+    const token = getValidToken();
+    if (!token) {
+      console.warn('[members-ws] No valid token found, skipping connection.');
+      return;
+    }
 
     const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
     const socket = new SockJS(`${backendUrl}/ws`);
@@ -180,8 +184,21 @@ export function useMembersSync(
       },
 
       // ── onError / onDisconnected ─────────────────────────────────────────────
-      (error: unknown) => {
+      (error: any) => {
         if (isUnmountedRef.current) return;
+
+        const errorMessage = typeof error === 'string' ? error : (error?.headers?.message || '');
+        const isAuthError = errorMessage.toLowerCase().includes('auth') ||
+                           errorMessage.toLowerCase().includes('jwt') ||
+                           errorMessage.toLowerCase().includes('expired') ||
+                           errorMessage.toLowerCase().includes('invalid');
+
+        if (isAuthError) {
+          console.error('[members-ws] Fatal authentication error:', errorMessage);
+          // Stop retrying on fatal auth errors to avoid backend log spam.
+          return;
+        }
+
         console.warn('[members-ws] Disconnected, will reconnect in',
           reconnectDelayRef.current, 'ms', error);
 

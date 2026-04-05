@@ -6,7 +6,6 @@ import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef
 import { getUserFromToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import api from '@/lib/axios';
-import VelocityPanel from '@/components/layout/VelocityPanel';
 
 /* ─────────────────────────────────────────────
    Types
@@ -106,10 +105,7 @@ export default function Sidebar() {
     const [recentSearch, setRecentSearch] = useState('');
 
 
-    /* agile analytics */
-    const [currentProjectType, setCurrentProjectType] = useState<string | null>(null);
-    const [showVelocityPanel, setShowVelocityPanel] = useState(false);
-    const [currentSidebarProjectId, setCurrentSidebarProjectId] = useState<string | null>(null);
+    /* agile analytics removed */
 
     /* refs for click-outside + anchor position */
     const favRef    = useRef<HTMLDivElement>(null);
@@ -175,18 +171,7 @@ export default function Sidebar() {
         return () => clearTimeout(timer);
     }, [pathname, fetchProjects]);
 
-    // Fetch current project type to gate AGILE-only sidebar items.
-    useEffect(() => {
-        const pid =
-            (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('projectId'))
-            || localStorage.getItem('currentProjectId')
-            || (recentProjects.length > 0 ? recentProjects[0].id.toString() : null);
-        if (!pid) { setCurrentProjectType(null); setCurrentSidebarProjectId(null); return; }
-        setCurrentSidebarProjectId(pid);
-        api.get(`/api/projects/${pid}`)
-            .then(res => setCurrentProjectType(res.data?.type ?? null))
-            .catch(() => setCurrentProjectType(null));
-    }, [pathname, recentProjects]);
+    /* useEffect for project type removed */
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -337,12 +322,28 @@ export default function Sidebar() {
             )}
             
             <div
-                className={`h-screen flex-shrink-0 z-[100] bg-white transition-all duration-300 ease-in-out ${isMobile ? 'fixed left-0 top-0' : 'relative'} ${isMobile && collapsed ? 'pointer-events-none' : ''}`}
+                className={`h-screen flex-shrink-0 z-[200] bg-white transition-all duration-300 ease-in-out ${isMobile ? 'fixed left-0 top-0 z-[1000]' : 'relative'} ${isMobile && collapsed ? 'pointer-events-none' : ''}`}
                 style={{ 
                     width: isMobile ? (collapsed ? '0px' : '260px') : (collapsed ? '64px' : '240px'),
                     opacity: isMobile && collapsed ? 0 : 1
                 }}
             >
+                {/* ── Floating collapse button — Moved outside overflow-hidden container to prevent clipping ── */}
+                <button
+                    onClick={toggleCollapsed}
+                    title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                    className="hidden md:flex absolute top-[14px] right-[-13px] z-[999] w-[26px] h-[26px] items-center justify-center rounded-full bg-white border border-[#E3E8EF] shadow-md text-[#9AA3AE] hover:text-[#155DFC] hover:border-[#155DFC]/30 hover:shadow-blue-100 transition-all duration-150"
+                >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="1" y="1.5" width="14" height="13" rx="2" stroke="currentColor" strokeWidth="1.4" />
+                        <line x1="5" y1="1.5" x2="5" y2="14.5" stroke="currentColor" strokeWidth="1.4" />
+                        <path
+                            d={collapsed ? 'M8.5 10L11 8L8.5 6' : 'M10.5 10L8 8L10.5 6'}
+                            stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"
+                        />
+                    </svg>
+                </button>
+
                 <div className="h-full bg-white border-r border-[#E3E8EF] flex flex-col overflow-x-hidden w-[240px] md:w-[inherit]">
 
                     {/* ── Header: Planora logo + wordmark ── */}
@@ -370,22 +371,6 @@ export default function Sidebar() {
                         </span>
                     </div>
                 </div>
-
-                {/* ── Floating collapse button — always on the right edge, vertically centred in header ── */}
-                <button
-                    onClick={toggleCollapsed}
-                    title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                    className="hidden md:flex absolute top-[14px] right-[-13px] z-50 w-[26px] h-[26px] items-center justify-center rounded-full bg-white border border-[#E3E8EF] shadow-md text-[#9AA3AE] hover:text-[#155DFC] hover:border-[#155DFC]/30 hover:shadow-blue-100 transition-all duration-150"
-                >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="1" y="1.5" width="14" height="13" rx="2" stroke="currentColor" strokeWidth="1.4" />
-                        <line x1="5" y1="1.5" x2="5" y2="14.5" stroke="currentColor" strokeWidth="1.4" />
-                        <path
-                            d={collapsed ? 'M8.5 10L11 8L8.5 6' : 'M10.5 10L8 8L10.5 6'}
-                            stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"
-                        />
-                    </svg>
-                </button>
 
                 {/* ── Nav body ── */}
                 <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 flex flex-col gap-0.5">
@@ -449,25 +434,6 @@ export default function Sidebar() {
 
 
 
-                    {/* ── Agile Analytics section (AGILE projects only) ── */}
-                    {currentProjectType === 'AGILE' && (
-                        <>
-                            <div className="my-2 mx-1 border-t border-[#F2F4F7]" />
-                            <SectionHeader
-                                label="AGILE"
-                                collapsed={collapsed}
-                                expanded={true}
-                                onToggle={() => {}}
-                            />
-                            <NavRow
-                                icon={<BarChart3Icon />}
-                                label="Sprint Velocity"
-                                collapsed={collapsed}
-                                active={showVelocityPanel}
-                                onClick={() => setShowVelocityPanel(true)}
-                            />
-                        </>
-                    )}
                 </div>
 
                 {/* ── User section ── */}
@@ -550,12 +516,7 @@ export default function Sidebar() {
                     onClose={() => setInboxOpen(false)}
                 />
             )}
-            {showVelocityPanel && (
-                <VelocityPanel
-                    projectId={currentSidebarProjectId}
-                    onClose={() => setShowVelocityPanel(false)}
-                />
-            )}
+            {/* Velocity Panel removed as requested */}
         </div>
         </>
     );
@@ -1036,10 +997,4 @@ const UserIcon = ({ size = 16 }: { size?: number }) => (
     </svg>
 );
 
-const BarChart3Icon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="18" y1="20" x2="18" y2="10" />
-        <line x1="12" y1="20" x2="12" y2="4" />
-        <line x1="6" y1="20" x2="6" y2="14" />
-    </svg>
-);
+

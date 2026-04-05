@@ -1,8 +1,9 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import SockJS from 'sockjs-client';
 import { CompatClient, Stomp } from '@stomp/stompjs';
 
+import { getValidToken } from '@/lib/auth';
 import * as chatApi from '@/services/chat-service';
 import type {
   ChatFeatureFlags,
@@ -426,7 +427,8 @@ export const useChat = (projectId: string) => {
   const connectToChat = useCallback(
     (token: string, username: string, aliases: string[]) => {
       try {
-        const client = Stomp.over(() => new SockJS('http://localhost:8080/ws'));
+        const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+        const client = Stomp.over(() => new SockJS(`${backendUrl}/ws`));
         client.debug = () => {};
         client.reconnect_delay = 5000;
         const normalizedAliases = new Set(aliases.map(a => a.toLowerCase()));
@@ -566,17 +568,30 @@ export const useChat = (projectId: string) => {
           });
 
           // â”€â”€ Join + presence ping â”€â”€
-          client.send(`/app/project/${projectId}/chat.addUser`, {}, JSON.stringify({ sender: username, type: 'JOIN' }));
           client.send(`/app/project/${projectId}/presence.ping`, {}, JSON.stringify({}));
-        }, (connectError: unknown) => {
+        }, (connectError: any) => {
           setIsSocketConnected(false);
+
+          const errorMessage = typeof connectError === 'string' ? connectError : (connectError?.headers?.message || '');
+          const isAuthError = errorMessage.toLowerCase().includes('auth') ||
+                             errorMessage.toLowerCase().includes('jwt') ||
+                             errorMessage.toLowerCase().includes('expired') ||
+                             errorMessage.toLowerCase().includes('invalid');
+
+          if (isAuthError) {
+            setError('Your session has expired. Please log in again.');
+            console.error('[chat-ws] Fatal authentication error:', errorMessage);
+            // Don't retry on fatal auth errors
+            return;
+          }
+
           setError('Connection failed. Is the backend running?');
-          console.error(connectError);
+          console.error('[chat-ws] Connection error:', connectError);
         });
       } catch (err) {
         setIsSocketConnected(false);
         setError('Socket initialization failed.');
-        console.error(err);
+        console.error('[chat-ws] Initialization error:', err);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -586,8 +601,12 @@ export const useChat = (projectId: string) => {
   // â”€â”€ Initialization â”€â”€
   useEffect(() => {
     const initialize = async () => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      if (!token) { router.push('/login'); return; }
+      const token = getValidToken();
+      if (!token) {
+        console.warn('[chat-ws] No valid token found, redirecting to login.');
+        router.push('/login');
+        return;
+      }
 
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
