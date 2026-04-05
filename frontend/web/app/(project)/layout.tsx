@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import SidebarLayout from '@/navBar/SidebarLayout';
 import api from '@/lib/axios';

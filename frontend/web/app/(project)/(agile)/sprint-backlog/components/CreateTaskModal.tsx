@@ -3,8 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, User, Hash } from 'lucide-react';
 import axios from '@/lib/axios';
-import { toast } from '@/components/ui';
-
 interface TeamMember {
   id: number;
   name: string;

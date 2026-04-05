@@ -13,7 +13,7 @@ import { getUserFromToken } from '@/lib/auth';
 import { toast } from '@/components/ui';
 import type { TaskItem, SprintItem } from '@/types';
 import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
-import CreateTaskModal, { type CreateTaskData } from '@/components/shared/CreateTaskModal';
+import { type CreateTaskData } from '@/components/shared/CreateTaskModal';
 import CreateSprintModal from './components/CreateSprintModal';
 
 type RawTask = {

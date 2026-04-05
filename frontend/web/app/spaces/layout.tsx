@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense } from 'react';
+import React from 'react';
 import SidebarLayout from '@/navBar/SidebarLayout';
 
 export default function SpacesLayout({ children }: { children: React.ReactNode }) {

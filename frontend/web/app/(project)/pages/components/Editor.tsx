@@ -61,7 +61,7 @@ function Divider() {
 export default function Editor({ content, onUpdate, editable = true }: EditorProps) {
   const [isMounted, setIsMounted] = useState(false);
 
-  const handleUpdate = React.useMemo(
+  const handleUpdate = useMemo(
     () => debounce((html: string) => { onUpdate(html); }, 800),
     [onUpdate]
   );

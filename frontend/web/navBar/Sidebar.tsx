@@ -17,7 +17,6 @@ import { InboxDropdown } from './sidebar/InboxDropdown';
 import {
   HomeIcon, StarIcon, ClockIcon, ProfileIcon,
   InboxIcon,
-  MessageSquareIcon, UserIcon,
 } from './sidebar/SidebarIcons';
 
 /* ── Types ── */
@@ -262,16 +261,6 @@ export default function Sidebar() {
     ].reduce((acc, c) => acc + (c.unseenCount || 0), 0);
   }, [chatSummaries]);
 
-  const inboxItems = useMemo(() => {
-    if (!chatSummaries) return [];
-    const all = [
-      ...(chatSummaries.rooms || []).map(r => ({ ...r, type: 'ROOM' })),
-      ...(chatSummaries.directMessages || []).map(d => ({ ...d, type: 'DM' })),
-    ];
-    const unread = all.filter(c => (c.unseenCount || 0) > 0);
-    if (unread.length > 0) return unread.slice(0, 5);
-    return all.slice(0, 2);
-  }, [chatSummaries]);
 
   const closeDropdowns = () => { setFavOpen(false); setRecentOpen(false); };
 

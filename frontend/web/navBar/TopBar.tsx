@@ -13,7 +13,6 @@ import * as projectsApi from '@/services/projects-service';
 import { NotificationBell } from './topbar/NotificationBell';
 import { TabBar } from './topbar/TabBar';
 import { ProjectDropdown } from './sidebar/ProjectDropdown';
-import { SearchIcon } from './sidebar/SidebarIcons';
 import GlobalSearch from './topbar/GlobalSearch';
 
 const subscribeToBrowserStorage = (onStoreChange: () => void) => {

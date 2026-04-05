@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { getUserFromToken, User } from '@/lib/auth';
 import Link from 'next/link';
 import api from '@/lib/axios';
@@ -12,7 +12,7 @@ import DashboardTable from './components/DashboardTable';
 import WelcomeGreeting from '@/components/ui/WelcomeGreeting';
 import { NotificationBell } from '@/navBar/topbar/NotificationBell';
 import Image from 'next/image';
-import { Menu, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 interface ProjectSummary {
     id: number;

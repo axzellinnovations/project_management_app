@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import api from '@/lib/axios';
-import { Task, Sprint, TeamMemberInfo, PageItem, Project } from '@/types';
+import { Task, Sprint, TeamMemberInfo, PageItem } from '@/types';
 
 import MetricsGrid from "../components/MetricsGrid";
 import { CurrentSprint } from "../components/ProjectTimeline";

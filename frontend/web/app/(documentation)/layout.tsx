@@ -1,4 +1,3 @@
-import { Suspense } from 'react';
 import SidebarLayout from '@/navBar/SidebarLayout';
 
 export default function DocumentationLayout({

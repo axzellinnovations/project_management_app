@@ -30,13 +30,14 @@ export default function VerifyEmailForm() {
       console.error("Verification error:", _err);
       
       let errorMessage = 'Invalid OTP. Please try again.';
-      const errorData = (_err as any).response?.data;
+      const res = (_err as { response?: { data?: unknown } })?.response;
+      const errorData = res?.data;
       
       // Handle different error response formats
       if (typeof errorData === 'string') {
         errorMessage = errorData;
-      } else if (errorData?.message) {
-        errorMessage = errorData.message;
+      } else if (errorData && typeof errorData === 'object' && 'message' in errorData) {
+        errorMessage = (errorData as { message: string }).message;
       }
       
       setError(errorMessage);
@@ -56,16 +57,17 @@ export default function VerifyEmailForm() {
       setError('');
       const successMsg = typeof response.data === 'string' ? response.data : 'New OTP sent to your email.';
       alert(successMsg);
-    } catch (_err: any) {
+    } catch (_err: unknown) {
       console.error("Resend error:", _err);
       
       let errorMessage = 'Failed to resend OTP. Please try again.';
-      const errorData = _err.response?.data;
+      const res = (_err as { response?: { data?: unknown } })?.response;
+      const errorData = res?.data;
       
       if (typeof errorData === 'string') {
         errorMessage = errorData;
-      } else if (errorData?.message) {
-        errorMessage = errorData.message;
+      } else if (errorData && typeof errorData === 'object' && 'message' in errorData) {
+        errorMessage = (errorData as { message: string }).message;
       }
       
       setError(errorMessage);

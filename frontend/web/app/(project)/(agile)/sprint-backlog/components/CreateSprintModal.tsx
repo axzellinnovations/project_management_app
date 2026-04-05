@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { X, Rocket, Calendar, Target } from 'lucide-react';
-import { toast } from '@/components/ui';
 
 interface CreateSprintModalProps {
   isOpen: boolean;
@@ -49,7 +48,7 @@ export default function CreateSprintModal({
       await onCreateSprint(name.trim(), startDate || undefined, endDate || undefined, goal.trim() || undefined);
       resetForm();
       onClose();
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to create sprint.');
     } finally {
       setSubmitting(false);

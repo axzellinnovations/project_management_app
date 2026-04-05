@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import SprintBacklogPage from './page';
 import api from '@/lib/axios';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 jest.mock('next/navigation', () => ({
   useRouter: jest.fn(),
