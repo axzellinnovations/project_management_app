@@ -1,6 +1,7 @@
 package com.planora.backend.service;
 
 import com.planora.backend.dto.*;
+import com.planora.backend.exception.ResourceNotFoundException;
 import com.planora.backend.model.*;
 import com.planora.backend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -10,18 +11,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.*;
-import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -51,7 +48,7 @@ public class DocumentService {
     private final ProjectRepository projectRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final UserRepository userRepository;
-    private final S3Presigner s3Presigner;
+    private final S3StorageService s3StorageService;
     private final S3Client s3Client;
 
     @Value("${aws.s3.dms-bucket}")
@@ -76,12 +73,7 @@ public class DocumentService {
                 .contentType(request.getContentType())
                 .build();
 
-        PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
-                .signatureDuration(URL_DURATION)
-                .putObjectRequest(putObjectRequest)
-                .build();
-
-        String uploadUrl = s3Presigner.presignPutObject(presignRequest).url().toString();
+        String uploadUrl = s3StorageService.generatePresignedUploadUrl(dmsBucket, objectKey, request.getContentType(), URL_DURATION);
 
         return DocumentUploadInitResponseDTO.builder()
                 .uploadUrl(uploadUrl)
@@ -198,12 +190,7 @@ public class DocumentService {
                 .contentType(request.getContentType())
                 .build();
 
-        PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
-                .signatureDuration(URL_DURATION)
-                .putObjectRequest(putObjectRequest)
-                .build();
-
-        String uploadUrl = s3Presigner.presignPutObject(presignRequest).url().toString();
+        String uploadUrl = s3StorageService.generatePresignedUploadUrl(dmsBucket, objectKey, request.getContentType(), URL_DURATION);
 
         return DocumentUploadInitResponseDTO.builder()
                 .uploadUrl(uploadUrl)
@@ -275,7 +262,7 @@ public class DocumentService {
                     : documentRepository.findByProjectIdAndStatusOrderByCreatedAtDesc(projectId, DocumentStatus.ACTIVE);
         }
 
-        return documents.stream().map(document -> mapDocument(document, true)).toList();
+        return documents.stream().map(document -> mapDocument(document, false)).toList();
     }
 
     @Transactional(readOnly = true)
@@ -290,10 +277,11 @@ public class DocumentService {
 
         Document document = getDocument(projectId, documentId);
         if (document.getStatus() == DocumentStatus.SOFT_DELETED) {
-            throw new RuntimeException("Document is deleted");
+            throw new ResourceNotFoundException("Document is deleted");
         }
 
-        return generateDownloadUrl(document.getLatestObjectKey());
+        s3StorageService.verifyObjectExists(dmsBucket, document.getLatestObjectKey());
+        return s3StorageService.generatePresignedDownloadUrl(dmsBucket, document.getLatestObjectKey(), URL_DURATION);
     }
 
     @Transactional(readOnly = true)
@@ -368,11 +356,7 @@ public class DocumentService {
 
         for (DocumentVersion version : versions) {
             try {
-                DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
-                        .bucket(dmsBucket)
-                        .key(version.getObjectKey())
-                        .build();
-                s3Client.deleteObject(deleteObjectRequest);
+                s3StorageService.deleteObject(dmsBucket, version.getObjectKey());
             } catch (Exception e) {
                 logger.warn("Failed to delete object from S3 for key {}: {}", version.getObjectKey(), e.getMessage());
             }
@@ -458,15 +442,22 @@ public class DocumentService {
         requireOwnerOrAdmin(member);
 
         DocumentFolder folder = resolveFolder(projectId, folderId);
+        softDeleteFolderRecursive(folder);
+    }
 
-        long childFolders = documentFolderRepository.countByParentFolderIdAndDeletedAtIsNull(folderId);
-        if (childFolders > 0) {
-            throw new RuntimeException("Cannot delete folder with child folders");
+    private void softDeleteFolderRecursive(DocumentFolder folder) {
+        List<DocumentFolder> children = documentFolderRepository.findByParentFolderIdAndDeletedAtIsNull(folder.getId());
+        for (DocumentFolder child : children) {
+            softDeleteFolderRecursive(child);
         }
 
-        long activeDocs = documentRepository.countByFolderIdAndStatus(folderId, DocumentStatus.ACTIVE);
-        if (activeDocs > 0) {
-            throw new RuntimeException("Cannot delete folder with active documents");
+        List<Document> activeDocs = documentRepository.findByFolderIdAndStatus(folder.getId(), DocumentStatus.ACTIVE);
+        for (Document doc : activeDocs) {
+            doc.setStatus(DocumentStatus.SOFT_DELETED);
+            doc.setDeletedAt(LocalDateTime.now());
+        }
+        if (!activeDocs.isEmpty()) {
+            documentRepository.saveAll(activeDocs);
         }
 
         folder.setDeletedAt(LocalDateTime.now());
@@ -492,49 +483,11 @@ public class DocumentService {
     }
 
     private void validateFileRequest(String fileName, String contentType, Long fileSize) {
-        if (fileName == null || fileName.isBlank()) {
-            throw new RuntimeException("fileName is required");
-        }
-
-        if (contentType == null || contentType.isBlank()) {
-            throw new RuntimeException("contentType is required");
-        }
-
-        if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
-            throw new RuntimeException("Unsupported file type");
-        }
-
-        if (fileSize == null || fileSize <= 0 || fileSize > MAX_FILE_SIZE_BYTES) {
-            throw new RuntimeException("fileSize must be between 1 byte and 25MB");
-        }
+        s3StorageService.validateFileRequest(fileName, contentType, fileSize, MAX_FILE_SIZE_BYTES, ALLOWED_CONTENT_TYPES);
     }
 
     private String resolveContentType(String contentType, String fileName) {
-        if (contentType != null && !contentType.isBlank() && !"application/octet-stream".equalsIgnoreCase(contentType)) {
-            return contentType;
-        }
-
-        String extension = "";
-        int dotIndex = fileName.lastIndexOf('.');
-        if (dotIndex >= 0 && dotIndex < fileName.length() - 1) {
-            extension = fileName.substring(dotIndex + 1).toLowerCase();
-        }
-
-        Map<String, String> mimeMap = Map.ofEntries(
-                Map.entry("pdf", "application/pdf"),
-                Map.entry("doc", "application/msword"),
-                Map.entry("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
-                Map.entry("xls", "application/vnd.ms-excel"),
-                Map.entry("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
-                Map.entry("txt", "text/plain"),
-                Map.entry("jpeg", "image/jpeg"),
-                Map.entry("jpg", "image/jpeg"),
-                Map.entry("png", "image/png"),
-                Map.entry("gif", "image/gif"),
-                Map.entry("webp", "image/webp")
-        );
-
-        return mimeMap.getOrDefault(extension, "application/octet-stream");
+        return s3StorageService.resolveContentType(contentType, fileName);
     }
 
     private String buildObjectKey(Long projectId, Long folderId, String fileName) {
@@ -573,49 +526,26 @@ public class DocumentService {
     }
 
     private void verifyObjectExists(String objectKey) {
-        try {
-            HeadObjectRequest headObjectRequest = HeadObjectRequest.builder()
-                    .bucket(dmsBucket)
-                    .key(objectKey)
-                    .build();
-            s3Client.headObject(headObjectRequest);
-        } catch (NoSuchKeyException ex) {
-            throw new RuntimeException("Uploaded object not found in storage");
-        } catch (S3Exception ex) {
-            if (ex.statusCode() == 404) {
-                throw new RuntimeException("Uploaded object not found in storage");
-            }
-            throw new RuntimeException("Failed to verify uploaded object");
-        }
+        s3StorageService.verifyObjectExists(dmsBucket, objectKey);
     }
 
     private String generateDownloadUrl(String objectKey) {
-        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                .bucket(dmsBucket)
-                .key(objectKey)
-                .build();
-
-        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                .signatureDuration(URL_DURATION)
-                .getObjectRequest(getObjectRequest)
-                .build();
-
-        return s3Presigner.presignGetObject(presignRequest).url().toString();
+        return s3StorageService.generatePresignedDownloadUrl(dmsBucket, objectKey, URL_DURATION);
     }
 
     private Project getProject(Long projectId) {
         return projectRepository.findById(projectId)
-                .orElseThrow(() -> new RuntimeException("Project not found with id: " + projectId));
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found with id: " + projectId));
     }
 
     private User getUser(Long userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
     }
 
     private Document getDocument(Long projectId, Long documentId) {
         return documentRepository.findByIdAndProjectId(documentId, projectId)
-                .orElseThrow(() -> new RuntimeException("Document not found with id: " + documentId));
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found with id: " + documentId));
     }
 
     private DocumentFolder resolveFolder(Long projectId, Long folderId) {
@@ -624,10 +554,10 @@ public class DocumentService {
         }
 
         DocumentFolder folder = documentFolderRepository.findByIdAndProjectId(folderId, projectId)
-                .orElseThrow(() -> new RuntimeException("Folder not found with id: " + folderId));
+                .orElseThrow(() -> new ResourceNotFoundException("Folder not found with id: " + folderId));
 
         if (folder.getDeletedAt() != null) {
-            throw new RuntimeException("Folder is deleted");
+            throw new ResourceNotFoundException("Folder is deleted");
         }
 
         return folder;
