@@ -6,6 +6,7 @@ import TaskHeader from './TaskHeader';
 import TaskMainContent from './TaskMainContent';
 import TaskSidebar from './TaskSidebar';
 import api from '@/lib/axios';
+import { toast } from '@/components/ui';
 
 interface TaskData {
   id: number;
@@ -86,7 +87,7 @@ function TaskPageContent() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to update task:', err);
-      alert('Failed to update task: ' + (err.response?.data?.message || err.message));
+      toast('Failed to update task: ' + (err.response?.data?.message || err.message), 'error');
     }
   };
 

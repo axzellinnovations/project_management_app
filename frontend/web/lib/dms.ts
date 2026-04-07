@@ -1,4 +1,5 @@
 import api from '@/lib/axios';
+import axios from 'axios';
 
 export type DocumentStatus = 'ACTIVE' | 'SOFT_DELETED';
 
@@ -197,7 +198,12 @@ async function uploadViaBackend(projectId: number, file: File, folderId?: number
     }
 }
 
-export async function uploadDocument(projectId: number, file: File, folderId?: number): Promise<DocumentItem> {
+export async function uploadDocument(
+    projectId: number,
+    file: File,
+    folderId?: number,
+    onProgress?: (percent: number) => void
+): Promise<DocumentItem> {
     const contentType = inferContentType(file);
 
     const initResponse = await initUpload(projectId, {
@@ -207,20 +213,16 @@ export async function uploadDocument(projectId: number, file: File, folderId?: n
         folderId,
     });
 
-    let putResponse: Response;
     try {
-        putResponse = await fetch(initResponse.uploadUrl, {
-            method: 'PUT',
-            body: file,
-            headers: {
-                'Content-Type': contentType,
+        await axios.put(initResponse.uploadUrl, file, {
+            headers: { 'Content-Type': contentType },
+            onUploadProgress: (progressEvent) => {
+                if (onProgress && progressEvent.total) {
+                    onProgress(Math.round((progressEvent.loaded * 100) / progressEvent.total));
+                }
             },
         });
     } catch {
-        return uploadViaBackend(projectId, file, folderId);
-    }
-
-    if (!putResponse.ok) {
         return uploadViaBackend(projectId, file, folderId);
     }
 

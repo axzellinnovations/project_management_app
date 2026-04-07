@@ -11,7 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -46,7 +45,7 @@ public class UserService {
     private final TokenRepository tokenRepository;
     private final EmailService emailService;
 
-    private AuthenticationManager authenticationManager;
+    private final AuthenticationManager authenticationManager;
 
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
@@ -81,7 +80,6 @@ public class UserService {
                 return "User already verified. Please login.";
             }
         } else {
-            //save unverified user
             user.setEmail(user.getEmail().toLowerCase());
             user.setPassword(encoder.encode(user.getPassword()));
             user.setVerified(false);
@@ -94,17 +92,24 @@ public class UserService {
         verificationToken.setUser(user);
         verificationToken.setToken(otp);
         verificationToken.setTokenType(VerificationToken.TokenType.VERIFICATION);
-        verificationToken.setExpiry(Instant.now().plus(java.time.Duration.ofMinutes(10)));
+        verificationToken.setExpiry(Instant.now().plus(Duration.ofMinutes(10)));
         tokenRepository.save(verificationToken);
 
-        emailService.sendVerificationEmail(user.getEmail(), otp);
+        try {
+            emailService.sendVerificationEmail(user.getEmail(), otp);
+        } catch (Exception e) {
+            logger.error("Failed to send verification email to {}: {}", user.getEmail(), e.getMessage());
+        }
         return "OTP send successfully";
     }
 
     @Transactional
     public boolean verifyToken(String email, String otp) {
         User user = userRepository.findByEmailIgnoreCase(email.toLowerCase()).orElse(null);
-        VerificationToken verificationToken = tokenRepository.findByUser(user);
+        if (user == null) {
+            return false;
+        }
+        VerificationToken verificationToken = tokenRepository.findByUserAndTokenType(user, VerificationToken.TokenType.VERIFICATION);
 
         if (verificationToken == null || verificationToken.isUsed() || verificationToken.getExpiry().isBefore(Instant.now())) {
             return false;
@@ -127,20 +132,6 @@ public class UserService {
         }
     }
 
-    public String verify(User user) {
-        Authentication authentication =
-                authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(
-                        user.getEmail().toLowerCase(),
-                        user.getPassword()));
-
-        if (authentication.isAuthenticated()) {
-            User authenticatedUser = userRepository.findByEmailIgnoreCase(user.getEmail().toLowerCase()).orElse(null);
-            return jwtService.generateToken(user.getEmail(), authenticatedUser.getUsername());
-        }
-
-        return "Failed to login";
-    }
-
     @Transactional
     public LoginResponse loginUser(User user) {
         try {
@@ -151,11 +142,13 @@ public class UserService {
 
             if (authentication.isAuthenticated()) {
                 User authenticatedUser = userRepository.findByEmailIgnoreCase(user.getEmail().toLowerCase()).orElse(null);
-                String token = jwtService.generateToken(user.getEmail().toLowerCase(), authenticatedUser.getUsername());
+                String accessToken  = jwtService.generateToken(user.getEmail().toLowerCase(), authenticatedUser.getUsername());
+                String refreshToken = jwtService.generateRefreshToken(user.getEmail().toLowerCase());
                 LoginResponse response = new LoginResponse();
                 response.setSuccess(true);
                 response.setMessage("Login successful");
-                response.setToken(token);
+                response.setToken(accessToken);
+                response.setRefreshToken(refreshToken);
                 return response;
             }
 
@@ -170,18 +163,34 @@ public class UserService {
             response.setMessage("Email is not verified. Please check your email.");
             response.setErrorCode("UNVERIFIED_EMAIL");
             return response;
-        } catch (BadCredentialsException e) {
-            LoginResponse response = new LoginResponse();
-            response.setSuccess(false);
-            response.setMessage("Incorrect username or password");
-            response.setErrorCode("INVALID_CREDENTIALS");
-            return response;
         } catch (AuthenticationException e) {
             LoginResponse response = new LoginResponse();
             response.setSuccess(false);
             response.setMessage("Incorrect username or password");
             response.setErrorCode("INVALID_CREDENTIALS");
             return response;
+        }
+    }
+
+    @Transactional
+    public LoginResponse refreshTokens(String refreshToken) {
+        try {
+            String email = jwtService.validateRefreshToken(refreshToken);
+            User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
+            if (user == null || !user.isVerified()) {
+                return null;
+            }
+            String newAccessToken  = jwtService.generateToken(email, user.getUsername());
+            String newRefreshToken = jwtService.generateRefreshToken(email);
+            LoginResponse response = new LoginResponse();
+            response.setSuccess(true);
+            response.setMessage("Token refreshed");
+            response.setToken(newAccessToken);
+            response.setRefreshToken(newRefreshToken);
+            return response;
+        } catch (Exception e) {
+            logger.warn("Refresh token validation failed: {}", e.getMessage());
+            return null;
         }
     }
 
@@ -205,18 +214,15 @@ public class UserService {
         verificationToken.setUser(user);
         verificationToken.setToken(otp);
         verificationToken.setTokenType(VerificationToken.TokenType.VERIFICATION);
-        verificationToken.setExpiry(Instant.now().plus(java.time.Duration.ofMinutes(10)));
+        verificationToken.setExpiry(Instant.now().plus(Duration.ofMinutes(10)));
         tokenRepository.save(verificationToken);
 
-        emailService.sendVerificationEmail(email.toLowerCase(), otp);
+        try {
+            emailService.sendVerificationEmail(email.toLowerCase(), otp);
+        } catch (Exception e) {
+            logger.error("Failed to send verification email to {}: {}", email, e.getMessage());
+        }
         return "New OTP send to your email.";
-    }
-
-    private String generateSecureToken() {
-        SecureRandom random = new SecureRandom();
-        byte[] bytes = new byte[32];
-        random.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     @Transactional
@@ -226,7 +232,6 @@ public class UserService {
         if (user == null)
             return "If that email exists, an OTP has been sent.";
 
-        // Delete existing password reset tokens for this user
         VerificationToken existingToken = tokenRepository.findByUserAndTokenType(user, VerificationToken.TokenType.PASSWORD_RESET);
         if (existingToken != null) {
             tokenRepository.delete(existingToken);
@@ -238,13 +243,21 @@ public class UserService {
         verificationToken.setUser(user);
         verificationToken.setToken(otp);
         verificationToken.setTokenType(VerificationToken.TokenType.PASSWORD_RESET);
-        verificationToken.setExpiry(Instant.now().plus(java.time.Duration.ofMinutes(10)));
+        verificationToken.setExpiry(Instant.now().plus(Duration.ofMinutes(10)));
         tokenRepository.save(verificationToken);
 
-        emailService.sendPasswordResetRequest(email.toLowerCase(), otp);
+        try {
+            emailService.sendPasswordResetRequest(email.toLowerCase(), otp);
+        } catch (Exception e) {
+            logger.error("Failed to send password reset email to {}: {}", email, e.getMessage());
+        }
         return "Password reset OTP sent successfully.";
     }
 
+    /**
+     * Resets the password using the OTP received by email (which is the token stored in VerificationToken).
+     * The token must be of type PASSWORD_RESET and must not be expired or already used.
+     */
     @Transactional
     public boolean resetPassword(String token, String newPassword) {
         VerificationToken verificationToken = tokenRepository.findByToken(token);
@@ -260,25 +273,6 @@ public class UserService {
         userRepository.save(user);
         tokenRepository.save(verificationToken);
         return true;
-    }
-
-    // Deprecated: Use resetPassword(token, newPassword) instead
-    @Transactional
-    @Deprecated
-    public boolean resetPassword(String email, String otp, String newPassword) {
-        User user = userRepository.findByEmail(email.toLowerCase());
-        VerificationToken verificationToken = tokenRepository.findByUser(user);
-
-        if (verificationToken != null && verificationToken.getToken().equals(otp) && !verificationToken.isExpired()
-                && verificationToken.getTokenType() == VerificationToken.TokenType.PASSWORD_RESET) {
-            user.setPassword(encoder.encode(newPassword));
-            verificationToken.setUsed(true);
-            userRepository.save(user);
-            tokenRepository.save(verificationToken);
-            return true;
-        }
-
-        return false;
     }
 
     public java.util.List<User> getAllUsers() {
@@ -301,16 +295,14 @@ public class UserService {
             throw new RuntimeException("User not found");
         }
 
-        // Only fullName can be updated. Username and email are immutable.
         if (newFullName != null && !newFullName.isEmpty()) {
             user.setFullName(newFullName);
         } else {
             throw new IllegalArgumentException("Full name cannot be empty");
         }
 
-        // Ensure email and username are not modified
-        user.setEmail(user.getEmail()); // Defensive: prevent accidental modification
-        user.setUsername(user.getUsername()); // Defensive: prevent accidental modification
+        user.setEmail(user.getEmail());
+        user.setUsername(user.getUsername());
 
         return userRepository.save(user);
     }
@@ -322,31 +314,27 @@ public class UserService {
             throw new RuntimeException("User not found");
         }
 
-        // Validate file size (5MB max)
-        long maxFileSize = 5 * 1024 * 1024;
+        long maxFileSize = 25L * 1024 * 1024; // 25 MB to match service-layer limit
         if (file.getSize() > maxFileSize) {
-            throw new IllegalArgumentException("File size exceeds maximum limit of 5MB");
+            throw new IllegalArgumentException("File size exceeds maximum limit of 25MB");
         }
 
-        // Validate file type
         String contentType = file.getContentType();
         if (contentType == null || !isValidImageType(contentType)) {
             throw new IllegalArgumentException("Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed");
         }
 
         try {
-            // Delete old profile picture if it exists
-            String oldProfilePicUrl = user.getProfilePicUrl();
-            if (oldProfilePicUrl != null && !oldProfilePicUrl.isEmpty()) {
-                deleteProfilePictureFile(oldProfilePicUrl);
+            // Delete old profile picture key from S3 if it exists
+            String oldKey = user.getProfilePicUrl();
+            if (oldKey != null && !oldKey.isEmpty()) {
+                deleteProfilePictureByKey(extractKeyFromStoredValue(oldKey));
             }
 
-            // Generate a unique file name
             String originalFilename = file.getOriginalFilename();
             String fileExtension = originalFilename != null ? originalFilename.substring(originalFilename.lastIndexOf(".")) : ".jpg";
             String uniqueFileName = UUID.randomUUID().toString() + fileExtension;
 
-            // Upload to S3
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                     .bucket(profileBucket)
                     .key(uniqueFileName)
@@ -356,13 +344,11 @@ public class UserService {
             s3Client.putObject(putObjectRequest,
                     RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
 
-            // Construct the public S3 URL
-            String fileUrl = String.format("https://%s.s3.%s.amazonaws.com/%s", profileBucket, region, uniqueFileName);
-
-            user.setProfilePicUrl(fileUrl);
+            // Store only the S3 object key — never the full public URL
+            user.setProfilePicUrl(uniqueFileName);
             userRepository.save(user);
 
-            return fileUrl;
+            return uniqueFileName;
 
         } catch (Exception e) {
             throw new RuntimeException("Could not store the file in S3. Error: " + e.getMessage());
@@ -376,39 +362,49 @@ public class UserService {
                 contentType.equals("image/webp");
     }
 
-    private void deleteProfilePictureFile(String fileUrl) {
-        try {
-            // Extract filename (the S3 Object Key) from the full URL
-            // e.g., "https://my-bucket.s3.us-east-1.amazonaws.com/uuid.jpg" -> "uuid.jpg"
-            String key = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
+    /**
+     * Resolves the S3 object key from the stored value.
+     * Handles both legacy full-URL values and new key-only values for backward compatibility.
+     */
+    private String extractKeyFromStoredValue(String stored) {
+        if (stored == null || stored.isEmpty()) return stored;
+        if (stored.startsWith("http://") || stored.startsWith("https://")) {
+            return stored.substring(stored.lastIndexOf("/") + 1);
+        }
+        return stored;
+    }
 
+    private void deleteProfilePictureByKey(String key) {
+        if (key == null || key.isEmpty()) return;
+        try {
             DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
                     .bucket(profileBucket)
                     .key(key)
                     .build();
-
             s3Client.deleteObject(deleteObjectRequest);
         } catch (Exception e) {
-            // Log the error but don't fail the upload if old file cleanup fails
-            logger.warn("Failed to delete old profile picture from S3: {}", e.getMessage());
+            logger.warn("Failed to delete old profile picture from S3 (key={}): {}", key, e.getMessage());
         }
     }
 
-    public String generatePresignedUrl(String fileUrl) {
-        if (fileUrl == null || fileUrl.isEmpty() || !fileUrl.contains("amazonaws.com")) {
-            return fileUrl; // Return as-is if it's empty or a local default image
+    /**
+     * Generates a presigned S3 URL valid for 60 minutes.
+     * Accepts either a raw S3 object key or a legacy full S3 URL for backward compatibility.
+     * Returns null/empty for null/empty input.
+     */
+    public String generatePresignedUrl(String stored) {
+        if (stored == null || stored.isEmpty()) {
+            return stored;
         }
 
-        try {
-            // Extract the key (e.g., uuid.jpg) from the full database URL
-            String key = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
+        String key = extractKeyFromStoredValue(stored);
 
+        try {
             GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                     .bucket(profileBucket)
                     .key(key)
                     .build();
 
-            // Create a temporary URL valid for 60 minutes
             GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
                     .signatureDuration(Duration.ofMinutes(60))
                     .getObjectRequest(getObjectRequest)
@@ -416,9 +412,18 @@ public class UserService {
 
             return s3Presigner.presignGetObject(presignRequest).url().toString();
         } catch (Exception e) {
-            logger.error("Failed to generate presigned URL", e);
+            logger.error("Failed to generate presigned URL for key={}: {}", key, e.getMessage());
             return null;
         }
     }
+
+    @SuppressWarnings("unused")
+    private String generateSecureToken() {
+        SecureRandom random = new SecureRandom();
+        byte[] bytes = new byte[32];
+        random.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
 }
+
 

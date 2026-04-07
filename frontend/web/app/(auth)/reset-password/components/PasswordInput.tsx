@@ -36,6 +36,7 @@ export default function PasswordInput({
         />
         <button
           type="button"
+          aria-label={showPassword ? 'Hide password' : 'Show password'}
           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
           onClick={() => setShowPassword(!showPassword)}
           disabled={disabled}

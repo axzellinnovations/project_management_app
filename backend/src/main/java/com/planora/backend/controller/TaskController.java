@@ -4,7 +4,6 @@ import com.planora.backend.dto.CommentRequestDTO;
 import com.planora.backend.dto.TaskActivityResponseDTO;
 import com.planora.backend.dto.TaskRequestDTO;
 import com.planora.backend.dto.TaskResponseDTO;
-import com.planora.backend.model.Task;
 import com.planora.backend.model.UserPrincipal;
 import com.planora.backend.service.TaskActivityService;
 import com.planora.backend.service.TaskService;
@@ -82,10 +81,14 @@ public class TaskController {
     @GetMapping("/project/{projectId}")
     public ResponseEntity<List<TaskResponseDTO>> getTasksByProject(
             @PathVariable Long projectId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long assigneeId,
+            @RequestParam(required = false) String priority,
+            @RequestParam(required = false) Long sprintId,
             @AuthenticationPrincipal UserPrincipal currentUser
     ){
         Long currentUserId = currentUser.getUserId();
-        return new ResponseEntity<>(service.getTasksByProject(projectId, currentUserId), HttpStatus.OK);
+        return new ResponseEntity<>(service.getTasksByProject(projectId, currentUserId, status, assigneeId, priority, sprintId), HttpStatus.OK);
     }
 
     // DASHBOARD ENDPOINTS
@@ -209,6 +212,42 @@ public class TaskController {
         Long currentUserId = currentUser.getUserId();
         service.assignUser(taskID,userId,currentUserId);
         return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    @DeleteMapping("/{taskId}/assignee")
+    public ResponseEntity<Void> unassignTask(
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ){
+        service.unassignTask(taskId, currentUser.getUserId());
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    // BULK OPERATIONS
+
+    @PatchMapping("/bulk/status")
+    public ResponseEntity<Void> bulkUpdateStatus(
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ){
+        @SuppressWarnings("unchecked")
+        List<Integer> rawIds = (List<Integer>) body.get("taskIds");
+        List<Long> taskIds = rawIds.stream().map(i -> i.longValue()).toList();
+        String status = (String) body.get("status");
+        service.bulkUpdateStatus(taskIds, status, currentUser.getUserId());
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    @DeleteMapping("/bulk")
+    public ResponseEntity<Void> bulkDelete(
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ){
+        @SuppressWarnings("unchecked")
+        List<Integer> rawIds = (List<Integer>) body.get("taskIds");
+        List<Long> taskIds = rawIds.stream().map(i -> i.longValue()).toList();
+        service.bulkDelete(taskIds, currentUser.getUserId());
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
     @PatchMapping("/{taskId}/priority")

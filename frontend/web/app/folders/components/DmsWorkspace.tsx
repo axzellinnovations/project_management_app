@@ -45,6 +45,8 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
     const [versions, setVersions] = useState<Record<number, DocumentVersionItem[]>>({});
     const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [isUploading, setIsUploading] = useState(false);
 
     const isTrashMode = mode === 'trash';
 
@@ -194,7 +196,7 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
     const onDeleteFolder = async (folder: DocumentFolder) => {
         if (!projectId || isTrashMode) return;
 
-        const ok = window.confirm(`Delete folder "${folder.name}"? Folder must be empty.`);
+        const ok = window.confirm(`Delete folder "${folder.name}" and all its contents?\n\nAll documents inside will be moved to Trash. This cannot be undone.`);
         if (!ok) return;
 
         try {
@@ -219,7 +221,9 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
 
         try {
             setBusy(true);
-            await uploadDocument(projectId, file, selectedFolderId);
+            setIsUploading(true);
+            setUploadProgress(0);
+            await uploadDocument(projectId, file, selectedFolderId, (percent) => setUploadProgress(percent));
             await refresh();
             event.target.value = '';
         } catch (err) {
@@ -227,6 +231,8 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
             setError(message && message.trim().length > 0 ? message : 'Upload failed.');
         } finally {
             setBusy(false);
+            setIsUploading(false);
+            setUploadProgress(0);
         }
     };
 
@@ -440,6 +446,8 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
                 selectedInfoDoc={selectedInfoDoc}
                 setSelectedInfoDoc={setSelectedInfoDoc}
                 getFolderName={getFolderName}
+                isUploading={isUploading}
+                uploadProgress={uploadProgress}
             />
         </>
     );

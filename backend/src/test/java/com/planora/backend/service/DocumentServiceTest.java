@@ -2,8 +2,13 @@ package com.planora.backend.service;
 
 import com.planora.backend.dto.DocumentFolderCreateRequestDTO;
 import com.planora.backend.dto.DocumentFolderResponseDTO;
+import com.planora.backend.dto.DocumentResponseDTO;
+import com.planora.backend.dto.DocumentUploadFinalizeRequestDTO;
+import com.planora.backend.exception.ResourceNotFoundException;
+import com.planora.backend.model.Document;
 import com.planora.backend.model.DocumentFolder;
 import com.planora.backend.model.DocumentStatus;
+import com.planora.backend.model.DocumentVersion;
 import com.planora.backend.model.Project;
 import com.planora.backend.model.Team;
 import com.planora.backend.model.TeamMember;
@@ -22,16 +27,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class DocumentServiceTest {
@@ -49,9 +52,7 @@ class DocumentServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private S3Presigner s3Presigner;
-    @Mock
-    private S3Client s3Client;
+    private S3StorageService s3StorageService;
 
     @InjectMocks
     private DocumentService documentService;
@@ -115,7 +116,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void deleteFolder_rejectsWhenActiveDocumentsExist() {
+    void deleteFolder_withActiveDocuments_cascadesSoftDeletes() {
         TeamMember admin = new TeamMember();
         admin.setRole(TeamRole.ADMIN);
 
@@ -123,16 +124,154 @@ class DocumentServiceTest {
         folder.setId(300L);
         folder.setProject(project);
 
+        User uploader = new User();
+        uploader.setUserId(55L);
+
+        Document activeDoc = new Document();
+        activeDoc.setId(1L);
+        activeDoc.setStatus(DocumentStatus.ACTIVE);
+        activeDoc.setProject(project);
+        activeDoc.setUploadedBy(uploader);
+
         when(projectRepository.findById(5L)).thenReturn(Optional.of(project));
         when(teamMemberRepository.findByTeamIdAndUserUserId(12L, 55L)).thenReturn(Optional.of(admin));
         when(documentFolderRepository.findByIdAndProjectId(300L, 5L)).thenReturn(Optional.of(folder));
-        when(documentFolderRepository.countByParentFolderIdAndDeletedAtIsNull(300L)).thenReturn(0L);
-        when(documentRepository.countByFolderIdAndStatus(300L, DocumentStatus.ACTIVE)).thenReturn(2L);
+        when(documentFolderRepository.findByParentFolderIdAndDeletedAtIsNull(300L)).thenReturn(List.of());
+        when(documentRepository.findByFolderIdAndStatus(300L, DocumentStatus.ACTIVE)).thenReturn(List.of(activeDoc));
 
-        RuntimeException exception = assertThrows(RuntimeException.class,
-                () -> documentService.deleteFolder(5L, 300L, 55L));
+        assertDoesNotThrow(() -> documentService.deleteFolder(5L, 300L, 55L));
 
-        assertEquals("Cannot delete folder with active documents", exception.getMessage());
-        verify(documentRepository).countByFolderIdAndStatus(300L, DocumentStatus.ACTIVE);
+        assertEquals(DocumentStatus.SOFT_DELETED, activeDoc.getStatus());
+        assertNotNull(activeDoc.getDeletedAt());
+        verify(documentRepository).saveAll(List.of(activeDoc));
+        verify(documentFolderRepository).save(folder);
+    }
+
+    @Test
+    void deleteFolder_withChildFolders_cascadesRecursively() {
+        TeamMember admin = new TeamMember();
+        admin.setRole(TeamRole.ADMIN);
+
+        DocumentFolder parent = new DocumentFolder();
+        parent.setId(300L);
+        parent.setProject(project);
+
+        DocumentFolder child = new DocumentFolder();
+        child.setId(301L);
+        child.setProject(project);
+
+        when(projectRepository.findById(5L)).thenReturn(Optional.of(project));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(12L, 55L)).thenReturn(Optional.of(admin));
+        when(documentFolderRepository.findByIdAndProjectId(300L, 5L)).thenReturn(Optional.of(parent));
+        when(documentFolderRepository.findByParentFolderIdAndDeletedAtIsNull(300L)).thenReturn(List.of(child));
+        when(documentFolderRepository.findByParentFolderIdAndDeletedAtIsNull(301L)).thenReturn(List.of());
+        when(documentRepository.findByFolderIdAndStatus(300L, DocumentStatus.ACTIVE)).thenReturn(List.of());
+        when(documentRepository.findByFolderIdAndStatus(301L, DocumentStatus.ACTIVE)).thenReturn(List.of());
+
+        assertDoesNotThrow(() -> documentService.deleteFolder(5L, 300L, 55L));
+
+        assertNotNull(child.getDeletedAt());
+        assertNotNull(parent.getDeletedAt());
+        verify(documentFolderRepository, times(2)).save(any(DocumentFolder.class));
+    }
+
+    @Test
+    void finalizeUpload_withDuplicateObjectKey_returnsExistingDocument() {
+        TeamMember member = new TeamMember();
+        member.setRole(TeamRole.MEMBER);
+
+        User uploader = new User();
+        uploader.setUserId(55L);
+        uploader.setUsername("alice");
+
+        Document existingDoc = new Document();
+        existingDoc.setId(42L);
+        existingDoc.setName("file.pdf");
+        existingDoc.setStatus(DocumentStatus.ACTIVE);
+        existingDoc.setProject(project);
+        existingDoc.setUploadedBy(uploader);
+        existingDoc.setLatestObjectKey("project-5/root/uuid-file.pdf");
+        existingDoc.setLatestVersionNumber(1);
+
+        DocumentVersion existingVersion = new DocumentVersion();
+        existingVersion.setDocument(existingDoc);
+        existingVersion.setVersionNumber(1);
+        existingVersion.setObjectKey("project-5/root/uuid-file.pdf");
+        existingVersion.setUploadedBy(uploader);
+
+        DocumentUploadFinalizeRequestDTO request = new DocumentUploadFinalizeRequestDTO();
+        request.setFileName("file.pdf");
+        request.setContentType("application/pdf");
+        request.setFileSize(1024L);
+        request.setObjectKey("project-5/root/uuid-file.pdf");
+
+        when(projectRepository.findById(5L)).thenReturn(Optional.of(project));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(12L, 55L)).thenReturn(Optional.of(member));
+        doNothing().when(s3StorageService).validateFileRequest(any(), any(), any(), anyLong(), any());
+        doNothing().when(s3StorageService).verifyObjectExists(any(), any());
+        when(documentVersionRepository.findByObjectKey("project-5/root/uuid-file.pdf")).thenReturn(Optional.of(existingVersion));
+
+        DocumentResponseDTO result = documentService.finalizeUpload(5L, 55L, request);
+
+        assertEquals(42L, result.getId());
+        verify(documentRepository, never()).save(any());
+    }
+
+    @Test
+    void softDelete_onAlreadyDeletedDocument_returnsWithoutError() {
+        TeamMember admin = new TeamMember();
+        admin.setRole(TeamRole.ADMIN);
+
+        User uploader = new User();
+        uploader.setUserId(55L);
+
+        Document deletedDoc = new Document();
+        deletedDoc.setId(10L);
+        deletedDoc.setStatus(DocumentStatus.SOFT_DELETED);
+        deletedDoc.setDeletedAt(LocalDateTime.now().minusDays(1));
+        deletedDoc.setProject(project);
+        deletedDoc.setUploadedBy(uploader);
+
+        when(projectRepository.findById(5L)).thenReturn(Optional.of(project));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(12L, 55L)).thenReturn(Optional.of(admin));
+        when(documentRepository.findByIdAndProjectId(10L, 5L)).thenReturn(Optional.of(deletedDoc));
+
+        assertDoesNotThrow(() -> documentService.softDelete(5L, 10L, 55L));
+        verify(documentRepository, never()).save(any());
+    }
+
+    @Test
+    void permanentDelete_callsS3DeleteForEachVersionAndRemovesRecords() {
+        TeamMember admin = new TeamMember();
+        admin.setRole(TeamRole.ADMIN);
+
+        User uploader = new User();
+        uploader.setUserId(55L);
+
+        Document doc = new Document();
+        doc.setId(20L);
+        doc.setStatus(DocumentStatus.SOFT_DELETED);
+        doc.setProject(project);
+        doc.setUploadedBy(uploader);
+
+        DocumentVersion v1 = new DocumentVersion();
+        v1.setObjectKey("project-5/root/uuid-v1.pdf");
+        v1.setUploadedBy(uploader);
+
+        DocumentVersion v2 = new DocumentVersion();
+        v2.setObjectKey("project-5/root/uuid-v2.pdf");
+        v2.setUploadedBy(uploader);
+
+        when(projectRepository.findById(5L)).thenReturn(Optional.of(project));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(12L, 55L)).thenReturn(Optional.of(admin));
+        when(documentRepository.findByIdAndProjectId(20L, 5L)).thenReturn(Optional.of(doc));
+        when(documentVersionRepository.findByDocumentIdOrderByVersionNumberDesc(20L)).thenReturn(List.of(v1, v2));
+
+        assertDoesNotThrow(() -> documentService.permanentDelete(5L, 20L, 55L));
+
+        verify(s3StorageService).deleteObject(any(), eq("project-5/root/uuid-v1.pdf"));
+        verify(s3StorageService).deleteObject(any(), eq("project-5/root/uuid-v2.pdf"));
+        verify(documentVersionRepository).deleteAll(List.of(v1, v2));
+        verify(documentRepository).delete(doc);
     }
 }

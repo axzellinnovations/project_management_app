@@ -78,7 +78,33 @@ export function getUserFromToken(): User | null {
         return decodedUser;
     } catch (error) {
         console.error("Failed to decode token:", error);
+
         return null;
+    }
+}
+
+export function saveToken(token: string): void {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('token', token);
+    }
+}
+
+export function saveRefreshToken(token: string): void {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('refreshToken', token);
+    }
+}
+
+export function getRefreshToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('refreshToken');
+}
+
+export function clearTokens(): void {
+    if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('userProfile');
     }
 }
 

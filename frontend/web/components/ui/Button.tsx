@@ -10,6 +10,7 @@ export interface ButtonProps
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'link';
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm';
   loading?: boolean;
+  'aria-label'?: string;
 }
 
 const variantClasses: Record<string, string> = {

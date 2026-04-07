@@ -1,6 +1,7 @@
 package com.planora.backend.controller;
 
 import com.planora.backend.dto.UserResponseDTO;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,34 +22,33 @@ import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "http://localhost:3000")
+// CORS is configured globally in SecurityConfig — no @CrossOrigin annotation needed here.
 public class UserController {
 
     @Autowired
     private UserService service;
 
     @PostMapping("/register")
-    public ResponseEntity<String> register(@RequestBody User user){
+    public ResponseEntity<String> register(@Valid @RequestBody User user) {
         return new ResponseEntity<>(service.register(user), HttpStatus.OK);
     }
 
     @PostMapping("/reg/verify")
-    public ResponseEntity<?> verifyEmail(@RequestBody VerifyRequest request){
+    public ResponseEntity<?> verifyEmail(@Valid @RequestBody VerifyRequest request) {
         boolean isSuccess = service.verifyToken(request.getEmail(), request.getOtp());
-        if(isSuccess){
-            return new ResponseEntity<>("Verification Success!",HttpStatus.OK);
-        }
-        else {
-            return new ResponseEntity<>("Invalid or Expired OTP",HttpStatus.UNAUTHORIZED);
+        if (isSuccess) {
+            return new ResponseEntity<>("Verification Success!", HttpStatus.OK);
+        } else {
+            return new ResponseEntity<>("Invalid or Expired OTP", HttpStatus.UNAUTHORIZED);
         }
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody User user){
+    public ResponseEntity<?> login(@RequestBody User user) {
         LoginResponse response = service.loginUser(user);
-        if(response.isSuccess()){
+        if (response.isSuccess()) {
             return new ResponseEntity<>(response, HttpStatus.OK);
-        } else if("UNVERIFIED_EMAIL".equals(response.getErrorCode())) {
+        } else if ("UNVERIFIED_EMAIL".equals(response.getErrorCode())) {
             return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
         } else {
             return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
@@ -56,24 +56,36 @@ public class UserController {
     }
 
     @PostMapping("/resend")
-    public ResponseEntity<String> resendOtp(@RequestBody OtpRequest otpRequest){
+    public ResponseEntity<String> resendOtp(@Valid @RequestBody OtpRequest otpRequest) {
         return new ResponseEntity<>(service.resendOtp(otpRequest.getEmail()), HttpStatus.OK);
     }
 
     @PostMapping("/forgot")
-    public ResponseEntity<String> forgotPassword(@RequestBody OtpRequest otpRequest){
+    public ResponseEntity<String> forgotPassword(@Valid @RequestBody OtpRequest otpRequest) {
         return new ResponseEntity<>(service.forgotPassword(otpRequest.getEmail()), HttpStatus.OK);
     }
 
     @PostMapping("/reset")
-    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request){
-        boolean isSuccess = service.resetPassword(request.getEmail(), request.getOtp(), request.getNewPassword());
-        if(isSuccess){
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        boolean isSuccess = service.resetPassword(request.getToken(), request.getNewPassword());
+        if (isSuccess) {
             return new ResponseEntity<>("Password reset successfully", HttpStatus.OK);
-        }
-        else {
+        } else {
             return new ResponseEntity<>("Invalid or expired OTP", HttpStatus.UNAUTHORIZED);
         }
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> body) {
+        String refreshToken = body.get("refreshToken");
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return new ResponseEntity<>("Refresh token is required", HttpStatus.BAD_REQUEST);
+        }
+        LoginResponse response = service.refreshTokens(refreshToken);
+        if (response != null && response.isSuccess()) {
+            return new ResponseEntity<>(response, HttpStatus.OK);
+        }
+        return new ResponseEntity<>("Invalid or expired refresh token", HttpStatus.UNAUTHORIZED);
     }
 
     @GetMapping("/users")
@@ -81,14 +93,12 @@ public class UserController {
         try {
             List<User> allUsers = service.getAllUsers();
 
-            // Filter out the current user if excludeEmail is provided
             if (excludeEmail != null && !excludeEmail.isEmpty()) {
                 allUsers = allUsers.stream()
                         .filter(user -> !user.getEmail().equalsIgnoreCase(excludeEmail))
                         .collect(Collectors.toList());
             }
 
-            // Return UserResponseDTO with complete user information
             List<UserResponseDTO> userList = allUsers.stream()
                     .map(user -> new UserResponseDTO(
                             user.getUserId(),
@@ -107,7 +117,7 @@ public class UserController {
     }
 
     @GetMapping("/try")
-    public String myTry(){
+    public String myTry() {
         return "Try - Running Successfully";
     }
 

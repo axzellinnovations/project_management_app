@@ -3,6 +3,8 @@ package com.planora.backend.service;
 import com.planora.backend.dto.CommentRequestDTO;
 import com.planora.backend.dto.TaskRequestDTO;
 import com.planora.backend.dto.TaskResponseDTO;
+import com.planora.backend.exception.ForbiddenException;
+import com.planora.backend.exception.ResourceNotFoundException;
 import com.planora.backend.model.Comment;
 import com.planora.backend.model.Priority;
 import com.planora.backend.model.Project;
@@ -15,6 +17,7 @@ import com.planora.backend.repository.CommentRepository;
 import com.planora.backend.repository.LabelRepository;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.SprintRepository;
+import com.planora.backend.repository.TaskAccessRepository;
 import com.planora.backend.repository.TaskRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
@@ -30,6 +33,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
@@ -56,6 +60,8 @@ class TaskServiceTest {
     private CommentRepository commentRepository;
     @Mock
     private SprintRepository sprintRepository;
+    @Mock
+    private TaskAccessRepository taskAccessRepository;
     @Mock
     private NotificationService notificationService;
     @Mock
@@ -171,9 +177,9 @@ class TaskServiceTest {
         when(projectRepository.findById(10L)).thenReturn(Optional.of(project));
         when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 100L)).thenReturn(Optional.of(viewer));
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> taskService.createTask(request, 100L));
+        ForbiddenException exception = assertThrows(ForbiddenException.class, () -> taskService.createTask(request, 100L));
 
-        assertEquals("Insufficient Permissions: VIEWER cannot perform this action.", exception.getMessage());
+        assertEquals("Insufficient permissions: requires MEMBER or higher", exception.getMessage());
         verify(taskRepository, never()).save(any(Task.class));
         verify(notificationService, never()).createNotification(any(), any(), any());
     }
@@ -227,7 +233,7 @@ class TaskServiceTest {
 
         taskService.deleteTask(60L, 500L);
 
-        verify(notificationService, times(2)).createNotification(any(User.class), contains("deleted task"), eq("/taskcard?taskId=60"));
+        verify(notificationService, times(2)).createNotification(any(User.class), contains("deleted task"), eq("/kanban?projectId=10"));
         verify(taskRepository).delete(task);
     }
 
@@ -305,5 +311,90 @@ class TaskServiceTest {
 
         verify(commentRepository).save(any(Comment.class));
         verify(notificationService, never()).createNotification(any(User.class), any(String.class), any(String.class));
+    }
+
+    @Test
+    void createTask_setsReporterToCurrentUser() {
+        TaskRequestDTO request = new TaskRequestDTO();
+        request.setProjectId(10L);
+        request.setTitle("Reporter test task");
+
+        when(projectRepository.findById(10L)).thenReturn(Optional.of(project));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 100L)).thenReturn(Optional.of(creator));
+        when(userRepository.findById(100L)).thenReturn(Optional.of(creatorUser));
+        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> {
+            Task saved = invocation.getArgument(0);
+            saved.setId(1001L);
+            return saved;
+        });
+
+        TaskResponseDTO result = taskService.createTask(request, 100L);
+
+        assertEquals("creator", result.getReporterName());
+    }
+
+    @Test
+    void createTask_withInvalidSprintId_throwsResourceNotFoundException() {
+        TaskRequestDTO request = new TaskRequestDTO();
+        request.setProjectId(10L);
+        request.setTitle("Sprint task");
+        request.setSprintId(999L);
+
+        when(projectRepository.findById(10L)).thenReturn(Optional.of(project));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 100L)).thenReturn(Optional.of(creator));
+        when(sprintRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> taskService.createTask(request, 100L));
+        verify(taskRepository, never()).save(any(Task.class));
+    }
+
+    @Test
+    void deleteTask_byNonOwnerNonAdmin_throwsForbiddenException() {
+        Task task = buildTask(60L);
+        actorMember.setRole(TeamRole.MEMBER);
+
+        when(taskRepository.findById(60L)).thenReturn(Optional.of(task));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
+
+        ForbiddenException exception = assertThrows(ForbiddenException.class,
+                () -> taskService.deleteTask(60L, 500L));
+
+        assertNotNull(exception.getMessage());
+        verify(taskRepository, never()).delete(any(Task.class));
+    }
+
+    @Test
+    void addDependency_toItself_throwsIllegalArgumentException() {
+        Task task = buildTask(50L);
+
+        when(taskRepository.findById(50L)).thenReturn(Optional.of(task));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> taskService.addDependency(50L, 50L, 500L));
+    }
+
+    @Test
+    void bulkUpdateStatus_crossProject_throwsForbiddenException() {
+        // task1 belongs to project (team 20), task2 belongs to a different project (team 99)
+        Team otherTeam = new Team();
+        otherTeam.setId(99L);
+        Project otherProject = new Project();
+        otherProject.setId(55L);
+        otherProject.setTeam(otherTeam);
+
+        Task task1 = buildTask(101L);
+        Task task2 = new Task();
+        task2.setId(102L);
+        task2.setProject(otherProject);
+
+        // actorMember is member of team 20, but not team 99
+        when(taskRepository.findAllById(List.of(101L, 102L))).thenReturn(List.of(task1, task2));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(99L, 500L)).thenReturn(Optional.empty());
+        when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
+
+        assertThrows(ForbiddenException.class,
+                () -> taskService.bulkUpdateStatus(List.of(101L, 102L), "DONE", 500L));
     }
 }

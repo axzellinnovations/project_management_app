@@ -16,6 +16,7 @@ export default function VerifyEmailForm() {
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,8 +56,9 @@ export default function VerifyEmailForm() {
     try {
       const response = await api.post('/api/auth/resend', { email });
       setError('');
-      const successMsg = typeof response.data === 'string' ? response.data : 'New OTP sent to your email.';
-      alert(successMsg);
+
+      const msg = typeof response.data === 'string' ? response.data : 'New OTP sent to your email.';
+      setSuccessMsg(msg);
     } catch (_err: unknown) {
       console.error("Resend error:", _err);
       
@@ -103,8 +105,14 @@ export default function VerifyEmailForm() {
         </div>
 
         {error && (
-          <p className="text-xs text-red-600 text-center bg-red-50 p-2 rounded-lg">
+          <p role="alert" className="text-xs text-red-600 text-center bg-red-50 p-2 rounded-lg">
             {error}
+          </p>
+        )}
+
+        {successMsg && (
+          <p role="alert" className="text-xs text-green-700 text-center bg-green-50 p-2 rounded-lg">
+            {successMsg}
           </p>
         )}
 

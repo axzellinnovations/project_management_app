@@ -37,7 +37,7 @@ public class Task {
     @JoinColumn(name = "kanban_column_id")
     private KanbanColumn kanbanColumn;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assignee_id")
     private TeamMember assignee;
 
@@ -72,7 +72,7 @@ public class Task {
     @OneToMany(mappedBy = "parentTask" , cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Task> subTasks = new ArrayList<>();
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "task_labels",
             joinColumns = @JoinColumn(name = "task_id"),
