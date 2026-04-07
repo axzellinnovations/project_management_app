@@ -71,28 +71,30 @@ export default function Editor({ content, onUpdate, editable = true }: EditorPro
     setIsMounted(true); 
   }, []);
 
+  const extensions = useMemo(() => [
+    SlashCommand.configure({ suggestion: slashSuggestion }),
+    StarterKit.configure({
+      heading: { levels: [1, 2, 3] },
+      // Disable StarterKit's bundled versions so our explicit imports below
+      // (with custom config) are the sole registered instances.
+      link: false,
+      underline: false,
+    }),
+    Placeholder.configure({ placeholder: "Type '/' for commands, or start writing..." }),
+    Highlight,
+    Underline,
+    TaskList,
+    TaskItem.configure({ nested: true }),
+    Link.configure({ openOnClick: false }),
+    Table.configure({ resizable: true }),
+    TableRow,
+    TableHeader,
+    TableCell,
+  ], []);
+
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [
-      SlashCommand.configure({ suggestion: slashSuggestion }),
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-        // Disable StarterKit's bundled versions so our explicit imports below
-        // (with custom config) are the sole registered instances.
-        link: false,
-        underline: false,
-      }),
-      Placeholder.configure({ placeholder: "Type '/' for commands, or start writing..." }),
-      Highlight,
-      Underline,
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      Link.configure({ openOnClick: false }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableHeader,
-      TableCell,
-    ],
+    extensions,
     content,
     editable,
     onUpdate: ({ editor }) => { handleUpdate(editor.getHTML()); },
