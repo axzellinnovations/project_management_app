@@ -21,7 +21,21 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     // "Assigned to me"
     List<Task> findByAssigneeUserUserIdOrderByUpdatedAtDesc(Long userId, Pageable pageable);
 
-    // "Worked On"
-    @Query("SELECT t FROM Task t WHERE (t.assignee.user.userId = :userId OR t.reporter.user.userId = :userId) AND t.lastModifiedBy.userId = :userId ORDER BY t.updatedAt DESC")
+    // "Worked On" — tasks this user was involved in (assigned or reported) and last modified by them
+    @Query("SELECT DISTINCT t FROM Task t WHERE t.lastModifiedBy.userId = :userId OR t.assignee.user.userId = :userId ORDER BY t.updatedAt DESC")
     List<Task> findTasksWorkedOnByUser(@Param("userId") Long userId, Pageable pageable);
+
+    // Server-side filtered tasks for a project
+    @Query("SELECT t FROM Task t WHERE t.project.id = :projectId " +
+           "AND (:status IS NULL OR t.status = :status) " +
+           "AND (:assigneeId IS NULL OR t.assignee.user.userId = :assigneeId) " +
+           "AND (:priority IS NULL OR CAST(t.priority AS string) = :priority) " +
+           "AND (:sprintId IS NULL OR t.sprint.id = :sprintId) " +
+           "ORDER BY t.createdAt DESC")
+    List<Task> findByProjectIdFiltered(
+            @Param("projectId") Long projectId,
+            @Param("status") String status,
+            @Param("assigneeId") Long assigneeId,
+            @Param("priority") String priority,
+            @Param("sprintId") Long sprintId);
 }
