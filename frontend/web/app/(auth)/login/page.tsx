@@ -29,9 +29,12 @@ export default function LoginPage() {
 
             // 2. Check if login was successful
             if (response.data.success) {
-                // Store token
+                // Store tokens
                 console.log("Login successful:", response.data);
                 localStorage.setItem('token', response.data.token);
+                if (response.data.refreshToken) {
+                    localStorage.setItem('refreshToken', response.data.refreshToken);
+                }
 
                 // 3. Redirect to dashboard
                 router.push('/dashboard');
@@ -112,7 +115,7 @@ export default function LoginPage() {
 
                 {/* Error Message Display */}
                 {error && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                         <p className="text-sm text-red-700">{error}</p>
                     </div>
                 )}

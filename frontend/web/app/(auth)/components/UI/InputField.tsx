@@ -7,6 +7,8 @@ interface InputFieldProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder: string;
   required?: boolean;
+  id?: string;
+  'aria-describedby'?: string;
 }
 
 export default function InputField({ 
@@ -15,19 +17,23 @@ export default function InputField({
   value, 
   onChange, 
   placeholder, 
-  required = false 
+  required = false,
+  id,
+  'aria-describedby': ariaDescribedby,
 }: InputFieldProps) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">
+      <label htmlFor={id} className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">
         {label}
       </label>
       <input
+        id={id}
         type={type}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
         required={required}
+        aria-describedby={ariaDescribedby}
         className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
       />
     </div>
