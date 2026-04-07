@@ -1,12 +1,13 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import Image from 'next/image';
 import api from '@/lib/axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
 interface TaskSidebarProps {
+  taskId?: number;
   status: string;
   assignee: string | null;
   reporter: string | null;
@@ -22,11 +23,12 @@ interface TaskSidebarProps {
   onUpdateStatus?: (status: string) => void;
   onUpdatePriority?: (priority: string) => void;
   onUpdateStoryPoint?: (storyPoint: number) => void;
+  onUnassign?: () => void;
 }
 
 const TaskSidebar: React.FC<TaskSidebarProps> = ({ 
-  status, assignee, reporter, labels, priority, sprint, storyPoint, dates,
-  onUpdateStatus, onUpdatePriority, onUpdateStoryPoint
+  taskId, status, assignee, reporter, labels, priority, sprint, storyPoint, dates,
+  onUpdateStatus, onUpdatePriority, onUpdateStoryPoint, onUnassign
 }) => {
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isPriorityOpen, setIsPriorityOpen] = useState(false);
@@ -150,7 +152,7 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
           
           {assignee && (
             <SidebarField label="Assignee">
-               <div className="flex items-center gap-2 hover:bg-gray-50 p-1 -ml-1 rounded cursor-pointer group">
+               <div className="flex items-center gap-2 hover:bg-gray-50 p-1 -ml-1 rounded group">
                   <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold overflow-hidden">
                       {usersMap[assignee] ? (
                          <Image 
@@ -165,7 +167,16 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
                          assignee.charAt(0).toUpperCase()
                       )}
                   </div>
-                  <span className="text-sm text-blue-600 group-hover:underline">{assignee}</span>
+                  <span className="text-sm text-blue-600 flex-1">{assignee}</span>
+                  {onUnassign && (
+                    <button
+                      onClick={onUnassign}
+                      title="Remove assignee"
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                </div>
             </SidebarField>
           )}

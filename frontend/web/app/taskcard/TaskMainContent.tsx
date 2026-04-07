@@ -257,9 +257,9 @@ const ActionButton = ({ icon, label, onClick }: { icon: React.ReactNode; label: 
 
 // Returns an icon based on file content type
 const AttachmentIcon = ({ contentType }: { contentType: string }) => {
-  if (contentType.startsWith('image/')) return <Image size={18} className="text-purple-500 shrink-0" />;
-  if (contentType === 'application/pdf') return <FileText size={18} className="text-red-500 shrink-0" />;
-  return <FileIcon size={18} className="text-blue-500 shrink-0" />;
+  if (contentType.startsWith('image/')) return <Image size={18} className="text-purple-500 shrink-0" aria-hidden="true" />;
+  if (contentType === 'application/pdf') return <FileText size={18} className="text-red-500 shrink-0" aria-hidden="true" />;
+  return <FileIcon size={18} className="text-blue-500 shrink-0" aria-hidden="true" />;
 };
 
 // Format bytes to human-readable size

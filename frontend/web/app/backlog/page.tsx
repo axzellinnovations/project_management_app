@@ -18,6 +18,7 @@ import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-mo
 import EmptyState from '@/components/shared/EmptyState';
 import BottomSheet from '@/components/shared/BottomSheet';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
+import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
@@ -277,6 +278,16 @@ export default function BacklogPage() {
     }, [projectId]);
 
     useEffect(() => { void loadTasks(); }, [loadTasks]);
+
+    useTaskWebSocket(projectId, useCallback((event) => {
+        if (event.type === 'TASK_CREATED' && event.task) {
+            setTasks(prev => [...prev.filter(x => x.id !== event.task!.id), event.task as Task]);
+        } else if (event.type === 'TASK_UPDATED' && event.task) {
+            setTasks(prev => prev.map(x => x.id === event.task!.id ? { ...x, ...event.task } as Task : x));
+        } else if (event.type === 'TASK_DELETED' && event.taskId) {
+            setTasks(prev => prev.filter(x => x.id !== event.taskId));
+        }
+    }, []));
 
     const handleMarkDone = useCallback(async (id: number) => {
         setTasks((prev) => prev.map((t) => t.id === id ? { ...t, status: 'DONE' } : t));

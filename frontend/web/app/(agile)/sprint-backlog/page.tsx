@@ -517,8 +517,9 @@ export default function SprintBacklogPage() {
 
   const handleBulkStatusChange = async (status: string) => {
     const ids = getSelectedTaskIds();
+    if (ids.length === 0) return;
     try {
-      await Promise.all(ids.map(id => api.put(`/api/tasks/${id}`, { status })));
+      await api.patch('/api/tasks/bulk/status', { taskIds: ids, status });
       setProductTasks(prev => prev.map(t => t.selected ? { ...t, status, selected: false } : t));
       setSprints(prev => prev.map(s => ({
         ...s, tasks: s.tasks.map(t => t.selected ? { ...t, status, selected: false } : t)
@@ -533,7 +534,7 @@ export default function SprintBacklogPage() {
     const ids = getSelectedTaskIds();
     if (ids.length === 0) return;
     try {
-      await Promise.all(ids.map(id => api.delete(`/api/tasks/${id}`)));
+      await api.delete('/api/tasks/bulk', { data: { taskIds: ids } });
       setProductTasks(prev => prev.filter(t => !t.selected));
       setSprints(prev => prev.map(s => ({ ...s, tasks: s.tasks.filter(t => !t.selected) })));
       toast(`Deleted ${ids.length} task(s)`, 'success');

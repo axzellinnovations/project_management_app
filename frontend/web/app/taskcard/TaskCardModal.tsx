@@ -5,6 +5,7 @@ import TaskHeader from './TaskHeader';
 import TaskMainContent from './TaskMainContent';
 import TaskSidebar from './TaskSidebar';
 import api from '@/lib/axios';
+import { toast } from '@/components/ui';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface TaskData {
@@ -70,7 +71,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
       await fetchTaskData();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
-      alert('Failed to update task: ' + (axiosErr?.response?.data?.message || 'Unknown error'));
+      toast('Failed to update task: ' + (axiosErr?.response?.data?.message || 'Unknown error'), 'error');
     }
   };
 
@@ -135,6 +136,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                 onSubtaskAdded={fetchTaskData}
               />
               <TaskSidebar
+                taskId={taskData.id}
                 status={taskData.status}
                 assignee={taskData.assigneeName}
                 reporter={taskData.reporterName}
@@ -150,6 +152,14 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                 onUpdateStatus={(status) => updateTask({ status })}
                 onUpdatePriority={(priority) => updateTask({ priority })}
                 onUpdateStoryPoint={(storyPoint) => updateTask({ storyPoint })}
+                onUnassign={async () => {
+                  try {
+                    await api.delete(`/api/tasks/${taskData.id}/assignee`);
+                    await fetchTaskData();
+                  } catch {
+                    toast('Failed to remove assignee', 'error');
+                  }
+                }}
               />
             </div>
           </>
