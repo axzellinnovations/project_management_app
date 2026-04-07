@@ -14,7 +14,7 @@ import com.planora.backend.model.Task;
 public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByProjectId(Long projectId);
     List<Task> findBySprintId(Long sprintId);
-    List<Task> findBySprintIdAndStatus(Long sprintId, com.planora.backend.model.Status status);
+    List<Task> findBySprintIdAndStatus(Long sprintId, String status);
 
     long countByAssigneeAndProject_TeamId(com.planora.backend.model.TeamMember assignee, Long teamId);
 
@@ -40,4 +40,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
             @Param("assigneeId") Long assigneeId,
             @Param("priority") String priority,
             @Param("sprintId") Long sprintId);
+
+    @Query("SELECT t FROM Task t WHERE LOWER(t.title) LIKE LOWER(CONCAT('%', :query, '%')) AND t.project.team.id IN (SELECT tm.team.id FROM TeamMember tm WHERE tm.user.userId = :userId)")
+    List<Task> searchTasksByTitle(@Param("query") String query, @Param("userId") Long userId, Pageable pageable);
 }

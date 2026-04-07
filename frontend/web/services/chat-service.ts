@@ -1,4 +1,4 @@
-import api from '@/lib/axios';
+﻿import api from '@/lib/axios';
 import type {
   ChatFeatureFlags,
   ChatMessage,
@@ -10,9 +10,9 @@ import type {
   RoomChatSummary,
   TeamChatSummary,
   UnreadBadgeSummary,
-} from '@/app/project/[id]/chat/components/chat';
+} from '@/app/(project)/project/[id]/chat/components/chat';
 
-// ── Types ──
+// â”€â”€ Types â”€â”€
 
 export interface ChatSummaries {
   directSummaries: DirectChatSummary[];
@@ -25,7 +25,7 @@ export interface AuthUserSummary {
   username?: string;
 }
 
-// ── Team / General ──
+// â”€â”€ Team / General â”€â”€
 
 export async function markTeamAsRead(projectId: string): Promise<void> {
   await api.post(`/api/projects/${projectId}/chat/mark-read`);
@@ -55,7 +55,7 @@ export async function fetchUnreadBadge(projectId: string): Promise<UnreadBadgeSu
   return data;
 }
 
-// ── Search ──
+// â”€â”€ Search â”€â”€
 
 export async function searchChatMessages(
   projectId: string,
@@ -68,7 +68,7 @@ export async function searchChatMessages(
   return data;
 }
 
-// ── Members / Users ──
+// â”€â”€ Members / Users â”€â”€
 
 export async function fetchChatMembers(projectId: string): Promise<string[]> {
   const { data } = await api.get<string[]>(`/api/projects/${projectId}/chat/members`);
@@ -85,7 +85,7 @@ export async function fetchCurrentUser(): Promise<{ username: string }> {
   return data;
 }
 
-// ── Summaries ──
+// â”€â”€ Summaries â”€â”€
 
 export async function fetchChatSummaries(projectId: string): Promise<ChatSummaries> {
   const { data } = await api.get(`/api/projects/${projectId}/chat/summaries`);
@@ -95,7 +95,7 @@ export async function fetchChatSummaries(projectId: string): Promise<ChatSummari
   return { directSummaries, roomSummaries, teamSummary };
 }
 
-// ── Messages ──
+// â”€â”€ Messages â”€â”€
 
 export async function fetchTeamMessages(projectId: string): Promise<ChatMessage[]> {
   const { data } = await api.get<ChatMessage[]>(`/api/projects/${projectId}/chat/messages`);
@@ -147,7 +147,7 @@ export async function deleteMessageRest(
   return data;
 }
 
-// ── Threads ──
+// â”€â”€ Threads â”€â”€
 
 export async function fetchThreadMessages(
   projectId: string,
@@ -171,7 +171,7 @@ export async function postThreadReply(
   return data;
 }
 
-// ── Reactions ──
+// â”€â”€ Reactions â”€â”€
 
 export async function fetchMessageReactions(
   projectId: string,
@@ -195,7 +195,7 @@ export async function toggleReactionRest(
   return data;
 }
 
-// ── Rooms ──
+// â”€â”€ Rooms â”€â”€
 
 export async function fetchRooms(projectId: string): Promise<ChatRoom[]> {
   const { data } = await api.get<ChatRoom[]>(`/api/projects/${projectId}/chat/rooms`);
@@ -244,3 +244,4 @@ export async function pinRoomMessageRest(
   );
   return data;
 }
+

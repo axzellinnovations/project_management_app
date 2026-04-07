@@ -83,6 +83,7 @@ export interface Task {
   dueDate?: string;
   startDate?: string;
   createdAt?: string;
+  completedAt?: string;
   updatedAt?: string;
   assignee?: Assignee;
   assigneeId?: number;

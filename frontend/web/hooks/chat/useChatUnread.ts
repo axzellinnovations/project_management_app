@@ -1,11 +1,11 @@
-import { useState, useCallback } from 'react';
+﻿import { useState, useCallback } from 'react';
 import * as chatApi from '@/services/chat-service';
 import type {
   ChatMessage,
   DirectChatSummary,
   RoomChatSummary,
   UnreadBadgeSummary,
-} from '@/app/project/[id]/chat/components/chat';
+} from '@/app/(project)/project/[id]/chat/components/chat';
 
 export function useChatUnread(projectId: string) {
   const [teamUnseenCount, setTeamUnseenCount] = useState(0);
@@ -128,3 +128,4 @@ export function useChatUnread(projectId: string) {
     loadSummaries,
   };
 }
+

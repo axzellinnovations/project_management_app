@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import SockJS from 'sockjs-client';
 import { CompatClient, Stomp } from '@stomp/stompjs';
+import { getValidToken } from '@/lib/auth';
 
 interface TaskEvent {
   type: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_DELETED';
@@ -35,10 +36,11 @@ export function useTaskWebSocket(
   useEffect(() => {
     if (!projectId) return;
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const token = getValidToken();
     if (!token) return;
 
-    const stompClient = Stomp.over(() => new SockJS('http://localhost:8080/ws'));
+    const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+    const stompClient = Stomp.over(() => new SockJS(`${backendUrl}/ws`));
     stompClient.debug = () => {};
     stompClient.reconnect_delay = 5000;
 
@@ -58,7 +60,18 @@ export function useTaskWebSocket(
           }
         );
       },
-      () => {
+      (error: unknown) => {
+        const errorMessage = typeof error === 'string' ? error : ((error as { headers?: { message?: string } })?.headers?.message || '');
+        const isAuthError = errorMessage.toLowerCase().includes('auth') ||
+                           errorMessage.toLowerCase().includes('jwt') ||
+                           errorMessage.toLowerCase().includes('expired') ||
+                           errorMessage.toLowerCase().includes('invalid');
+
+        if (isAuthError) {
+          console.error('[task-ws] Fatal authentication error:', errorMessage);
+          // Stop retrying on fatal auth errors to avoid backend log spam.
+          return;
+        }
         // connection error — silent, will auto-reconnect
       }
     );

@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 import SockJS from 'sockjs-client';
 import { CompatClient, Stomp } from '@stomp/stompjs';
 
+import { getValidToken } from '@/lib/auth';
 import * as chatApi from '@/services/chat-service';
 import type {
   ChatFeatureFlags,
@@ -10,7 +11,7 @@ import type {
   ChatReactionSummary,
   ChatRoom,
   UnreadBadgeSummary,
-} from '@/app/project/[id]/chat/components/chat';
+} from '@/app/(project)/project/[id]/chat/components/chat';
 
 import { normalizeIdentity, isSameIdentity, normalizeRoom, mergeMessage } from './chat-utils';
 import { useChatMessages } from './useChatMessages';
@@ -21,7 +22,7 @@ import { useChatReactions } from './useChatReactions';
 import { useChatSearch } from './useChatSearch';
 import { useChatUnread } from './useChatUnread';
 
-// ── Types used only within this composer ──
+// â”€â”€ Types used only within this composer â”€â”€
 
 interface RoomEvent {
   action: 'CREATED' | 'UPDATED' | 'DELETED';
@@ -60,24 +61,24 @@ const DEFAULT_FEATURE_FLAGS: ChatFeatureFlags = {
   telemetryEnabled: process.env.NEXT_PUBLIC_CHAT_TELEMETRY_ENABLED !== 'false',
 };
 
-// ── Composer Hook ──
+// â”€â”€ Composer Hook â”€â”€
 
 export const useChat = (projectId: string) => {
   const router = useRouter();
 
-  // ── Auth & user state ──
+  // â”€â”€ Auth & user state â”€â”€
   const [currentUser, setCurrentUser] = useState('');
   const [currentUserAliases, setCurrentUserAliases] = useState<string[]>([]);
   const [users, setUsers] = useState<string[]>([]);
   const [userProfilePics, setUserProfilePics] = useState<Record<string, string>>({});
 
-  // ── Selection state ──
+  // â”€â”€ Selection state â”€â”€
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const selectedUserRef = useRef<string | null>(null);
   const selectedRoomIdRef = useRef<number | null>(null);
 
-  // ── UI state ──
+  // â”€â”€ UI state â”€â”€
   const [featureFlags, setFeatureFlags] = useState<ChatFeatureFlags>(DEFAULT_FEATURE_FLAGS);
   const [commandNotice, setCommandNotice] = useState('');
   const [isSocketConnected, setIsSocketConnected] = useState(false);
@@ -86,10 +87,10 @@ export const useChat = (projectId: string) => {
   const [hasRestoredSelection, setHasRestoredSelection] = useState(false);
   const hasRestoredSelectionRef = useRef(false);
 
-  // ── Connection ref ──
+  // â”€â”€ Connection ref â”€â”€
   const stompClientRef = useRef<CompatClient | null>(null);
 
-  // ── Domain hooks ──
+  // â”€â”€ Domain hooks â”€â”€
   const msg = useChatMessages(projectId);
   const rm = useChatRooms(projectId);
   const presence = useChatPresence(projectId);
@@ -98,9 +99,9 @@ export const useChat = (projectId: string) => {
   const search = useChatSearch(projectId);
   const unread = useChatUnread(projectId);
 
-  // ── Stable setter/callback destructuring (prevents dep-array identity loops) ──
+  // â”€â”€ Stable setter/callback destructuring (prevents dep-array identity loops) â”€â”€
   const { setMessages, setPrivateMessages, setRoomMessages, setTeamLastMessage,
-          setPrivateLastMessages, setRoomLastMessages, mergePrivateMessage,
+          setRoomLastMessages, mergePrivateMessage,
           sendMessage: msgSend, sendRoomMessage: msgSendRoom,
           editMessage: msgEdit, deleteMessage: msgDelete,
           loadRoomHistory: msgLoadRoom, loadPrivateHistory: msgLoadPrivate } = msg;
@@ -114,13 +115,13 @@ export const useChat = (projectId: string) => {
   const { setThreadMessages, sendThreadReply: threadsSendReply,
           openThread: threadsOpenThread, closeThread: threadsClose } = threads;
 
-  // ── Ref sync ──
+  // â”€â”€ Ref sync â”€â”€
   useEffect(() => { selectedUserRef.current = selectedUser; }, [selectedUser]);
   useEffect(() => { selectedRoomIdRef.current = selectedRoomId; }, [selectedRoomId]);
 
   const selectionStorageKey = `chat-selection:${projectId}`;
 
-  // ── Helpers ──
+  // â”€â”€ Helpers â”€â”€
   const isStompConnected = () => Boolean(stompClientRef.current?.connected);
   const stompSend = useCallback((dest: string, body: string) => {
     if (stompClientRef.current?.connected) {
@@ -137,7 +138,7 @@ export const useChat = (projectId: string) => {
     setUsers(prev => (prev.includes(teamName) ? prev : [...prev, teamName]));
   }, []);
 
-  // ── Feature flags & telemetry ──
+  // â”€â”€ Feature flags & telemetry â”€â”€
   const featureFlagsRef = useRef(featureFlags);
   useEffect(() => { featureFlagsRef.current = featureFlags; }, [featureFlags]);
 
@@ -168,7 +169,7 @@ export const useChat = (projectId: string) => {
     [projectId],
   );
 
-  // ── Cross-domain updateMessageEverywhere ──
+  // â”€â”€ Cross-domain updateMessageEverywhere â”€â”€
   const updateMessageEverywhere = useCallback(
     (incoming: ChatMessage, isOptimistic = false) => {
       const mergeTopLevel = (list: ChatMessage[], inc: ChatMessage): ChatMessage[] => {
@@ -219,7 +220,7 @@ export const useChat = (projectId: string) => {
     [currentUser, setMessages, setRoomMessages, setPrivateMessages, setThreadMessages],
   );
 
-  // ── Wrapped public actions (inject dependencies) ──
+  // â”€â”€ Wrapped public actions (inject dependencies) â”€â”€
 
   const sendMessage = useCallback(
     (content: string, recipient?: string | null) => {
@@ -351,7 +352,7 @@ export const useChat = (projectId: string) => {
     setSelectedRoomId(Number.isFinite(n) ? n : null);
   }, []);
 
-  // ── Selection persistence ──
+  // â”€â”€ Selection persistence â”€â”€
   useEffect(() => {
     if (typeof window === 'undefined' || !hasRestoredSelection) return;
     const selection =
@@ -394,7 +395,7 @@ export const useChat = (projectId: string) => {
     [selectionStorageKey],
   );
 
-  // ── Fetch helpers used during init ──
+  // â”€â”€ Fetch helpers used during init â”€â”€
   const fetchAllUsers = useCallback(async () => {
     try {
       const data = await chatApi.fetchChatMembers(projectId);
@@ -422,11 +423,12 @@ export const useChat = (projectId: string) => {
     }
   }, []);
 
-  // ── STOMP connection ──
+  // â”€â”€ STOMP connection â”€â”€
   const connectToChat = useCallback(
     (token: string, username: string, aliases: string[]) => {
       try {
-        const client = Stomp.over(() => new SockJS('http://localhost:8080/ws'));
+        const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+        const client = Stomp.over(() => new SockJS(`${backendUrl}/ws`));
         client.debug = () => {};
         client.reconnect_delay = 5000;
         const normalizedAliases = new Set(aliases.map(a => a.toLowerCase()));
@@ -437,7 +439,7 @@ export const useChat = (projectId: string) => {
           setIsSocketConnected(true);
           setError('');
 
-          // ── Team channel ──
+          // â”€â”€ Team channel â”€â”€
           client.subscribe(`/topic/project/${projectId}/public`, payload => {
             const inc: ChatMessage = JSON.parse(payload.body);
             if (inc.type === 'JOIN' && inc.sender !== username) {
@@ -462,7 +464,7 @@ export const useChat = (projectId: string) => {
             }
           });
 
-          // ── Private messages ──
+          // â”€â”€ Private messages â”€â”€
           client.subscribe(`/user/queue/project/${projectId}/messages`, payload => {
             const inc: ChatMessage = JSON.parse(payload.body);
             const sender = inc.sender?.toLowerCase() || '';
@@ -481,7 +483,7 @@ export const useChat = (projectId: string) => {
             if (inc.id) loadMsgReactions(inc.id);
           });
 
-          // ── Room events ──
+          // â”€â”€ Room events â”€â”€
           client.subscribe(`/topic/project/${projectId}/rooms`, payload => {
             const event: RoomEvent = JSON.parse(payload.body);
             if ((event.action === 'CREATED' || event.action === 'UPDATED') && event.room) {
@@ -505,13 +507,13 @@ export const useChat = (projectId: string) => {
             }
           });
 
-          // ── Presence ──
+          // â”€â”€ Presence â”€â”€
           client.subscribe(`/topic/project/${projectId}/presence`, payload => {
             const event: PresenceEvent = JSON.parse(payload.body);
             setOnlineUsers((event.onlineUsers || []).map(u => u.toLowerCase()));
           });
 
-          // ── Team typing ──
+          // â”€â”€ Team typing â”€â”€
           client.subscribe(`/topic/project/${projectId}/typing/team`, payload => {
             const event: TypingEvent = JSON.parse(payload.body);
             const s = event.sender?.toLowerCase();
@@ -521,7 +523,7 @@ export const useChat = (projectId: string) => {
             );
           });
 
-          // ── Private typing ──
+          // â”€â”€ Private typing â”€â”€
           client.subscribe(`/user/queue/project/${projectId}/typing/private`, payload => {
             const event: TypingEvent = JSON.parse(payload.body);
             const s = event.sender?.toLowerCase();
@@ -531,7 +533,7 @@ export const useChat = (projectId: string) => {
             );
           });
 
-          // ── Unread badge ──
+          // â”€â”€ Unread badge â”€â”€
           client.subscribe(`/user/queue/project/${projectId}/unread-badge`, payload => {
             const badge: UnreadBadgeSummary = JSON.parse(payload.body);
             setUnreadBadge({
@@ -542,7 +544,7 @@ export const useChat = (projectId: string) => {
             });
           });
 
-          // ── Mentions ──
+          // â”€â”€ Mentions â”€â”€
           client.subscribe(`/user/queue/project/${projectId}/mentions`, payload => {
             const mention: MentionEvent = JSON.parse(payload.body);
             const ctx =
@@ -565,29 +567,46 @@ export const useChat = (projectId: string) => {
             }
           });
 
-          // ── Join + presence ping ──
-          client.send(`/app/project/${projectId}/chat.addUser`, {}, JSON.stringify({ sender: username, type: 'JOIN' }));
+          // ——— Join + presence ping ———
           client.send(`/app/project/${projectId}/presence.ping`, {}, JSON.stringify({}));
-        }, (connectError: unknown) => {
+        }, (error: unknown) => {
           setIsSocketConnected(false);
+
+          const errorMessage = typeof error === 'string' ? error : ((error as { headers?: { message?: string } })?.headers?.message || '');
+          const isAuthError = errorMessage.toLowerCase().includes('auth') ||
+                             errorMessage.toLowerCase().includes('jwt') ||
+                             errorMessage.toLowerCase().includes('expired') ||
+                             errorMessage.toLowerCase().includes('invalid');
+
+          if (isAuthError) {
+            setError('Your session has expired. Please log in again.');
+            console.error('[chat-ws] Fatal authentication error:', errorMessage);
+            // Don't retry on fatal auth errors
+            return;
+          }
+
           setError('Connection failed. Is the backend running?');
-          console.error(connectError);
+          console.error('[chat-ws] Connection error:', error);
         });
       } catch (err) {
         setIsSocketConnected(false);
         setError('Socket initialization failed.');
-        console.error(err);
+        console.error('[chat-ws] Initialization error:', err);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [projectId, showCommandNotice, trackTelemetry],
   );
 
-  // ── Initialization ──
+  // â”€â”€ Initialization â”€â”€
   useEffect(() => {
     const initialize = async () => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      if (!token) { router.push('/login'); return; }
+      const token = getValidToken();
+      if (!token) {
+        console.warn('[chat-ws] No valid token found, redirecting to login.');
+        router.push('/login');
+        return;
+      }
 
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
@@ -636,7 +655,7 @@ export const useChat = (projectId: string) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Presence heartbeat ──
+  // â”€â”€ Presence heartbeat â”€â”€
   useEffect(() => {
     if (!isSocketConnected || !stompClientRef.current) return;
     const interval = window.setInterval(() => {
@@ -645,7 +664,7 @@ export const useChat = (projectId: string) => {
     return () => window.clearInterval(interval);
   }, [projectId, isSocketConnected]);
 
-  // ── Per-room STOMP subscriptions ──
+  // â”€â”€ Per-room STOMP subscriptions â”€â”€
   useEffect(() => {
     if (!isSocketConnected || !stompClientRef.current) return;
     const client = stompClientRef.current;
@@ -690,7 +709,7 @@ export const useChat = (projectId: string) => {
     return () => subs.forEach(s => s?.unsubscribe());
   }, [projectId, rm.rooms, isSocketConnected, currentUser, setRoomMessages, setRoomLastMessages, setRoomUnseenCounts, loadMsgReactions, setRoomTypingUsers]);
 
-  // ── Thread subscription ──
+  // â”€â”€ Thread subscription â”€â”€
   useEffect(() => {
     if (!isSocketConnected || !stompClientRef.current || !threads.activeThreadRootRef.current?.id) return;
     const rootId = threads.activeThreadRootRef.current.id;
@@ -702,7 +721,7 @@ export const useChat = (projectId: string) => {
     return () => sub.unsubscribe();
   }, [projectId, isSocketConnected, threads.activeThreadRootRef, setThreadMessages, loadMsgReactions]);
 
-  // ── Per-message reaction subscriptions ──
+  // â”€â”€ Per-message reaction subscriptions â”€â”€
   useEffect(() => {
     if (!isSocketConnected || !stompClientRef.current) return;
     const client = stompClientRef.current;
@@ -723,7 +742,7 @@ export const useChat = (projectId: string) => {
     return () => subs.forEach(s => s.unsubscribe());
   }, [projectId, isSocketConnected, msg.messages, msg.privateMessages, msg.roomMessages, threads.threadMessages, setMessageReactions]);
 
-  // ── Selection cleanup ──
+  // â”€â”€ Selection cleanup â”€â”€
   useEffect(() => {
     if (!selectedUser) { setPrivateTypingUsers([]); return; }
     setPrivateTypingUsers(prev => prev.filter(u => isSameIdentity(u, selectedUser)));
@@ -749,7 +768,7 @@ export const useChat = (projectId: string) => {
     }
   }, [selectedRoomId, selectedUser, setTeamUnseenCount, setTeamMentionCount, markTeamAsRead, hasRestoredSelection]);
 
-  // ── Return unified interface ──
+  // â”€â”€ Return unified interface â”€â”€
   return {
     currentUser,
     currentUserAliases,
@@ -807,3 +826,4 @@ export const useChat = (projectId: string) => {
     retryConnection: () => window.location.reload(),
   };
 };
+

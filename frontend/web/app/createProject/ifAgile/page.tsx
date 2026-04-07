@@ -126,7 +126,6 @@ export default function AgileProjectPage() {
         const name = e.target.value;
         setProjectName(name);
 
-        const currentGenerated = name.slice(0, 4).toUpperCase().replace(/\s+/g, '_');
         if (!projectKey || projectKey === name.slice(0, projectKey.length).toUpperCase().replace(/\s+/g, '_')) {
             const generatedKey = name.replace(/\s+/g, '_').slice(0, 4).toUpperCase();
             setProjectKey(generatedKey);

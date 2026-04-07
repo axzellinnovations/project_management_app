@@ -102,8 +102,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         accessor.getSessionAttributes().put("username", normalizedUsername);
                         
                         System.out.println("[WebSocket] Authentication successful for user: " + normalizedUsername);
+                    } catch (io.jsonwebtoken.ExpiredJwtException e) {
+                        System.err.println("[WebSocket] Authentication failed: JWT expired");
+                        throw new IllegalArgumentException("JWT expired");
+                    } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
+                        System.err.println("[WebSocket] Authentication failed: " + e.getMessage());
+                        throw new IllegalArgumentException("JWT invalid: " + e.getMessage());
                     } catch (Exception e) {
-                        System.err.println("[WebSocket] Authentication error: " + e.getMessage());
+                        System.err.println("[WebSocket] Unexpected authentication error: " + e.getMessage());
                         e.printStackTrace();
                         throw new IllegalArgumentException("WebSocket authentication failed: " + e.getMessage());
                     }

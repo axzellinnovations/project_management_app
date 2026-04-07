@@ -27,18 +27,18 @@ export default function VerifyEmailForm() {
       await api.post('/api/auth/reg/verify', { email, otp });
       alert("Email verified successfully! Please login.");
       router.push('/login');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      console.error("Verification error:", err);
+    } catch (_err: unknown) {
+      console.error("Verification error:", _err);
       
       let errorMessage = 'Invalid OTP. Please try again.';
-      const errorData = err.response?.data;
+      const res = (_err as { response?: { data?: unknown } })?.response;
+      const errorData = res?.data;
       
       // Handle different error response formats
       if (typeof errorData === 'string') {
         errorMessage = errorData;
-      } else if (errorData?.message) {
-        errorMessage = errorData.message;
+      } else if (errorData && typeof errorData === 'object' && 'message' in errorData) {
+        errorMessage = (errorData as { message: string }).message;
       }
       
       setError(errorMessage);
@@ -56,23 +56,20 @@ export default function VerifyEmailForm() {
     try {
       const response = await api.post('/api/auth/resend', { email });
       setError('');
-      
-      let msg = 'New OTP sent to your email.';
-      if (typeof response.data === 'string') {
-        msg = response.data;
-      }
+
+      const msg = typeof response.data === 'string' ? response.data : 'New OTP sent to your email.';
       setSuccessMsg(msg);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      console.error("Resend error:", err);
+    } catch (_err: unknown) {
+      console.error("Resend error:", _err);
       
       let errorMessage = 'Failed to resend OTP. Please try again.';
-      const errorData = err.response?.data;
+      const res = (_err as { response?: { data?: unknown } })?.response;
+      const errorData = res?.data;
       
       if (typeof errorData === 'string') {
         errorMessage = errorData;
-      } else if (errorData?.message) {
-        errorMessage = errorData.message;
+      } else if (errorData && typeof errorData === 'object' && 'message' in errorData) {
+        errorMessage = (errorData as { message: string }).message;
       }
       
       setError(errorMessage);
