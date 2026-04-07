@@ -14,4 +14,6 @@ public interface DocumentFolderRepository extends JpaRepository<DocumentFolder, 
     Optional<DocumentFolder> findByIdAndProjectId(Long id, Long projectId);
 
     long countByParentFolderIdAndDeletedAtIsNull(Long folderId);
+
+    List<DocumentFolder> findByParentFolderIdAndDeletedAtIsNull(Long parentFolderId);
 }
