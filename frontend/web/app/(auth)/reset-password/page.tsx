@@ -7,7 +7,6 @@ import ResetPasswordForm from './components/ResetPasswordForm';
 import SuccessMessage from './components/SuccessMessage';
 
 export default function ResetPasswordPage() {
-  const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -19,8 +18,8 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setError('');
 
-    if (!email || !otp) {
-      setError('Please enter both email and OTP.');
+    if (!otp) {
+      setError('Please enter the OTP from your email.');
       return;
     }
 
@@ -29,8 +28,8 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters long.');
       return;
     }
 
@@ -38,13 +37,11 @@ export default function ResetPasswordPage() {
 
     try {
       await api.post('/api/auth/reset', {
-        email: email.toLowerCase(),
-        otp: otp,
+        token: otp,
         newPassword: newPassword
       });
 
       setSubmitted(true);
-      setEmail('');
       setOtp('');
       setNewPassword('');
       setConfirmPassword('');
@@ -87,7 +84,7 @@ export default function ResetPasswordPage() {
           </svg>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Reset Password</h1>
-        <p className="text-gray-500 text-sm mt-2">Enter your email and OTP to create a new password</p>
+        <p className="text-gray-500 text-sm mt-2">Enter the OTP sent to your email and choose a new password</p>
       </div>
 
       {/* Main Card Container */}
@@ -96,13 +93,11 @@ export default function ResetPasswordPage() {
           <SuccessMessage />
         ) : (
           <ResetPasswordForm
-            email={email}
             otp={otp}
             newPassword={newPassword}
             confirmPassword={confirmPassword}
             error={error}
             isLoading={isLoading}
-            onEmailChange={setEmail}
             onOtpChange={setOtp}
             onPasswordChange={setNewPassword}
             onConfirmPasswordChange={setConfirmPassword}
