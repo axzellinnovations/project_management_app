@@ -26,9 +26,11 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findTasksWorkedOnByUser(@Param("userId") Long userId, Pageable pageable);
 
     // Server-side filtered tasks for a project
-    @Query("SELECT t FROM Task t WHERE t.project.id = :projectId " +
+    @Query("SELECT t FROM Task t " +
+           "LEFT JOIN t.assignee a LEFT JOIN a.user au " +
+           "WHERE t.project.id = :projectId " +
            "AND (:status IS NULL OR t.status = :status) " +
-           "AND (:assigneeId IS NULL OR t.assignee.user.userId = :assigneeId) " +
+           "AND (:assigneeId IS NULL OR au.userId = :assigneeId) " +
            "AND (:priority IS NULL OR CAST(t.priority AS string) = :priority) " +
            "AND (:sprintId IS NULL OR t.sprint.id = :sprintId) " +
            "ORDER BY t.createdAt DESC")
