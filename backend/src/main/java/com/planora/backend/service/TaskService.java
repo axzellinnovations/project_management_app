@@ -1,6 +1,7 @@
 package com.planora.backend.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -178,7 +179,14 @@ public class TaskService {
         if(request.getPriority() != null) task.setPriority(Priority.valueOf(request.getPriority()));
         if(request.getStatus() != null) task.setStatus(request.getStatus());
 
-        //update fields-other attributes
+        // Set or clear completedAt when status transitions to/from DONE
+        if (request.getStatus() != null && !request.getStatus().equalsIgnoreCase(oldStatus)) {
+            if ("DONE".equalsIgnoreCase(request.getStatus())) {
+                task.setCompletedAt(LocalDateTime.now());
+            } else {
+                task.setCompletedAt(null);
+            }
+        }
         if(request.getStoryPoint() != null) task.setStoryPoint(request.getStoryPoint());
         if(request.getStartDate() != null) task.setStartDate(request.getStartDate());
         if(request.getDueDate() != null) task.setDueDate(request.getDueDate());
@@ -415,6 +423,7 @@ public class TaskService {
         }
     }
 
+    @Transactional(readOnly = true)
     public List<com.planora.backend.dto.CommentResponseDTO> getComments(Long taskId, Long currentUserId) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
@@ -544,12 +553,31 @@ public class TaskService {
     @Transactional
     public void bulkUpdateStatus(List<Long> taskIds, String status, Long currentUserId) {
         List<Task> tasks = taskRepository.findAllById(taskIds);
+        List<Task> doneTransitioned = new java.util.ArrayList<>();
         for (Task task : tasks) {
             requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
+            String oldTaskStatus = task.getStatus();
             task.setStatus(status);
+            if ("DONE".equalsIgnoreCase(status) && !"DONE".equalsIgnoreCase(oldTaskStatus)) {
+                task.setCompletedAt(LocalDateTime.now());
+                doneTransitioned.add(task);
+            } else if (!"DONE".equalsIgnoreCase(status)) {
+                task.setCompletedAt(null);
+            }
             task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         }
         taskRepository.saveAll(tasks);
+
+        // NTH-2: notify stakeholders of tasks that just moved to DONE
+        if (!doneTransitioned.isEmpty()) {
+            User actor = userRepository.findById(currentUserId).orElse(null);
+            String actorName = actor != null ? actor.getUsername() : "Unknown";
+            for (Task doneTask : doneTransitioned) {
+                String message = actorName + " marked \"" + doneTask.getTitle() + "\" as Done";
+                String link = "/taskcard?taskId=" + doneTask.getId();
+                notifyTaskStakeholders(doneTask, currentUserId, message, link);
+            }
+        }
     }
 
     //20. BULK DELETE

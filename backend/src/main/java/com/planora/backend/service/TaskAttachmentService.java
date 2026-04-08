@@ -10,17 +10,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.*;
-import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -48,8 +41,7 @@ public class TaskAttachmentService {
     private final TaskRepository taskRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final UserRepository userRepository;
-    private final S3Presigner s3Presigner;
-    private final S3Client s3Client;
+    private final S3StorageService s3StorageService;
 
     @Value("${aws.s3.task-bucket}")
     private String taskBucket;
@@ -62,18 +54,8 @@ public class TaskAttachmentService {
 
         String objectKey = buildObjectKey(taskId, request.getFileName());
 
-        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(taskBucket)
-                .key(objectKey)
-                .contentType(request.getContentType())
-                .build();
-
-        PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
-                .signatureDuration(URL_DURATION)
-                .putObjectRequest(putObjectRequest)
-                .build();
-
-        String uploadUrl = s3Presigner.presignPutObject(presignRequest).url().toString();
+        String uploadUrl = s3StorageService.generatePresignedUploadUrl(
+                taskBucket, objectKey, request.getContentType(), URL_DURATION);
 
         return TaskAttachmentUploadInitResponseDTO.builder()
                 .uploadUrl(uploadUrl)
@@ -88,7 +70,7 @@ public class TaskAttachmentService {
         validateTeamMember(task, userId);
         validateFileRequest(request.getFileName(), request.getContentType(), request.getFileSize());
         validateObjectKeyOwnership(taskId, request.getObjectKey());
-        verifyObjectExists(request.getObjectKey());
+        s3StorageService.verifyObjectExists(taskBucket, request.getObjectKey());
 
         // Idempotency: if this objectKey was already finalized, return existing record
         TaskAttachment existing = taskAttachmentRepository.findByObjectKey(request.getObjectKey()).orElse(null);
@@ -120,19 +102,14 @@ public class TaskAttachmentService {
         }
 
         String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "upload.bin";
-        String resolvedContentType = resolveContentType(file.getContentType(), fileName);
+        String resolvedContentType = s3StorageService.resolveContentType(file.getContentType(), fileName);
         validateFileRequest(fileName, resolvedContentType, file.getSize());
 
         String objectKey = buildObjectKey(taskId, fileName);
 
         try {
-            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                    .bucket(taskBucket)
-                    .key(objectKey)
-                    .contentType(resolvedContentType)
-                    .build();
-
-            s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+            s3StorageService.putObject(taskBucket, objectKey, resolvedContentType,
+                    file.getInputStream(), file.getSize());
         } catch (Exception e) {
             throw new RuntimeException("Could not upload file to S3: " + e.getMessage());
         }
@@ -170,11 +147,7 @@ public class TaskAttachmentService {
         }
 
         try {
-            DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
-                    .bucket(taskBucket)
-                    .key(attachment.getObjectKey())
-                    .build();
-            s3Client.deleteObject(deleteObjectRequest);
+            s3StorageService.deleteObject(taskBucket, attachment.getObjectKey());
         } catch (Exception e) {
             logger.warn("Failed to delete object from S3 for key {}: {}", attachment.getObjectKey(), e.getMessage());
         }
@@ -182,7 +155,7 @@ public class TaskAttachmentService {
         taskAttachmentRepository.delete(attachment);
     }
 
-    // ── Helpers ──
+    // ── Task-specific helpers ──
 
     private Task getTask(Long taskId) {
         return taskRepository.findById(taskId)
@@ -200,6 +173,7 @@ public class TaskAttachmentService {
                 .orElseThrow(() -> new RuntimeException("User is not a member of this project team"));
     }
 
+    /** Task-specific validation: enforces ALLOWED_CONTENT_TYPES and MAX_FILE_SIZE_BYTES. */
     private void validateFileRequest(String fileName, String contentType, Long fileSize) {
         if (fileName == null || fileName.isBlank()) {
             throw new RuntimeException("fileName is required");
@@ -230,6 +204,7 @@ public class TaskAttachmentService {
         return nameOnly;
     }
 
+    /** Task-specific: ensures the objectKey belongs to this task's S3 prefix. */
     private void validateObjectKeyOwnership(Long taskId, String objectKey) {
         if (objectKey == null || objectKey.isBlank()) {
             throw new RuntimeException("objectKey is required");
@@ -240,69 +215,14 @@ public class TaskAttachmentService {
         }
     }
 
-    private void verifyObjectExists(String objectKey) {
-        try {
-            HeadObjectRequest headObjectRequest = HeadObjectRequest.builder()
-                    .bucket(taskBucket)
-                    .key(objectKey)
-                    .build();
-            s3Client.headObject(headObjectRequest);
-        } catch (NoSuchKeyException e) {
-            throw new RuntimeException("File not found in storage. Please re-upload.");
-        } catch (Exception e) {
-            logger.warn("Could not verify object existence for key {}: {}", objectKey, e.getMessage());
-        }
-    }
-
-    private String generateDownloadUrl(String objectKey) {
-        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
-                .bucket(taskBucket)
-                .key(objectKey)
-                .build();
-
-        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                .signatureDuration(URL_DURATION)
-                .getObjectRequest(getObjectRequest)
-                .build();
-
-        return s3Presigner.presignGetObject(presignRequest).url().toString();
-    }
-
-    private String resolveContentType(String contentType, String fileName) {
-        if (contentType != null && !contentType.isBlank() && !"application/octet-stream".equalsIgnoreCase(contentType)) {
-            return contentType;
-        }
-
-        String extension = "";
-        int dotIndex = fileName.lastIndexOf('.');
-        if (dotIndex >= 0 && dotIndex < fileName.length() - 1) {
-            extension = fileName.substring(dotIndex + 1).toLowerCase();
-        }
-
-        Map<String, String> mimeMap = Map.ofEntries(
-                Map.entry("pdf", "application/pdf"),
-                Map.entry("doc", "application/msword"),
-                Map.entry("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
-                Map.entry("xls", "application/vnd.ms-excel"),
-                Map.entry("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
-                Map.entry("txt", "text/plain"),
-                Map.entry("jpeg", "image/jpeg"),
-                Map.entry("jpg", "image/jpeg"),
-                Map.entry("png", "image/png"),
-                Map.entry("gif", "image/gif"),
-                Map.entry("webp", "image/webp")
-        );
-
-        return mimeMap.getOrDefault(extension, "application/octet-stream");
-    }
-
     private TaskAttachmentResponseDTO mapToDTO(TaskAttachment attachment) {
         return TaskAttachmentResponseDTO.builder()
                 .id(attachment.getId())
                 .fileName(attachment.getFileName())
                 .contentType(attachment.getContentType())
                 .fileSize(attachment.getFileSize())
-                .downloadUrl(generateDownloadUrl(attachment.getObjectKey()))
+                .downloadUrl(s3StorageService.generatePresignedDownloadUrl(
+                        taskBucket, attachment.getObjectKey(), URL_DURATION))
                 .uploadedByName(attachment.getUploadedBy().getUsername())
                 .createdAt(attachment.getCreatedAt())
                 .build();

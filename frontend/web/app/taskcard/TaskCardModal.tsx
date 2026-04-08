@@ -12,6 +12,7 @@ interface TaskData {
   id: number;
   title: string;
   description: string;
+  projectId: number;
   projectName: string;
   status: string;
   priority: string;
@@ -56,6 +57,12 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
     fetchTaskData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const updateTask = async (updates: Partial<{
     title: string;
@@ -131,9 +138,11 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                 subtasks={taskData.subtasks || []}
                 dependencies={taskData.dependencies || []}
                 taskId={taskData.id}
+                projectId={taskData.projectId}
                 onUpdateTitle={(title) => updateTask({ title })}
                 onUpdateDescription={(description) => updateTask({ description })}
                 onSubtaskAdded={fetchTaskData}
+                onDependencyChanged={fetchTaskData}
               />
               <TaskSidebar
                 taskId={taskData.id}
@@ -152,6 +161,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                 onUpdateStatus={(status) => updateTask({ status })}
                 onUpdatePriority={(priority) => updateTask({ priority })}
                 onUpdateStoryPoint={(storyPoint) => updateTask({ storyPoint })}
+                onUpdateDueDate={(dueDate) => updateTask({ dueDate })}
                 onUnassign={async () => {
                   try {
                     await api.delete(`/api/tasks/${taskData.id}/assignee`);

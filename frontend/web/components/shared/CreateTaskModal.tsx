@@ -17,6 +17,7 @@ export interface CreateTaskData {
   assigneeId?: number;
   storyPoint: number;
   labelIds?: number[];
+  dueDate?: string;
 }
 
 interface CreateTaskModalProps {
@@ -24,6 +25,7 @@ interface CreateTaskModalProps {
   onClose: () => void;
   onCreateTask: (taskData: CreateTaskData) => Promise<void>;
   projectId: number;
+  initialDueDate?: string;
 }
 
 const PRIORITY_OPTIONS = [
@@ -40,11 +42,13 @@ export default function CreateTaskModal({
   onClose,
   onCreateTask,
   projectId,
+  initialDueDate,
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
   const [assignee, setAssignee] = useState<number | ''>('');
   const [storyPoint, setStoryPoint] = useState(0);
+  const [dueDate, setDueDate] = useState(initialDueDate ?? '');
   const [selectedLabels, setSelectedLabels] = useState<Label[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
@@ -86,6 +90,7 @@ export default function CreateTaskModal({
     setPriority('MEDIUM');
     setAssignee('');
     setStoryPoint(0);
+    setDueDate(initialDueDate ?? '');
     setSelectedLabels([]);
     setError(null);
   };
@@ -107,6 +112,7 @@ export default function CreateTaskModal({
         assigneeId: assignee || undefined,
         storyPoint,
         labelIds: selectedLabels.map((l) => l.id),
+        dueDate: dueDate || undefined,
       });
       resetForm();
       onClose();
@@ -222,6 +228,17 @@ export default function CreateTaskModal({
               projectId={projectId}
               selectedLabels={selectedLabels}
               onChange={setSelectedLabels}
+            />
+          </div>
+
+          {/* Due Date */}
+          <div className="space-y-2">
+            <label className="text-[13px] font-bold text-[#344054]">DUE DATE (optional)</label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#EAECF0] rounded-xl text-sm text-[#475467] focus:ring-2 focus:ring-[#155DFC]/20 focus:outline-none transition-all"
             />
           </div>
 
