@@ -47,8 +47,6 @@ export default function ResetPasswordPage() {
       setConfirmPassword('');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error("Reset password error:", err);
-      
       let errorMessage = 'Failed to reset password. Please try again.';
       const errorData = err.response?.data;
       
