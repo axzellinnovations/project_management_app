@@ -1,18 +1,21 @@
 package com.planora.backend.service;
 
-import com.planora.backend.dto.NotificationResponseDTO;
-import com.planora.backend.model.Notification;
-import com.planora.backend.model.User;
-import com.planora.backend.repository.NotificationRepository;
-import jakarta.persistence.EntityNotFoundException;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Locale;
+import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.stream.Collectors;
+import com.planora.backend.dto.NotificationResponseDTO;
+import com.planora.backend.model.Notification;
+import com.planora.backend.model.User;
+import com.planora.backend.repository.NotificationRepository;
+
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 public class NotificationService {
@@ -46,8 +49,10 @@ public class NotificationService {
                 .isRead(notification.isRead())
                 .createdAt(notification.getCreatedAt())
                 .build();
+
+        String destinationUsername = recipient.getUsername().toLowerCase(Locale.ROOT);
         messagingTemplate.convertAndSendToUser(
-                recipient.getUsername(),
+                destinationUsername,
                 "/queue/notifications",
                 dto
         );

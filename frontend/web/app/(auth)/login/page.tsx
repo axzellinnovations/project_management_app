@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/axios';
+import { saveRefreshToken, saveToken } from '@/lib/auth';
 
 
 export default function LoginPage() {
@@ -31,9 +32,9 @@ export default function LoginPage() {
             if (response.data.success) {
                 // Store tokens
                 console.log("Login successful:", response.data);
-                localStorage.setItem('token', response.data.token);
+                saveToken(response.data.token);
                 if (response.data.refreshToken) {
-                    localStorage.setItem('refreshToken', response.data.refreshToken);
+                    saveRefreshToken(response.data.refreshToken);
                 }
 
                 // 3. Redirect to dashboard

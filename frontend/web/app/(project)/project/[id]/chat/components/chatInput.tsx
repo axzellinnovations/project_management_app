@@ -130,7 +130,7 @@ export const ChatInput = ({
 
   return (
     <div
-      className="relative border-t border-gray-100/80 bg-white/95 px-3 sm:px-4 py-3 sticky bottom-0 inset-x-0 z-30 shadow-[0_-6px_18px_rgba(0,0,0,0.04)] supports-[backdrop-filter]:backdrop-blur"
+      className="relative flex-shrink-0 border-t border-gray-100/80 bg-white/95 px-3 sm:px-4 py-3 z-30 shadow-[0_-6px_18px_rgba(0,0,0,0.04)] supports-[backdrop-filter]:backdrop-blur"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       {/* Mention dropdown */}

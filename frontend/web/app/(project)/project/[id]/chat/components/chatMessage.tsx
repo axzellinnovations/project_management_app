@@ -215,8 +215,7 @@ export const ChatMessages = ({
   return (
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 sm:py-4 space-y-0.5 scroll-smooth overscroll-y-contain"
-      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)' }}
+      className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-3 sm:py-4 space-y-0.5 scroll-smooth overscroll-y-contain"
     >
       <AnimatePresence initial={false}>
         {visibleMessages.map((msg, idx) => {

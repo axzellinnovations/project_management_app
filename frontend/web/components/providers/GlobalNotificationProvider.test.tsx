@@ -6,6 +6,7 @@ import {
 import type { Notification } from '@/services/notifications-service';
 import * as notificationsApi from '@/services/notifications-service';
 import { toast } from '@/components/ui/Toast';
+import { AUTH_TOKEN_CHANGED_EVENT } from '@/lib/auth';
 
 let currentPathname = '/dashboard';
 
@@ -43,19 +44,12 @@ jest.mock('@/services/notifications-service', () => ({
   markAllNotificationsRead: jest.fn(),
 }));
 
-jest.mock('@/lib/auth', () => ({
-  getValidToken: jest.fn(),
-}));
-
 jest.mock('@/components/ui/Toast', () => ({
   toast: jest.fn(),
 }));
 
-import { getValidToken } from '@/lib/auth';
-
 const mockedApi = notificationsApi as jest.Mocked<typeof notificationsApi>;
 const mockedToast = toast as jest.MockedFunction<typeof toast>;
-const mockedGetValidToken = getValidToken as jest.Mock;
 
 const buildNotification = (
   id: number,
@@ -95,7 +89,7 @@ describe('GlobalNotificationProvider', () => {
     notificationHandler = null;
     currentPathname = '/dashboard';
     window.localStorage.clear();
-    mockedGetValidToken.mockReturnValue('fake-token');
+    window.localStorage.setItem('token', 'fake-token');
 
     mockedApi.fetchNotifications.mockResolvedValue([]);
     mockedApi.fetchUnreadCount.mockResolvedValue(0);
@@ -127,6 +121,33 @@ describe('GlobalNotificationProvider', () => {
       expect.any(Function)
     );
     expect(stompClient.subscribe).toHaveBeenCalledWith('/user/queue/notifications', expect.any(Function));
+  });
+
+  it('connects when token becomes available after mount', async () => {
+    window.localStorage.removeItem('token');
+
+    render(
+      <GlobalNotificationProvider>
+        <TestConsumer />
+      </GlobalNotificationProvider>
+    );
+
+    await waitFor(() => {
+      expect(stompClient.connect).not.toHaveBeenCalled();
+    });
+
+    act(() => {
+      window.localStorage.setItem('token', 'late-token');
+      window.dispatchEvent(new Event(AUTH_TOKEN_CHANGED_EVENT));
+    });
+
+    await waitFor(() => {
+      expect(stompClient.connect).toHaveBeenCalledWith(
+        { Authorization: 'Bearer late-token' },
+        expect.any(Function),
+        expect.any(Function)
+      );
+    });
   });
 
   it('adds incoming notification, increments unread, and shows toast when user is on another page', async () => {

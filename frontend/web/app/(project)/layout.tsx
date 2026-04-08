@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import SidebarLayout from '@/navBar/SidebarLayout';
 import api from '@/lib/axios';
 
@@ -26,8 +26,10 @@ export default function ProjectLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useParams();
   const searchParams = useSearchParams();
+  const isChatRoute = pathname?.includes('/chat');
 
   // Try to resolve projectId from path params or query params
   const projectId = (params?.projectId || params?.id || searchParams.get('projectId')) as string | undefined;
@@ -71,7 +73,7 @@ export default function ProjectLayout({
 
   return (
     <SidebarLayout>
-      <main className="flex-1 min-h-0 overflow-hidden">
+      <main className={isChatRoute ? 'h-full min-h-0 flex flex-col overflow-hidden' : 'flex-1 min-h-0 overflow-hidden'}>
         {children}
       </main>
     </SidebarLayout>

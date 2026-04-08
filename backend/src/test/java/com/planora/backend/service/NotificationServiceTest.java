@@ -1,19 +1,5 @@
 package com.planora.backend.service;
 
-import com.planora.backend.dto.NotificationResponseDTO;
-import com.planora.backend.model.Notification;
-import com.planora.backend.model.User;
-import com.planora.backend.repository.NotificationRepository;
-import jakarta.persistence.EntityNotFoundException;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
-
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -22,14 +8,29 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+
+import com.planora.backend.dto.NotificationResponseDTO;
+import com.planora.backend.model.Notification;
+import com.planora.backend.model.User;
+import com.planora.backend.repository.NotificationRepository;
+
+import jakarta.persistence.EntityNotFoundException;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
@@ -73,6 +74,25 @@ class NotificationServiceTest {
 
         verify(messagingTemplate).convertAndSendToUser(
                 eq("alice"),
+                eq("/queue/notifications"),
+                any(NotificationResponseDTO.class)
+        );
+    }
+
+    @Test
+    void createNotification_normalizesDestinationUsernameToLowercase() {
+        recipient.setUsername("AliceMixedCase");
+
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> {
+            Notification toSave = invocation.getArgument(0);
+            toSave.setId(102L);
+            return toSave;
+        });
+
+        notificationService.createNotification(recipient, "Realtime alert", "/project/10/chat");
+
+        verify(messagingTemplate).convertAndSendToUser(
+                eq("alicemixedcase"),
                 eq("/queue/notifications"),
                 any(NotificationResponseDTO.class)
         );

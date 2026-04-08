@@ -5,10 +5,18 @@ export interface User {
     userId?: number;
 }
 
+export const AUTH_TOKEN_CHANGED_EVENT = 'planora-auth-token-changed';
+
 interface JwtPayload {
     sub?: string;
     username?: string;
     exp?: number;
+}
+
+function emitAuthTokenChanged(): void {
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event(AUTH_TOKEN_CHANGED_EVENT));
+    }
 }
 
 export function getUserFromToken(): User | null {
@@ -86,6 +94,7 @@ export function getUserFromToken(): User | null {
 export function saveToken(token: string): void {
     if (typeof window !== 'undefined') {
         localStorage.setItem('token', token);
+        emitAuthTokenChanged();
     }
 }
 
@@ -105,6 +114,7 @@ export function clearTokens(): void {
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('userProfile');
+        emitAuthTokenChanged();
     }
 }
 
