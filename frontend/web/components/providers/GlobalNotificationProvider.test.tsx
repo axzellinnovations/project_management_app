@@ -42,6 +42,8 @@ jest.mock('@/services/notifications-service', () => ({
   fetchUnreadCount: jest.fn(),
   markNotificationRead: jest.fn(),
   markAllNotificationsRead: jest.fn(),
+  deleteNotification: jest.fn(),
+  deleteAllNotifications: jest.fn(),
 }));
 
 jest.mock('@/components/ui/Toast', () => ({
@@ -66,7 +68,14 @@ const buildNotification = (
 });
 
 function TestConsumer() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useGlobalNotifications();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    deleteNotificationById,
+    deleteAllNotifications,
+  } = useGlobalNotifications();
 
   return (
     <div>
@@ -79,6 +88,8 @@ function TestConsumer() {
       </ul>
       <button onClick={() => void markAsRead(1)}>mark-one</button>
       <button onClick={() => void markAllAsRead()}>mark-all</button>
+      <button onClick={() => void deleteNotificationById(1)}>delete-one</button>
+      <button onClick={() => void deleteAllNotifications()}>delete-all</button>
     </div>
   );
 }
@@ -95,6 +106,8 @@ describe('GlobalNotificationProvider', () => {
     mockedApi.fetchUnreadCount.mockResolvedValue(0);
     mockedApi.markNotificationRead.mockResolvedValue(undefined);
     mockedApi.markAllNotificationsRead.mockResolvedValue(undefined);
+    mockedApi.deleteNotification.mockResolvedValue(undefined);
+    mockedApi.deleteAllNotifications.mockResolvedValue([]);
   });
 
   it('hydrates initial notifications and unread count then subscribes for realtime updates', async () => {
@@ -254,6 +267,66 @@ describe('GlobalNotificationProvider', () => {
       expect(mockedApi.markAllNotificationsRead).toHaveBeenCalledTimes(1);
       expect(screen.getByText('2:read')).toBeInTheDocument();
       expect(screen.getByTestId('unread-count')).toHaveTextContent('0');
+    });
+  });
+
+  it('supports deleting one notification via context', async () => {
+    mockedApi.fetchNotifications.mockResolvedValue([
+      buildNotification(1, false, '/project/8/chat', 'First'),
+      buildNotification(2, true, '/members/8', 'Second'),
+    ]);
+    mockedApi.fetchUnreadCount.mockResolvedValue(1);
+
+    render(
+      <GlobalNotificationProvider>
+        <TestConsumer />
+      </GlobalNotificationProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('notification-count')).toHaveTextContent('2');
+      expect(screen.getByTestId('unread-count')).toHaveTextContent('1');
+    });
+
+    fireEvent.click(screen.getByText('delete-one'));
+
+    await waitFor(() => {
+      expect(mockedApi.deleteNotification).toHaveBeenCalledWith(1);
+      expect(screen.getByTestId('notification-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('unread-count')).toHaveTextContent('0');
+    });
+  });
+
+  it('supports deleting all notifications via context', async () => {
+    mockedApi.fetchNotifications.mockResolvedValue([
+      buildNotification(1, false, '/project/8/chat', 'First'),
+      buildNotification(2, true, '/members/8', 'Second'),
+      buildNotification(3, false, '/project/8/tasks', 'Third'),
+    ]);
+    mockedApi.fetchUnreadCount.mockResolvedValue(2);
+    mockedApi.deleteAllNotifications.mockResolvedValue([
+      { status: 'fulfilled', value: undefined },
+      { status: 'fulfilled', value: undefined },
+      { status: 'rejected', reason: new Error('Delete failed') },
+    ]);
+
+    render(
+      <GlobalNotificationProvider>
+        <TestConsumer />
+      </GlobalNotificationProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('notification-count')).toHaveTextContent('3');
+    });
+
+    fireEvent.click(screen.getByText('delete-all'));
+
+    await waitFor(() => {
+      expect(mockedApi.deleteAllNotifications).toHaveBeenCalledWith([1, 2, 3]);
+      expect(screen.getByTestId('notification-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('unread-count')).toHaveTextContent('1');
+      expect(screen.getByText('3:unread')).toBeInTheDocument();
     });
   });
 });

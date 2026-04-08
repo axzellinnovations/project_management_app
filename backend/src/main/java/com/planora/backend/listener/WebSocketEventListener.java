@@ -1,5 +1,7 @@
 package com.planora.backend.listener;
 
+import java.time.LocalDateTime;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 import com.planora.backend.controller.ChatController;
+import com.planora.backend.repository.UserRepository;
 import com.planora.backend.service.ChatPresenceService;
 
 @Component
@@ -23,6 +26,9 @@ public class WebSocketEventListener {
 
     @Autowired
     private ChatPresenceService chatPresenceService;
+
+    @Autowired
+    private UserRepository userRepository;
 
     // This method is called whenever a WebSocket connection is disconnected
     @EventListener
@@ -42,6 +48,10 @@ public class WebSocketEventListener {
 
         if (username != null) {
             logger.info("User Disconnected : " + username);
+            userRepository.findByUsernameIgnoreCase(username).ifPresent(user -> {
+                user.setLastActive(LocalDateTime.now());
+                userRepository.save(user);
+            });
             var presenceUpdates = chatPresenceService.markOfflineForSession(sessionId, username);
             presenceUpdates.forEach((projectId, onlineUsers) ->
                     messagingTemplate.convertAndSend(

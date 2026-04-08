@@ -35,6 +35,37 @@ interface ChatSummaries {
   directMessages: DirectMessageSummary[];
 }
 
+interface InboxNavRowProps {
+  collapsed: boolean;
+  active: boolean;
+  unseenCount: number;
+  onClick: () => void;
+}
+
+function InboxNavRow({ collapsed, active, unseenCount, onClick }: InboxNavRowProps) {
+  return (
+    <NavRow
+      icon={
+        <div className="relative">
+          <InboxIcon />
+          {unseenCount > 0 && (
+            <span className="absolute -top-1 -right-1.5 bg-cu-primary text-white text-[9px] font-bold px-1 rounded-full border border-white">
+              {unseenCount > 9 ? '9+' : unseenCount}
+            </span>
+          )}
+        </div>
+      }
+      label="Inbox"
+      collapsed={collapsed}
+      active={active}
+      hasChevron
+      chevronOpen={active}
+      badge={unseenCount}
+      onClick={onClick}
+    />
+  );
+}
+
 /* storage sync helper */
 const subscribeToBrowserStorage = (onChange: () => void) => {
   if (typeof window === 'undefined') return () => {};
@@ -253,12 +284,12 @@ export default function Sidebar() {
     (p.projectKey || '').toLowerCase().includes(recentSearch.toLowerCase())
   );
   
-  const totalUnseen = useMemo(() => {
-    if (!chatSummaries) return 0;
+  const inboxItems = useMemo(() => {
+    if (!chatSummaries) return [];
     return [
       ...(chatSummaries.rooms || []),
-      ...(chatSummaries.directMessages || [])
-    ].reduce((acc, c) => acc + (c.unseenCount || 0), 0);
+      ...(chatSummaries.directMessages || []),
+    ].filter(item => (item.unseenCount || 0) > 0);
   }, [chatSummaries]);
 
 
@@ -329,23 +360,10 @@ export default function Sidebar() {
 
             {/* Inbox row + dropdown */}
             <div ref={inboxRef} className="relative">
-              <NavRow
-                icon={
-                  <div className="relative">
-                    <InboxIcon />
-                    {totalUnseen > 0 && (
-                      <span className="absolute -top-1 -right-1.5 bg-cu-primary text-white text-[9px] font-bold px-1 rounded-full border border-white">
-                        {totalUnseen > 9 ? '9+' : totalUnseen}
-                      </span>
-                    )}
-                  </div>
-                }
-                label="Inbox"
+              <InboxNavRow
                 collapsed={collapsed}
                 active={inboxOpen}
-                hasChevron
-                chevronOpen={inboxOpen}
-                badge={totalUnseen}
+                unseenCount={inboxItems.length}
                 onClick={openInboxDropdown}
               />
             </div>

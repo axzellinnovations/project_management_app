@@ -14,6 +14,8 @@ interface GlobalNotificationContextType {
   unreadCount: number;
   markAsRead: (id: number) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  deleteNotificationById: (id: number) => Promise<void>;
+  deleteAllNotifications: () => Promise<{ deleted: number; failed: number }>;
 }
 
 const GlobalNotificationContext = createContext<GlobalNotificationContextType | undefined>(undefined);
@@ -203,9 +205,52 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     }
   };
 
+  const deleteNotificationById = async (id: number) => {
+    await notificationsApi.deleteNotification(id);
+    setNotifications((prev) => {
+      const next = prev.filter((notif) => notif.id !== id);
+      setUnreadCount(next.filter((notif) => !notif.read).length);
+      return next;
+    });
+  };
+
+  const deleteAllNotifications = async (): Promise<{ deleted: number; failed: number }> => {
+    const ids = notifications.map((notification) => notification.id);
+    if (ids.length === 0) {
+      return { deleted: 0, failed: 0 };
+    }
+
+    const results = await notificationsApi.deleteAllNotifications(ids);
+    const successfulIds = new Set<number>();
+
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        successfulIds.add(ids[index]);
+      }
+    });
+
+    setNotifications((prev) => {
+      const next = prev.filter((notif) => !successfulIds.has(notif.id));
+      setUnreadCount(next.filter((notif) => !notif.read).length);
+      return next;
+    });
+
+    return {
+      deleted: successfulIds.size,
+      failed: ids.length - successfulIds.size,
+    };
+  };
+
   return (
     <GlobalNotificationContext.Provider
-      value={{ notifications, unreadCount, markAsRead, markAllAsRead }}
+      value={{
+        notifications,
+        unreadCount,
+        markAsRead,
+        markAllAsRead,
+        deleteNotificationById,
+        deleteAllNotifications,
+      }}
     >
       {children}
     </GlobalNotificationContext.Provider>
