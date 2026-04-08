@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 /**
@@ -11,19 +11,21 @@ import { useSearchParams } from 'next/navigation';
 export default function PendingVerificationBanner() {
     const searchParams = useSearchParams();
     const [dismissed, setDismissed] = useState(false);
-    const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
-    useEffect(() => {
+    const pendingEmail = useMemo(() => {
         const emailFromUrl = searchParams.get('email');
-        const emailFromStorage = localStorage.getItem('pendingVerificationEmail');
-
-        const email = emailFromUrl || emailFromStorage;
-        if (email) {
-            setPendingEmail(email);
-            // Persist so returning users still see the banner
-            localStorage.setItem('pendingVerificationEmail', email);
-        }
+        const emailFromStorage = typeof window !== 'undefined'
+            ? localStorage.getItem('pendingVerificationEmail')
+            : null;
+        return emailFromUrl || emailFromStorage || null;
     }, [searchParams]);
+
+    // Persist so returning users still see the banner
+    useEffect(() => {
+        if (pendingEmail) {
+            localStorage.setItem('pendingVerificationEmail', pendingEmail);
+        }
+    }, [pendingEmail]);
 
     if (dismissed || !pendingEmail) return null;
 
