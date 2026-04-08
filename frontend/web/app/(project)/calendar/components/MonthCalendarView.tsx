@@ -17,6 +17,7 @@ import {
 interface MonthCalendarViewProps {
   currentDate: Date;
   events: CalendarEventItem[];
+  onDayClick?: (date: Date) => void;
 }
 
 const getEventsForDate = (events: CalendarEventItem[], day: Date) =>
@@ -29,7 +30,7 @@ const getEventsForDate = (events: CalendarEventItem[], day: Date) =>
     return exact ? isSameDay(day, exact) : false;
   });
 
-export default function MonthCalendarView({ currentDate, events }: MonthCalendarViewProps) {
+export default function MonthCalendarView({ currentDate, events, onDayClick }: MonthCalendarViewProps) {
   const [popup, setPopup] = useState<{ event: CalendarEventItem; x: number; y: number } | null>(null);
 
   const handleEventClick = (event: CalendarEventItem, clientX: number, clientY: number) => {
@@ -61,7 +62,8 @@ export default function MonthCalendarView({ currentDate, events }: MonthCalendar
           return (
             <div
               key={`${day.toISOString()}-${idx}`}
-              className="min-h-[130px] border-b border-r border-[#F2F4F7] p-2"
+              className={`min-h-[130px] border-b border-r border-[#F2F4F7] p-2${onDayClick ? ' cursor-pointer hover:bg-[#F9FAFB]' : ''}`}
+              onClick={() => onDayClick?.(day)}
             >
               <div className={`mb-2 text-xs font-semibold ${inCurrentMonth ? 'text-[#101828]' : 'text-[#98A2B3]'}`}>
                 {day.getDate()}

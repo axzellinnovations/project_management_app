@@ -11,9 +11,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Duration;
@@ -49,7 +46,6 @@ public class DocumentService {
     private final TeamMemberRepository teamMemberRepository;
     private final UserRepository userRepository;
     private final S3StorageService s3StorageService;
-    private final S3Client s3Client;
 
     @Value("${aws.s3.dms-bucket}")
     private String dmsBucket;
@@ -67,12 +63,6 @@ public class DocumentService {
         }
 
         String objectKey = buildObjectKey(projectId, folderId, request.getFileName());
-        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(dmsBucket)
-                .key(objectKey)
-                .contentType(request.getContentType())
-                .build();
-
         String uploadUrl = s3StorageService.generatePresignedUploadUrl(dmsBucket, objectKey, request.getContentType(), URL_DURATION);
 
         return DocumentUploadInitResponseDTO.builder()
@@ -146,16 +136,7 @@ public class DocumentService {
         String objectKey = buildObjectKey(projectId, folderId, fileName);
 
         try {
-            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                    .bucket(dmsBucket)
-                    .key(objectKey)
-                    .contentType(resolvedContentType)
-                    .build();
-
-            s3Client.putObject(
-                    putObjectRequest,
-                    RequestBody.fromInputStream(file.getInputStream(), file.getSize())
-            );
+            s3StorageService.putObject(dmsBucket, objectKey, resolvedContentType, file.getInputStream(), file.getSize());
         } catch (Exception e) {
             throw new RuntimeException("Could not upload file to S3 from backend: " + e.getMessage());
         }
@@ -183,13 +164,6 @@ public class DocumentService {
         validateFileRequest(request.getFileName(), request.getContentType(), request.getFileSize());
 
         String objectKey = buildObjectKey(projectId, document.getFolder() != null ? document.getFolder().getId() : null, request.getFileName());
-
-        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(dmsBucket)
-                .key(objectKey)
-                .contentType(request.getContentType())
-                .build();
-
         String uploadUrl = s3StorageService.generatePresignedUploadUrl(dmsBucket, objectKey, request.getContentType(), URL_DURATION);
 
         return DocumentUploadInitResponseDTO.builder()
@@ -280,7 +254,11 @@ public class DocumentService {
             throw new ResourceNotFoundException("Document is deleted");
         }
 
-        s3StorageService.verifyObjectExists(dmsBucket, document.getLatestObjectKey());
+        try {
+            s3StorageService.verifyObjectExists(dmsBucket, document.getLatestObjectKey());
+        } catch (ResourceNotFoundException e) {
+            throw new ResourceNotFoundException("Document file is no longer available in storage. The file may have been deleted externally.");
+        }
         return s3StorageService.generatePresignedDownloadUrl(dmsBucket, document.getLatestObjectKey(), URL_DURATION);
     }
 

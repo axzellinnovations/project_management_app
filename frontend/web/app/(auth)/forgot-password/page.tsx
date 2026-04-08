@@ -27,8 +27,6 @@ export default function ForgotPasswordPage() {
       setEmail('');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error("Forgot password error:", err);
-      
       let errorMessage = 'Failed to process request. Please try again.';
       const errorData = err.response?.data;
       
@@ -101,30 +99,33 @@ export default function ForgotPasswordPage() {
           <form className='space-y-5' onSubmit={handleSubmit}>
             {/* Error Message */}
             {error && (
-              <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              <div id="forgot-error" role="alert" aria-live="polite" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
                 {error}
               </div>
             )}
 
             {/* Success Message */}
             {success && (
-              <div role="alert" className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+              <div role="status" aria-live="polite" className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
                 {success}
               </div>
             )}
 
             {/* Email Input */}
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">
+              <label htmlFor="forgot-email" className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">
                 Email Address
               </label>
               <input
+                id="forgot-email"
                 type="email"
+                autoComplete="email"
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value.toLowerCase())}
                 required
+                aria-describedby={error ? 'forgot-error' : undefined}
               />
             </div>
 

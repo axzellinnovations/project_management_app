@@ -7,6 +7,7 @@ import com.planora.backend.dto.TaskResponseDTO;
 import com.planora.backend.model.UserPrincipal;
 import com.planora.backend.service.TaskActivityService;
 import com.planora.backend.service.TaskService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +20,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/tasks")
-@CrossOrigin(origins = "http://localhost:3000")
 public class TaskController {
 
     @Autowired
@@ -33,7 +33,7 @@ public class TaskController {
 
     @PostMapping
     public ResponseEntity<TaskResponseDTO> createTask(
-            @RequestBody TaskRequestDTO request,
+            @Valid @RequestBody TaskRequestDTO request,
             @AuthenticationPrincipal UserPrincipal currentUser){
         Long currentUserId = currentUser.getUserId();
         TaskResponseDTO task = service.createTask(request, currentUserId);
@@ -185,7 +185,7 @@ public class TaskController {
     @PostMapping("/{taskId}/comments")
     public ResponseEntity<Void> addComment(
             @PathVariable Long taskId,
-            @RequestBody CommentRequestDTO request,
+            @Valid @RequestBody CommentRequestDTO request,
             @AuthenticationPrincipal UserPrincipal currentUser
             ){
         Long currentUserId = currentUser.getUserId();

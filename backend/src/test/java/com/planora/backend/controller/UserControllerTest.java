@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.planora.backend.dto.LoginResponse;
 import com.planora.backend.dto.OtpRequest;
 import com.planora.backend.dto.ResetPasswordRequest;
+import com.planora.backend.dto.UserResponseDTO;
 import com.planora.backend.dto.VerifyRequest;
 import com.planora.backend.model.User;
 import com.planora.backend.service.UserService;
@@ -19,9 +20,11 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -200,5 +203,45 @@ public class UserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").value("new-access-token"))
                 .andExpect(jsonPath("$.refreshToken").value("new-refresh-token"));
+    }
+
+    // FEATURE-4: GET /api/auth/me returns full UserResponseDTO (userId, fullName, verified, presigned URL)
+    @Test
+    @WithMockUser(username = "test@example.com")
+    void testGetCurrentUser_ReturnsFullUserResponseDTO() throws Exception {
+        testUser.setUserId(42L);
+        testUser.setFullName("Test User");
+        testUser.setVerified(true);
+        testUser.setProfilePicUrl(null);
+        when(userService.getUserByEmail(anyString())).thenReturn(testUser);
+        when(userService.generatePresignedUrl(any())).thenReturn(null);
+
+        mockMvc.perform(get("/api/auth/me").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("test@example.com"))
+                .andExpect(jsonPath("$.username").value("testuser"))
+                .andExpect(jsonPath("$.verified").value(true));
+    }
+
+    // BUG-2: GET /api/auth/users/{userId}/photo returns 404 when user has no profile picture
+    @Test
+    @WithMockUser
+    void testGetUserPhoto_NoPicture_Returns404() throws Exception {
+        when(userService.generatePresignedUrlForUser(anyLong())).thenReturn(null);
+
+        mockMvc.perform(get("/api/auth/users/99/photo").with(csrf()))
+                .andExpect(status().isNotFound());
+    }
+
+    // BUG-2: GET /api/auth/users/{userId}/photo returns presigned URL when photo exists
+    @Test
+    @WithMockUser
+    void testGetUserPhoto_WithPicture_ReturnsPresignedUrl() throws Exception {
+        when(userService.generatePresignedUrlForUser(anyLong()))
+                .thenReturn("https://s3.amazonaws.com/bucket/photo.jpg?Signature=abc");
+
+        mockMvc.perform(get("/api/auth/users/1/photo").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url").value("https://s3.amazonaws.com/bucket/photo.jpg?Signature=abc"));
     }
 }

@@ -29,11 +29,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
@@ -396,5 +398,77 @@ class TaskServiceTest {
 
         assertThrows(ForbiddenException.class,
                 () -> taskService.bulkUpdateStatus(List.of(101L, 102L), "DONE", 500L));
+    }
+
+    @Test
+    void updateTask_setsDoneStatus_setsCompletedAt() {
+        Task task = buildTask(1L);
+        task.setStatus("IN_PROGRESS");
+
+        TaskRequestDTO request = new TaskRequestDTO();
+        request.setStatus("DONE");
+
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
+        when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        taskService.updateTask(1L, request, 500L);
+
+        assertNotNull(task.getCompletedAt(), "completedAt should be set when status transitions to DONE");
+    }
+
+    @Test
+    void updateTask_movingFromDone_clearsCompletedAt() {
+        Task task = buildTask(2L);
+        task.setStatus("DONE");
+        task.setCompletedAt(java.time.LocalDateTime.now().minusDays(1));
+
+        TaskRequestDTO request = new TaskRequestDTO();
+        request.setStatus("IN_PROGRESS");
+
+        when(taskRepository.findById(2L)).thenReturn(Optional.of(task));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
+        when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        taskService.updateTask(2L, request, 500L);
+
+        assertNull(task.getCompletedAt(), "completedAt should be cleared when moving away from DONE");
+    }
+
+    @Test
+    void bulkUpdateStatus_doneStatus_setsCompletedAt() {
+        Task task1 = buildTask(10L);
+        task1.setStatus("TODO");
+
+        when(taskRepository.findAllById(List.of(10L))).thenReturn(List.of(task1));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
+        when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
+        when(taskRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        taskService.bulkUpdateStatus(List.of(10L), "DONE", 500L);
+
+        assertNotNull(task1.getCompletedAt(), "completedAt should be set when bulk status transitions to DONE");
+    }
+
+    @Test
+    void bulkUpdateStatus_doneStatus_notifiesAssignee() {
+        Task task1 = buildTask(11L);
+        task1.setStatus("TODO");
+
+        when(taskRepository.findAllById(List.of(11L))).thenReturn(List.of(task1));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
+        when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
+        when(userRepository.findAllById(any())).thenReturn(List.of(assigneeUser));
+        when(taskRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        taskService.bulkUpdateStatus(List.of(11L), "DONE", 500L);
+
+        verify(notificationService).createNotification(
+                eq(assigneeUser),
+                contains("marked"),
+                contains("/taskcard?taskId=11")
+        );
     }
 }
