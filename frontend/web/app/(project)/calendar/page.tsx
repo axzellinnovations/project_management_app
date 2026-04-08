@@ -9,6 +9,7 @@ import AgendaCalendarView from './components/AgendaCalendarView';
 import { fetchCalendarEvents } from './api';
 import type { CalendarEventItem, CalendarFilters, CalendarView } from './types';
 import { addDays, addMonths, formatMonthLabel, formatWeekLabel } from './utils/date';
+import CreateTaskModal, { type CreateTaskData } from '@/components/shared/CreateTaskModal';
 
 const DEFAULT_FILTERS: CalendarFilters = {
   search: '',
@@ -88,26 +89,30 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [filters, setFilters] = useState<CalendarFilters>(DEFAULT_FILTERS);
 
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [prefilledDate, setPrefilledDate] = useState<string | undefined>(undefined);
+
+  const loadEvents = async () => {
+    if (!projectId) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await fetchCalendarEvents(projectId);
+      setEvents(result);
+    } catch {
+      setError('Failed to load calendar events.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!projectId) {
       setError('No project selected.');
       return;
     }
-
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await fetchCalendarEvents(projectId);
-        setEvents(result);
-      } catch {
-        setError('Failed to load calendar events.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void load();
+    void loadEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   const assigneeOptions = useMemo(() => {
@@ -176,6 +181,30 @@ export default function CalendarPage() {
 
   const handleToday = () => setCurrentDate(new Date());
 
+  const handleDayClick = (date: Date) => {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    setPrefilledDate(`${yyyy}-${mm}-${dd}`);
+    setShowCreateModal(true);
+  };
+
+  const handleCreateTask = async (data: CreateTaskData) => {
+    if (!projectId) return;
+    await import('@/lib/axios').then(({ default: api }) =>
+      api.post('/api/tasks', {
+        projectId: parseInt(projectId, 10),
+        title: data.title,
+        priority: data.priority,
+        storyPoint: data.storyPoint,
+        assigneeId: data.assigneeId,
+        labelIds: data.labelIds,
+        dueDate: data.dueDate,
+      })
+    );
+    void loadEvents();
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -207,10 +236,20 @@ export default function CalendarPage() {
 
       {!loading && !error && (
         <>
-          {view === 'month' && <MonthCalendarView currentDate={currentDate} events={filteredEvents} />}
-          {view === 'week' && <WeekCalendarView currentDate={currentDate} events={filteredEvents} />}
+          {view === 'month' && <MonthCalendarView currentDate={currentDate} events={filteredEvents} onDayClick={handleDayClick} />}
+          {view === 'week' && <WeekCalendarView currentDate={currentDate} events={filteredEvents} onDayClick={handleDayClick} />}
           {view === 'agenda' && <AgendaCalendarView currentDate={currentDate} events={filteredEvents} />}
         </>
+      )}
+
+      {showCreateModal && projectId && (
+        <CreateTaskModal
+          isOpen={showCreateModal}
+          onClose={() => { setShowCreateModal(false); setPrefilledDate(undefined); }}
+          onCreateTask={handleCreateTask}
+          projectId={parseInt(projectId, 10)}
+          initialDueDate={prefilledDate}
+        />
       )}
     </div>
   );
