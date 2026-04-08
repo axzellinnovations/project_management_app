@@ -235,4 +235,40 @@ public class UserServiceTest {
 
         assertFalse(result);
     }
+
+    // BUG-1: UserPrincipal.isEnabled() must reflect the user's verified status
+    @Test
+    void testUserPrincipal_IsEnabled_ReflectsVerifiedStatus() {
+        com.planora.backend.model.UserPrincipal principal =
+                new com.planora.backend.model.UserPrincipal(testUser);
+
+        testUser.setVerified(false);
+        assertFalse(principal.isEnabled(), "isEnabled() should be false for unverified users");
+
+        testUser.setVerified(true);
+        assertTrue(principal.isEnabled(), "isEnabled() should be true for verified users");
+    }
+
+    // BUG-2: generatePresignedUrlForUser returns null for a user with no profile picture
+    @Test
+    void testGeneratePresignedUrlForUser_NullProfilePic_ReturnsNull() {
+        testUser.setProfilePicUrl(null);
+        when(userRepository.findById(1L)).thenReturn(java.util.Optional.of(testUser));
+
+        String result = userService.generatePresignedUrlForUser(1L);
+
+        assertNull(result);
+        verify(s3Presigner, never()).presignGetObject(
+                any(software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest.class));
+    }
+
+    // BUG-2: generatePresignedUrlForUser returns null for a non-existent user
+    @Test
+    void testGeneratePresignedUrlForUser_NonExistentUser_ReturnsNull() {
+        when(userRepository.findById(999L)).thenReturn(java.util.Optional.empty());
+
+        String result = userService.generatePresignedUrlForUser(999L);
+
+        assertNull(result);
+    }
 }

@@ -3,10 +3,25 @@
 import Image from 'next/image';
 import { useProfileData } from './useProfileData';
 
+// NTH-4: Format a UTC ISO datetime string as a human-friendly relative time.
+function formatRelativeTime(iso: string | null): string {
+    if (!iso) return 'Never';
+    const date = new Date(iso);
+    const diffMs = Date.now() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60_000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+}
+
 export default function ProfilePage() {
     const {
         username, email, fullName, setFullName,
         resolvedProfilePicUrl, imageKey,
+        lastActive,
         isLoading, isSavingName, isUploadingPhoto,
         pwStep, setPwStep, isSendingOtp,
         otp, setOtp, newPassword, setNewPassword,
@@ -67,7 +82,7 @@ export default function ProfilePage() {
                                 disabled={isUploadingPhoto}
                             />
                         </label>
-                        <span className="text-xs text-[#6A7282]">Accepted: JPG, PNG, GIF, WebP (max 5MB)</span>
+                        <span className="text-xs text-[#6A7282]">Accepted: JPG, PNG, GIF, WebP (max 25MB)</span>
                     </div>
                 </div>
 
@@ -90,6 +105,14 @@ export default function ProfilePage() {
                             disabled
                             className="w-full rounded-lg border border-[#D0D5DD] bg-[#F9FAFB] text-[#667085] px-4 py-2.5"
                         />
+                    </div>
+
+                    {/* NTH-4: Last active */}
+                    <div>
+                        <label className="block text-sm font-medium text-[#344054] mb-1.5">Last active</label>
+                        <p className="text-sm text-[#667085] px-4 py-2.5 rounded-lg border border-[#D0D5DD] bg-[#F9FAFB]">
+                            {formatRelativeTime(lastActive)}
+                        </p>
                     </div>
 
                     <div>
