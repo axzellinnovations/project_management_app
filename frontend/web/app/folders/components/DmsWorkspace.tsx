@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { getUserFromToken } from '@/lib/auth';
+import { useSearchParams } from 'next/navigation';
 import {
     createFolder,
     deleteFolder,
@@ -12,13 +12,14 @@ import {
     getDocumentVersions,
     listDocuments,
     listFolders,
+    listUserProjects,
     permanentDeleteDocument,
     restoreDocument,
     softDeleteDocument,
     updateDocumentMetadata,
     uploadDocument,
 } from '@/lib/dms';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Search, X } from 'lucide-react';
 import DmsHeader from '@/app/folders/components/DmsHeader';
 import DmsSidebar from '@/app/folders/components/DmsSidebar';
 import DmsDocumentsTable from '@/app/folders/components/DmsDocumentsTable';
@@ -32,7 +33,13 @@ interface DmsWorkspaceProps {
 const FAVORITES_KEY = 'dmsFavoriteDocumentIds';
 
 export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
-    const [projectId, setProjectId] = useState<number | null>(null);
+    const searchParams = useSearchParams();
+    const [projectId, setProjectId] = useState<number | null>(() => {
+        const qp = searchParams.get('projectId');
+        const stored = typeof window !== 'undefined' ? localStorage.getItem('currentProjectId') : null;
+        const id = Number(qp || stored);
+        return Number.isFinite(id) && id > 0 ? id : null;
+    });
     const [folders, setFolders] = useState<DocumentFolder[]>([]);
     const [documents, setDocuments] = useState<DocumentItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -47,33 +54,12 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isUploading, setIsUploading] = useState(false);
+    const [isDragOver, setIsDragOver] = useState(false);
+    const [sharedDocuments, setSharedDocuments] = useState<DocumentItem[]>([]);
+    const [projectNameMap, setProjectNameMap] = useState<Record<number, string>>({});
+    const [sharedProjectsNote, setSharedProjectsNote] = useState<string | null>(null);
 
     const isTrashMode = mode === 'trash';
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-
-        const query = new URLSearchParams(window.location.search);
-        const queryProjectId = query.get('projectId');
-        const storedProjectId = localStorage.getItem('currentProjectId');
-        const resolved = queryProjectId || storedProjectId;
-
-        if (!resolved) {
-            setError('No project selected. Open a project first from Dashboard and then return to Folders.');
-            setLoading(false);
-            return;
-        }
-
-        const parsed = Number(resolved);
-        if (!Number.isFinite(parsed)) {
-            setError('Invalid project ID.');
-            setLoading(false);
-            return;
-        }
-
-        setProjectId(parsed);
-        localStorage.setItem('currentProjectId', String(parsed));
-    }, []);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -114,12 +100,38 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
         void load();
     }, [projectId, isTrashMode]);
 
-    const filteredDocuments = useMemo(() => {
-        const currentUser = getUserFromToken();
-        const now = Date.now();
-        const recentThresholdMs = 14 * 24 * 60 * 60 * 1000;
+    // FEATURE-3: load documents from all user projects in shared mode
+    useEffect(() => {
+        if (mode !== 'shared' || !projectId) return;
 
-        return documents.filter((doc) => {
+        const loadShared = async () => {
+            try {
+                const allProjects = await listUserProjects();
+                const topProjects = allProjects.slice(0, 5);
+                const nameMap: Record<number, string> = {};
+                for (const p of topProjects) nameMap[p.id] = p.name;
+                setProjectNameMap(nameMap);
+                if (allProjects.length > 5) {
+                    setSharedProjectsNote(`Showing documents from 5 of your ${allProjects.length} projects.`);
+                } else {
+                    setSharedProjectsNote(null);
+                }
+                const docArrays = await Promise.all(
+                    topProjects.map((p) => listDocuments(p.id, undefined, false).catch(() => []))
+                );
+                setSharedDocuments(docArrays.flat());
+            } catch {
+                setSharedDocuments([]);
+            }
+        };
+
+        void loadShared();
+    }, [mode, projectId]);
+
+    const filteredDocuments = useMemo(() => {
+        const sourceDocuments = mode === 'shared' ? sharedDocuments : documents;
+
+        let result = sourceDocuments.filter((doc) => {
             if (isTrashMode && doc.status !== 'SOFT_DELETED') {
                 return false;
             }
@@ -128,19 +140,11 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
                 return false;
             }
 
-            if (selectedFolderId && doc.folderId !== selectedFolderId) {
-                return false;
-            }
-
-            if (mode === 'recent' && now - new Date(doc.createdAt).getTime() > recentThresholdMs) {
+            if (mode !== 'shared' && selectedFolderId && doc.folderId !== selectedFolderId) {
                 return false;
             }
 
             if (mode === 'favorites' && !favoriteIds.includes(doc.id)) {
-                return false;
-            }
-
-            if (mode === 'shared' && (!currentUser?.username || doc.uploadedByName === currentUser.username)) {
                 return false;
             }
 
@@ -156,7 +160,16 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
 
             return true;
         });
-    }, [documents, favoriteIds, isTrashMode, mode, selectedFolderId, searchQuery]);
+
+        // FEATURE-2: recent mode — sort by updatedAt DESC and cap at 20
+        if (mode === 'recent') {
+            result = [...result].sort(
+                (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+            ).slice(0, 20);
+        }
+
+        return result;
+    }, [documents, sharedDocuments, favoriteIds, isTrashMode, mode, selectedFolderId, searchQuery]);
 
     const title = useMemo(() => {
         if (mode === 'recent') return 'Recent';
@@ -196,7 +209,13 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
     const onDeleteFolder = async (folder: DocumentFolder) => {
         if (!projectId || isTrashMode) return;
 
-        const ok = window.confirm(`Delete folder "${folder.name}" and all its contents?\n\nAll documents inside will be moved to Trash. This cannot be undone.`);
+        const activeCount = documents.filter((d) => d.folderId === folder.id && d.status === 'ACTIVE').length;
+        const message =
+            activeCount > 0
+                ? `Delete folder "${folder.name}"?\n\nThis folder contains ${activeCount} document(s). Deleting this folder will also move all documents inside it to Trash.`
+                : `Are you sure you want to delete folder "${folder.name}"?`;
+
+        const ok = window.confirm(message);
         if (!ok) return;
 
         try {
@@ -229,6 +248,30 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
         } catch (err) {
             const message = (err as { message?: string })?.message;
             setError(message && message.trim().length > 0 ? message : 'Upload failed.');
+        } finally {
+            setBusy(false);
+            setIsUploading(false);
+            setUploadProgress(0);
+        }
+    };
+
+    // NTH-1: drag-and-drop upload
+    const onDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        setIsDragOver(false);
+        if (!projectId) return;
+        const file = event.dataTransfer.files?.[0];
+        if (!file) return;
+
+        try {
+            setBusy(true);
+            setIsUploading(true);
+            setUploadProgress(0);
+            await uploadDocument(projectId, file, selectedFolderId, (percent) => setUploadProgress(percent));
+            await refresh();
+        } catch (err) {
+            const message = (err as { message?: string })?.message;
+            setError(message && message.trim().length > 0 ? message : 'Drop upload failed.');
         } finally {
             setBusy(false);
             setIsUploading(false);
@@ -377,7 +420,19 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
 
     return (
         <>
-            <div className="w-full max-w-[1400px] mx-auto min-h-[calc(100vh-160px)] rounded-xl border border-[#E6E8EC] bg-[#FCFCFD] shadow-sm overflow-hidden">
+            <div
+                className="w-full max-w-[1400px] mx-auto min-h-[calc(100vh-160px)] rounded-xl border border-[#E6E8EC] bg-[#FCFCFD] shadow-sm overflow-hidden relative"
+                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={onDrop}
+            >
+                {/* NTH-1: drag-drop overlay */}
+                {isDragOver && (
+                    <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#EEF4FF]/80 border-2 border-dashed border-[#155DFC] rounded-xl pointer-events-none">
+                        <p className="text-lg font-semibold text-[#155DFC]">Drop file to upload</p>
+                    </div>
+                )}
+
                 <DmsHeader title={title} isTrashMode={isTrashMode} onUpload={onUpload} />
 
                 <div className="grid grid-cols-12 min-h-[70vh]">
@@ -400,14 +455,24 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
 
                     <section className="col-span-12 lg:col-span-9 xl:col-span-10 bg-white">
                         <div className="px-5 py-3 border-b border-[#E6E8EC] flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div className="relative w-full lg:max-w-[420px]">
+                        <div className="relative w-full lg:max-w-[420px]">
                                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3]" />
                                 <input
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     placeholder="Search by name, owner, or type"
-                                    className="w-full pl-9 pr-3 py-2 text-sm border border-[#D0D5DD] rounded-md focus:outline-none focus:ring-2 focus:ring-[#B2CCFF]"
+                                    className={`w-full pl-9 ${searchQuery ? 'pr-8' : 'pr-3'} py-2 text-sm border border-[#D0D5DD] rounded-md focus:outline-none focus:ring-2 focus:ring-[#B2CCFF]`}
                                 />
+                                {/* NTH-3: clear search button */}
+                                {searchQuery && (
+                                    <button
+                                        onClick={() => setSearchQuery('')}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[#98A2B3] hover:text-[#344054]"
+                                        title="Clear search"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                )}
                             </div>
                             <div className="inline-flex rounded-md border border-[#D0D5DD] overflow-hidden text-xs">
                                 <span className="px-3 py-2 bg-[#F9FAFB] text-[#667085]">Mode</span>
@@ -421,10 +486,19 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
                             </div>
                         )}
 
+                        {/* FEATURE-3: note when shared view is capped */}
+                        {mode === 'shared' && sharedProjectsNote && (
+                            <div className="mx-5 mt-3 p-2 text-xs text-[#667085] bg-[#F9FAFB] border border-[#E6E8EC] rounded-md">
+                                {sharedProjectsNote}
+                            </div>
+                        )}
+
                         <DmsDocumentsTable
                             filteredDocuments={filteredDocuments}
                             favoriteIds={favoriteIds}
                             isTrashMode={isTrashMode}
+                            mode={mode}
+                            projectNameMap={projectNameMap}
                             onToggleFavorite={onToggleFavorite}
                             onView={onView}
                             onDownload={onDownload}

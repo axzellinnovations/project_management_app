@@ -160,6 +160,16 @@ export async function getDocumentDownloadUrl(projectId: number, documentId: numb
     return response.data.downloadUrl;
 }
 
+export interface UserProject {
+    id: number;
+    name: string;
+}
+
+export async function listUserProjects(): Promise<UserProject[]> {
+    const response = await api.get<UserProject[]>('/api/projects');
+    return response.data;
+}
+
 async function initUpload(projectId: number, request: UploadInitRequest): Promise<UploadInitResponse> {
     try {
         const response = await api.post<UploadInitResponse>(`/api/projects/${projectId}/documents/upload/init`, request);
