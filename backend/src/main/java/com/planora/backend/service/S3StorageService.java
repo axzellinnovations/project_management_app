@@ -3,12 +3,14 @@ package com.planora.backend.service;
 import com.planora.backend.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
+import java.io.InputStream;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
@@ -119,5 +121,20 @@ public class S3StorageService {
         if (fileSize == null || fileSize <= 0 || fileSize > maxBytes) {
             throw new RuntimeException("fileSize must be between 1 byte and " + (maxBytes / (1024 * 1024)) + "MB");
         }
+    }
+
+    /**
+     * Upload raw bytes from an InputStream directly to S3 (used by the back-end proxy
+     * upload path where the client sends the file to the server rather than directly
+     * to S3 via a presigned URL).
+     */
+    public void putObject(String bucket, String objectKey, String contentType,
+                          InputStream inputStream, long contentLength) {
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(objectKey)
+                .contentType(contentType)
+                .build();
+        s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(inputStream, contentLength));
     }
 }
