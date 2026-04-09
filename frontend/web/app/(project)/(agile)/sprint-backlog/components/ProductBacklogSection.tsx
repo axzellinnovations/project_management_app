@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
+  CornerDownLeft,
   Rocket, Trash2,
 } from 'lucide-react';
 import CreateTaskModal, { type CreateTaskData } from '@/components/shared/CreateTaskModal';
@@ -28,12 +29,14 @@ interface ProductBacklogSectionProps {
   onStoryPointsChange: (id: number, points: number) => void;
   onCreateTask: (data: CreateTaskData) => Promise<void>;
   onDeleteTask?: (id: number) => void;
-  onCreateSprint: (name: string) => void;
+  onCreateSprint: () => void;
   onDropTask: (taskId: number) => void;
   onAssignTask: (taskId: number, assigneeName: string, assigneePhotoUrl: string | null) => void;
   onStatusChange: (taskId: number, status: string) => void;
   externalShowCreateModal?: boolean;
   onCloseCreateModal?: () => void;
+  projectLabels?: Array<{ id: number; name: string; color?: string }>;
+  onCreateLabel?: (name: string) => Promise<{ id: number; name: string; color?: string }>;
 }
 
 
@@ -41,8 +44,8 @@ interface ProductBacklogSectionProps {
 export default function ProductBacklogSection({
   tasks,
   projectId,
-  projectKey,
-  sprintCount,
+  projectKey: _projectKey,
+  sprintCount: _sprintCount,
   currentUserRole,
   onToggleTask: _onToggleTask,
   onStoryPointsChange,
@@ -54,6 +57,8 @@ export default function ProductBacklogSection({
   onStatusChange,
   externalShowCreateModal,
   onCloseCreateModal,
+  projectLabels = [],
+  onCreateLabel,
 }: ProductBacklogSectionProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [showCreateModalInternal, setShowCreateModalInternal] = useState(false);
@@ -77,7 +82,10 @@ export default function ProductBacklogSection({
   const [taskToDeleteId, setTaskToDeleteId] = useState<number | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMemberInfo[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [labelCache, setLabelCache] = useState<Record<number, Array<{ id: number; name: string; color?: string }>>>({});
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [showCreateTaskBox, setShowCreateTaskBox] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
 
   const canDeleteTask = currentUserRole !== 'VIEWER';
 
@@ -137,11 +145,33 @@ export default function ProductBacklogSection({
     }
   };
 
-  const totals = useMemo(() => {
-    const total = tasks.reduce((sum, task) => sum + (task.storyPoints ?? 0), 0);
-    const inProgress = tasks.filter(t => t.status === 'IN_PROGRESS' || t.status === 'IN_REVIEW').length;
-    const done = tasks.filter(t => t.status === 'DONE').length;
-    return { total, inProgress, done, count: tasks.length };  }, [tasks]);
+  const handleAddLabel = async (taskId: number, labelId: number) => {
+    try {
+      await api.post(`/api/tasks/${taskId}/label/${labelId}`);
+      const label = projectLabels.find((l) => l.id === labelId);
+      if (label) {
+        setLabelCache((prev) => {
+          const existing = prev[taskId] ?? tasks.find((t) => t.id === taskId)?.labels ?? [];
+          if (existing.some((l) => l.id === labelId)) return prev;
+          return { ...prev, [taskId]: [...existing, label] };
+        });
+      }
+    } catch {
+      // silent
+    }
+  };
+
+  const handleRemoveLabel = async (taskId: number, labelId: number) => {
+    try {
+      await api.delete(`/api/tasks/${taskId}/label/${labelId}`);
+      setLabelCache((prev) => {
+        const existing = prev[taskId] ?? tasks.find((t) => t.id === taskId)?.labels ?? [];
+        return { ...prev, [taskId]: existing.filter((l) => l.id !== labelId) };
+      });
+    } catch {
+      // silent
+    }
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -150,6 +180,13 @@ export default function ProductBacklogSection({
       onDropTask(taskId);
     }
   };
+
+  const totals = useMemo(() => {
+    const total = tasks.reduce((sum, task) => sum + (task.storyPoints ?? 0), 0);
+    const inProgress = tasks.filter(t => t.status === 'IN_PROGRESS' || t.status === 'IN_REVIEW').length;
+    const done = tasks.filter(t => t.status === 'DONE').length;
+    return { total, inProgress, done, count: tasks.length };
+  }, [tasks]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -172,21 +209,21 @@ export default function ProductBacklogSection({
             {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           </button>
           <span className="text-[14px] font-bold text-[#101828] truncate">Backlog</span>
-          <span className="flex-shrink-0 rounded-full bg-[#F2F4F7] px-2 py-0.5 text-[11px] font-bold text-[#667085]">
+          <span className="flex-shrink-0 rounded-full bg-[#F2F4F7] px-2 py-0.5 text-[12px] font-bold text-[#667085]">
             {totals.count}
           </span>
           {totals.total > 0 && (
-            <span className="flex-shrink-0 rounded-full border border-[#EAECF0] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#344054] hidden sm:inline">
+            <span className="flex-shrink-0 rounded-full border border-[#EAECF0] bg-white px-2 py-0.5 text-[12px] font-semibold text-[#344054] hidden sm:inline">
               {totals.total} pts
             </span>
           )}
           {totals.inProgress > 0 && (
-            <span className="flex-shrink-0 rounded-full bg-[#EFF8FF] px-2 py-0.5 text-[11px] font-bold text-[#175CD3] hidden sm:inline">
+            <span className="flex-shrink-0 rounded-full bg-[#EFF8FF] px-2 py-0.5 text-[12px] font-bold text-[#175CD3] hidden sm:inline">
               {totals.inProgress} active
             </span>
           )}
           {totals.done > 0 && (
-            <span className="flex-shrink-0 rounded-full bg-[#ECFDF3] px-2 py-0.5 text-[11px] font-bold text-[#027A48] hidden sm:inline">
+            <span className="flex-shrink-0 rounded-full bg-[#ECFDF3] px-2 py-0.5 text-[12px] font-bold text-[#027A48] hidden sm:inline">
               {totals.done} done
             </span>
           )}
@@ -195,13 +232,13 @@ export default function ProductBacklogSection({
         {/* Action buttons */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { setIsOpen(true); setShowCreateModal(true); }}
+            onClick={() => { setIsOpen(true); setShowCreateTaskBox(true); }}
             className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-2.5 py-1.5 text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] shadow-sm transition-all active:scale-95"
           >
             + Task
           </button>
           <button
-            onClick={() => onCreateSprint(`${projectKey || 'Sprint'} ${sprintCount + 1}`)}
+            onClick={() => onCreateSprint()}
             className="flex items-center gap-1.5 rounded-lg border border-[#175CD3] bg-[#175CD3] px-2.5 py-1.5 text-[12px] font-bold text-white hover:bg-[#1849A9] shadow-sm transition-all active:scale-95"
           >
             <Rocket size={12} />
@@ -212,15 +249,16 @@ export default function ProductBacklogSection({
 
       {isOpen && (
         <div>
-<div className="space-y-0 rounded-lg overflow-hidden border border-[#EAECF0]">
+<div className="flex flex-col gap-[5px]">
             {tasks.map((task) => (
               <div
                 key={task.id}
                 draggable
                 onDragStart={(e) => e.dataTransfer.setData('text/plain', String(task.id))}
+                className="rounded-lg overflow-hidden border border-[#EAECF0]"
               >
                 <TaskRow
-                  task={{ ...task, status: task.status ?? 'TODO' }}
+                  task={{ ...task, status: task.status ?? 'TODO', labels: labelCache[task.id] ?? task.labels ?? [] }}
                   teamMembers={teamMembers}
                   loadingMembers={loadingMembers}
                   canDelete={canDeleteTask}
@@ -231,13 +269,51 @@ export default function ProductBacklogSection({
                   onAssignTask={handleAssignTask}
                   onDeleteTask={(id) => setTaskToDeleteId(id)}
                   onOpenTask={(id) => setSelectedTaskId(id)}
+                  projectLabels={projectLabels}
+                  onAddLabel={handleAddLabel}
+                  onRemoveLabel={handleRemoveLabel}
+                  onCreateLabel={onCreateLabel}
                 />
               </div>
             ))}
           </div>
 
 
-           {/* ── Create Task Modal ── */}
+           {/* ── Inline Create Task ── */}
+          {showCreateTaskBox && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newTaskTitle.trim()) { setShowCreateTaskBox(false); setNewTaskTitle(''); return; }
+                void onCreateTask({ title: newTaskTitle.trim(), storyPoint: 0, priority: 'MEDIUM' });
+                setNewTaskTitle('');
+                setShowCreateTaskBox(false);
+              }}
+              className="mt-2 flex items-center gap-3 rounded-lg border-2 border-[#175CD3] bg-white px-3 py-1.5 transition-all duration-200"
+            >
+              <input
+                type="text"
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') { setShowCreateTaskBox(false); setNewTaskTitle(''); }
+                }}
+                placeholder="Task name"
+                autoFocus
+                className="flex-1 min-w-0 bg-transparent text-[12px] font-medium text-[#101828] outline-none placeholder-[#98A2B3]"
+              />
+              <button
+                type="submit"
+                disabled={!newTaskTitle.trim()}
+                className="flex h-7 w-7 items-center justify-center shrink-0 rounded-md bg-[#175CD3] text-white hover:bg-[#1849A9] disabled:opacity-50 transition-colors duration-150"
+                title="Create Task"
+              >
+                <CornerDownLeft size={14} />
+              </button>
+            </form>
+          )}
+
+           {/* ── Create Task Modal (header New Task button) ── */}
           <CreateTaskModal
             isOpen={showCreateModal}
             onClose={() => setShowCreateModal(false)}

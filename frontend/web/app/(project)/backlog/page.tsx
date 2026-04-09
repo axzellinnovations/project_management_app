@@ -6,21 +6,19 @@ import { useSearchParams } from 'next/navigation';
 import { Task } from '../kanban/types';
 import { fetchTasksByProject } from '../kanban/api';
 import api from '@/lib/axios';
-import Image from 'next/image';
 import {
     AlertCircle, Plus, ChevronDown, ChevronUp,
     ArrowUp, ArrowRight, ArrowDown, Minus,
-    Check, Trash2, MoreHorizontal, GripVertical
+    Check, Trash2, MoreHorizontal
 } from 'lucide-react';
 import CreateTaskModal, { type CreateTaskData } from '@/components/shared/CreateTaskModal';
 import { hexToLabelStyle } from '@/components/shared/LabelPicker';
-import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import AssigneeAvatar from '../(agile)/sprint-backlog/components/AssigneeAvatar';
 import EmptyState from '@/components/shared/EmptyState';
 import BottomSheet from '@/components/shared/BottomSheet';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
 import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
 // ── Priority helpers ──────────────────────────────────────────────────────────
 const PRIORITY_CONFIG: Record<string, { color: string; icon: React.ElementType; label: string }> = {
@@ -38,36 +36,20 @@ const STATUS_COLOR: Record<string, string> = {
 
 const STATUS_OPTIONS = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
 
-function resolveUrl(url?: string | null) {
-    if (!url) return null;
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    return `${API_BASE_URL}${url}`;
-}
-
-// ── Swipeable task row ────────────────────────────────────────────────────────
-function SwipeableTaskRow({
+// ── Compact backlog task row ─────────────────────────────────────────────────
+function BacklogTaskRow({
     task,
-    onMarkDone,
     onDelete,
     onClick,
     onStatusChange,
     onOpenModal,
-    usersMap,
 }: {
     task: Task;
-    onMarkDone: (id: number) => void;
     onDelete: (id: number) => void;
     onClick: (task: Task) => void;
     onStatusChange: (id: number, status: string) => void;
     onOpenModal: (id: number) => void;
-    usersMap: Record<string, string | null>;
 }) {
-    const x = useMotionValue(0);
-    const background = useTransform(
-        x,
-        [-72, -40, 0, 40, 72],
-        ['#DC2626', '#DC2626', 'transparent', '#16A34A', '#16A34A']
-    );
     const PriorityIcon = task.priority ? (PRIORITY_CONFIG[task.priority]?.icon ?? Minus) : Minus;
     const priorityColor = task.priority ? (PRIORITY_CONFIG[task.priority]?.color ?? '#9CA3AF') : '#9CA3AF';
     const statusClass = STATUS_COLOR[task.status] ?? 'bg-[#F3F4F6] text-[#6A7282]';
@@ -76,7 +58,9 @@ function SwipeableTaskRow({
     const statusRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    // Close dropdowns on outside click
+    const isOverdue = !!(task.dueDate && task.status !== 'DONE' &&
+        new Date(task.dueDate + 'T00:00:00') < new Date(new Date().toDateString()));
+
     useEffect(() => {
         const handler = (e: MouseEvent) => {
             if (statusRef.current && !statusRef.current.contains(e.target as Node)) setStatusOpen(false);
@@ -86,150 +70,115 @@ function SwipeableTaskRow({
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
-    const avatarUrl = task.assigneeName ? resolveUrl(usersMap[task.assigneeName] ?? usersMap[task.assigneeName?.split(' ')[0]] ?? null) : null;
-
     return (
-        <div className="relative overflow-visible rounded-xl">
-            {/* Swipe reveal backgrounds */}
-            <motion.div
-                className="absolute inset-0 flex items-center rounded-xl pointer-events-none"
-                style={{ background }}
-            >
-                <Trash2 size={20} className="text-white absolute left-4 opacity-0 group-data-left:opacity-100" />
-                <Check  size={20} className="text-white absolute right-4" />
-            </motion.div>
+        <div
+            className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 min-h-[40px] rounded-lg border border-[#EAECF0] cursor-pointer select-none transition-colors ${
+                isOverdue ? 'bg-[#FEE2E2] hover:bg-[#FEE2E2]' : 'bg-white hover:bg-[#F8FAFF]'
+            }`}
+            onClick={() => {
+                if (statusOpen || menuOpen) return;
+                if (window.innerWidth >= 768) onOpenModal(task.id);
+                else onClick(task);
+            }}
+        >
+            {/* Priority indicator */}
+            <span className="shrink-0 w-1.5 h-6 rounded-full" style={{ background: priorityColor }} />
 
-            {/* Card */}
-            <motion.div
-                style={{ x }}
-                drag="x"
-                dragConstraints={{ left: -80, right: 80 }}
-                dragElastic={{ left: 0.2, right: 0.2 }}
-                onDragEnd={(_, info) => {
-                    if (info.offset.x < -60)      onDelete(task.id);
-                    else if (info.offset.x > 60)  onMarkDone(task.id);
-                }}
-                onClick={() => {
-                    if (statusOpen || menuOpen) return;
-                    // Desktop: open modal; mobile: open bottom sheet
-                    if (window.innerWidth >= 768) onOpenModal(task.id);
-                    else onClick(task);
-                }}
-                className="relative bg-white rounded-xl border border-[#E5E7EB] cursor-pointer select-none"
-            >
-                <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 min-h-[52px]">
-                    {/* Drag handle (desktop) */}
-                    <GripVertical size={14} className="hidden sm:block text-[#D1D5DB] shrink-0 cursor-grab" />
+            {/* Task ID */}
+            <span className="hidden md:block text-[11px] font-mono text-[#9CA3AF] shrink-0 w-14">#{task.id}</span>
 
-                    {/* Priority dot (mobile: larger/styled indicator) */}
-                    <span className="shrink-0 w-1.5 sm:w-2 h-7 sm:h-2 rounded-full sm:rounded-full" style={{ background: priorityColor }} />
+            {/* Title + labels */}
+            <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                <span className="md:hidden text-[11px] font-mono text-[#9CA3AF] shrink-0">#{task.id}</span>
+                <p className="text-[12px] font-medium text-[#101828] truncate">{task.title}</p>
+                {task.labels && task.labels.length > 0 && (
+                    <div className="hidden sm:flex gap-1">
+                        {task.labels.slice(0, 2).map((l) => (
+                            <span key={l.id} style={hexToLabelStyle(l.color ?? '#6366F1')} className="px-1.5 py-0.5 rounded-full text-[10px] font-medium">
+                                {l.name}
+                            </span>
+                        ))}
+                    </div>
+                )}
+            </div>
 
-                    {/* Task ID */}
-                    <span className="hidden md:block text-[11px] font-mono text-[#9CA3AF] shrink-0 w-14">
-                        #{task.id}
+            {/* Right side */}
+            <div className="shrink-0 flex items-center gap-1.5 sm:gap-2">
+                {/* Due date */}
+                {task.dueDate && (
+                    <span className={`hidden sm:block text-[11px] px-1.5 py-0.5 rounded-full border ${
+                        isOverdue
+                            ? 'bg-[#FEF3F2] text-[#B42318] border-[#FDA29B]'
+                            : 'bg-[#F9FAFB] text-[#344054] border-[#EAECF0]'
+                    }`}>
+                        {new Date(task.dueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
+                )}
 
-                    {/* Title + description */}
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                            <span className="sm:hidden text-[11px] font-mono text-[#9CA3AF] shrink-0">
-                                #{task.id}
-                            </span>
-                            <p className="text-[13px] font-medium text-[#101828] truncate">{task.title}</p>
+                {/* Assignee avatar */}
+                {task.assigneeName && (
+                    <AssigneeAvatar name={task.assigneeName} profilePicUrl={task.assigneePhotoUrl} size={22} />
+                )}
+
+                {/* Story points */}
+                {task.storyPoint != null && (
+                    <span className="text-[11px] font-semibold text-[#374151] bg-[#F3F4F6] rounded px-1.5 py-0.5">
+                        {task.storyPoint}
+                    </span>
+                )}
+
+                {/* Status badge */}
+                <div className="relative" ref={statusRef}>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setStatusOpen(s => !s); }}
+                        className={`text-[10px] sm:text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${statusClass} whitespace-nowrap`}
+                    >
+                        <span className="max-w-[60px] sm:max-w-none truncate">{task.status?.replace(/_/g, ' ')}</span>
+                        <ChevronDown size={10} className="shrink-0" />
+                    </button>
+                    {statusOpen && (
+                        <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-[#E5E7EB] rounded-xl shadow-lg py-1 min-w-[130px]">
+                            {STATUS_OPTIONS.map((s) => (
+                                <button
+                                    key={s}
+                                    onClick={(e) => { e.stopPropagation(); onStatusChange(task.id, s); setStatusOpen(false); }}
+                                    className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-[#F9FAFB] transition-colors ${task.status === s ? 'font-semibold text-[#155DFC]' : 'text-[#374151]'}`}
+                                >
+                                    {s.replace(/_/g, ' ')}
+                                </button>
+                            ))}
                         </div>
-                        {task.description && (
-                            <p className="text-[12px] text-[#6A7282] truncate mt-0.5">{task.description}</p>
-                        )}
-                        {task.labels && task.labels.length > 0 && (
-                            <div className="flex gap-1 mt-1 flex-wrap">
-                                {task.labels.slice(0, 3).map((l) => (
-                                    <span key={l.id} style={hexToLabelStyle(l.color ?? '#6366F1')} className="px-1.5 py-0.5 rounded-full text-[10px] font-medium">
-                                        {l.name}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Right side: assignee + points + status + menu */}
-                    <div className="shrink-0 flex items-center gap-1.5 sm:gap-2">
-                        {/* Assignee avatar */}
-                        {task.assigneeName && (
-                            <div className="flex w-6 h-6 rounded-full bg-[#155DFC] text-white text-[10px] font-bold items-center justify-center uppercase overflow-hidden shrink-0">
-                                {avatarUrl ? (
-                                    <Image src={avatarUrl} alt={task.assigneeName} width={24} height={24} className="w-full h-full object-cover" unoptimized />
-                                ) : (
-                                    task.assigneeName.charAt(0)
-                                )}
-                            </div>
-                        )}
-                        {task.storyPoint != null && (
-                            <span className="text-[11px] font-semibold text-[#374151] bg-[#F3F4F6] rounded px-1.5 py-0.5">
-                                {task.storyPoint}
-                            </span>
-                        )}
-
-                        {/* Status badge with dropdown */}
-                        <div className="relative" ref={statusRef}>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); setStatusOpen(s => !s); }}
-                                className={`text-[10px] sm:text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${statusClass} whitespace-nowrap`}
-                            >
-                                <span className="max-w-[60px] sm:max-w-none truncate sm:overflow-visible">
-                                    {task.status?.replace(/_/g, ' ')}
-                                </span>
-                                <ChevronDown size={10} className="shrink-0" />
-                            </button>
-                            {statusOpen && (
-                                <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-[#E5E7EB] rounded-xl shadow-lg py-1 min-w-[130px]">
-                                    {STATUS_OPTIONS.map((s) => (
-                                        <button
-                                            key={s}
-                                            onClick={(e) => { e.stopPropagation(); onStatusChange(task.id, s); setStatusOpen(false); }}
-                                            className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-[#F9FAFB] transition-colors ${task.status === s ? 'font-semibold text-[#155DFC]' : 'text-[#374151]'}`}
-                                        >
-                                            {s.replace(/_/g, ' ')}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        <PriorityIcon size={14} color={priorityColor} className="shrink-0" />
-
-                        {/* Desktop context menu */}
-                        <div className="hidden sm:block relative" ref={menuRef}>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); setMenuOpen(m => !m); }}
-                                className="p-1 rounded hover:bg-[#F3F4F6] text-[#9CA3AF] transition-colors"
-                            >
-                                <MoreHorizontal size={15} />
-                            </button>
-                            {menuOpen && (
-                                <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-[#E5E7EB] rounded-xl shadow-lg py-1 min-w-[120px]">
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onOpenModal(task.id); }}
-                                        className="w-full text-left px-3 py-1.5 text-[12px] text-[#374151] hover:bg-[#F9FAFB] transition-colors"
-                                    >
-                                        Edit
-                                    </button>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(task.id); }}
-                                        className="w-full text-left px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50 transition-colors"
-                                    >
-                                        Delete
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    )}
                 </div>
-                {/* Mobile swipe hint */}
-                <div className="sm:hidden absolute bottom-0 inset-x-0 flex justify-between px-4 pb-0.5 pointer-events-none">
-                    <span className="text-[9px] text-[#DC2626] opacity-40">← Delete</span>
-                    <span className="text-[9px] text-[#16A34A] opacity-40">Done →</span>
+
+                <PriorityIcon size={13} color={priorityColor} className="shrink-0" />
+
+                {/* Context menu */}
+                <div className="relative" ref={menuRef}>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setMenuOpen(m => !m); }}
+                        className="p-1 rounded hover:bg-[#F3F4F6] text-[#9CA3AF] transition-colors"
+                    >
+                        <MoreHorizontal size={14} />
+                    </button>
+                    {menuOpen && (
+                        <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-[#E5E7EB] rounded-xl shadow-lg py-1 min-w-[120px]">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onOpenModal(task.id); }}
+                                className="w-full text-left px-3 py-1.5 text-[12px] text-[#374151] hover:bg-[#F9FAFB] transition-colors"
+                            >
+                                Edit
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(task.id); }}
+                                className="w-full text-left px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50 transition-colors"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    )}
                 </div>
-            </motion.div>
+            </div>
         </div>
     );
 }
@@ -246,20 +195,6 @@ export default function BacklogPage() {
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [selectedTaskIdForModal, setSelectedTaskIdForModal] = useState<number | null>(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
-    const [usersMap, setUsersMap] = useState<Record<string, string | null>>({});
-
-    // Fetch user avatar map
-    useEffect(() => {
-        api.get('/api/auth/users').then((res) => {
-            const map: Record<string, string | null> = {};
-            for (const u of (res.data as { username?: string; fullName?: string; profilePicUrl?: string }[])) {
-                const key = u.fullName || u.username || '';
-                if (key) map[key] = u.profilePicUrl ?? null;
-                if (u.username && u.username !== key) map[u.username] = u.profilePicUrl ?? null;
-            }
-            setUsersMap(map);
-        }).catch(() => {/* non-critical */});
-    }, []);
 
     const loadTasks = useCallback(async () => {
         if (!projectId) return;
@@ -384,7 +319,7 @@ export default function BacklogPage() {
                 <div>
                     <h1 className="text-[18px] sm:text-xl font-bold text-[#101828]">Product Backlog</h1>
                     <p className="text-[12px] text-[#6A7282] mt-0.5 hidden sm:block">
-                        {tasks.length} issue{tasks.length !== 1 ? 's' : ''} · Swipe right to complete, left to delete
+                        {tasks.length} issue{tasks.length !== 1 ? 's' : ''}
                     </p>
                 </div>
                 <button
@@ -440,17 +375,15 @@ export default function BacklogPage() {
                                     subtitle="Create your first issue to get started."
                                 />
                             ) : (
-                                <div className="flex flex-col divide-y divide-[#F3F4F6] px-3 pt-1">
+                                <div className="flex flex-col gap-[5px] p-3">
                                     {tasks.map((task) => (
-                                        <SwipeableTaskRow
+                                        <BacklogTaskRow
                                             key={task.id}
                                             task={task}
-                                            onMarkDone={handleMarkDone}
                                             onDelete={handleDelete}
                                             onClick={setSelectedTask}
                                             onStatusChange={handleStatusChange}
                                             onOpenModal={setSelectedTaskIdForModal}
-                                            usersMap={usersMap}
                                         />
                                     ))}
                                 </div>
