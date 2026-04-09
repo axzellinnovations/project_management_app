@@ -189,7 +189,7 @@ export default function VelocityChart({ sprints }: VelocityChartProps) {
                   textAnchor="middle"
                   className="text-[10px] fill-[#667085]"
                 >
-                  {d.name.length > 12 ? d.name.slice(0, 10) + '…' : d.name}
+                  {(d.name ?? '').length > 12 ? d.name.slice(0, 10) + '…' : (d.name ?? '')}
                 </text>
               </g>
             );
