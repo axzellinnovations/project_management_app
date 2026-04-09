@@ -688,6 +688,16 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
 
             <button
               type="button"
+              onClick={() => setShowReportModal(true)}
+              title="Sprint Report"
+              className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-2.5 py-2 text-[13px] font-bold text-[#344054] hover:bg-[#F2F4F7] shadow-sm transition-colors duration-150"
+            >
+              <BarChart3 size={14} className="text-[#667085]" />
+              Sprint Report
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowSprintMenu((prev) => !prev)}
               aria-haspopup="true"
               aria-expanded={showSprintMenu}

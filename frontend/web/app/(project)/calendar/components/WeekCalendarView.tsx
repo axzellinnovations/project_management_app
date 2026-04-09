@@ -5,6 +5,7 @@ import { DAY_NAMES, addDays, isDateInRange, isSameDay, startOfWeek, toDate } fro
 interface WeekCalendarViewProps {
   currentDate: Date;
   events: CalendarEventItem[];
+  onDayClick?: (date: Date) => void;
 }
 
 const eventsForDay = (events: CalendarEventItem[], day: Date) =>
@@ -17,7 +18,7 @@ const eventsForDay = (events: CalendarEventItem[], day: Date) =>
     return anchor ? isSameDay(anchor, day) : false;
   });
 
-export default function WeekCalendarView({ currentDate, events }: WeekCalendarViewProps) {
+export default function WeekCalendarView({ currentDate, events, onDayClick }: WeekCalendarViewProps) {
   const start = startOfWeek(currentDate);
   const weekDays = Array.from({ length: 7 }, (_, idx) => addDays(start, idx));
 
@@ -37,7 +38,7 @@ export default function WeekCalendarView({ currentDate, events }: WeekCalendarVi
           const dayEvents = eventsForDay(events, day);
 
           return (
-            <div key={day.toISOString()} className="min-h-[340px] border-r border-[#F2F4F7] p-2 align-top">
+            <div key={day.toISOString()} className={`min-h-[340px] border-r border-[#F2F4F7] p-2 align-top${onDayClick ? ' cursor-pointer hover:bg-[#F9FAFB]' : ''}`} onClick={() => onDayClick?.(day)}>
               <div className="space-y-1.5">
                 {dayEvents.map((event) => (
                   <CalendarEventCard key={`${event.id}-${day.toDateString()}`} event={event} compact={false} />

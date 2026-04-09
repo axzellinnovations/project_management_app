@@ -99,6 +99,7 @@ public class UserController {
                         .collect(Collectors.toList());
             }
 
+            // BUG-2 fix: only generate a presigned URL for users that actually have a photo key.
             List<UserResponseDTO> userList = allUsers.stream()
                     .map(user -> new UserResponseDTO(
                             user.getUserId(),
@@ -106,13 +107,34 @@ public class UserController {
                             user.getFullName(),
                             user.getEmail(),
                             user.isVerified(),
-                            service.generatePresignedUrl(user.getProfilePicUrl())
+                            user.getProfilePicUrl() != null && !user.getProfilePicUrl().isEmpty()
+                                    ? service.generatePresignedUrl(user.getProfilePicUrl())
+                                    : null,
+                            user.getLastActive()
                     ))
                     .collect(Collectors.toList());
 
             return new ResponseEntity<>(userList, HttpStatus.OK);
         } catch (Exception e) {
             return new ResponseEntity<>("Error fetching users: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * On-demand presigned URL for a single user's profile photo. Consumers that only
+     * need the avatar for one user should call this endpoint instead of fetching the
+     * full user list (avoids O(N) S3 presigner calls on the list endpoint).
+     */
+    @GetMapping("/users/{userId}/photo")
+    public ResponseEntity<?> getUserPhoto(@PathVariable Long userId) {
+        try {
+            String presignedUrl = service.generatePresignedUrlForUser(userId);
+            if (presignedUrl == null) {
+                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            }
+            return new ResponseEntity<>(Map.of("url", presignedUrl), HttpStatus.OK);
+        } catch (Exception e) {
+            return new ResponseEntity<>("Error fetching photo: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -126,10 +148,19 @@ public class UserController {
         try {
             String email = authentication.getName();
             User user = service.getUserByEmail(email);
-            return new ResponseEntity<>(Map.of(
-                    "email", user.getEmail(),
-                    "username", user.getUsername() != null ? user.getUsername() : ""
-            ), HttpStatus.OK);
+            String presignedUrl = user.getProfilePicUrl() != null && !user.getProfilePicUrl().isEmpty()
+                    ? service.generatePresignedUrl(user.getProfilePicUrl())
+                    : null;
+            UserResponseDTO dto = new UserResponseDTO(
+                    user.getUserId(),
+                    user.getUsername(),
+                    user.getFullName(),
+                    user.getEmail(),
+                    user.isVerified(),
+                    presignedUrl,
+                    user.getLastActive()
+            );
+            return new ResponseEntity<>(dto, HttpStatus.OK);
         } catch (Exception e) {
             return new ResponseEntity<>("Failed to fetch current user: " + e.getMessage(), HttpStatus.BAD_REQUEST);
         }

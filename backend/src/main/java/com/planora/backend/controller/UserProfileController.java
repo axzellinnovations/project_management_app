@@ -41,7 +41,8 @@ public class UserProfileController {
                     updatedUser.getFullName(),
                     updatedUser.getEmail(),
                     updatedUser.isVerified(),
-                    presignedUrl // Use the temporary URL here!
+                    presignedUrl,
+                    updatedUser.getLastActive()
             );
             return new ResponseEntity<>(response, HttpStatus.OK);
         } catch (Exception e){

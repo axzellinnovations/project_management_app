@@ -13,6 +13,7 @@ type UserResponse = {
     email: string;
     verified: boolean;
     profilePicUrl: string | null;
+    lastActive: string | null;
 };
 
 type PhotoUploadResponse = {
@@ -22,8 +23,6 @@ type PhotoUploadResponse = {
     errorCode: string | null;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
-
 export function useProfileData() {
     const router = useRouter();
 
@@ -32,6 +31,7 @@ export function useProfileData() {
     const [fullName, setFullName] = useState('');
     const [profilePicUrl, setProfilePicUrl] = useState('');
     const [imageKey, setImageKey] = useState(Date.now());
+    const [lastActive, setLastActive] = useState<string | null>(null);
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSavingName, setIsSavingName] = useState(false);
@@ -47,12 +47,10 @@ export function useProfileData() {
     const [errorMessage, setErrorMessage] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
 
+    // BUG-3: The backend always returns a presigned HTTPS URL (or null). Trust it as-is.
     const resolvedProfilePicUrl = useMemo(() => {
         if (!profilePicUrl) return '';
-        if (profilePicUrl.startsWith('http://') || profilePicUrl.startsWith('https://')) {
-            return profilePicUrl;
-        }
-        return `${API_BASE_URL}${profilePicUrl}`;
+        return profilePicUrl;
     }, [profilePicUrl]);
 
     const getApiErrorMessage = (error: unknown, fallback: string) => {
@@ -86,6 +84,7 @@ export function useProfileData() {
                     setUsername(currentUser.username || tokenUser.username || '');
                     setFullName(currentUser.fullName || '');
                     setProfilePicUrl(currentUser.profilePicUrl || '');
+                    setLastActive(currentUser.lastActive || null);
                 }
             } catch (error: unknown) {
                 setErrorMessage(getApiErrorMessage(error, 'Failed to load profile details.'));
@@ -186,6 +185,7 @@ export function useProfileData() {
         fullName, setFullName,
         resolvedProfilePicUrl,
         imageKey,
+        lastActive,
         isLoading,
         isSavingName,
         isUploadingPhoto,

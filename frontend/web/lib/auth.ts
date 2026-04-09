@@ -19,20 +19,47 @@ function emitAuthTokenChanged(): void {
     }
 }
 
+// Remember-me helpers
+
+/** Persist the user's "remember me" preference (stored in localStorage itself so
+ *  it survives a browser restart and controls where the tokens are kept). */
+export function setRememberMe(remember: boolean): void {
+    if (typeof window === 'undefined') return;
+    if (remember) {
+        localStorage.setItem('rememberMe', 'true');
+    } else {
+        localStorage.removeItem('rememberMe');
+    }
+}
+
+export function getRememberMe(): boolean {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('rememberMe') === 'true';
+}
+
+/** Pick the right storage based on the rememberMe flag.
+ *  - rememberMe=true  -> localStorage  (survives browser restart)
+ *  - rememberMe=false -> sessionStorage (cleared when the tab/window closes) */
+function tokenStorage(): Storage {
+    return getRememberMe() ? localStorage : sessionStorage;
+}
+
+// Token helpers
+
 export function getUserFromToken(): User | null {
     if (typeof window === 'undefined') return null;
 
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return null;
 
     try {
         const tokenParts = token.split('.');
         if (tokenParts.length < 2) {
             localStorage.removeItem('token');
+            sessionStorage.removeItem('token');
             return null;
         }
 
-        // Simple JWT decoding (payload is the second part)
         const base64Url = tokenParts[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
         const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
@@ -42,18 +69,16 @@ export function getUserFromToken(): User | null {
         const payload: JwtPayload = JSON.parse(jsonPayload);
         if (!payload.sub) {
             localStorage.removeItem('token');
+            sessionStorage.removeItem('token');
             return null;
         }
 
-        // If token is expired, clear it and treat user as logged out.
         if (payload.exp && payload.exp * 1000 <= Date.now()) {
             localStorage.removeItem('token');
+            sessionStorage.removeItem('token');
             return null;
         }
 
-        // Try to extract userId from JWT (commonly as 'userId' or 'id')
-
-        // Extend JwtPayload to include userId and id as possible number fields
         type ExtendedJwtPayload = JwtPayload & { userId?: number; id?: number };
         const extPayload = payload as ExtendedJwtPayload;
         let userId: number | undefined = undefined;
@@ -66,7 +91,6 @@ export function getUserFromToken(): User | null {
             userId,
         };
 
-        // Keep sidebar/profile displays in sync after profile edits without requiring re-login.
         const cachedProfile = localStorage.getItem('userProfile');
         if (cachedProfile) {
             try {
@@ -84,29 +108,27 @@ export function getUserFromToken(): User | null {
         }
 
         return decodedUser;
-    } catch (error) {
-        console.error("Failed to decode token:", error);
-
+    } catch {
         return null;
     }
 }
 
 export function saveToken(token: string): void {
     if (typeof window !== 'undefined') {
-        localStorage.setItem('token', token);
+        tokenStorage().setItem('token', token);
         emitAuthTokenChanged();
     }
 }
 
 export function saveRefreshToken(token: string): void {
     if (typeof window !== 'undefined') {
-        localStorage.setItem('refreshToken', token);
+        tokenStorage().setItem('refreshToken', token);
     }
 }
 
 export function getRefreshToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('refreshToken');
+    return localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
 }
 
 export function clearTokens(): void {
@@ -114,22 +136,22 @@ export function clearTokens(): void {
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('userProfile');
+        localStorage.removeItem('rememberMe');
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('refreshToken');
         emitAuthTokenChanged();
     }
 }
 
 /**
  * Returns the JWT token only if it's present and not expired.
- * Also clears the token from localStorage if it's expired.
+ * Checks both storages to handle transitions between remember / no-remember sessions.
  */
 export function getValidToken(): string | null {
     if (typeof window === 'undefined') return null;
-    const token = localStorage.getItem('token');
-    if (!token) return null;
-
-    // getUserFromToken() internally clears the token if it's expired or malformed.
     if (getUserFromToken()) {
-        return localStorage.getItem('token'); // Return the actual token string.
+        return localStorage.getItem('token') || sessionStorage.getItem('token');
     }
     return null;
 }
+

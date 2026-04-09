@@ -4,7 +4,36 @@ import { ChevronDown, X } from 'lucide-react';
 import Image from 'next/image';
 import api from '@/lib/axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+// BUG-7: Module-level singleton so the user list is fetched at most once per
+// browser session regardless of how many task cards the user opens.
+type UserMapEntry = { username?: string; fullName?: string; profilePicUrl?: string | null };
+
+let userMapCache: Record<string, string | null> | null = null;
+let userMapFetchPromise: Promise<Record<string, string | null>> | null = null;
+
+function getOrFetchUserMap(): Promise<Record<string, string | null>> {
+    if (userMapCache !== null) return Promise.resolve(userMapCache);
+    if (userMapFetchPromise !== null) return userMapFetchPromise;
+
+    userMapFetchPromise = api
+        .get<UserMapEntry[]>('/api/auth/users')
+        .then(response => {
+            const map: Record<string, string | null> = {};
+            response.data.forEach(u => {
+                if (u.username) map[u.username] = u.profilePicUrl || null;
+                if (u.fullName) map[u.fullName] = u.profilePicUrl || null;
+            });
+            userMapCache = map;
+            userMapFetchPromise = null;
+            return map;
+        })
+        .catch(() => {
+            userMapFetchPromise = null;
+            return {};
+        });
+
+    return userMapFetchPromise;
+}
 
 interface TaskSidebarProps {
   taskId?: number;
@@ -23,12 +52,13 @@ interface TaskSidebarProps {
   onUpdateStatus?: (status: string) => void;
   onUpdatePriority?: (priority: string) => void;
   onUpdateStoryPoint?: (storyPoint: number) => void;
+  onUpdateDueDate?: (dueDate: string) => void;
   onUnassign?: () => void;
 }
 
 const TaskSidebar: React.FC<TaskSidebarProps> = ({ 
   taskId, status, assignee, reporter, labels, priority, sprint, storyPoint, dates,
-  onUpdateStatus, onUpdatePriority, onUpdateStoryPoint, onUnassign
+  onUpdateStatus, onUpdatePriority, onUpdateStoryPoint, onUpdateDueDate, onUnassign
 }) => {
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isPriorityOpen, setIsPriorityOpen] = useState(false);
@@ -36,28 +66,15 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
   const [editedStoryPoint, setEditedStoryPoint] = useState(storyPoint);
   const [usersMap, setUsersMap] = useState<Record<string, string | null>>({});
 
+  // BUG-7: Use the module-level singleton — only one fetch per browser session.
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const response = await api.get('/api/auth/users');
-        const uidMap: Record<string, string | null> = {};
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        response.data.forEach((u: any) => {
-           if (u.username) uidMap[u.username] = u.profilePicUrl || null;
-           if (u.fullName) uidMap[u.fullName] = u.profilePicUrl || null; // Map full name too in case assignee is full name
-        });
-        setUsersMap(uidMap);
-      } catch (error) {
-        console.error('Failed to fetch users:', error);
-      }
-    };
-    void fetchUsers();
+    void getOrFetchUserMap().then(setUsersMap);
   }, []);
 
+  // BUG-3: Backend always returns a presigned HTTPS URL (or null). Trust it as-is.
   const resolveProfilePic = (url?: string | null) => {
     if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    return `${API_BASE_URL}${url}`;
+    return url;
   };
 
   // Update local state when props change
@@ -302,9 +319,18 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
            {dates.dueDate && (
              <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-500 font-medium">Due date</span>
-                <span className="text-sm text-gray-800 bg-gray-50 px-2 py-1 rounded border border-gray-100">
-                  {new Date(dates.dueDate).toLocaleDateString()}
-                </span>
+                {onUpdateDueDate ? (
+                  <input
+                    type="date"
+                    defaultValue={dates.dueDate ? dates.dueDate.substring(0, 10) : ''}
+                    onChange={(e) => { if (e.target.value) onUpdateDueDate(e.target.value); }}
+                    className="text-sm text-gray-800 bg-gray-50 px-2 py-1 rounded border border-gray-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+                  />
+                ) : (
+                  <span className="text-sm text-gray-800 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                    {new Date(dates.dueDate).toLocaleDateString()}
+                  </span>
+                )}
              </div>
            )}
            {dates.created && (

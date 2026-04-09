@@ -26,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDateTime;
@@ -34,6 +35,9 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -273,5 +277,69 @@ class DocumentServiceTest {
         verify(s3StorageService).deleteObject(any(), eq("project-5/root/uuid-v2.pdf"));
         verify(documentVersionRepository).deleteAll(List.of(v1, v2));
         verify(documentRepository).delete(doc);
+    }
+
+    @Test
+    void getDownloadUrl_whenObjectMissingInS3_throwsDescriptiveException() {
+        TeamMember member = new TeamMember();
+        member.setRole(TeamRole.MEMBER);
+
+        User uploader = new User();
+        uploader.setUserId(55L);
+
+        Document doc = new Document();
+        doc.setId(10L);
+        doc.setStatus(DocumentStatus.ACTIVE);
+        doc.setProject(project);
+        doc.setUploadedBy(uploader);
+        doc.setLatestObjectKey("project-5/root/uuid-file.pdf");
+
+        when(projectRepository.findById(5L)).thenReturn(Optional.of(project));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(12L, 55L)).thenReturn(Optional.of(member));
+        when(documentRepository.findByIdAndProjectId(10L, 5L)).thenReturn(Optional.of(doc));
+        doThrow(new ResourceNotFoundException("Uploaded object not found in storage"))
+                .when(s3StorageService).verifyObjectExists(any(), anyString());
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class,
+                () -> documentService.getDownloadUrl(5L, 10L, 55L));
+
+        assertTrue(ex.getMessage().contains("no longer available in storage"),
+                "Should return a user-friendly message about the missing file");
+        verify(s3StorageService, never()).generatePresignedDownloadUrl(any(), any(), any());
+    }
+
+    @Test
+    void uploadDocumentViaBackend_delegatesToS3StorageService() throws Exception {
+        TeamMember member = new TeamMember();
+        member.setRole(TeamRole.MEMBER);
+
+        User uploader = new User();
+        uploader.setUserId(55L);
+        uploader.setUsername("alice");
+
+        byte[] content = "PDF content".getBytes();
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "report.pdf", "application/pdf", content);
+
+        when(projectRepository.findById(5L)).thenReturn(Optional.of(project));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(12L, 55L)).thenReturn(Optional.of(member));
+        when(s3StorageService.resolveContentType(anyString(), anyString())).thenReturn("application/pdf");
+        doNothing().when(s3StorageService).validateFileRequest(any(), any(), any(), anyLong(), any());
+        doNothing().when(s3StorageService).putObject(any(), anyString(), any(), any(), anyLong());
+        doNothing().when(s3StorageService).verifyObjectExists(any(), anyString());
+        when(documentVersionRepository.findByObjectKey(anyString())).thenReturn(Optional.empty());
+        when(userRepository.findById(55L)).thenReturn(Optional.of(uploader));
+        when(documentRepository.save(any(Document.class))).thenAnswer(inv -> {
+            Document d = inv.getArgument(0);
+            d.setId(77L);
+            return d;
+        });
+        when(documentVersionRepository.save(any(DocumentVersion.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        DocumentResponseDTO result = documentService.uploadDocumentViaBackend(5L, 55L, file, null);
+
+        assertNotNull(result);
+        // Verify the upload went through s3StorageService, not a raw S3Client
+        verify(s3StorageService).putObject(any(), anyString(), eq("application/pdf"), any(), eq((long) content.length));
     }
 }

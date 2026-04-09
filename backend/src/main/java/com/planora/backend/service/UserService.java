@@ -279,6 +279,18 @@ public class UserService {
         return userRepository.findAll();
     }
 
+    /**
+     * Generates a presigned S3 URL for a single user's profile photo on demand.
+     * Returns null if the user has no profile picture or does not exist.
+     */
+    public String generatePresignedUrlForUser(Long userId) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null || user.getProfilePicUrl() == null || user.getProfilePicUrl().isEmpty()) {
+            return null;
+        }
+        return generatePresignedUrl(user.getProfilePicUrl());
+    }
+
     public User getUserByEmail(String email) {
         if (email == null || email.isBlank()) {
             throw new RuntimeException("User email is required");
