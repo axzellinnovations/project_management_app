@@ -3,7 +3,9 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Sun, Moon } from 'lucide-react';
 import { LogoutIcon } from './SidebarIcons';
+import { useTheme } from '@/components/providers/ThemeProvider';
 
 export function SidebarFooter({
   collapsed,
@@ -18,6 +20,7 @@ export function SidebarFooter({
   onLogout: () => void;
   onLinkClick: () => void;
 }) {
+  const { theme, toggleTheme } = useTheme();
   return (
     <div className="px-2 pb-3 flex-shrink-0 border-t border-cu-border-light pt-2">
       <div className="flex items-center gap-2 min-w-0">
@@ -46,9 +49,18 @@ export function SidebarFooter({
           </div>
         </Link>
         {!collapsed && (
-          <button onClick={onLogout} title="Logout" className="ml-auto text-cu-text-muted hover:text-cu-danger transition-colors p-1.5 rounded-md hover:bg-red-50 flex-shrink-0">
-            <LogoutIcon />
-          </button>
+          <>
+            <button
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="text-cu-text-muted hover:text-cu-text-primary transition-colors p-1.5 rounded-md hover:bg-cu-bg-tertiary flex-shrink-0"
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            <button onClick={onLogout} title="Logout" className="text-cu-text-muted hover:text-cu-danger transition-colors p-1.5 rounded-md hover:bg-red-50 flex-shrink-0">
+              <LogoutIcon />
+            </button>
+          </>
         )}
       </div>
     </div>
