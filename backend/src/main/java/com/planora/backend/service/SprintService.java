@@ -18,6 +18,7 @@ import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.TaskRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -234,8 +235,17 @@ public class SprintService {
                 .stream()
                 .filter(t -> !"DONE".equalsIgnoreCase(t.getStatus()))
                 .collect(Collectors.toList());
-        incomplete.forEach(t -> t.setSprint(null));
-        taskRepository.saveAll(incomplete);
+
+        if (!incomplete.isEmpty()) {
+            // Find next available NOT_STARTED sprint in the same project
+            List<Sprint> nextSprints = sprintRepository.findNextAvailableSprint(
+                    sprint.getProId(), SprintStatus.NOT_STARTED, id, PageRequest.of(0, 1)
+            );
+
+            Sprint targetSprint = nextSprints.isEmpty() ? null : nextSprints.get(0);
+            incomplete.forEach(t -> t.setSprint(targetSprint));
+            taskRepository.saveAll(incomplete);
+        }
 
         return toDTO(sprint);
     }
