@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, ChevronDown, Pencil, Trash2, UserPlus } from 'lucide-react';
+import { CalendarDays, ChevronDown, Pencil, Tag, Trash2, UserPlus } from 'lucide-react';
 import AssigneeAvatar from './AssigneeAvatar';
 import { hexToLabelStyle } from '@/components/shared/LabelPicker';
 
@@ -48,6 +48,11 @@ export interface TaskRowProps {
   onDueDateChange?: (id: number, date: string) => void;
   onDeleteTask: (id: number) => void;
   onOpenTask?: (id: number) => void;
+  projectLabels?: Array<{ id: number; name: string; color?: string }>;
+  onAddLabel?: (taskId: number, labelId: number) => Promise<void>;
+  onRemoveLabel?: (taskId: number, labelId: number) => Promise<void>;
+  onCreateLabel?: (name: string) => Promise<{ id: number; name: string; color?: string }>;
+  extraStatuses?: Array<{ value: string; label: string }>;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -129,22 +134,73 @@ function TaskRow({
   onDueDateChange,
   onDeleteTask,
   onOpenTask,
+  projectLabels = [],
+  onAddLabel,
+  onRemoveLabel,
+  onCreateLabel,
+  extraStatuses = [],
 }: TaskRowProps) {
   const [statusOpen, setStatusOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [labelOpen, setLabelOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
+  const [labelInput, setLabelInput] = useState('');
+  const [creatingLabel, setCreatingLabel] = useState(false);
   const [statusRect, setStatusRect] = useState<DOMRect | null>(null);
   const [assignRect, setAssignRect] = useState<DOMRect | null>(null);
+  const [labelRect, setLabelRect] = useState<DOMRect | null>(null);
 
   const statusRef = useRef<HTMLDivElement>(null);
   const assignRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   const statusPortalRef = useRef<HTMLDivElement>(null);
   const assignPortalRef = useRef<HTMLDivElement>(null);
+  const labelPortalRef = useRef<HTMLDivElement>(null);
+
+  const taskLabelIds = useMemo(() => new Set((task.labels ?? []).map((l) => l.id)), [task.labels]);
+
+  const openLabel = useCallback(() => {
+    const rect = labelRef.current?.getBoundingClientRect() ?? null;
+    setLabelRect(rect);
+    setLabelOpen(true);
+  }, []);
+
+  const handleLabelToggle = useCallback(async (label: { id: number; name: string; color?: string }) => {
+    if (taskLabelIds.has(label.id)) {
+      // Clicking active label removes it
+      await onRemoveLabel?.(task.id, label.id);
+    } else {
+      // Remove any existing label first (single-label rule), then add new one
+      if (taskLabelIds.size > 0) {
+        const existingId = task.labels![0].id;
+        await onRemoveLabel?.(task.id, existingId);
+      }
+      await onAddLabel?.(task.id, label.id);
+    }
+  }, [task.id, task.labels, taskLabelIds, onAddLabel, onRemoveLabel]);
+
+  const handleCreateLabelFromInput = useCallback(async () => {
+    const trimmed = labelInput.trim();
+    if (!trimmed || creatingLabel || !onCreateLabel) return;
+    setCreatingLabel(true);
+    try {
+      const newLabel = await onCreateLabel(trimmed);
+      await onAddLabel?.(task.id, newLabel.id);
+      setLabelInput('');
+    } finally {
+      setCreatingLabel(false);
+    }
+  }, [labelInput, creatingLabel, onCreateLabel, onAddLabel, task.id]);
 
   const canonicalStatus = (task.status ?? 'TODO').toUpperCase() as TaskStatus;
-  const validStatus: TaskStatus = canonicalStatus in STATUS_LABELS ? canonicalStatus : 'TODO';
+  const isKnownStatus = canonicalStatus in STATUS_LABELS;
+  const validStatus: TaskStatus = isKnownStatus ? canonicalStatus : 'TODO';
+  const displayLabel = isKnownStatus
+    ? STATUS_LABELS[validStatus]
+    : (extraStatuses.find(s => s.value === canonicalStatus)?.label ?? task.status ?? 'TODO');
+  const displayStyle = isKnownStatus ? STATUS_COLORS[validStatus] : 'bg-[#F2F4F7] text-[#344054]';
   const dueClass = classifyDue(task.dueDate, validStatus);
   const statusBorderColor = STATUS_BORDER[validStatus];
   const priorityKey = (task.priority ?? 'LOW').toUpperCase();
@@ -162,6 +218,10 @@ function TaskRow({
         assignRef.current && !assignRef.current.contains(target) &&
         assignPortalRef.current && !assignPortalRef.current.contains(target)
       ) setAssignOpen(false);
+      if (
+        labelRef.current && !labelRef.current.contains(target) &&
+        labelPortalRef.current && !labelPortalRef.current.contains(target)
+      ) setLabelOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -195,14 +255,14 @@ function TaskRow({
 
   const rowBg =
     dueClass === 'overdue' || dueClass === 'today'
-      ? 'bg-[#FEF9F9]'
+      ? 'bg-[#FEE2E2]'
       : dueClass === 'soon'
         ? 'bg-[#FFFDF5]'
         : 'bg-white';
 
   return (
     <div
-      className={`group relative flex items-center min-h-[36px] border-b border-[#F2F4F7] ${rowBg} hover:bg-[#F9FAFB] cursor-pointer transition-colors duration-150`}
+      className={`group relative flex items-center min-h-[36px] rounded-lg ${rowBg} hover:bg-[#F9FAFB] cursor-pointer transition-colors duration-150`}
       style={{ borderLeft: `3px solid ${statusBorderColor}` }}
       onClick={() => !renaming && onOpenTask?.(task.id)}
     >
@@ -221,19 +281,19 @@ function TaskRow({
 
       {/* Task number */}
       <div className="flex-shrink-0 w-[44px] px-2 flex items-center justify-end">
-        <span className="text-[11px] font-bold tabular-nums text-[#98A2B3]">#{task.taskNo}</span>
+        <span className="text-[12px] font-bold tabular-nums text-[#98A2B3]">#{task.taskNo}</span>
       </div>
 
       {/* Priority badge */}
       <div className="flex-shrink-0 w-[72px] px-1 flex items-center" onClick={(e) => e.stopPropagation()}>
-        <span className={`inline-flex h-5 items-center rounded px-1.5 text-[9px] font-bold uppercase tracking-wide truncate ${priorityStyle}`}>
+        <span className={`inline-flex h-5 items-center rounded px-1.5 text-[11px] font-bold uppercase tracking-wide truncate ${priorityStyle}`}>
           {priorityKey}
         </span>
       </div>
 
       {/* Title */}
       <div
-        className="flex-1 min-w-0 px-2 py-2 flex flex-col justify-center"
+        className="flex-1 min-w-0 px-2 flex items-center gap-1.5 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {renaming ? (
@@ -247,28 +307,23 @@ function TaskRow({
             }}
             onBlur={() => void commitRename()}
             autoFocus
-            className="w-full border-b-2 border-[#175CD3] bg-transparent text-[13px] font-semibold text-[#101828] outline-none"
+            className="w-full border-b-2 border-[#175CD3] bg-transparent text-[12px] font-semibold text-[#101828] outline-none"
           />
         ) : (
           <>
             <span
-              className={`text-[13px] font-semibold text-[#101828] truncate ${validStatus === 'DONE' ? 'line-through opacity-60' : ''}`}
+              className={`text-[12px] font-semibold text-[#101828] truncate min-w-0 ${validStatus === 'DONE' ? 'line-through opacity-60' : ''}`}
               onClick={(e) => { e.stopPropagation(); onOpenTask?.(task.id); }}
             >
               {task.title}
             </span>
-            {task.labels && task.labels.length > 0 && (
-              <div className="flex gap-1 mt-0.5 flex-wrap">
-                {task.labels.slice(0, 3).map((l) => (
-                  <span
-                    key={l.id}
-                    style={hexToLabelStyle(l.color ?? '#6366F1')}
-                    className="px-1.5 py-0.5 rounded-full text-[10px] font-medium"
-                  >
-                    {l.name}
-                  </span>
-                ))}
-              </div>
+            {task.labels?.[0] && (
+              <span
+                style={hexToLabelStyle(task.labels[0].color ?? '#6366F1')}
+                className="flex-shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap"
+              >
+                {task.labels[0].name}
+              </span>
             )}
           </>
         )}
@@ -338,9 +393,9 @@ function TaskRow({
         <button
           type="button"
           onClick={() => openStatus()}
-          className={`flex h-6 w-full items-center justify-between gap-1 rounded-md px-2 text-[9px] font-bold uppercase tracking-wide transition-all ${STATUS_COLORS[validStatus]}`}
+          className={`flex h-6 w-full items-center justify-between gap-1 rounded-md px-2 text-[11px] font-bold uppercase tracking-wide transition-all ${displayStyle}`}
         >
-          <span className="truncate">{STATUS_LABELS[validStatus]}</span>
+          <span className="truncate">{displayLabel}</span>
           <ChevronDown size={9} className="flex-shrink-0 opacity-60" />
         </button>
         {statusOpen && statusRect && typeof document !== 'undefined' && createPortal(
@@ -356,9 +411,24 @@ function TaskRow({
                   onStatusChange(task.id, s);
                   setStatusOpen(false);
                 }}
-                className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-[#F9FAFB] ${s === validStatus ? 'text-[#155DFC]' : ''}`}
+                className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-[#F9FAFB] ${task.status?.toUpperCase() === s ? 'text-[#155DFC]' : ''}`}
               >
                 {STATUS_LABELS[s]}
+              </button>
+            ))}
+            {extraStatuses.length > 0 && (
+              <div className="border-t border-[#EAECF0] my-1" />
+            )}
+            {extraStatuses.map((s) => (
+              <button
+                key={s.value}
+                onClick={() => {
+                  onStatusChange(task.id, s.value);
+                  setStatusOpen(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-[#F9FAFB] ${task.status?.toUpperCase() === s.value ? 'text-[#155DFC]' : ''}`}
+              >
+                {s.label}
               </button>
             ))}
           </div>,
@@ -375,7 +445,7 @@ function TaskRow({
           <button
             type="button"
             onClick={() => dateRef.current?.showPicker()}
-            className={`inline-flex h-6 w-full items-center justify-center gap-1 rounded-md border px-1.5 text-[10px] font-bold ${DUE_CHIP_STYLES[dueClass]}`}
+            className={`inline-flex h-6 w-full items-center justify-center gap-1 rounded-md border px-1.5 text-[12px] font-bold ${DUE_CHIP_STYLES[dueClass]}`}
           >
             <CalendarDays size={9} className="flex-shrink-0" />
             <span className="truncate">{formatDate(task.dueDate)}</span>
@@ -401,12 +471,86 @@ function TaskRow({
             min="0"
             value={task.storyPoints}
             onChange={(e) => onStoryPointsChange(task.id, Number(e.target.value))}
-            className="w-full text-center text-[11px] font-bold text-[#101828] outline-none bg-transparent"
+            className="w-full text-center text-[12px] font-bold text-[#101828] outline-none bg-transparent"
           />
         </div>
       </div>
 
       {/* Actions – visible on row hover */}
+      {/* Label picker button */}
+      {(onAddLabel || onCreateLabel) && (
+        <div
+          className="flex-shrink-0 w-[26px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+          ref={labelRef}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => { if (labelOpen) setLabelOpen(false); else openLabel(); }}
+            title="Labels"
+            className={`flex h-6 w-6 items-center justify-center rounded-md transition-all ${
+              labelOpen ? 'bg-[#EFF8FF] text-[#175CD3]' : 'text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF]'
+            }`}
+          >
+            <Tag size={12} />
+          </button>
+          {labelOpen && labelRect && typeof document !== 'undefined' && createPortal(
+            <div
+              ref={labelPortalRef}
+              className="fixed z-[9999] w-56 overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-xl"
+              style={{ top: labelRect.bottom + 4, left: Math.max(4, labelRect.right - 224) }}
+            >
+              {/* Create new label input */}
+              <div className="px-3 py-2 border-b border-[#F2F4F7]">
+                <input
+                  autoFocus
+                  type="text"
+                  value={labelInput}
+                  onChange={(e) => setLabelInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); void handleCreateLabelFromInput(); }
+                    if (e.key === 'Escape') { setLabelOpen(false); setLabelInput(''); }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  placeholder="New label name + Enter"
+                  disabled={creatingLabel}
+                  className="w-full text-[12px] text-[#101828] placeholder-[#98A2B3] bg-transparent outline-none"
+                />
+              </div>
+              {/* Existing labels */}
+              <div className="max-h-48 overflow-y-auto">
+                {projectLabels.length === 0 && (
+                  <div className="px-3 py-3 text-[12px] text-[#98A2B3]">No labels yet</div>
+                )}
+                {projectLabels.map((label) => {
+                  const active = taskLabelIds.has(label.id);
+                  return (
+                    <button
+                      key={label.id}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); void handleLabelToggle(label); }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-[12px] hover:bg-[#F9FAFB] transition-colors"
+                    >
+                      <span
+                        className="inline-block h-3 w-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: label.color ?? '#6B7280' }}
+                      />
+                      <span className="flex-1 text-left truncate text-[#344054] font-medium">{label.name}</span>
+                      {active && (
+                        <span className="h-4 w-4 rounded-full bg-[#175CD3] flex items-center justify-center flex-shrink-0">
+                          <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1.5 4L3 5.5L6.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>,
+            document.body
+          )}
+        </div>
+      )}
+
       <div
         className="flex-shrink-0 w-[52px] pl-1 pr-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
         onClick={(e) => e.stopPropagation()}
