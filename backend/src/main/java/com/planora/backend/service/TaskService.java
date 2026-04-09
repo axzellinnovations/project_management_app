@@ -1,6 +1,5 @@
 package com.planora.backend.service;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -93,10 +92,8 @@ public class TaskService {
 
         task.setStoryPoint(request.getStoryPoint() != null ? request.getStoryPoint() : 0);
 
-        // Ensure every task has a start date (use creation date when not provided) and a due date.
-        LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
-        task.setStartDate(startDate);
-        task.setDueDate(request.getDueDate() != null ? request.getDueDate() : startDate);
+        task.setStartDate(request.getStartDate());
+        task.setDueDate(request.getDueDate());
 
         //enum assign
         if(request.getPriority() != null) task.setPriority(Priority.valueOf(request.getPriority()));

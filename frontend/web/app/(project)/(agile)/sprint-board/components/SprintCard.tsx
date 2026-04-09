@@ -6,12 +6,21 @@ import { CSS } from '@dnd-kit/utilities';
 import { SprintboardTask } from '../types';
 import { Calendar } from 'lucide-react';
 import AssigneeAvatar from '../../sprint-backlog/components/AssigneeAvatar';
+import { hexToLabelStyle } from '@/components/shared/LabelPicker';
+
+const PRIORITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  HIGH:   { bg: 'bg-[#FEF3F2]', text: 'text-[#B42318]', label: 'High' },
+  URGENT: { bg: 'bg-[#FEF3F2]', text: 'text-[#B42318]', label: 'Urgent' },
+  MEDIUM: { bg: 'bg-[#FFFAEB]', text: 'text-[#B54708]', label: 'Medium' },
+  LOW:    { bg: 'bg-[#F2F4F7]', text: 'text-[#344054]', label: 'Low' },
+};
 
 interface SprintCardProps {
   task: SprintboardTask;
+  onOpenTask?: (id: number) => void;
 }
 
-export default function SprintCard({ task }: SprintCardProps) {
+export default function SprintCard({ task, onOpenTask }: SprintCardProps) {
   const {
     attributes,
     listeners,
@@ -50,6 +59,8 @@ export default function SprintCard({ task }: SprintCardProps) {
     new Date(task.dueDate) < new Date() &&
     task.status !== 'DONE';
 
+  const priorityStyle = PRIORITY_STYLES[(task.priority || '').toUpperCase()];
+
   return (
     <div
       ref={setNodeRef}
@@ -62,10 +73,23 @@ export default function SprintCard({ task }: SprintCardProps) {
         ${isDragging ? 'ring-2 ring-[#155DFC] z-50 scale-105' : ''}
       `}
     >
-      {/* Title */}
-      <h3 className="text-[14px] font-semibold text-[#101828] leading-tight mb-3">
-        {task.title}
-      </h3>
+      {/* Title — click to open task modal */}
+      <div className="flex items-start gap-1.5 mb-3">
+        <h3
+          className="text-[14px] font-semibold text-[#101828] leading-tight cursor-pointer hover:text-[#155DFC] transition-colors flex-1 min-w-0"
+          onClick={(e) => { e.stopPropagation(); onOpenTask?.(task.taskId); }}
+        >
+          {task.title}
+        </h3>
+        {task.label && (
+          <span
+            style={hexToLabelStyle(task.label.color ?? '#6366F1')}
+            className="flex-shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap mt-0.5"
+          >
+            {task.label.name}
+          </span>
+        )}
+      </div>
 
       {/* Date */}
       {dueDateFormatted && (
@@ -77,9 +101,14 @@ export default function SprintCard({ task }: SprintCardProps) {
         </div>
       )}
 
-      {/* Bottom row: Story points & Assignee */}
+      {/* Bottom row: Priority badge, Story points & Assignee */}
       <div className="flex items-center justify-between mt-auto pt-1">
         <div className="flex items-center gap-2">
+          {priorityStyle && (
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${priorityStyle.bg} ${priorityStyle.text}`}>
+              {priorityStyle.label}
+            </span>
+          )}
           {task.storyPoint !== undefined && (
             <div className="px-2.5 py-1 rounded-md text-[12px] font-bold bg-[#F2F4F7] text-[#344054]">
               {task.storyPoint}

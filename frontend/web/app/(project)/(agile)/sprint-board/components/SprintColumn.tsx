@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { motion } from 'framer-motion';
 import {
@@ -13,13 +13,17 @@ import { Plus } from 'lucide-react';
 
 interface SprintColumnProps {
   column: Sprintcolumn;
-  onCreateTask?: (status: string) => void;
+  onInlineCreate?: (title: string, status: string) => Promise<void>;
+  onOpenTask?: (id: number) => void;
 }
 
 export default function SprintColumn({
   column,
-  onCreateTask,
+  onInlineCreate,
+  onOpenTask,
 }: SprintColumnProps) {
+  const [inlineOpen, setInlineOpen] = useState(false);
+  const [inlineTitle, setInlineTitle] = useState('');
   const { setNodeRef } = useDroppable({
     id: column.columnStatus,
     data: { type: 'column', columnStatus: column.columnStatus },
@@ -69,9 +73,18 @@ export default function SprintColumn({
           <h3 className={`font-bold text-[13px] uppercase tracking-wider ${getTitleColor(column.columnStatus)}`}>
             {column.columnName}
           </h3>
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/50 text-[#475467] text-[12px] font-bold border border-[#EAECF0]/50 shadow-sm">
-            {column.tasks.length}
-          </span>
+          {(() => {
+            const isWipDanger = column.columnStatus.toUpperCase() === 'IN_PROGRESS' && column.tasks.length >= 5;
+            return (
+              <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[12px] font-bold border shadow-sm transition-colors ${
+                isWipDanger
+                  ? 'bg-[#FEF3F2] border-[#FECDCA] text-[#B42318]'
+                  : 'bg-white/50 border-[#EAECF0]/50 text-[#475467]'
+              }`}>
+                {column.tasks.length}
+              </span>
+            );
+          })()}
         </div>
       </div>
 
@@ -90,6 +103,7 @@ export default function SprintColumn({
               <SprintCard
                 key={task.taskId}
                 task={task}
+                onOpenTask={onOpenTask}
               />
             ))
           ) : (
@@ -100,15 +114,41 @@ export default function SprintColumn({
         </SortableContext>
       </div>
 
-      {/* Create Task Button */}
+      {/* Create Task Button / Inline Input */}
       <div className="mt-4 pb-2">
-        <button
-          onClick={() => onCreateTask?.(column.columnStatus)}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-white hover:bg-gray-50 border border-[#EAECF0] rounded-xl text-[14px] font-semibold text-[#344054] shadow-sm transition-all duration-200 group"
-        >
-          <Plus size={18} className="text-[#98A2B3] group-hover:text-[#101828]" />
-          <span>Create</span>
-        </button>
+        {inlineOpen ? (
+          <input
+            autoFocus
+            value={inlineTitle}
+            onChange={(e) => setInlineTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && inlineTitle.trim()) {
+                const title = inlineTitle.trim();
+                setInlineTitle('');
+                setInlineOpen(false);
+                void onInlineCreate?.(title, column.columnStatus);
+              }
+              if (e.key === 'Escape') {
+                setInlineOpen(false);
+                setInlineTitle('');
+              }
+            }}
+            onBlur={() => {
+              setInlineOpen(false);
+              setInlineTitle('');
+            }}
+            className="w-full px-3 py-2 text-sm border border-[#155DFC] rounded-xl focus:outline-none bg-white shadow-sm"
+            placeholder="Task name… (Enter to save)"
+          />
+        ) : (
+          <button
+            onClick={() => setInlineOpen(true)}
+            className="w-full flex items-center justify-center gap-2 py-3 bg-white hover:bg-gray-50 border border-[#EAECF0] rounded-xl text-[14px] font-semibold text-[#344054] shadow-sm transition-all duration-200 group"
+          >
+            <Plus size={18} className="text-[#98A2B3] group-hover:text-[#101828]" />
+            <span>Create</span>
+          </button>
+        )}
       </div>
     </motion.div>
   );
