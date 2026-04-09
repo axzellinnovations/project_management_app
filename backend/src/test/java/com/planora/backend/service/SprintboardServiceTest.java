@@ -1,9 +1,12 @@
 package com.planora.backend.service;
 
+import com.planora.backend.dto.SprintcolumnDTO;
+import com.planora.backend.exception.ConflictException;
 import com.planora.backend.model.Project;
 import com.planora.backend.model.Sprint;
+import com.planora.backend.model.SprintStatus;
 import com.planora.backend.model.Sprintboard;
-import com.planora.backend.model.SprintcolumnStatus;
+import com.planora.backend.model.Sprintcolumn;
 import com.planora.backend.model.Task;
 import com.planora.backend.model.Team;
 import com.planora.backend.model.TeamMember;
@@ -36,44 +39,51 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class SprintboardServiceTest {
 
-    @Mock
-    private SprintboardRepository sprintboardRepository;
-    @Mock
-    private SpringcolumnRepository springcolumnRepository;
-    @Mock
-    private SprintRepository sprintRepository;
-    @Mock
-    private TaskRepository taskRepository;
-    @Mock
-    private ProjectRepository projectRepository;
-    @Mock
-    private TeamMemberRepository teamMemberRepository;
-    @Mock
-    private UserRepository userRepository;
-    @Mock
-    private SpringcolumnService springcolumnService;
-    @Mock
-    private NotificationService notificationService;
+    @Mock private SprintboardRepository sprintboardRepository;
+    @Mock private SpringcolumnRepository springcolumnRepository;
+    @Mock private SprintRepository sprintRepository;
+    @Mock private TaskRepository taskRepository;
+    @Mock private ProjectRepository projectRepository;
+    @Mock private TeamMemberRepository teamMemberRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private SpringcolumnService springcolumnService;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks
     private SprintboardService sprintboardService;
 
-    @Test
-    void moveTaskToColumn_statusChangeNotifiesStakeholders() {
+    // -------- helpers --------
+
+    private static Project makeProject() {
         Team team = new Team();
         team.setId(10L);
-
         Project project = new Project();
         project.setId(3L);
         project.setTeam(team);
+        return project;
+    }
 
+    private static Sprint makeSprint(Project project) {
         Sprint sprint = new Sprint();
         sprint.setId(5L);
-        sprint.setProId(3L);
+        sprint.setProject(project);
+        return sprint;
+    }
 
-        Sprintboard sprintboard = new Sprintboard();
-        sprintboard.setId(7L);
-        sprintboard.setSprint(sprint);
+    private static Sprintboard makeSprintboard(Sprint sprint) {
+        Sprintboard sb = new Sprintboard();
+        sb.setId(7L);
+        sb.setSprint(sprint);
+        return sb;
+    }
+
+    // -------- existing tests (updated for BUG-6) --------
+
+    @Test
+    void moveTaskToColumn_statusChangeNotifiesStakeholders() {
+        Project project = makeProject();
+        Sprint sprint = makeSprint(project);
+        Sprintboard sprintboard = makeSprintboard(sprint);
 
         User assigneeUser = new User();
         assigneeUser.setUserId(200L);
@@ -108,11 +118,11 @@ class SprintboardServiceTest {
         when(projectRepository.findById(3L)).thenReturn(Optional.of(project));
         when(teamMemberRepository.findByTeamIdAndUserUserId(10L, 500L)).thenReturn(Optional.of(actorMember));
         when(taskRepository.findById(77L)).thenReturn(Optional.of(task));
-        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actor));
         when(userRepository.findAllById(any())).thenReturn(List.of(assigneeUser, reporterUser));
 
-        sprintboardService.moveTaskToColumn(77L, 7L, SprintcolumnStatus.DONE, 500L);
+        sprintboardService.moveTaskToColumn(77L, 7L, "DONE", 500L);
 
         verify(notificationService, times(2))
                 .createNotification(any(User.class), contains("moved task"), eq("/taskcard?taskId=77"));
@@ -120,20 +130,9 @@ class SprintboardServiceTest {
 
     @Test
     void moveTaskToColumn_sameStatusDoesNotNotify() {
-        Team team = new Team();
-        team.setId(10L);
-
-        Project project = new Project();
-        project.setId(3L);
-        project.setTeam(team);
-
-        Sprint sprint = new Sprint();
-        sprint.setId(5L);
-        sprint.setProId(3L);
-
-        Sprintboard sprintboard = new Sprintboard();
-        sprintboard.setId(7L);
-        sprintboard.setSprint(sprint);
+        Project project = makeProject();
+        Sprint sprint = makeSprint(project);
+        Sprintboard sprintboard = makeSprintboard(sprint);
 
         Task task = new Task();
         task.setId(77L);
@@ -148,10 +147,58 @@ class SprintboardServiceTest {
         when(projectRepository.findById(3L)).thenReturn(Optional.of(project));
         when(teamMemberRepository.findByTeamIdAndUserUserId(10L, 500L)).thenReturn(Optional.of(actorMember));
         when(taskRepository.findById(77L)).thenReturn(Optional.of(task));
-        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        sprintboardService.moveTaskToColumn(77L, 7L, SprintcolumnStatus.TODO, 500L);
+        sprintboardService.moveTaskToColumn(77L, 7L, "TODO", 500L);
 
         verify(notificationService, never()).createNotification(any(User.class), any(String.class), any(String.class));
+    }
+
+    // -------- new tests --------
+
+    @Test
+    void addColumnToSprintboard_createsColumnWithMaxPositionPlusOne() {
+        Project project = makeProject();
+        Sprint sprint = makeSprint(project);
+        Sprintboard sprintboard = makeSprintboard(sprint);
+
+        Sprintcolumn existingCol = new Sprintcolumn();
+        existingCol.setPosition(2);
+
+        TeamMember adminMember = new TeamMember();
+        adminMember.setRole(TeamRole.ADMIN);
+
+        when(sprintboardRepository.findById(7L)).thenReturn(Optional.of(sprintboard));
+        when(projectRepository.findById(3L)).thenReturn(Optional.of(project));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(10L, 100L)).thenReturn(Optional.of(adminMember));
+        when(springcolumnRepository.findBySprintboardIdOrderByPosition(7L)).thenReturn(List.of(existingCol));
+        when(springcolumnRepository.save(any(Sprintcolumn.class))).thenAnswer(inv -> {
+            Sprintcolumn col = inv.getArgument(0);
+            col.setId(99L);
+            return col;
+        });
+
+        SprintcolumnDTO result = sprintboardService.addColumnToSprintboard(7L, "Review", "TODO", 100L);
+
+        org.junit.jupiter.api.Assertions.assertEquals(3, result.getPosition());
+        org.junit.jupiter.api.Assertions.assertEquals("Review", result.getColumnName());
+    }
+
+    @Test
+    void completeSprint_whenNotActive_throwsConflict() {
+        Project project = makeProject();
+        Sprint sprint = makeSprint(project);
+        sprint.setStatus(SprintStatus.NOT_STARTED);
+
+        SprintService sprintSvc = new SprintService(
+                sprintRepository, projectRepository, teamMemberRepository,
+                sprintboardService, taskRepository, sprintboardRepository);
+
+        when(sprintRepository.findById(5L)).thenReturn(Optional.of(sprint));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                ConflictException.class,
+                () -> sprintSvc.completeSprint(5L, 100L)
+        );
     }
 }

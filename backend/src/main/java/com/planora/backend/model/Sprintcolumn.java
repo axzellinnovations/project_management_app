@@ -23,9 +23,8 @@ public class Sprintcolumn {
     @Column(nullable = false)
     private Integer position;
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private SprintcolumnStatus columnStatus;
+    private String columnStatus;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sprintboard_id", nullable = false)
