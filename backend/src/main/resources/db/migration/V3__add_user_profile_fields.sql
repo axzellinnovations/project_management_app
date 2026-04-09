@@ -1,0 +1,10 @@
+-- V3: Add extended profile fields to users table
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name      VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name       VARCHAR(100);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS contact_number  VARCHAR(30);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS country_code    VARCHAR(10);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title       VARCHAR(150);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company         VARCHAR(150);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS position        VARCHAR(150);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio             TEXT;
