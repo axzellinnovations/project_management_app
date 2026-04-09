@@ -230,9 +230,25 @@ function TopBarContent() {
   };
 
   const isProjectPage = useMemo(() => {
-    const projectPaths = ['/summary', '/timeline', '/sprint-backlog', '/backlog', '/kanban', '/sprint-board', '/calendar', '/burndown', '/pages', '/notifications', '/members', '/project/'];
-    return projectPaths.some(path => pathname.startsWith(path));
-  }, [pathname]);
+    const hasProjectContext = Boolean(projectId);
+    if (pathname.startsWith('/project/') && pathname.includes('/chat')) {
+      return true;
+    }
+    const projectScopedPaths = [
+      '/summary',
+      '/timeline',
+      '/sprint-backlog',
+      '/backlog',
+      '/kanban',
+      '/sprint-board',
+      '/calendar',
+      '/burndown',
+      '/pages',
+      '/notifications',
+      '/members',
+    ];
+    return hasProjectContext && projectScopedPaths.some(path => pathname.startsWith(path));
+  }, [pathname, projectId]);
 
   /* ── Profile avatar block (shared) ── */
   const profileAvatar = resolvedProfilePicUrl ? (

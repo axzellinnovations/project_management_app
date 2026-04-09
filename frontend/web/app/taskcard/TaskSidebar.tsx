@@ -57,7 +57,7 @@ interface TaskSidebarProps {
 }
 
 const TaskSidebar: React.FC<TaskSidebarProps> = ({ 
-  taskId, status, assignee, reporter, labels, priority, sprint, storyPoint, dates,
+  taskId: _taskId, status, assignee, reporter, labels, priority, sprint, storyPoint, dates,
   onUpdateStatus, onUpdatePriority, onUpdateStoryPoint, onUpdateDueDate, onUnassign
 }) => {
   const [isStatusOpen, setIsStatusOpen] = useState(false);

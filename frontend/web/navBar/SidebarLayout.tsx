@@ -6,7 +6,12 @@ import TopBar from './TopBar';
 import { Suspense } from 'react';
 import { usePathname } from 'next/navigation';
 
-export default function SidebarLayout({ children }: { children: React.ReactNode }) {
+interface SidebarLayoutProps {
+    children: React.ReactNode;
+    showTopBar?: boolean;
+}
+
+export default function SidebarLayout({ children, showTopBar = true }: SidebarLayoutProps) {
     const pathname = usePathname();
     const isChatRoute = pathname?.includes('/chat');
 
@@ -18,9 +23,13 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 style={{ transition: 'all 300ms cubic-bezier(0.4,0,0.2,1)' }}
             >
                 <div className="flex flex-col flex-1 min-w-0 overflow-hidden main-content-area">
-                    <Suspense fallback={null}>
-                        <TopBar />
-                    </Suspense>
+                    {showTopBar && (
+                        <div className="transition-opacity duration-200 ease-out">
+                            <Suspense fallback={null}>
+                                <TopBar />
+                            </Suspense>
+                        </div>
+                    )}
                     <div className={`flex-1 w-full ${isChatRoute ? 'overflow-hidden' : 'overflow-y-auto'}`}>
                         {children}
                     </div>

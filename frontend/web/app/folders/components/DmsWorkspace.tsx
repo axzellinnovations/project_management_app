@@ -34,7 +34,7 @@ const FAVORITES_KEY = 'dmsFavoriteDocumentIds';
 
 export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
     const searchParams = useSearchParams();
-    const [projectId, setProjectId] = useState<number | null>(() => {
+    const [projectId] = useState<number | null>(() => {
         const qp = searchParams.get('projectId');
         const stored = typeof window !== 'undefined' ? localStorage.getItem('currentProjectId') : null;
         const id = Number(qp || stored);
