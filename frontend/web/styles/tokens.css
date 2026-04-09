@@ -104,3 +104,31 @@
   --cu-topbar-height: 48px;
   --cu-detail-panel-width: 400px;
 }
+
+/* ══════════════════════════════════════════════════
+   Dark Mode Overrides
+   Applied when <html class="dark"> is present
+   ══════════════════════════════════════════════════ */
+html.dark {
+  /* Surface */
+  --cu-bg: #111827;
+  --cu-bg-secondary: #0F172A;
+  --cu-bg-tertiary: #1E293B;
+
+  /* Border */
+  --cu-border: #334155;
+  --cu-border-light: #1E293B;
+
+  /* Text */
+  --cu-text-primary: #F1F5F9;
+  --cu-text-secondary: #94A3B8;
+  --cu-text-tertiary: #64748B;
+
+  /* Sidebar — keep dark but slightly lighter than main bg */
+  --cu-sidebar: #0F172A;
+  --cu-sidebar-hover: #1E293B;
+  --cu-sidebar-active: #293548;
+  --cu-sidebar-border: #1E293B;
+  --cu-sidebar-text: #94A3B8;
+  --cu-sidebar-text-bright: #F1F5F9;
+}
