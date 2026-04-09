@@ -297,7 +297,7 @@ export default function ChatInterface() {
       </div>
 
       {/* ── Main chat area ── */}
-      <div className={`flex-1 flex flex-col min-w-0 bg-white border-l-0 lg:border-l border-gray-100/60 shadow-sm ${!showChatSidebar ? 'flex w-full' : 'hidden lg:flex'}`}>
+      <div className={`flex-1 min-h-0 flex flex-col min-w-0 bg-white border-l-0 lg:border-l border-gray-100/60 shadow-sm ${!showChatSidebar ? 'flex w-full' : 'hidden lg:flex'}`}>
 
         {/* Reconnect / disconnect banner */}
         <AnimatePresence>
@@ -466,45 +466,47 @@ export default function ChatInterface() {
           )}
         </AnimatePresence>
 
-        {/* No conversation selected — empty state */}
-        {!selectedUser && !hasSelectedRoom && displayMessages.length === 0 && !isLoading ? null : null}
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* No conversation selected — empty state */}
+          {!selectedUser && !hasSelectedRoom && displayMessages.length === 0 && !isLoading ? null : null}
 
-        {/* Messages */}
-        <ChatMessages
-          projectId={projectId}
-          messages={filteredMessages}
-          currentUser={currentUser}
-          currentUserAliases={currentUserAliases}
-          isPrivateChat={isPrivateChat}
-          userProfilePics={userProfilePics}
-          activeRoomId={selectedRoomId}
-          pinnedMessageId={selectedRoom?.pinnedMessageId ?? null}
-          reactionsByMessageId={messageReactions}
-          onOpenThread={openThread}
-          onEditMessage={editMessage}
-          onDeleteMessage={deleteMessage}
-          onToggleReaction={toggleReaction}
-          onPinRoomMessage={
-            selectedRoomId ? (messageId) => pinRoomMessage(selectedRoomId, messageId) : undefined
-          }
-          typingUser={activeTypingUser}
-        />
+          {/* Messages */}
+          <ChatMessages
+            projectId={projectId}
+            messages={filteredMessages}
+            currentUser={currentUser}
+            currentUserAliases={currentUserAliases}
+            isPrivateChat={isPrivateChat}
+            userProfilePics={userProfilePics}
+            activeRoomId={selectedRoomId}
+            pinnedMessageId={selectedRoom?.pinnedMessageId ?? null}
+            reactionsByMessageId={messageReactions}
+            onOpenThread={openThread}
+            onEditMessage={editMessage}
+            onDeleteMessage={deleteMessage}
+            onToggleReaction={toggleReaction}
+            onPinRoomMessage={
+              selectedRoomId ? (messageId) => pinRoomMessage(selectedRoomId, messageId) : undefined
+            }
+            typingUser={activeTypingUser}
+          />
 
-        {/* Input */}
-        <ChatInput
-          onSendMessage={handleSendMessage}
-          onTypingChange={sendTyping}
-          disabled={isLoading || !!error}
-          placeholder={
-            hasSelectedRoom
-              ? `Message #${selectedRoom?.name ?? 'channel'}…`
-              : selectedUser
-              ? `Message ${selectedUser}…`
-              : 'Message team…'
-          }
-          enableMentions={!selectedUser}
-          mentionCandidates={mentionCandidates}
-        />
+          {/* Input */}
+          <ChatInput
+            onSendMessage={handleSendMessage}
+            onTypingChange={sendTyping}
+            disabled={isLoading || !!error}
+            placeholder={
+              hasSelectedRoom
+                ? `Message #${selectedRoom?.name ?? 'channel'}…`
+                : selectedUser
+                ? `Message ${selectedUser}…`
+                : 'Message team…'
+            }
+            enableMentions={!selectedUser}
+            mentionCandidates={mentionCandidates}
+          />
+        </div>
       </div>
 
       {/* ── Thread panel ── */}

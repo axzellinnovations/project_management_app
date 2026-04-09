@@ -5,13 +5,21 @@ export interface User {
     userId?: number;
 }
 
+export const AUTH_TOKEN_CHANGED_EVENT = 'planora-auth-token-changed';
+
 interface JwtPayload {
     sub?: string;
     username?: string;
     exp?: number;
 }
 
-// ─── Remember-me helpers ──────────────────────────────────────────────────────
+function emitAuthTokenChanged(): void {
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event(AUTH_TOKEN_CHANGED_EVENT));
+    }
+}
+
+// Remember-me helpers
 
 /** Persist the user's "remember me" preference (stored in localStorage itself so
  *  it survives a browser restart and controls where the tokens are kept). */
@@ -30,13 +38,13 @@ export function getRememberMe(): boolean {
 }
 
 /** Pick the right storage based on the rememberMe flag.
- *  - rememberMe=true  → localStorage  (survives browser restart)
- *  - rememberMe=false → sessionStorage (cleared when the tab/window closes) */
+ *  - rememberMe=true  -> localStorage  (survives browser restart)
+ *  - rememberMe=false -> sessionStorage (cleared when the tab/window closes) */
 function tokenStorage(): Storage {
     return getRememberMe() ? localStorage : sessionStorage;
 }
 
-// ─── Token helpers ────────────────────────────────────────────────────────────
+// Token helpers
 
 export function getUserFromToken(): User | null {
     if (typeof window === 'undefined') return null;
@@ -107,12 +115,17 @@ export function getUserFromToken(): User | null {
 
 export function saveToken(token: string): void {
     if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        sessionStorage.removeItem('token');
         tokenStorage().setItem('token', token);
+        emitAuthTokenChanged();
     }
 }
 
 export function saveRefreshToken(token: string): void {
     if (typeof window !== 'undefined') {
+        localStorage.removeItem('refreshToken');
+        sessionStorage.removeItem('refreshToken');
         tokenStorage().setItem('refreshToken', token);
     }
 }
@@ -130,6 +143,7 @@ export function clearTokens(): void {
         localStorage.removeItem('rememberMe');
         sessionStorage.removeItem('token');
         sessionStorage.removeItem('refreshToken');
+        emitAuthTokenChanged();
     }
 }
 

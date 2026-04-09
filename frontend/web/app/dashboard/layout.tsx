@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import SidebarLayout from '@/navBar/SidebarLayout';
+import { AUTH_TOKEN_CHANGED_EVENT, getValidToken } from '@/lib/auth';
 
 export default function DashboardLayout({
     children,
@@ -12,20 +13,25 @@ export default function DashboardLayout({
     const router = useRouter();
 
     useEffect(() => {
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-        if (!token) {
+        const ensureAuthenticated = () => {
+            if (getValidToken()) return;
             router.replace('/login');
-            return;
-        }
+        };
 
         const handleStorage = (event: StorageEvent) => {
-            if (event.key === 'token' && !event.newValue) {
-                router.replace('/login');
+            if (event.key === 'token' || event.key === 'rememberMe' || event.key === null) {
+                ensureAuthenticated();
             }
         };
 
+        ensureAuthenticated();
+
         window.addEventListener('storage', handleStorage);
-        return () => window.removeEventListener('storage', handleStorage);
+        window.addEventListener(AUTH_TOKEN_CHANGED_EVENT, ensureAuthenticated);
+        return () => {
+            window.removeEventListener('storage', handleStorage);
+            window.removeEventListener(AUTH_TOKEN_CHANGED_EVENT, ensureAuthenticated);
+        };
     }, [router]);
 
     return (

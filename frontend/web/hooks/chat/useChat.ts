@@ -101,7 +101,7 @@ export const useChat = (projectId: string) => {
 
   // â”€â”€ Stable setter/callback destructuring (prevents dep-array identity loops) â”€â”€
   const { setMessages, setPrivateMessages, setRoomMessages, setTeamLastMessage,
-          setRoomLastMessages, mergePrivateMessage,
+      setPrivateLastMessages, setRoomLastMessages, mergePrivateMessage,
           sendMessage: msgSend, sendRoomMessage: msgSendRoom,
           editMessage: msgEdit, deleteMessage: msgDelete,
           loadRoomHistory: msgLoadRoom, loadPrivateHistory: msgLoadPrivate } = msg;
@@ -474,6 +474,15 @@ export const useChat = (projectId: string) => {
             if (!partner || inc.parentMessageId) return;
 
             mergePrivateMessage(partner, inc, selectedUserRef.current, isFromCurrent);
+            const activeKey =
+              selectedUserRef.current && isSameIdentity(selectedUserRef.current, partner)
+                ? selectedUserRef.current.toLowerCase()
+                : partner;
+            setPrivateLastMessages(prev => ({
+              ...prev,
+              [activeKey]: inc,
+              ...(activeKey !== partner ? { [partner]: inc } : {}),
+            }));
             if (!isFromCurrent && !(selectedUserRef.current && isSameIdentity(selectedUserRef.current, partner))) {
               const key = selectedUserRef.current && isSameIdentity(selectedUserRef.current, partner)
                 ? selectedUserRef.current.toLowerCase() : partner;
@@ -719,7 +728,7 @@ export const useChat = (projectId: string) => {
       if (inc.id) loadMsgReactions(inc.id);
     });
     return () => sub.unsubscribe();
-  }, [projectId, isSocketConnected, threads.activeThreadRootRef, setThreadMessages, loadMsgReactions]);
+  }, [projectId, isSocketConnected, threads.activeThreadRootRef, threads.activeThreadRootRef.current, setThreadMessages, loadMsgReactions]);
 
   // â”€â”€ Per-message reaction subscriptions â”€â”€
   useEffect(() => {

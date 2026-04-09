@@ -6,6 +6,7 @@ import {
 import type { Notification } from '@/services/notifications-service';
 import * as notificationsApi from '@/services/notifications-service';
 import { toast } from '@/components/ui/Toast';
+import { AUTH_TOKEN_CHANGED_EVENT } from '@/lib/auth';
 
 let currentPathname = '/dashboard';
 
@@ -41,21 +42,29 @@ jest.mock('@/services/notifications-service', () => ({
   fetchUnreadCount: jest.fn(),
   markNotificationRead: jest.fn(),
   markAllNotificationsRead: jest.fn(),
-}));
-
-jest.mock('@/lib/auth', () => ({
-  getValidToken: jest.fn(),
+  deleteNotification: jest.fn(),
+  deleteAllNotifications: jest.fn(),
 }));
 
 jest.mock('@/components/ui/Toast', () => ({
   toast: jest.fn(),
 }));
 
-import { getValidToken } from '@/lib/auth';
-
 const mockedApi = notificationsApi as jest.Mocked<typeof notificationsApi>;
 const mockedToast = toast as jest.MockedFunction<typeof toast>;
-const mockedGetValidToken = getValidToken as jest.Mock;
+
+const buildMockJwt = (overrides: Record<string, unknown> = {}) => {
+  const header = window.btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const payload = window.btoa(
+    JSON.stringify({
+      sub: 'tester@example.com',
+      username: 'tester',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      ...overrides,
+    })
+  );
+  return `${header}.${payload}.signature`;
+};
 
 const buildNotification = (
   id: number,
@@ -72,7 +81,14 @@ const buildNotification = (
 });
 
 function TestConsumer() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useGlobalNotifications();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    deleteNotificationById,
+    deleteAllNotifications,
+  } = useGlobalNotifications();
 
   return (
     <div>
@@ -85,6 +101,8 @@ function TestConsumer() {
       </ul>
       <button onClick={() => void markAsRead(1)}>mark-one</button>
       <button onClick={() => void markAllAsRead()}>mark-all</button>
+      <button onClick={() => void deleteNotificationById(1)}>delete-one</button>
+      <button onClick={() => void deleteAllNotifications()}>delete-all</button>
     </div>
   );
 }
@@ -95,12 +113,14 @@ describe('GlobalNotificationProvider', () => {
     notificationHandler = null;
     currentPathname = '/dashboard';
     window.localStorage.clear();
-    mockedGetValidToken.mockReturnValue('fake-token');
+    window.localStorage.setItem('token', buildMockJwt());
 
     mockedApi.fetchNotifications.mockResolvedValue([]);
     mockedApi.fetchUnreadCount.mockResolvedValue(0);
     mockedApi.markNotificationRead.mockResolvedValue(undefined);
     mockedApi.markAllNotificationsRead.mockResolvedValue(undefined);
+    mockedApi.deleteNotification.mockResolvedValue(undefined);
+    mockedApi.deleteAllNotifications.mockResolvedValue([]);
   });
 
   it('hydrates initial notifications and unread count then subscribes for realtime updates', async () => {
@@ -122,11 +142,38 @@ describe('GlobalNotificationProvider', () => {
     });
 
     expect(stompClient.connect).toHaveBeenCalledWith(
-      { Authorization: 'Bearer fake-token' },
+      { Authorization: `Bearer ${window.localStorage.getItem('token')}` },
       expect.any(Function),
       expect.any(Function)
     );
     expect(stompClient.subscribe).toHaveBeenCalledWith('/user/queue/notifications', expect.any(Function));
+  });
+
+  it('connects when token becomes available after mount', async () => {
+    window.localStorage.removeItem('token');
+
+    render(
+      <GlobalNotificationProvider>
+        <TestConsumer />
+      </GlobalNotificationProvider>
+    );
+
+    await waitFor(() => {
+      expect(stompClient.connect).not.toHaveBeenCalled();
+    });
+
+    act(() => {
+      window.localStorage.setItem('token', buildMockJwt({ sub: 'late@example.com', username: 'late' }));
+      window.dispatchEvent(new Event(AUTH_TOKEN_CHANGED_EVENT));
+    });
+
+    await waitFor(() => {
+      expect(stompClient.connect).toHaveBeenCalledWith(
+        { Authorization: `Bearer ${window.localStorage.getItem('token')}` },
+        expect.any(Function),
+        expect.any(Function)
+      );
+    });
   });
 
   it('adds incoming notification, increments unread, and shows toast when user is on another page', async () => {
@@ -233,6 +280,66 @@ describe('GlobalNotificationProvider', () => {
       expect(mockedApi.markAllNotificationsRead).toHaveBeenCalledTimes(1);
       expect(screen.getByText('2:read')).toBeInTheDocument();
       expect(screen.getByTestId('unread-count')).toHaveTextContent('0');
+    });
+  });
+
+  it('supports deleting one notification via context', async () => {
+    mockedApi.fetchNotifications.mockResolvedValue([
+      buildNotification(1, false, '/project/8/chat', 'First'),
+      buildNotification(2, true, '/members/8', 'Second'),
+    ]);
+    mockedApi.fetchUnreadCount.mockResolvedValue(1);
+
+    render(
+      <GlobalNotificationProvider>
+        <TestConsumer />
+      </GlobalNotificationProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('notification-count')).toHaveTextContent('2');
+      expect(screen.getByTestId('unread-count')).toHaveTextContent('1');
+    });
+
+    fireEvent.click(screen.getByText('delete-one'));
+
+    await waitFor(() => {
+      expect(mockedApi.deleteNotification).toHaveBeenCalledWith(1);
+      expect(screen.getByTestId('notification-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('unread-count')).toHaveTextContent('0');
+    });
+  });
+
+  it('supports deleting all notifications via context', async () => {
+    mockedApi.fetchNotifications.mockResolvedValue([
+      buildNotification(1, false, '/project/8/chat', 'First'),
+      buildNotification(2, true, '/members/8', 'Second'),
+      buildNotification(3, false, '/project/8/tasks', 'Third'),
+    ]);
+    mockedApi.fetchUnreadCount.mockResolvedValue(2);
+    mockedApi.deleteAllNotifications.mockResolvedValue([
+      { status: 'fulfilled', value: undefined },
+      { status: 'fulfilled', value: undefined },
+      { status: 'rejected', reason: new Error('Delete failed') },
+    ]);
+
+    render(
+      <GlobalNotificationProvider>
+        <TestConsumer />
+      </GlobalNotificationProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('notification-count')).toHaveTextContent('3');
+    });
+
+    fireEvent.click(screen.getByText('delete-all'));
+
+    await waitFor(() => {
+      expect(mockedApi.deleteAllNotifications).toHaveBeenCalledWith([1, 2, 3]);
+      expect(screen.getByTestId('notification-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('unread-count')).toHaveTextContent('1');
+      expect(screen.getByText('3:unread')).toBeInTheDocument();
     });
   });
 });

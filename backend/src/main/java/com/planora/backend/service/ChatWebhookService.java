@@ -19,6 +19,8 @@ import com.planora.backend.model.ChatMessage;
 
 import lombok.extern.slf4j.Slf4j;
 
+// TODO: Wire this service to a ChatWebhookController when webhook integration is ready.
+// Currently this class is unreachable from any controller.
 @Service
 @Slf4j
 public class ChatWebhookService {
