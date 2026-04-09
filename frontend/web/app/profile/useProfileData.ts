@@ -14,6 +14,14 @@ type UserResponse = {
     verified: boolean;
     profilePicUrl: string | null;
     lastActive: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    contactNumber: string | null;
+    countryCode: string | null;
+    jobTitle: string | null;
+    company: string | null;
+    position: string | null;
+    bio: string | null;
 };
 
 type PhotoUploadResponse = {
@@ -29,6 +37,14 @@ export function useProfileData() {
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [fullName, setFullName] = useState('');
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
+    const [contactNumber, setContactNumber] = useState('');
+    const [countryCode, setCountryCode] = useState('');
+    const [jobTitle, setJobTitle] = useState('');
+    const [company, setCompany] = useState('');
+    const [position, setPosition] = useState('');
+    const [bio, setBio] = useState('');
     const [profilePicUrl, setProfilePicUrl] = useState('');
     const [imageKey, setImageKey] = useState(Date.now());
     const [lastActive, setLastActive] = useState<string | null>(null);
@@ -76,16 +92,21 @@ export function useProfileData() {
 
         const loadProfile = async () => {
             try {
-                const response = await api.get<UserResponse[]>('/api/auth/users');
-                const currentUser = response.data.find(
-                    (user) => user.email.toLowerCase() === tokenUser.email.toLowerCase()
-                );
-                if (currentUser) {
-                    setUsername(currentUser.username || tokenUser.username || '');
-                    setFullName(currentUser.fullName || '');
-                    setProfilePicUrl(currentUser.profilePicUrl || '');
-                    setLastActive(currentUser.lastActive || null);
-                }
+                const response = await api.get<UserResponse>('/api/user/profile');
+                const p = response.data;
+                setUsername(p.username || tokenUser.username || '');
+                setEmail(p.email || tokenUser.email || '');
+                setFullName(p.fullName || '');
+                setFirstName(p.firstName || '');
+                setLastName(p.lastName || '');
+                setContactNumber(p.contactNumber || '');
+                setCountryCode(p.countryCode || '');
+                setJobTitle(p.jobTitle || '');
+                setCompany(p.company || '');
+                setPosition(p.position || '');
+                setBio(p.bio || '');
+                setProfilePicUrl(p.profilePicUrl || '');
+                setLastActive(p.lastActive || null);
             } catch (error: unknown) {
                 setErrorMessage(getApiErrorMessage(error, 'Failed to load profile details.'));
             } finally {
@@ -133,17 +154,33 @@ export function useProfileData() {
         }
     };
 
-    const onSaveFullName = async (event: FormEvent<HTMLFormElement>) => {
+    const onSaveProfile = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setErrorMessage('');
         setSuccessMessage('');
-        if (!fullName.trim()) { setErrorMessage('Full name cannot be blank.'); return; }
         try {
             setIsSavingName(true);
             const response = await api.put<UserResponse>('/api/user/profile/update', {
-                fullName: fullName.trim(),
+                fullName: fullName.trim() || null,
+                firstName: firstName.trim() || null,
+                lastName: lastName.trim() || null,
+                contactNumber: contactNumber.trim() || null,
+                countryCode: countryCode.trim() || null,
+                jobTitle: jobTitle.trim() || null,
+                company: company.trim() || null,
+                position: position.trim() || null,
+                bio: bio.trim() || null,
             });
-            setFullName(response.data.fullName || '');
+            const p = response.data;
+            setFullName(p.fullName || '');
+            setFirstName(p.firstName || '');
+            setLastName(p.lastName || '');
+            setContactNumber(p.contactNumber || '');
+            setCountryCode(p.countryCode || '');
+            setJobTitle(p.jobTitle || '');
+            setCompany(p.company || '');
+            setPosition(p.position || '');
+            setBio(p.bio || '');
             setSuccessMessage('Profile updated successfully.');
         } catch (error: unknown) {
             setErrorMessage(getApiErrorMessage(error, 'Failed to update profile.'));
@@ -183,6 +220,14 @@ export function useProfileData() {
         username,
         email,
         fullName, setFullName,
+        firstName, setFirstName,
+        lastName, setLastName,
+        contactNumber, setContactNumber,
+        countryCode, setCountryCode,
+        jobTitle, setJobTitle,
+        company, setCompany,
+        position, setPosition,
+        bio, setBio,
         resolvedProfilePicUrl,
         imageKey,
         lastActive,
@@ -199,7 +244,7 @@ export function useProfileData() {
         successMessage,
         handleSendOtp,
         handleResetPassword,
-        onSaveFullName,
+        onSaveProfile,
         onUploadPhoto,
     };
 }

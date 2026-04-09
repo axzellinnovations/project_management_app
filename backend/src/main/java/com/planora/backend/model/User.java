@@ -50,6 +50,31 @@ public class User {
     @Column(name = "profile_picture_url")
     private String profilePicUrl;
 
+    // Extended profile fields
+    @Column(name = "first_name", length = 100)
+    private String firstName;
+
+    @Column(name = "last_name", length = 100)
+    private String lastName;
+
+    @Column(name = "contact_number", length = 30)
+    private String contactNumber;
+
+    @Column(name = "country_code", length = 10)
+    private String countryCode;
+
+    @Column(name = "job_title", length = 150)
+    private String jobTitle;
+
+    @Column(name = "company", length = 150)
+    private String company;
+
+    @Column(name = "position", length = 150)
+    private String position;
+
+    @Column(columnDefinition = "TEXT")
+    private String bio;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

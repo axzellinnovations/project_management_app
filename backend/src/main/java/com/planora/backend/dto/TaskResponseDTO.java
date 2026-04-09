@@ -34,6 +34,9 @@ public class TaskResponseDTO {
     private Long reporterId;
     private String reporterName;
 
+    private Long milestoneId;
+    private String milestoneName;
+
     private List<SubtaskDTO> subtasks;
     private List<LabelDTO> labels;
     private List<DependencyDTO> dependencies;

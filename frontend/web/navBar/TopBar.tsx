@@ -109,8 +109,10 @@ function TopBarContent() {
     base.push(
       { id: 'chats', label: 'Chats' },
       { id: 'notifications', label: 'Notifications' },
+      { id: 'milestones', label: 'Milestones' },
       { id: 'members', label: 'Members' },
-      { id: 'pages', label: 'Pages' }
+      { id: 'pages', label: 'Pages' },
+      { id: 'list', label: 'List' }
     );
 
     return base;
@@ -121,8 +123,11 @@ function TopBarContent() {
     if (pathname.startsWith('/timeline')) return 'timeline';
     if (pathname.startsWith('/sprint-backlog') || pathname.startsWith('/backlog')) return 'backlog';
     if (pathname.startsWith('/kanban') || pathname.startsWith('/sprint-board')) return 'board';
+    if (pathname.startsWith('/list')) return 'list';
     if (pathname.startsWith('/calendar')) return 'calendar';
     if (pathname.startsWith('/burndown')) return 'burndown';
+    if (pathname.startsWith('/milestones')) return 'milestones';
+    if (pathname.startsWith('/workload')) return 'workload';
     if (pathname.startsWith('/project/') && pathname.includes('/chat')) return 'chats';
     if (pathname.startsWith('/notifications')) return 'notifications';
     if (pathname.startsWith('/members')) return 'members';
@@ -219,10 +224,13 @@ function TopBarContent() {
       case 'timeline': return withProjectId('/timeline');
       case 'backlog': return isAgile ? withProjectId('/sprint-backlog') : withProjectId('/backlog');
       case 'board': return isAgile ? withProjectId('/sprint-board') : withProjectId('/kanban');
+      case 'list': return withProjectId('/list');
       case 'calendar': return withProjectId('/calendar');
       case 'burndown': return withProjectId('/burndown');
       case 'chats': return projectId ? `/project/${projectId}/chat` : '/dashboard';
       case 'notifications': return projectId ? `/notifications?projectId=${projectId}` : '/notifications';
+      case 'milestones': return withProjectId('/milestones');
+      case 'workload': return withProjectId('/workload');
       case 'members': return projectId ? `/members/${projectId}` : '/members';
       case 'pages': return withProjectId('/pages');
       default: return projectId ? `/summary/${projectId}` : '/dashboard';
@@ -230,14 +238,14 @@ function TopBarContent() {
   };
 
   const isProjectPage = useMemo(() => {
-    const projectPaths = ['/summary', '/timeline', '/sprint-backlog', '/backlog', '/kanban', '/sprint-board', '/calendar', '/burndown', '/pages', '/notifications', '/members', '/project/'];
+    const projectPaths = ['/summary', '/timeline', '/sprint-backlog', '/backlog', '/kanban', '/sprint-board', '/calendar', '/burndown', '/list', '/milestones', '/workload', '/pages', '/notifications', '/members', '/project/'];
     return projectPaths.some(path => pathname.startsWith(path));
   }, [pathname]);
 
   /* ── Profile avatar block (shared) ── */
   const profileAvatar = resolvedProfilePicUrl ? (
     <div className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-white shadow-sm ring-1 ring-slate-200">
-      <Image src={resolvedProfilePicUrl} alt="Profile" width={32} height={32} className="w-full h-full object-cover" unoptimized />
+      <Image src={resolvedProfilePicUrl} alt="Profile" width={32} height={32} className="w-full h-full object-cover" unoptimized priority />
     </div>
   ) : (
     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 border-2 border-white flex items-center justify-center text-white text-[11px] font-bold shadow-sm ring-1 ring-slate-200">
@@ -251,7 +259,7 @@ function TopBarContent() {
 
   /* ── Project page TopBar ── */
   return (
-    <div className="w-full h-[120px] relative flex flex-col shrink-0 bg-white border-b border-slate-200 sticky top-0 z-[100]">
+    <div className="w-full h-[120px] sticky top-0 flex flex-col shrink-0 bg-white border-b border-slate-200 z-[100]">
       {/* Top Header Section */}
       <div className="flex-1 px-4 sm:px-8 flex items-center justify-between pt-2">
         <div className="flex items-center gap-4">
