@@ -1,0 +1,63 @@
+import React from 'react';
+import { NavRow } from '@/navBar/sidebar/NavRows';
+import { ClockIcon, StarIcon } from '@/navBar/sidebar/SidebarIcons';
+
+interface ProjectListProps {
+  collapsed: boolean;
+  favOpen: boolean;
+  recentOpen: boolean;
+  loading: boolean;
+  favoriteCount: number;
+  recentCount: number;
+  favRef: React.RefObject<HTMLDivElement | null>;
+  recentRef: React.RefObject<HTMLDivElement | null>;
+  onOpenFav: () => void;
+  onOpenRecent: () => void;
+}
+
+export default function ProjectList({
+  collapsed,
+  favOpen,
+  recentOpen,
+  loading,
+  favoriteCount,
+  recentCount,
+  favRef,
+  recentRef,
+  onOpenFav,
+  onOpenRecent,
+}: ProjectListProps) {
+  return (
+    <>
+      <div ref={favRef} className="relative">
+        <NavRow
+          icon={<StarIcon className="text-amber-400" />}
+          label="Favourites"
+          collapsed={collapsed}
+          active={favOpen}
+          hasChevron
+          chevronOpen={favOpen}
+          badge={favoriteCount}
+          onClick={onOpenFav}
+        />
+      </div>
+
+      <div ref={recentRef} className="relative">
+        <NavRow
+          icon={<ClockIcon />}
+          label="Recent Spaces"
+          collapsed={collapsed}
+          active={recentOpen}
+          hasChevron
+          chevronOpen={recentOpen}
+          badge={recentCount}
+          onClick={onOpenRecent}
+        />
+      </div>
+
+      {loading && !collapsed && (
+        <p className="px-2.5 py-1 text-[11px] text-cu-text-muted">Loading projects...</p>
+      )}
+    </>
+  );
+}

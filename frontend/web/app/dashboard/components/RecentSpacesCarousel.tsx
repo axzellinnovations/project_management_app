@@ -2,8 +2,9 @@
 
 import { useRef, useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
-import RecentProjectCard from './RecentProjectCard';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import api from '@/lib/axios';
 
 interface ProjectSummary {
     id: number;
@@ -11,6 +12,7 @@ interface ProjectSummary {
     projectKey?: string;
     isFavorite?: boolean;
     type: 'AGILE' | 'KANBAN' | string;
+    lastAccessedAt?: string;
 }
 
 interface RecentSpacesCarouselProps {
@@ -20,9 +22,27 @@ interface RecentSpacesCarouselProps {
 }
 
 export default function RecentSpacesCarousel({ projects, loading, searchQuery }: RecentSpacesCarouselProps) {
+    const router = useRouter();
     const scrollRef = useRef<HTMLDivElement>(null);
     const [showLeftArrow, setShowLeftArrow] = useState(false);
     const [showRightArrow, setShowRightArrow] = useState(true);
+
+    const formatLastOpened = (lastAccessedAt?: string) => {
+        if (!lastAccessedAt) return 'Last opened: not yet';
+        return `Last opened: ${new Date(lastAccessedAt).toLocaleDateString()}`;
+    };
+
+    const openProject = async (projectId: number, projectName: string) => {
+        try {
+            await api.post(`/api/projects/${projectId}/access`);
+        } catch (error) {
+            console.error('Failed to record project access:', error);
+        }
+
+        window.dispatchEvent(new CustomEvent('planora:project-accessed'));
+        localStorage.setItem('currentProjectName', projectName);
+        router.push(`/summary/${projectId}`);
+    };
 
     const handleScroll = () => {
         if (scrollRef.current) {
@@ -126,19 +146,31 @@ export default function RecentSpacesCarousel({ projects, loading, searchQuery }:
                 `}</style>
 
                 {projects.slice(0, 5).map((project) => (
-                    <RecentProjectCard
+                    <button
                         key={project.id}
-                        id={project.id.toString()}
-                        name={project.name}
-                        projectKey={project.projectKey}
-                        isFavorite={project.isFavorite}
-                        onFavoriteToggle={() => {
-                            window.dispatchEvent(new CustomEvent('planora:favorite-toggled'));
+                        onClick={() => {
+                            void openProject(project.id, project.name);
                         }}
-                        type={project.type === 'AGILE' ? 'Agile Scrum' : 'Kanban'}
-                        boardCount={1}
-                        width="min-w-[280px] max-w-[280px]"
-                    />
+                        className="min-w-[280px] max-w-[280px] h-[160px] rounded-[8px] border border-[#E5E7EB] bg-white hover:border-[#B8D2FF] hover:shadow-[0_6px_20px_rgba(0,82,204,0.12)] transition-all duration-200 p-4 text-left shrink-0"
+                        aria-label={`Open ${project.name}`}
+                    >
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                            <span className="text-[11px] font-semibold text-[#4A5565] uppercase tracking-wide">
+                                {project.projectKey || 'PROJECT'}
+                            </span>
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${project.type === 'AGILE' ? 'bg-[#EAF2FF] text-[#0052CC]' : 'bg-[#ECFDF3] text-[#027A48]'}`}>
+                                {project.type === 'AGILE' ? 'Agile' : 'Kanban'}
+                            </span>
+                        </div>
+
+                        <h3 className="text-[16px] leading-[21px] font-bold text-[#111827] line-clamp-2 mb-4">
+                            {project.name}
+                        </h3>
+
+                        <div className="mt-auto pt-3 border-t border-[#F3F4F6] text-[12px] text-[#6B7280]">
+                            {formatLastOpened(project.lastAccessedAt)}
+                        </div>
+                    </button>
                 ))}
 
                 {/* Always show "View all" card if we have projects, as per user request */}
