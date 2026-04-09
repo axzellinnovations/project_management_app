@@ -4,7 +4,7 @@ import React from 'react';
 import Image from 'next/image';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Task } from '../types';
+import { Task, Subtask } from '../../(project)/kanban/types';
 import { Calendar, Trash2, Edit2 } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
@@ -25,14 +25,14 @@ interface KanbanCardProps {
 
 export default function KanbanCard({ task, onDelete, onEdit, onOpenTask, usersMap }: KanbanCardProps) {
   const avatarUrl = task.assigneeName ? resolveUrl(usersMap?.[task.assigneeName] ?? null) : null;
-  const completedSubtasks = task.subtasks?.filter((s) => s.status === 'DONE').length ?? 0;
+  const completedSubtasks = task.subtasks?.filter((s: Subtask) => s.status === 'DONE').length ?? 0;
   const totalSubtasks = task.subtasks?.length ?? 0;
 
   const priorityStyle: Record<string, { dot: string; text: string; bg: string }> = {
     URGENT: { dot: 'bg-red-500', text: 'text-red-600', bg: 'bg-red-50' },
-    HIGH:   { dot: 'bg-orange-500', text: 'text-orange-600', bg: 'bg-orange-50' },
+    HIGH: { dot: 'bg-orange-500', text: 'text-orange-600', bg: 'bg-orange-50' },
     MEDIUM: { dot: 'bg-amber-400', text: 'text-amber-600', bg: 'bg-amber-50' },
-    LOW:    { dot: 'bg-gray-400', text: 'text-gray-500', bg: 'bg-gray-100' },
+    LOW: { dot: 'bg-gray-400', text: 'text-gray-500', bg: 'bg-gray-100' },
   };
   const pStyle = task.priority ? (priorityStyle[task.priority] ?? priorityStyle.LOW) : null;
 
