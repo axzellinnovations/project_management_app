@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 
+// DB MIGRATION REQUIRED: ALTER TABLE sprints RENAME COLUMN pro_id TO project_id;
+
 @Data
 @Entity
 @Table(name = "sprints")
@@ -18,9 +20,14 @@ public class Sprint {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Project ID (Foreign Key)
-    @Column(nullable = false)
-    private Long proId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id", nullable = false)
+    private Project project;
+
+    /** Convenience getter — preserves all existing callers of sprint.getProId() */
+    public Long getProId() {
+        return project != null ? project.getId() : null;
+    }
 
     @Column(nullable = false)
     private String name;

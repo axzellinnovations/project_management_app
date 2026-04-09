@@ -8,7 +8,7 @@ import java.util.List;
 
 public interface SprintRepository extends JpaRepository<Sprint, Long> {
 
-    List<Sprint> findByProId(Long proId);
+    List<Sprint> findByProject_Id(Long projectId);
 
-    boolean existsByProIdAndStatus(Long proId, SprintStatus status);
+    boolean existsByProject_IdAndStatus(Long projectId, SprintStatus status);
 }

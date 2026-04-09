@@ -104,7 +104,7 @@ public class ProjectService {
         Project savedProject = projectRepository.save(project);
         if (ProjectType.AGILE.equals(savedProject.getType())) {
             Sprint initialSprint = new Sprint();
-            initialSprint.setProId(savedProject.getId());
+            initialSprint.setProject(savedProject);
             initialSprint.setName(savedProject.getProjectKey() + " Sprint 1");
             initialSprint.setStatus(SprintStatus.NOT_STARTED);
             sprintRepository.save(initialSprint);
