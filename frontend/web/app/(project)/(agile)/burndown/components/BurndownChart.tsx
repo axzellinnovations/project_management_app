@@ -114,10 +114,10 @@ export default function BurndownChart({ sprintName, dataPoints, totalStoryPoints
             rx="6" fill={BLUE_LIGHT} fillOpacity="0.25" />
 
           {/* Y grid lines */}
-          {yTicks.map((tick) => {
+          {yTicks.map((tick, i) => {
             const y = yScale(tick);
             return (
-              <g key={tick}>
+              <g key={`ytick-${i}`}>
                 <line x1={PAD.left} y1={y} x2={PAD.left + innerW} y2={y}
                   stroke={GREY_DASHED} strokeWidth="1" strokeDasharray={tick === 0 ? '0' : '4 3'} />
                 <text x={PAD.left - 8} y={y + 4} textAnchor="end"
