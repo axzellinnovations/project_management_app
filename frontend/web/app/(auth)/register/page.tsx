@@ -1,85 +1,24 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import api from '@/lib/axios';
-import { getValidToken } from '@/lib/auth';
-
 import InputField from '../components/UI/InputField';
 import Button from '../components/UI/Button';
 import BrandLogo from '../components/UI/BrandLogo';
 import AuthCard from '../components/UI/AuthCard';
-
-// NTH-1: Password strength computation (no new npm packages)
-function getPasswordStrength(pw: string): 0 | 1 | 2 | 3 | 4 {
-  let score = 0;
-  if (pw.length >= 8) score++;
-  if (/[A-Z]/.test(pw)) score++;
-  if (/[0-9]/.test(pw)) score++;
-  if (/[^A-Za-z0-9]/.test(pw)) score++;
-  return score as 0 | 1 | 2 | 3 | 4;
-}
-
-const STRENGTH_LABELS = ['', 'Weak', 'Fair', 'Good', 'Strong'];
-const STRENGTH_COLOURS = ['bg-gray-200', 'bg-red-400', 'bg-amber-400', 'bg-emerald-400', 'bg-emerald-600'];
+import { useRegisterForm, STRENGTH_LABELS, STRENGTH_COLOURS } from './useRegisterForm';
 
 export default function RegisterPage() {
-  const router = useRouter();
-
-  const [username, setUsername] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  // NTH-3: Skip register page if already authenticated
-  useEffect(() => {
-    if (getValidToken()) {
-      router.replace('/dashboard');
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // NTH-1: Derive strength reactively
-  const strength = useMemo(() => getPasswordStrength(password), [password]);
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError('');
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match!");
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      await api.post('/api/auth/register', {
-        username, fullName, email: email.toLowerCase(), password
-      });
-      // FEATURE-5: persist email so the verification page can show a reminder banner
-      localStorage.setItem('pendingVerificationEmail', email.toLowerCase());
-      router.push(`/verify-email?email=${encodeURIComponent(email.toLowerCase())}`);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      let errorMessage = 'Registration failed. Please try again.';
-      const errorData = err.response?.data;
-
-      if (typeof errorData === 'string') {
-        errorMessage = errorData;
-      } else if (errorData?.message) {
-        errorMessage = errorData.message;
-      }
-
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const {
+    username, setUsername,
+    fullName, setFullName,
+    email, setEmail,
+    password, setPassword,
+    confirmPassword, setConfirmPassword,
+    isLoading,
+    error,
+    strength,
+    handleRegister,
+  } = useRegisterForm();
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans">
@@ -148,7 +87,7 @@ export default function RegisterPage() {
           <div>
             <InputField
               id="reg-password"
-              label="Password" type="password" value={password} required
+              label="Password" type="password" value={password} required showToggle
               onChange={(e) => setPassword(e.target.value)} placeholder="Create a password (min 8 chars)"
               aria-describedby="pw-strength"
             />
@@ -169,7 +108,7 @@ export default function RegisterPage() {
 
           <InputField
             id="reg-confirm-password"
-            label="Confirm Password" type="password" value={confirmPassword} required
+            label="Confirm Password" type="password" value={confirmPassword} required showToggle
             onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm your password"
           />
 
