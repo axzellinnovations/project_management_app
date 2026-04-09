@@ -1,3 +1,5 @@
 .env
 node_modules/
 frontend/web/node_modules
+.idea/
+.vscode/
