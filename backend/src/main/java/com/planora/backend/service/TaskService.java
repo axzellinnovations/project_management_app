@@ -235,6 +235,18 @@ public class TaskService {
         return mapToDTO(saved);
     }
 
+    /** Lightweight date-only update used by calendar drag-and-drop. */
+    @Transactional
+    public void patchTaskDates(Long taskId, LocalDate startDate, LocalDate dueDate, Long currentUserId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
+        if (startDate != null) task.setStartDate(startDate);
+        if (dueDate != null) task.setDueDate(dueDate);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+        taskRepository.save(task);
+    }
+
     //4. DELETE TASK
     @Transactional
     public Long deleteTask(Long taskId, Long currentUserId) {

@@ -9,12 +9,14 @@ import com.planora.backend.service.TaskActivityService;
 import com.planora.backend.service.TaskService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -259,6 +261,25 @@ public class TaskController {
         Long currentUserId = currentUser.getUserId();
         String priority = body.get("priority");
         return new ResponseEntity<>(service.updatePriority(taskId, priority, currentUserId), HttpStatus.OK);
+    }
+
+    /**
+     * PATCH /api/tasks/{taskId}/dates
+     * Lightweight endpoint for calendar drag-and-drop date updates.
+     * Accepts { startDate: "YYYY-MM-DD", dueDate: "YYYY-MM-DD" }.
+     */
+    @PatchMapping("/{taskId}/dates")
+    public ResponseEntity<Void> patchTaskDates(
+            @PathVariable Long taskId,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ) {
+        LocalDate startDate = body.containsKey("startDate") && body.get("startDate") != null
+                ? LocalDate.parse(body.get("startDate")) : null;
+        LocalDate dueDate = body.containsKey("dueDate") && body.get("dueDate") != null
+                ? LocalDate.parse(body.get("dueDate")) : null;
+        service.patchTaskDates(taskId, startDate, dueDate, currentUser.getUserId());
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
     @GetMapping("/{taskId}/activities")

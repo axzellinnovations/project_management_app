@@ -3,9 +3,13 @@ import type { CalendarEventItem } from './types';
 
 const asArray = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
 
+export const patchTaskDates = (taskId: number, startDate: string, dueDate: string) =>
+  api.patch(`/api/tasks/${taskId}/dates`, { startDate, dueDate });
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapTask = (task: any): CalendarEventItem => ({
   id: `task-${task.id}`,
+  taskId: task.id as number,
   title: task.title || 'Untitled Task',
   kind: 'task',
   type: task.type || 'Task',

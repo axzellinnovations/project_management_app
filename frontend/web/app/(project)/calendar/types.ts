@@ -2,6 +2,7 @@ export type CalendarView = 'month' | 'week' | 'agenda';
 
 export interface CalendarEventItem {
   id: string;
+  taskId?: number;
   title: string;
   kind: 'sprint' | 'task';
   type?: string;
