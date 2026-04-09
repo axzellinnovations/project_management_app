@@ -37,6 +37,9 @@ interface BacklogCardProps {
   onDeleteTask: (taskId: number, sprintId: number) => void;
   onToggleTask: (taskId: number) => void;
   onSprintDeleted: (sprintId: number, tasks: TaskItem[]) => void;
+  projectLabels?: Array<{ id: number; name: string; color?: string }>;
+  onCreateLabel?: (name: string) => Promise<{ id: number; name: string; color?: string }>;
+  extraStatuses?: Array<{ value: string; label: string }>;
 }
 
 type SprintStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
@@ -54,6 +57,7 @@ interface LocalSprintTask {
   dueDate: string;
   priority: 'Low' | 'Medium' | 'High' | 'Critical';
   subtasks: string;
+  labels?: Array<{ id: number; name: string; color?: string }>;
 }
 
 const DURATION_PRESETS = [
@@ -259,7 +263,7 @@ function EditSprintModal({ open, sprintName, loading, onConfirm, onCancel }: Edi
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateTask, onDeleteTask, onToggleTask, onSprintDeleted }: BacklogCardProps) {
+function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateTask, onDeleteTask, onToggleTask, onSprintDeleted, projectLabels = [], onCreateLabel, extraStatuses = [] }: BacklogCardProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [showSprintMenu, setShowSprintMenu] = useState(false);
@@ -325,6 +329,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
           dueDate: task.dueDate ?? existing?.dueDate ?? '',
           priority: existing?.priority ?? 'Medium',
           subtasks: existing?.subtasks ?? '',
+          labels: task.labels ?? existing?.labels ?? [],
         };
       });
     });
@@ -627,6 +632,39 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
     }
   };
 
+  const handleAddLabel = async (taskId: number, labelId: number) => {
+    try {
+      await api.post(`/api/tasks/${taskId}/label/${labelId}`);
+      const label = projectLabels.find((l) => l.id === labelId);
+      if (label) {
+        setLocalTasks((prev) =>
+          prev.map((t) =>
+            t.id !== taskId || t.labels?.some((l) => l.id === labelId)
+              ? t
+              : { ...t, labels: [...(t.labels ?? []), label] }
+          )
+        );
+      }
+    } catch {
+      // silent
+    }
+  };
+
+  const handleRemoveLabel = async (taskId: number, labelId: number) => {
+    try {
+      await api.delete(`/api/tasks/${taskId}/label/${labelId}`);
+      setLocalTasks((prev) =>
+        prev.map((t) =>
+          t.id !== taskId
+            ? t
+            : { ...t, labels: (t.labels ?? []).filter((l) => l.id !== labelId) }
+        )
+      );
+    } catch {
+      // silent
+    }
+  };
+
   return (
     <>
     <div className="rounded-xl border border-[#E4E7EC] bg-[#F8F9FB] p-5 shadow-sm">
@@ -644,21 +682,39 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
           </button>
 
           <div className="flex items-center gap-2">
-            <span className="text-[16px] font-bold text-[#101828]">
+            <span className="text-[14px] font-bold text-[#101828]">
               {sprint.name}
             </span>
+            {(() => {
+              if (!sprint.endDate || sprint.status === 'COMPLETED') return null;
+              const daysLeft = Math.ceil(
+                (new Date(sprint.endDate + 'T00:00:00').getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+              );
+              if (daysLeft < 0) return null;
+              const isDanger = daysLeft <= 2;
+              const isWarning = !isDanger && daysLeft <= 7;
+              return (
+                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] font-bold ${
+                  isDanger ? 'border-[#FECDCA] bg-[#FEF3F2] text-[#B42318]' :
+                  isWarning ? 'border-[#FEDF89] bg-[#FFFAEB] text-[#B54708]' :
+                  'border-[#EAECF0] bg-white text-[#667085]'
+                }`}>
+                  {daysLeft}d left
+                </span>
+              );
+            })()}
           </div>
         </div>
 
         <div className="relative flex flex-wrap items-center gap-3" ref={sprintMenuRef}>
           <div className="flex items-center gap-1.5 bg-white border border-[#EAECF0] px-2 py-1 rounded-full shadow-sm">
-            <div className="rounded-full bg-[#F2F4F7] px-2 py-[2px] text-[10px] font-bold text-[#344054]" title="To Do">
+            <div className="rounded-full bg-[#F2F4F7] px-2 py-[2px] text-[12px] font-bold text-[#344054]" title="To Do">
               {totals.todo}
             </div>
-            <div className="rounded-full bg-[#EFF8FF] px-2 py-[2px] text-[10px] font-bold text-[#175CD3]" title="In Progress">
+            <div className="rounded-full bg-[#EFF8FF] px-2 py-[2px] text-[12px] font-bold text-[#175CD3]" title="In Progress">
               {totals.inprogress}
             </div>
-            <div className="rounded-full bg-[#ECFDF3] px-2 py-[2px] text-[10px] font-bold text-[#027A48]" title="Done">
+            <div className="rounded-full bg-[#ECFDF3] px-2 py-[2px] text-[12px] font-bold text-[#027A48]" title="Done">
               {totals.done}
             </div>
           </div>
@@ -667,7 +723,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
             {sprint.status === 'NOT_STARTED' ? (
               <button
                 onClick={handleStartSprint}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg border border-[#175CD3] bg-[#175CD3] px-2.5 py-2 text-[13px] font-bold text-white hover:bg-[#1849A9] shadow-sm transform active:scale-95 transition-all duration-150"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg border border-[#175CD3] bg-[#175CD3] px-2.5 py-2 text-[12px] font-bold text-white hover:bg-[#1849A9] shadow-sm transform active:scale-95 transition-all duration-150"
               >
                 <Rocket size={14} />
                 Start Sprint
@@ -675,7 +731,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
             ) : sprint.status === 'ACTIVE' ? (
               <button
                 onClick={handleCompleteSprint}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg border border-[#027A48] bg-[#039855] px-2.5 py-2 text-[13px] font-bold text-white hover:bg-[#027A48] shadow-sm transform active:scale-95 transition-all duration-150"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg border border-[#027A48] bg-[#039855] px-2.5 py-2 text-[12px] font-bold text-white hover:bg-[#027A48] shadow-sm transform active:scale-95 transition-all duration-150"
               >
                 <Check size={14} />
                 Complete Sprint
@@ -690,7 +746,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
               type="button"
               onClick={() => setShowReportModal(true)}
               title="Sprint Report"
-              className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-2.5 py-2 text-[13px] font-bold text-[#344054] hover:bg-[#F2F4F7] shadow-sm transition-colors duration-150"
+              className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-2.5 py-2 text-[12px] font-bold text-[#344054] hover:bg-[#F2F4F7] shadow-sm transition-colors duration-150"
             >
               <BarChart3 size={14} className="text-[#667085]" />
               Sprint Report
@@ -816,7 +872,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
 
       {isOpen && (
         <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
-          <div className="space-y-0 rounded-lg overflow-hidden border border-[#EAECF0]">
+          <div className="flex flex-col gap-[5px]">
             {localTasks.length > 0 ? (
               localTasks.map((task) => (
                   <div
@@ -825,6 +881,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
                     onDragStart={(e) => {
                       e.dataTransfer.setData('text/plain', String(task.id));
                     }}
+                    className="rounded-lg overflow-hidden border border-[#EAECF0]"
                   >
                     <TaskRow
                       task={task}
@@ -840,6 +897,11 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
                       onDueDateChange={handleDueDateChange}
                       onDeleteTask={(id) => setTaskToDeleteId(id)}
                       onOpenTask={(id) => setSelectedTaskId(id)}
+                      projectLabels={projectLabels}
+                      onAddLabel={handleAddLabel}
+                      onRemoveLabel={handleRemoveLabel}
+                      onCreateLabel={onCreateLabel}
+                      extraStatuses={extraStatuses}
                     />
                   </div>
               ))
@@ -854,7 +916,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
             <div className="mt-2 flex justify-start">
               <button
                 onClick={() => setShowCreateTaskBox(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-2.5 py-1.5 text-[13px] font-medium text-[#344054] shadow-sm hover:bg-[#F9FAFB] transition-colors duration-150"
+                className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#344054] shadow-sm hover:bg-[#F9FAFB] transition-colors duration-150"
               >
                 <span className="text-[18px] leading-none mb-0.5">+</span>
                 Create Task
@@ -887,7 +949,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
                 }}
                 placeholder="Task name"
                 autoFocus
-                className="flex-1 min-w-0 bg-transparent text-[13px] font-medium text-[#101828] outline-none placeholder-[#98A2B3]"
+                className="flex-1 min-w-0 bg-transparent text-[12px] font-medium text-[#101828] outline-none placeholder-[#98A2B3]"
               />
               
               <button

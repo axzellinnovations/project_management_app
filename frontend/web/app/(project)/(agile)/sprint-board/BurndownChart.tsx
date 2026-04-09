@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "@/lib/axios";
 import {
   LineChart,
   Line,
@@ -14,36 +14,48 @@ import {
 } from "recharts";
 
 type BurndownPoint = {
-  day: number;
-  remaining: number;
+  date: string;
+  remainingPoints: number;
+  idealPoints: number;
 };
 
 export default function BurndownChart({ sprintId }: { sprintId: number }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<BurndownPoint[]>([]);
 
   useEffect(() => {
-    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
-    axios
-      .get(`${API_BASE_URL}/api/sprints/${sprintId}/burndown`)
+    api
+      .get(`/api/burndown/sprint/${sprintId}`)
       .then((res) => {
-        const formatted = res.data.map((p: BurndownPoint) => ({
-          day: `Day ${p.day}`,
-          remainingPoints: p.remaining,
-        }));
-        setData(formatted);
+        const points: BurndownPoint[] = (res.data.dataPoints ?? []).map(
+          (p: { date: string; remainingPoints: number; idealPoints: number }) => ({
+            date: p.date,
+            remainingPoints: p.remainingPoints,
+            idealPoints: p.idealPoints,
+          })
+        );
+        setData(points);
       })
-      .catch((err) => console.error("Error:", err));
+      .catch(() => {
+        // silently ignore — empty state shown below
+      });
   }, [sprintId]);
+
+  if (data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
+        No burndown data available for this sprint.
+      </div>
+    );
+  }
 
   return (
     <div style={{ width: "100%", height: 400 }}>
-      <h2>Burndown Chart</h2>
+      <h2 className="text-base font-semibold mb-2">Burndown Chart</h2>
 
       <ResponsiveContainer>
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="day" />
+          <XAxis dataKey="date" tick={{ fontSize: 11 }} />
           <YAxis allowDecimals={false} />
           <Tooltip />
           <Legend />
@@ -51,8 +63,19 @@ export default function BurndownChart({ sprintId }: { sprintId: number }) {
           <Line
             type="monotone"
             dataKey="remainingPoints"
+            name="Actual"
             stroke="#8884d8"
             strokeWidth={2}
+            dot={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="idealPoints"
+            name="Ideal"
+            stroke="#98A2B3"
+            strokeDasharray="5 5"
+            strokeWidth={1.5}
+            dot={false}
           />
         </LineChart>
       </ResponsiveContainer>
