@@ -1,7 +1,6 @@
 package com.planora.backend.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -14,9 +13,9 @@ import lombok.Setter;
 @Setter
 public class ResetPasswordRequest {
 
-    /** The OTP code received in the password-reset email (used as the token). */
+    /** Token from the password-reset link query param. */
     @NotBlank(message = "Token is required")
-    @Pattern(regexp = "^[0-9]{6}$", message = "Token must be a 6-digit OTP")
+    @Size(min = 6, max = 256, message = "Token is invalid")
     private String token;
 
     @NotBlank(message = "New password is required")
