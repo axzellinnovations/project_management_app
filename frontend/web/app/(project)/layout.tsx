@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import SidebarLayout from '@/navBar/SidebarLayout';
 import api from '@/lib/axios';
+import { getValidToken } from '@/lib/auth';
 
 /**
  * Unified Project Layout
@@ -35,7 +36,7 @@ export default function ProjectLayout({
   const projectId = (params?.projectId || params?.id || searchParams.get('projectId')) as string | undefined;
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getValidToken();
     if (!token) {
       router.replace('/login');
       return;

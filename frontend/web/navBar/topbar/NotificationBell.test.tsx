@@ -86,6 +86,21 @@ describe('NotificationBell', () => {
 
     expect(screen.getByText('Notifications')).toBeInTheDocument();
     expect(screen.getByText('You have no notifications')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View all notifications' })).toHaveAttribute(
+      'href',
+      '/notifications'
+    );
+  });
+
+  it('closes dropdown when view all notifications is clicked', async () => {
+    render(<NotificationBell />);
+
+    fireEvent.click(screen.getAllByRole('button')[0]);
+    fireEvent.click(screen.getByRole('link', { name: 'View all notifications' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Notifications')).not.toBeInTheDocument();
+    });
   });
 
   it('toggles dropdown closed when bell is clicked again', async () => {

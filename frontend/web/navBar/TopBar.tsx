@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useSyncExternalStore, Suspense, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
-import { getUserFromToken, User } from '@/lib/auth';
+import { AUTH_TOKEN_CHANGED_EVENT, getUserFromToken, getValidToken, User } from '@/lib/auth';
 import { useParams, usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useNavigation } from '@/lib/navigation-context';
 import { Menu, Plus } from 'lucide-react';
@@ -20,9 +20,11 @@ const subscribeToBrowserStorage = (onStoreChange: () => void) => {
   const handler = () => onStoreChange();
   window.addEventListener('storage', handler);
   window.addEventListener('focus', handler);
+  window.addEventListener(AUTH_TOKEN_CHANGED_EVENT, handler);
   return () => {
     window.removeEventListener('storage', handler);
     window.removeEventListener('focus', handler);
+    window.removeEventListener(AUTH_TOKEN_CHANGED_EVENT, handler);
   };
 };
 
@@ -37,9 +39,14 @@ function TopBarContent() {
     () => localStorage.getItem('currentProjectId'),
     () => null
   );
+  const storedProjectType = useSyncExternalStore(
+    subscribeToBrowserStorage,
+    () => localStorage.getItem('currentProjectType'),
+    () => null
+  );
   const token = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
-    () => localStorage.getItem('token'),
+    () => getValidToken(),
     () => null
   );
   const user = useMemo<User | null>(() => {
@@ -50,7 +57,7 @@ function TopBarContent() {
   useNavigation();
   const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
-  const [projectType, setProjectType] = useState<string | null>(null);
+  const [projectType, setProjectType] = useState<string | null>(storedProjectType);
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [projectsSearch, setProjectsSearch] = useState('');
   const [isRecentProjectsLoading, setIsRecentProjectsLoading] = useState(false);
@@ -80,9 +87,11 @@ function TopBarContent() {
     return queryProjectId || routeProjectId || storedProjectId;
   }, [params, searchParams, storedProjectId]);
 
+  const effectiveProjectType = projectType || storedProjectType;
+
   const isAgile = useMemo(() => {
-    return projectType === 'AGILE' || projectType === 'Agile Scrum' || projectType === 'SCRUM';
-  }, [projectType]);
+    return effectiveProjectType === 'AGILE' || effectiveProjectType === 'Agile Scrum' || effectiveProjectType === 'SCRUM';
+  }, [effectiveProjectType]);
 
   const tabs = useMemo(() => {
     const base = [
@@ -99,6 +108,7 @@ function TopBarContent() {
 
     base.push(
       { id: 'chats', label: 'Chats' },
+      { id: 'notifications', label: 'Notifications' },
       { id: 'members', label: 'Members' },
       { id: 'pages', label: 'Pages' }
     );
@@ -114,6 +124,7 @@ function TopBarContent() {
     if (pathname.startsWith('/calendar')) return 'calendar';
     if (pathname.startsWith('/burndown')) return 'burndown';
     if (pathname.startsWith('/project/') && pathname.includes('/chat')) return 'chats';
+    if (pathname.startsWith('/notifications')) return 'notifications';
     if (pathname.startsWith('/members')) return 'members';
     if (pathname.startsWith('/pages')) return 'pages';
     return 'summary';
@@ -123,16 +134,23 @@ function TopBarContent() {
     if (projectId && localStorage.getItem('currentProjectId') !== projectId) {
       localStorage.setItem('currentProjectId', projectId);
     }
+
+    if (storedProjectType) {
+      setProjectType(storedProjectType);
+    }
+
     const fetchProjectStatus = async () => {
       if (!projectId) { setIsFavorite(false); return; }
       try {
         const projectData = await projectsApi.fetchProjectDetails(projectId);
+        const resolvedProjectType = projectData?.type || 'KANBAN';
         setIsFavorite(Boolean(projectData?.isFavorite));
-        setProjectType(projectData?.type || 'KANBAN');
+        setProjectType(resolvedProjectType);
+        localStorage.setItem('currentProjectType', resolvedProjectType);
       } catch { setIsFavorite(false); }
     };
     void fetchProjectStatus();
-  }, [projectId]);
+  }, [projectId, storedProjectType]);
 
   useEffect(() => {
     if (user?.email) {
@@ -204,6 +222,7 @@ function TopBarContent() {
       case 'calendar': return withProjectId('/calendar');
       case 'burndown': return withProjectId('/burndown');
       case 'chats': return projectId ? `/project/${projectId}/chat` : '/dashboard';
+      case 'notifications': return projectId ? `/notifications?projectId=${projectId}` : '/notifications';
       case 'members': return projectId ? `/members/${projectId}` : '/members';
       case 'pages': return withProjectId('/pages');
       default: return projectId ? `/summary/${projectId}` : '/dashboard';
@@ -211,7 +230,7 @@ function TopBarContent() {
   };
 
   const isProjectPage = useMemo(() => {
-    const projectPaths = ['/summary', '/timeline', '/sprint-backlog', '/backlog', '/kanban', '/sprint-board', '/calendar', '/burndown', '/pages', '/members', '/project/'];
+    const projectPaths = ['/summary', '/timeline', '/sprint-backlog', '/backlog', '/kanban', '/sprint-board', '/calendar', '/burndown', '/pages', '/notifications', '/members', '/project/'];
     return projectPaths.some(path => pathname.startsWith(path));
   }, [pathname]);
 

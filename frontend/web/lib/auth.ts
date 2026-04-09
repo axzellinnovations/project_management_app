@@ -115,6 +115,8 @@ export function getUserFromToken(): User | null {
 
 export function saveToken(token: string): void {
     if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        sessionStorage.removeItem('token');
         tokenStorage().setItem('token', token);
         emitAuthTokenChanged();
     }
@@ -122,6 +124,8 @@ export function saveToken(token: string): void {
 
 export function saveRefreshToken(token: string): void {
     if (typeof window !== 'undefined') {
+        localStorage.removeItem('refreshToken');
+        sessionStorage.removeItem('refreshToken');
         tokenStorage().setItem('refreshToken', token);
     }
 }

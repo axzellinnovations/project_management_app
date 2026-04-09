@@ -328,6 +328,15 @@ export function NotificationBell() {
                 ))
               )}
             </div>
+            <div className="border-t border-slate-100 bg-white px-4 py-2.5">
+              <Link
+                href="/notifications"
+                onClick={() => setShowDropdown(false)}
+                className="block text-center text-[12px] font-semibold text-blue-600 hover:text-blue-700 transition font-outfit"
+              >
+                View all notifications
+              </Link>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

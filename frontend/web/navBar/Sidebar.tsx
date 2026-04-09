@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef } from 'react';
-import { getUserFromToken, User } from '@/lib/auth';
+import { AUTH_TOKEN_CHANGED_EVENT, clearTokens, getUserFromToken, getValidToken, User } from '@/lib/auth';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import api from '@/lib/axios';
 
@@ -71,9 +71,11 @@ const subscribeToBrowserStorage = (onChange: () => void) => {
   if (typeof window === 'undefined') return () => {};
   window.addEventListener('storage', onChange);
   window.addEventListener('focus', onChange);
+  window.addEventListener(AUTH_TOKEN_CHANGED_EVENT, onChange);
   return () => {
     window.removeEventListener('storage', onChange);
     window.removeEventListener('focus', onChange);
+    window.removeEventListener(AUTH_TOKEN_CHANGED_EVENT, onChange);
   };
 };
 
@@ -87,7 +89,7 @@ export default function Sidebar() {
 
   const token = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
-    () => localStorage.getItem('token'),
+    () => getValidToken(),
     () => null,
   );
   const user = useMemo<User | null>(() => {
@@ -257,7 +259,7 @@ export default function Sidebar() {
   };
 
   /* handlers */
-  const handleLogout = () => { localStorage.removeItem('token'); router.push('/login'); };
+  const handleLogout = () => { clearTokens(); router.push('/login'); };
 
   const handleProjectClick = async (project: Project) => {
     await rawProjectClick(project);

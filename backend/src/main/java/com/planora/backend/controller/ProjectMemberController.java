@@ -150,7 +150,12 @@ public class ProjectMemberController {
         Long teamId = project.getTeam().getId();
         Long currentUserId = principal.getUserId();
         teamMemberService.changeMemberRoleWithPermissions(
-                teamId, userId, request.role, currentUserId
+                teamId,
+                userId,
+                request.role,
+                currentUserId,
+                projectId,
+                project.getName()
         );
         return ResponseEntity.ok().build();
     }
@@ -166,7 +171,11 @@ public class ProjectMemberController {
         Long teamId = project.getTeam().getId();
         Long currentUserId = principal.getUserId();
         teamMemberService.removeMemberWithPermissions(
-                teamId, userId, currentUserId
+                teamId,
+                userId,
+                currentUserId,
+                projectId,
+                project.getName()
         );
         return ResponseEntity.ok().build();
     }

@@ -7,7 +7,7 @@ import { CompatClient, Stomp } from '@stomp/stompjs';
 import * as notificationsApi from '@/services/notifications-service';
 import { Notification } from '@/services/notifications-service';
 import { toast } from '@/components/ui/Toast';
-import { AUTH_TOKEN_CHANGED_EVENT } from '@/lib/auth';
+import { AUTH_TOKEN_CHANGED_EVENT, getValidToken } from '@/lib/auth';
 
 interface GlobalNotificationContextType {
   notifications: Notification[];
@@ -123,7 +123,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
   };
 
   const syncAuthAndConnection = () => {
-    const token = localStorage.getItem('token');
+    const token = getValidToken();
 
     if (!token) {
       activeTokenRef.current = null;
@@ -165,7 +165,9 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       }
     };
 
-    syncAuthAndConnection();
+    const initialSyncTimer = window.setTimeout(() => {
+      syncAuthAndConnection();
+    }, 0);
 
     window.addEventListener('storage', handleStorage);
     window.addEventListener(AUTH_TOKEN_CHANGED_EVENT, handleAuthTokenChanged);
@@ -177,6 +179,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       window.removeEventListener(AUTH_TOKEN_CHANGED_EVENT, handleAuthTokenChanged);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.clearTimeout(initialSyncTimer);
 
       activeTokenRef.current = null;
       disconnectClient();

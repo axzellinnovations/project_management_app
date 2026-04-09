@@ -5,7 +5,8 @@ import api from '@/lib/axios';
 export interface Notification {
   id: number;
   message: string;
-  type: string;
+  type?: string;
+  link?: string;
   read: boolean;
   createdAt: string;
   [key: string]: unknown;
