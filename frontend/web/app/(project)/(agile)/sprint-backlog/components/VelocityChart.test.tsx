@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import VelocityChart from './VelocityChart';
-import type { SprintItem } from '@/types';
+import type { SprintVelocityPoint } from './VelocityChart';
 
 // ResizeObserver is not available in jsdom
 global.ResizeObserver = class ResizeObserver {
@@ -9,14 +9,11 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
-const makeSprintItem = (id: number, name: string, tasks: SprintItem['tasks'] = []): SprintItem => ({
-  id,
-  name,
-  status: 'COMPLETED',
-  startDate: '2024-01-01',
-  endDate: '2024-01-14',
-  goal: '',
-  tasks,
+const makeVelocityPoint = (id: number, name: string, committed = 5, completed = 4): SprintVelocityPoint => ({
+  sprintId: id,
+  sprintName: name,
+  committedPoints: committed,
+  completedPoints: completed,
 });
 
 describe('VelocityChart', () => {
@@ -26,13 +23,12 @@ describe('VelocityChart', () => {
   });
 
   it('renders sprint name in chart', () => {
-    const sprintItem = makeSprintItem(1, 'Sprint Alpha');
-    const { container } = render(<VelocityChart sprints={[sprintItem]} />);
+    const { container } = render(<VelocityChart sprints={[makeVelocityPoint(1, 'Sprint Alpha')]} />);
     expect(container.innerHTML).toContain('Sprint Alpha');
   });
 
   it('renders velocity label', () => {
-    render(<VelocityChart sprints={[makeSprintItem(1, 'Sprint 1')]} />);
+    render(<VelocityChart sprints={[makeVelocityPoint(1, 'Sprint 1')]} />);
     expect(screen.getByText(/velocity/i)).toBeInTheDocument();
   });
 });

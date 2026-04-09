@@ -8,13 +8,14 @@ import FilterBar, { type BacklogFilters } from './components/FilterBar';
 import BulkActionBar from './components/BulkActionBar';
 import dynamic from 'next/dynamic';
 const VelocityChart = dynamic(() => import('./components/VelocityChart'), { ssr: false });
+import type { SprintVelocityPoint } from './components/VelocityChart';
 import api from '@/lib/axios';
 import { getUserFromToken } from '@/lib/auth';
 import { toast } from '@/components/ui';
-import type { TaskItem, SprintItem } from '@/types';
+import { getProjectLabels, createLabel } from '@/services/labels-service';
+import type { TaskItem, SprintItem, Label } from '@/types';
 import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
 import { type CreateTaskData } from '@/components/shared/CreateTaskModal';
-import CreateSprintModal from './components/CreateSprintModal';
 
 type RawTask = {
   id: number;
@@ -26,6 +27,7 @@ type RawTask = {
   status?: string;
   startDate?: string;
   dueDate?: string;
+  labels?: Label[];
 };
 
 export default function SprintBacklogPage() {
@@ -39,9 +41,11 @@ export default function SprintBacklogPage() {
   const [sprints, setSprints] = useState<SprintItem[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [showVelocity, setShowVelocity] = useState(false);
+  const [velocityData, setVelocityData] = useState<SprintVelocityPoint[]>([]);
   const [projectKey, setProjectKey] = useState<string>('');
-  const [showCreateSprintModal, setShowCreateSprintModal] = useState(false);
   const [showCreateTaskModal, setShowCreateTaskModal] = useState(false);
+  const [projectLabels, setProjectLabels] = useState<Array<{ id: number; name: string; color?: string }>>([]);
+  const [activeBoardStatuses, setActiveBoardStatuses] = useState<Array<{ value: string; label: string }>>([]);
   const [filters, setFilters] = useState<BacklogFilters>({
     search: '',
     statuses: [],
@@ -87,6 +91,7 @@ export default function SprintBacklogPage() {
     status: raw.status ?? 'TODO',
     startDate: raw.startDate ?? '',
     dueDate: raw.dueDate ?? '',
+    labels: raw.labels ?? [],
   });
 
   useEffect(() => {
@@ -98,15 +103,17 @@ export default function SprintBacklogPage() {
 
     const fetchData = async () => {
       try {
-        const [sprintsRes, tasksRes, membersRes, projectRes] = await Promise.all([
+        const [sprintsRes, tasksRes, membersRes, projectRes, labelsRes] = await Promise.all([
           api.get(`/api/sprints/project/${projectId}`),
           api.get(`/api/tasks/project/${projectId}`),
           api.get(`/api/projects/${projectId}/members`),
           api.get(`/api/projects/${projectId}`),
+          getProjectLabels(Number(projectId)),
         ]);
 
         const rawSprints = sprintsRes.data as { id: number; name: string; status: string; startDate?: string; endDate?: string }[];
         const rawTasks = tasksRes.data as RawTask[];
+        setProjectLabels(Array.isArray(labelsRes) ? labelsRes : []);
 
         interface ProjectMember {
           user: {
@@ -152,6 +159,21 @@ export default function SprintBacklogPage() {
           goal: s.goal ?? '',
           tasks: sprintTaskMap.get(s.id) ?? []
         })));
+
+        // Fetch active sprint board columns for custom status support
+        const activeSprint = rawSprints.find((s: { status: string }) => s.status === 'ACTIVE');
+        if (activeSprint) {
+          try {
+            const boardRes = await api.get(`/api/sprintboards/sprint/${activeSprint.id}`);
+            const defaultStatuses = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
+            const extra = (boardRes.data.columns ?? [])
+              .filter((c: { columnStatus: string; columnName: string }) => !defaultStatuses.includes(c.columnStatus))
+              .map((c: { columnStatus: string; columnName: string }) => ({ value: c.columnStatus, label: c.columnName }));
+            setActiveBoardStatuses(extra);
+          } catch {
+            // silent — no custom statuses
+          }
+        }
         setProductTasks(backlogTasks);
         setError(null);
       } catch (err: unknown) {
@@ -220,7 +242,7 @@ export default function SprintBacklogPage() {
     if (!action) return;
 
     if (action === 'create-sprint') {
-      setShowCreateSprintModal(true);
+      void createSprint(`${projectKey} Sprint ${sprints.length + 1}`);
     } else if (action === 'add-task') {
       setShowCreateTaskModal(true);
     }
@@ -229,7 +251,28 @@ export default function SprintBacklogPage() {
     const url = new URL(window.location.href);
     url.searchParams.delete('action');
     window.history.replaceState({}, '', url.toString());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  // Ctrl+N opens Create Task modal (NTH-5)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        setShowCreateTaskModal(true);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Fetch velocity data when chart is opened (FEATURE-1)
+  useEffect(() => {
+    if (!showVelocity || !projectId) return;
+    api.get<SprintVelocityPoint[]>(`/api/burndown/project/${projectId}/velocity`)
+      .then((res) => setVelocityData(res.data))
+      .catch(() => setVelocityData([]));
+  }, [showVelocity, projectId]);
 
   const toggleTaskSelection = (id: number) => {
     setProductTasks((prev) =>
@@ -468,6 +511,15 @@ export default function SprintBacklogPage() {
     ]);
   };
 
+  const LABEL_PALETTE = ['#EF4444','#F97316','#F59E0B','#84CC16','#22C55E','#14B8A6','#06B6D4','#3B82F6','#6366F1','#8B5CF6','#EC4899','#6B7280'];
+
+  const handleCreateLabel = useCallback(async (name: string) => {
+    const color = LABEL_PALETTE[Math.floor(Math.random() * LABEL_PALETTE.length)];
+    const newLabel = await createLabel(Number(projectId), name, color);
+    setProjectLabels((prev) => [...prev, newLabel]);
+    return newLabel;
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Bulk action helpers
   const selectedCount = useMemo(() => {
     const backlogSelected = productTasks.filter(t => t.selected).length;
@@ -612,7 +664,7 @@ export default function SprintBacklogPage() {
               />
 
               {/* ── Column header bar ── */}
-              <div className="hidden sm:grid items-center border border-[#EAECF0] rounded-lg bg-[#F2F4F7] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-[#667085] select-none" style={{ gridTemplateColumns: '28px 3px 44px 72px 1fr 36px 110px 88px 40px 52px' }}>
+              <div className="hidden sm:grid items-center border border-[#EAECF0] rounded-lg bg-[#F2F4F7] px-3 py-1.5 text-[12px] font-bold uppercase tracking-wide text-[#667085] select-none" style={{ gridTemplateColumns: '28px 3px 44px 72px 1fr 36px 110px 88px 40px 52px' }}>
                 <span />
                 <span />
                 <span>#</span>
@@ -644,6 +696,9 @@ export default function SprintBacklogPage() {
                     );
                   }}
                   onSprintDeleted={handleSprintDeleted}
+                  projectLabels={projectLabels}
+                  onCreateLabel={handleCreateLabel}
+                  extraStatuses={sprint.status === 'ACTIVE' ? activeBoardStatuses : []}
                 />
               ))}
 
@@ -659,7 +714,7 @@ export default function SprintBacklogPage() {
                 onDeleteTask={(taskId) => {
                   setProductTasks((prev) => prev.filter((t) => t.id !== taskId));
                 }}
-                onCreateSprint={() => setShowCreateSprintModal(true)}
+                onCreateSprint={() => { void createSprint(`${projectKey} Sprint ${sprints.length + 1}`); }}
                 onDropTask={moveTaskToBacklog}
                 onStatusChange={handleTaskStatusChange}
                 onAssignTask={(taskId, assigneeName, assigneePhotoUrl) => {
@@ -669,13 +724,8 @@ export default function SprintBacklogPage() {
                 }}
                 externalShowCreateModal={showCreateTaskModal}
                 onCloseCreateModal={() => setShowCreateTaskModal(false)}
-              />
-
-              <CreateSprintModal
-                isOpen={showCreateSprintModal}
-                onClose={() => setShowCreateSprintModal(false)}
-                onCreateSprint={createSprint}
-                defaultName={`${projectKey || 'Sprint'} ${sprints.length + 1}`}
+                projectLabels={projectLabels}
+                onCreateLabel={handleCreateLabel}
               />
 
               {sprints.length > 0 && (
@@ -693,7 +743,7 @@ export default function SprintBacklogPage() {
                   </button>
                 </div>
               )}
-              {showVelocity && sprints.length > 0 && <VelocityChart sprints={sprints} />}
+              {showVelocity && sprints.length > 0 && <VelocityChart sprints={velocityData} />}
 
               <BulkActionBar
                 selectedCount={selectedCount}

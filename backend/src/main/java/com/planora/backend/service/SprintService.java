@@ -1,32 +1,38 @@
 package com.planora.backend.service;
 
+import com.planora.backend.dto.SprintCreateRequestDTO;
+import com.planora.backend.dto.SprintResponseDTO;
+import com.planora.backend.exception.ConflictException;
+import com.planora.backend.exception.ForbiddenException;
+import com.planora.backend.exception.ResourceNotFoundException;
 import com.planora.backend.model.Project;
 import com.planora.backend.model.Sprint;
 import com.planora.backend.model.SprintStatus;
 import com.planora.backend.model.TeamMember;
 import com.planora.backend.model.TeamRole;
-import com.planora.backend.model.User;
+import com.planora.backend.model.Task;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.SprintRepository;
 import com.planora.backend.repository.SprintboardRepository;
 import com.planora.backend.repository.TeamMemberRepository;
-import com.planora.backend.repository.UserRepository;
 import com.planora.backend.repository.TaskRepository;
-import com.planora.backend.model.Task;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class SprintService {
 
+    private static final Logger logger = LoggerFactory.getLogger(SprintService.class);
+
     private final SprintRepository sprintRepository;
     private final ProjectRepository projectRepository;
     private final TeamMemberRepository teamMemberRepository;
-    private final UserRepository userRepository;
     private final SprintboardService sprintboardService;
     private final TaskRepository taskRepository;
     private final SprintboardRepository sprintboardRepository;
@@ -34,170 +40,166 @@ public class SprintService {
     public SprintService(SprintRepository sprintRepository,
                          ProjectRepository projectRepository,
                          TeamMemberRepository teamMemberRepository,
-                         UserRepository userRepository,
                          SprintboardService sprintboardService,
                          TaskRepository taskRepository,
                          SprintboardRepository sprintboardRepository) {
         this.sprintRepository = sprintRepository;
         this.projectRepository = projectRepository;
         this.teamMemberRepository = teamMemberRepository;
-        this.userRepository = userRepository;
         this.sprintboardService = sprintboardService;
         this.taskRepository = taskRepository;
         this.sprintboardRepository = sprintboardRepository;
     }
 
-    // ---------- Get Current User from SecurityContext ----------
+    // ---------- Permission helpers ----------
 
-    private Long getCurrentUserId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-
-        if (auth == null || !auth.isAuthenticated() || auth.getName() == null) {
-            throw new RuntimeException("Unauthorized");
-        }
-
-        // In your JwtFilter, auth.getName() will be the email/username
-        String email = auth.getName();
-
-        // Adjust this depending on your repository return type
-        // If findByEmail returns Optional<User>
-        User user = userRepository.findByEmail(email);
-
-        if (user == null) {
-            throw new RuntimeException("User not found for email: " + email);
-        }
-
-        return user.getUserId();
-
-    }
-
-    // ---------- Permission helpers (based on your image) ----------
-
-    private TeamRole getRoleForProject(Long projectId) {
+    private TeamRole getRoleForProject(Long projectId, Long userId) {
         Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new RuntimeException("Project not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
 
         Long teamId = project.getTeam().getId();
-        Long userId = getCurrentUserId();
 
         TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId, userId)
-                .orElseThrow(() -> new RuntimeException("Access denied: Not a team member"));
+                .orElseThrow(() -> new ForbiddenException("Access denied: Not a team member"));
 
         return member.getRole();
     }
 
-    private void requireViewBoard(Long projectId) {
-        getRoleForProject(projectId);
+    private void requireViewBoard(Long projectId, Long userId) {
+        getRoleForProject(projectId, userId);
     }
 
-    private void requireConfigureBoard(Long projectId) {
-        TeamRole role = getRoleForProject(projectId);
+    private void requireConfigureBoard(Long projectId, Long userId) {
+        TeamRole role = getRoleForProject(projectId, userId);
         if (!(role == TeamRole.OWNER || role == TeamRole.ADMIN)) {
-            throw new RuntimeException("Access denied: OWNER/ADMIN required (CONFIGURE_BOARD)");
+            throw new ForbiddenException("Access denied: OWNER/ADMIN required (CONFIGURE_BOARD)");
         }
+    }
+
+    // ---------- DTO mapping ----------
+
+    public SprintResponseDTO toDTO(Sprint s) {
+        return SprintResponseDTO.builder()
+                .id(s.getId())
+                .projectId(s.getProId())
+                .name(s.getName())
+                .startDate(s.getStartDate())
+                .endDate(s.getEndDate())
+                .status(s.getStatus() != null ? s.getStatus().name() : null)
+                .goal(s.getGoal())
+                .build();
     }
 
     // ---------- Sprint APIs ----------
 
-    // CREATE Sprint -> Configure Board (OWNER/ADMIN)
-    public Sprint createSprint(Sprint sprint) {
-        requireConfigureBoard(sprint.getProId());
+    @Transactional
+    public SprintResponseDTO createSprint(SprintCreateRequestDTO request, Long currentUserId) {
+        requireConfigureBoard(request.getProId(), currentUserId);
 
-        if (sprint.getStartDate() != null && sprint.getEndDate() != null
-                && sprint.getStartDate().isAfter(sprint.getEndDate())) {
-            throw new RuntimeException("Start date cannot be after end date");
+        if (request.getStartDate() != null && request.getEndDate() != null
+                && request.getStartDate().isAfter(request.getEndDate())) {
+            throw new IllegalArgumentException("Start date cannot be after end date");
         }
 
-        if (sprint.getStatus() == null) {
-            sprint.setStatus(SprintStatus.NOT_STARTED);
-        }
+        Project project = projectRepository.findById(request.getProId())
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
 
-        return sprintRepository.save(sprint);
+        Sprint sprint = new Sprint();
+        sprint.setProject(project);
+        sprint.setName(request.getName());
+        sprint.setStartDate(request.getStartDate());
+        sprint.setEndDate(request.getEndDate());
+        sprint.setGoal(request.getGoal());
+        sprint.setStatus(SprintStatus.NOT_STARTED);
+
+        return toDTO(sprintRepository.save(sprint));
     }
 
-    // READ Sprints -> View Board (all roles)
-    public List<Sprint> getSprintsByProject(Long proId) {
-        requireViewBoard(proId);
-        return sprintRepository.findByProId(proId);
+    @Transactional(readOnly = true)
+    public List<SprintResponseDTO> getSprintsByProject(Long projectId, Long currentUserId) {
+        requireViewBoard(projectId, currentUserId);
+        return sprintRepository.findByProject_Id(projectId)
+                .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
-    // READ Sprint by ID -> View Board
-    public Sprint getSprintById(Long id) {
+    @Transactional(readOnly = true)
+    public SprintResponseDTO getSprintById(Long id, Long currentUserId) {
         Sprint sprint = sprintRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Sprint not found"));
-
-        requireViewBoard(sprint.getProId());
-        return sprint;
+                .orElseThrow(() -> new ResourceNotFoundException("Sprint not found"));
+        requireViewBoard(sprint.getProId(), currentUserId);
+        return toDTO(sprint);
     }
 
-    // UPDATE Sprint -> Configure Board (OWNER/ADMIN)
-    public Sprint updateSprint(Long id, Sprint updatedSprint) {
+    /** Internal use by BurndownService — returns entity, no auth check duplication */
+    @Transactional(readOnly = true)
+    public Sprint getSprintEntityById(Long id) {
+        return sprintRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Sprint not found"));
+    }
+
+    @Transactional
+    public SprintResponseDTO updateSprint(Long id, SprintCreateRequestDTO request, Long currentUserId) {
         Sprint existing = sprintRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Sprint not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Sprint not found"));
 
-        requireConfigureBoard(existing.getProId());
+        requireConfigureBoard(existing.getProId(), currentUserId);
 
-        if (updatedSprint.getName() != null) existing.setName(updatedSprint.getName());
-        if (updatedSprint.getStartDate() != null) existing.setStartDate(updatedSprint.getStartDate());
-        if (updatedSprint.getEndDate() != null) existing.setEndDate(updatedSprint.getEndDate());
-        if (updatedSprint.getStatus() != null) existing.setStatus(updatedSprint.getStatus());
-        if (updatedSprint.getGoal() != null) existing.setGoal(updatedSprint.getGoal());
+        if (request.getName() != null) existing.setName(request.getName());
+        if (request.getStartDate() != null) existing.setStartDate(request.getStartDate());
+        if (request.getEndDate() != null) existing.setEndDate(request.getEndDate());
+        if (request.getGoal() != null) existing.setGoal(request.getGoal());
+        if (request.getStatus() != null) {
+            try {
+                existing.setStatus(SprintStatus.valueOf(request.getStatus()));
+            } catch (IllegalArgumentException ignored) {
+                // keep existing status if unknown value
+            }
+        }
 
         if (existing.getStartDate() != null && existing.getEndDate() != null
                 && existing.getStartDate().isAfter(existing.getEndDate())) {
-            throw new RuntimeException("Start date cannot be after end date");
+            throw new IllegalArgumentException("Start date cannot be after end date");
         }
 
-        if (existing.getStatus() == null) {
-            existing.setStatus(SprintStatus.NOT_STARTED);
-        }
-
-        return sprintRepository.save(existing);
+        return toDTO(sprintRepository.save(existing));
     }
 
-    // DELETE Sprint -> Configure Board (OWNER/ADMIN)
-    public void deleteSprint(Long id) {
+    @Transactional
+    public void deleteSprint(Long id, Long currentUserId) {
         Sprint existing = sprintRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Sprint not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Sprint not found"));
 
-        requireConfigureBoard(existing.getProId());
+        requireConfigureBoard(existing.getProId(), currentUserId);
 
         List<Task> sprintTasks = taskRepository.findBySprintId(id);
         if (!sprintTasks.isEmpty()) {
-            for (Task task : sprintTasks) {
-                task.setSprint(null);
-            }
+            sprintTasks.forEach(task -> task.setSprint(null));
             taskRepository.saveAll(sprintTasks);
         }
 
-        // Delete associated sprintboard (and its columns via cascade) before deleting sprint
         sprintboardRepository.findBySprintId(id).ifPresent(sprintboardRepository::delete);
-
         sprintRepository.deleteById(id);
     }
 
-    // START Sprint -> Configure Board (OWNER/ADMIN)
-    public Sprint startSprint(Long sprintId, LocalDate startDate, LocalDate endDate) {
+    @Transactional
+    public SprintResponseDTO startSprint(Long sprintId, LocalDate startDate, LocalDate endDate, Long currentUserId) {
         Sprint sprint = sprintRepository.findById(sprintId)
-                .orElseThrow(() -> new RuntimeException("Sprint not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Sprint not found"));
 
-        requireConfigureBoard(sprint.getProId());
+        requireConfigureBoard(sprint.getProId(), currentUserId);
 
         if (sprint.getStatus() == SprintStatus.ACTIVE) {
-            throw new RuntimeException("Sprint is already ACTIVE");
+            throw new ConflictException("Sprint is already ACTIVE");
         }
         if (sprint.getStatus() == SprintStatus.COMPLETED) {
-            throw new RuntimeException("Cannot start a COMPLETED sprint");
+            throw new ConflictException("Cannot start a COMPLETED sprint");
         }
-
         if (startDate == null || endDate == null) {
-            throw new RuntimeException("Start date and end date are required");
+            throw new IllegalArgumentException("Start date and end date are required");
         }
         if (startDate.isAfter(endDate)) {
-            throw new RuntimeException("Start date cannot be after end date");
+            throw new IllegalArgumentException("Start date cannot be after end date");
         }
-
-
 
         sprint.setStartDate(startDate);
         sprint.setEndDate(endDate);
@@ -205,14 +207,36 @@ public class SprintService {
 
         Sprint savedSprint = sprintRepository.save(sprint);
 
-        // Auto-create sprintboard for the active sprint
         try {
-            sprintboardService.createSprintboardForSprint(savedSprint.getId());
+            sprintboardService.createSprintboardForSprint(savedSprint.getId(), currentUserId);
         } catch (Exception e) {
-            // Log error but don't fail sprint creation
-            System.err.println("Failed to create sprintboard for sprint " + savedSprint.getId() + ": " + e.getMessage());
+            logger.error("Failed to create sprintboard for sprint {}: {}", savedSprint.getId(), e.getMessage(), e);
         }
 
-        return savedSprint;
+        return toDTO(savedSprint);
+    }
+
+    @Transactional
+    public SprintResponseDTO completeSprint(Long id, Long currentUserId) {
+        Sprint sprint = sprintRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Sprint not found"));
+
+        if (sprint.getStatus() != SprintStatus.ACTIVE) {
+            throw new ConflictException("Sprint is not ACTIVE");
+        }
+
+        requireConfigureBoard(sprint.getProId(), currentUserId);
+
+        sprint.setStatus(SprintStatus.COMPLETED);
+        sprintRepository.save(sprint);
+
+        List<Task> incomplete = taskRepository.findBySprintId(id)
+                .stream()
+                .filter(t -> !"DONE".equalsIgnoreCase(t.getStatus()))
+                .collect(Collectors.toList());
+        incomplete.forEach(t -> t.setSprint(null));
+        taskRepository.saveAll(incomplete);
+
+        return toDTO(sprint);
     }
 }

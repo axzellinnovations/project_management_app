@@ -53,6 +53,19 @@ jest.mock('@/components/ui/Toast', () => ({
 const mockedApi = notificationsApi as jest.Mocked<typeof notificationsApi>;
 const mockedToast = toast as jest.MockedFunction<typeof toast>;
 
+const buildMockJwt = (overrides: Record<string, unknown> = {}) => {
+  const header = window.btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const payload = window.btoa(
+    JSON.stringify({
+      sub: 'tester@example.com',
+      username: 'tester',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      ...overrides,
+    })
+  );
+  return `${header}.${payload}.signature`;
+};
+
 const buildNotification = (
   id: number,
   read = false,
@@ -100,7 +113,7 @@ describe('GlobalNotificationProvider', () => {
     notificationHandler = null;
     currentPathname = '/dashboard';
     window.localStorage.clear();
-    window.localStorage.setItem('token', 'fake-token');
+    window.localStorage.setItem('token', buildMockJwt());
 
     mockedApi.fetchNotifications.mockResolvedValue([]);
     mockedApi.fetchUnreadCount.mockResolvedValue(0);
@@ -129,7 +142,7 @@ describe('GlobalNotificationProvider', () => {
     });
 
     expect(stompClient.connect).toHaveBeenCalledWith(
-      { Authorization: 'Bearer fake-token' },
+      { Authorization: `Bearer ${window.localStorage.getItem('token')}` },
       expect.any(Function),
       expect.any(Function)
     );
@@ -150,13 +163,13 @@ describe('GlobalNotificationProvider', () => {
     });
 
     act(() => {
-      window.localStorage.setItem('token', 'late-token');
+      window.localStorage.setItem('token', buildMockJwt({ sub: 'late@example.com', username: 'late' }));
       window.dispatchEvent(new Event(AUTH_TOKEN_CHANGED_EVENT));
     });
 
     await waitFor(() => {
       expect(stompClient.connect).toHaveBeenCalledWith(
-        { Authorization: 'Bearer late-token' },
+        { Authorization: `Bearer ${window.localStorage.getItem('token')}` },
         expect.any(Function),
         expect.any(Function)
       );

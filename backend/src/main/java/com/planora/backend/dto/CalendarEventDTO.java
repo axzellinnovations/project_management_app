@@ -42,4 +42,10 @@ public class CalendarEventDTO {
 
     /** Whether the task has at least one comment */
     private boolean hasComment;
+
+    /** Whether the task has at least one attachment */
+    private boolean hasAttachment;
+
+    /** Environment label (e.g. "production", "staging") */
+    private String environment;
 }

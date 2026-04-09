@@ -7,6 +7,7 @@ export interface SprintboardTask {
   status: string;
   priority: string;
   dueDate?: string;
+  label?: { name: string; color?: string };
 }
 
 export interface Sprintcolumn {

@@ -1,17 +1,26 @@
 package com.planora.backend.controller;
 
+import com.planora.backend.dto.SprintCreateRequestDTO;
+import com.planora.backend.dto.SprintResponseDTO;
 import com.planora.backend.dto.StartSprintRequest;
-import com.planora.backend.model.Sprint;
+import com.planora.backend.model.UserPrincipal;
 import com.planora.backend.service.SprintService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/sprints")
-@CrossOrigin
 public class SprintController {
 
     private final SprintService sprintService;
@@ -20,47 +29,62 @@ public class SprintController {
         this.sprintService = sprintService;
     }
 
-    // CREATE Sprint
     @PostMapping
-    public ResponseEntity<Sprint> createSprint(@RequestBody Sprint sprint) {
-        Sprint createdSprint = sprintService.createSprint(sprint);
-        return new ResponseEntity<>(createdSprint, HttpStatus.CREATED);
+    public ResponseEntity<SprintResponseDTO> createSprint(
+            @RequestBody SprintCreateRequestDTO request,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        SprintResponseDTO created = sprintService.createSprint(request, currentUser.getUserId());
+        return new ResponseEntity<>(created, HttpStatus.CREATED);
     }
 
-    // READ sprints by project ID
     @GetMapping("/project/{proId}")
-    public ResponseEntity<List<Sprint>> getSprintsByProject(@PathVariable Long proId) {
-        List<Sprint> sprints = sprintService.getSprintsByProject(proId);
+    public ResponseEntity<List<SprintResponseDTO>> getSprintsByProject(
+            @PathVariable Long proId,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        List<SprintResponseDTO> sprints = sprintService.getSprintsByProject(proId, currentUser.getUserId());
         return new ResponseEntity<>(sprints, HttpStatus.OK);
     }
 
-    // READ sprint by ID
     @GetMapping("/{id}")
-    public ResponseEntity<Sprint> getSprintById(@PathVariable Long id) {
-        Sprint sprint = sprintService.getSprintById(id);
+    public ResponseEntity<SprintResponseDTO> getSprintById(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        SprintResponseDTO sprint = sprintService.getSprintById(id, currentUser.getUserId());
         return new ResponseEntity<>(sprint, HttpStatus.OK);
     }
 
-    // UPDATE sprint
     @PutMapping("/{id}")
-    public ResponseEntity<Sprint> updateSprint(@PathVariable Long id,
-                                               @RequestBody Sprint sprint) {
-        Sprint updatedSprint = sprintService.updateSprint(id, sprint);
-        return new ResponseEntity<>(updatedSprint, HttpStatus.OK);
+    public ResponseEntity<SprintResponseDTO> updateSprint(
+            @PathVariable Long id,
+            @RequestBody SprintCreateRequestDTO request,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        SprintResponseDTO updated = sprintService.updateSprint(id, request, currentUser.getUserId());
+        return new ResponseEntity<>(updated, HttpStatus.OK);
     }
 
-    // DELETE sprint
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteSprint(@PathVariable Long id) {
-        sprintService.deleteSprint(id);
+    public ResponseEntity<Void> deleteSprint(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        sprintService.deleteSprint(id, currentUser.getUserId());
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
-    // START Sprint
     @PutMapping("/{id}/start")
-    public ResponseEntity<Sprint> startSprint(@PathVariable Long id,
-                                              @RequestBody StartSprintRequest request) {
-        Sprint started = sprintService.startSprint(id, request.startDate(), request.endDate());
+    public ResponseEntity<SprintResponseDTO> startSprint(
+            @PathVariable Long id,
+            @RequestBody StartSprintRequest request,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        SprintResponseDTO started = sprintService.startSprint(id, request.startDate(), request.endDate(), currentUser.getUserId());
         return new ResponseEntity<>(started, HttpStatus.OK);
     }
+
+    @PutMapping("/{id}/complete")
+    public ResponseEntity<SprintResponseDTO> completeSprint(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        SprintResponseDTO completed = sprintService.completeSprint(id, currentUser.getUserId());
+        return new ResponseEntity<>(completed, HttpStatus.OK);
+    }
 }
+

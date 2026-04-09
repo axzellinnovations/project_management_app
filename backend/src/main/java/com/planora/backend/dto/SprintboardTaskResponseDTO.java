@@ -14,4 +14,6 @@ public class SprintboardTaskResponseDTO {
     private String status;
     private String priority;
     private LocalDate dueDate;
+    private String labelName;
+    private String labelColor;
 }

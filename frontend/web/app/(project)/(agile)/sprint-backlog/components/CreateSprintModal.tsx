@@ -42,14 +42,19 @@ export default function CreateSprintModal({
       setError('Sprint name is required');
       return;
     }
+    if (startDate && endDate && endDate < startDate) {
+      setError('End date must be on or after start date');
+      return;
+    }
 
     setSubmitting(true);
     try {
       await onCreateSprint(name.trim(), startDate || undefined, endDate || undefined, goal.trim() || undefined);
       resetForm();
       onClose();
-    } catch (_err) {
-      setError('Failed to create sprint.');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setError(axiosErr?.response?.data?.message || 'Failed to create sprint.');
     } finally {
       setSubmitting(false);
     }

@@ -2,13 +2,12 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { DragEndEvent } from '@dnd-kit/core';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Sprintboard, SprintboardTask } from './types';
 import { fetchSprintboardBySprintId, moveTaskToColumn, fetchSprintsByProject, completeSprint, addColumn } from './api';
 import SprintBoardHeader from './components/SprintBoardHeader';
 import SprintColumn from './components/SprintColumn';
 import SprintDragDropProvider from './components/SprintDragDropProvider';
-import CreateTaskModal from './components/CreateTaskModal';
 import CreateColumnModal from './components/CreateColumnModal';
 import { Loader, AlertCircle, CheckCircle2, Plus, Check, X } from 'lucide-react';
 import axios from '@/lib/axios';
@@ -24,24 +23,32 @@ interface SprintSummary {
 
 export default function SprintBoardPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const projectIdStr = searchParams.get('projectId');
 
-  const [sprintboard, setSprintboard] = useState<Sprintboard | null>(null);
-  const [activeSprint, setActiveSprint] = useState<SprintSummary | null>(null);
+  const [allBoards, setAllBoards] = useState<Sprintboard[]>([]);
+  const [allActiveSprints, setAllActiveSprints] = useState<SprintSummary[]>([]);
+  const [selectedIdx, setSelectedIdx] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [isAgile, setIsAgile] = useState(true);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
 
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  // Derived from selected index
+  const sprintboard = allBoards[selectedIdx] ?? null;
+  const activeSprint = allActiveSprints[selectedIdx] ?? null;
+
   const [isColumnModalOpen, setIsColumnModalOpen] = useState(false);
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
-  const [selectedColumn, setSelectedColumn] = useState('TODO');
-  const [isCreating, setIsCreating] = useState(false);
   const [isCreatingColumn, setIsCreatingColumn] = useState(false);
+
+  const toColumnStatus = (name: string) =>
+    name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_');
 
   const fetchActiveSprintAndBoard = useCallback(async () => {
     if (!projectIdStr) return;
@@ -61,22 +68,21 @@ export default function SprintBoardPage() {
         return;
       }
 
-      // 2. Fetch all sprints to find the active one
+      // 2. Fetch all sprints to find active ones
       const sprints = await fetchSprintsByProject(projectId) as SprintSummary[];
-      const active = sprints.find((s) => s.status === 'ACTIVE');
+      const activeList = sprints.filter((s) => s.status === 'ACTIVE');
 
-      if (!active) {
+      if (activeList.length === 0) {
         setLoading(false);
         return;
       }
 
-      setActiveSprint(active);
-
-      // 3. Fetch sprint board for the active sprint
-      const board = await fetchSprintboardBySprintId(active.id);
-      setSprintboard(board);
+      // 3. Fetch boards for all active sprints in parallel
+      const boards = await Promise.all(activeList.map(s => fetchSprintboardBySprintId(s.id)));
+      setAllActiveSprints(activeList);
+      setAllBoards(boards);
+      setSelectedIdx(0);
     } catch (err: unknown) {
-      console.error('Failed to load sprint board:', err);
       const axiosErr = err as AxiosError<{ message?: string }>;
       setError(axiosErr?.response?.data?.message || 'Failed to load sprint board. Please make sure the sprint has been started.');
     } finally {
@@ -134,12 +140,11 @@ export default function SprintBoardPage() {
       return col;
     });
 
-    setSprintboard({ ...sprintboard, columns: newColumns });
+    setAllBoards(prev => prev.map((b, i) => i === selectedIdx ? { ...b, columns: newColumns } : b));
 
     try {
       await moveTaskToColumn(taskId, sprintboard.id, newStatus);
     } catch (err) {
-      console.error('Failed to move task:', err);
       // Revert if failed
       fetchActiveSprintAndBoard();
     }
@@ -147,34 +152,68 @@ export default function SprintBoardPage() {
 
   const handleCreateTask = async (taskData: Record<string, unknown>) => {
     if (!projectIdStr) return;
-    setIsCreating(true);
     try {
       await axios.post('/api/tasks', taskData);
       setSuccessMsg('Task created!');
       setTimeout(() => setSuccessMsg(''), 2000);
       fetchActiveSprintAndBoard();
     } catch (err: unknown) {
-      console.error('Failed to create task:', err);
       const axiosErr = err as AxiosError<{ message?: string }>;
       toast(axiosErr?.response?.data?.message || 'Failed to create task.', 'error');
-    } finally {
-      setIsCreating(false);
     }
   };
 
+  const handleInlineCreateTask = useCallback(async (title: string, status: string) => {
+    if (!projectIdStr || !activeSprint || !sprintboard) return;
+    try {
+      const res = await axios.post('/api/tasks', {
+        title,
+        status,
+        projectId: parseInt(projectIdStr),
+        sprintId: activeSprint.id,
+        storyPoint: 0,
+        priority: 'MEDIUM',
+      });
+      const newTask: SprintboardTask = {
+        taskId: res.data.id,
+        title: res.data.title,
+        storyPoint: res.data.storyPoint ?? 0,
+        status,
+        priority: res.data.priority ?? 'MEDIUM',
+        assigneeName: res.data.assigneeName,
+        assigneePhotoUrl: res.data.assigneePhotoUrl ?? null,
+      };
+      setAllBoards(prev => prev.map((b, i) => {
+        if (i !== selectedIdx) return b;
+        return {
+          ...b,
+          columns: b.columns.map(col =>
+            col.columnStatus === status
+              ? { ...col, tasks: [...col.tasks, newTask] }
+              : col
+          ),
+        };
+      }));
+    } catch (err: unknown) {
+      const axiosErr = err as AxiosError<{ message?: string }>;
+      toast(axiosErr?.response?.data?.message || 'Failed to create task.', 'error');
+    }
+  }, [projectIdStr, activeSprint, sprintboard, selectedIdx]);
+
   const handleCompleteSprint = async () => {
-    if (!activeSprint || !confirm('Are you sure you want to complete this sprint? All tasks will be finalized.')) return;
+    if (!activeSprint) return;
 
     setIsUpdating(true);
     try {
-      await completeSprint(activeSprint.id, activeSprint as unknown as Record<string, unknown>);
+      await completeSprint(activeSprint.id);
+      // Remove the completed sprint from both lists
+      setAllActiveSprints(prev => prev.filter((_, i) => i !== selectedIdx));
+      setAllBoards(prev => prev.filter((_, i) => i !== selectedIdx));
+      setSelectedIdx(prev => Math.max(0, prev - 1));
+      setShowCompleteConfirm(false);
       setSuccessMsg('Sprint completed successfully!');
-      setTimeout(() => {
-        setSuccessMsg('');
-        fetchActiveSprintAndBoard(); // Refresh state
-      }, 2000);
+      setTimeout(() => setSuccessMsg(''), 2000);
     } catch (err) {
-      console.error('Failed to complete sprint:', err);
       toast('Failed to complete sprint.', 'error');
     } finally {
       setIsUpdating(false);
@@ -194,7 +233,6 @@ export default function SprintBoardPage() {
       setNewColumnName('');
       fetchActiveSprintAndBoard();
     } catch (err: unknown) {
-      console.error('Failed to add column:', err);
       const axiosErr = err as AxiosError<{ message?: string }>;
       const msg = axiosErr?.response?.data?.message || axiosErr?.message || 'Failed to add column.';
       toast(msg, 'error');
@@ -262,18 +300,73 @@ export default function SprintBoardPage() {
                 <CheckCircle2 className="w-10 h-10 text-gray-300" />
               </div>
               <h2 className="text-xl font-bold text-[#101828]">No active sprint</h2>
-              <p className="text-[#475467] text-sm mt-2">Start a sprint in the backlog to see progress here.</p>
+              <p className="text-[#475467] text-sm mt-2">
+                <button
+                  onClick={() => router.push(`/sprint-backlog?projectId=${projectIdStr}`)}
+                  className="text-[#155DFC] font-semibold hover:underline"
+                >
+                  Start a sprint
+                </button>
+                {' '}in the backlog to see progress here.
+              </p>
             </div>
           </div>
         ) : (
           <>
             <SprintBoardHeader
               sprintName={sprintboard.sprintName}
+              allActiveSprints={allActiveSprints}
+              selectedIdx={selectedIdx}
+              onSelectSprint={setSelectedIdx}
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
-              onCompleteSprint={handleCompleteSprint}
+              onCompleteSprint={() => setShowCompleteConfirm(true)}
               isLoading={isUpdating}
             />
+
+            {/* Complete Sprint Confirmation Dialog */}
+            {showCompleteConfirm && activeSprint && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                <div className="bg-white rounded-2xl shadow-2xl border border-[#EAECF0] p-6 max-w-sm w-full mx-4 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-[#FEF3F2] flex items-center justify-center flex-shrink-0">
+                      <CheckCircle2 size={20} className="text-[#D92D20]" />
+                    </div>
+                    <div>
+                      <h3 className="text-[16px] font-bold text-[#101828]">Complete Sprint</h3>
+                      <p className="text-[13px] text-[#475467]">This cannot be undone</p>
+                    </div>
+                  </div>
+                  <p className="text-[14px] text-[#344054] mb-2">
+                    You are about to complete:
+                  </p>
+                  <div className="bg-[#F9FAFB] border border-[#EAECF0] rounded-xl px-4 py-3 mb-5">
+                    <p className="text-[14px] font-bold text-[#101828]">{activeSprint.sprintName ?? `Sprint #${activeSprint.id}`}</p>
+                    <p className="text-[12px] text-[#667085] mt-0.5">All tasks in this sprint will be finalized.</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowCompleteConfirm(false)}
+                      className="flex-1 px-4 py-2.5 border border-[#D0D5DD] rounded-xl text-[14px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleCompleteSprint}
+                      disabled={isUpdating}
+                      className="flex-1 px-4 py-2.5 bg-[#D92D20] hover:bg-[#B42318] text-white rounded-xl text-[14px] font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isUpdating ? (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <CheckCircle2 size={16} />
+                      )}
+                      Complete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex-1 overflow-x-auto p-4 md:p-8 snap-x snap-mandatory hide-scrollbar">
               {successMsg && (
@@ -291,10 +384,8 @@ export default function SprintBoardPage() {
                     <SprintColumn
                       key={column.id}
                       column={column}
-                      onCreateTask={(status) => {
-                        setSelectedColumn(status);
-                        setIsCreateModalOpen(true);
-                      }}
+                      onInlineCreate={handleInlineCreateTask}
+                      onOpenTask={(id) => setSelectedTaskId(id)}
                     />
                   ))}
 
@@ -330,7 +421,7 @@ export default function SprintBoardPage() {
                             onChange={(e) => setNewColumnName(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && newColumnName.trim()) {
-                                finalizeAddColumn(newColumnName.trim(), 'IN_PROGRESS');
+                                finalizeAddColumn(newColumnName.trim(), toColumnStatus(newColumnName.trim()));
                                 setNewColumnName('');
                                 setIsAddingColumn(false);
                               } else if (e.key === 'Escape') {
@@ -344,7 +435,7 @@ export default function SprintBoardPage() {
                             <button
                               onClick={() => {
                                 if (newColumnName.trim()) {
-                                  finalizeAddColumn(newColumnName.trim(), 'IN_PROGRESS');
+                                  finalizeAddColumn(newColumnName.trim(), toColumnStatus(newColumnName.trim()));
                                   setNewColumnName('');
                                   setIsAddingColumn(false);
                                 }
@@ -371,24 +462,19 @@ export default function SprintBoardPage() {
               </SprintDragDropProvider>
             </div>
 
-            {activeSprint && (
-              <CreateTaskModal
-                isOpen={isCreateModalOpen}
-                onClose={() => setIsCreateModalOpen(false)}
-                onCreateTask={handleCreateTask}
-                columnStatus={selectedColumn}
-                projectId={parseInt(projectIdStr)}
-                sprintId={activeSprint.id}
-                loading={isCreating}
-              />
-            )}
-
             <CreateColumnModal
               isOpen={isColumnModalOpen}
               onClose={() => setIsColumnModalOpen(false)}
               onCreateColumn={finalizeAddColumn}
               loading={isCreatingColumn}
             />
+
+            {selectedTaskId !== null && (
+              <TaskCardModal
+                taskId={selectedTaskId}
+                onClose={() => setSelectedTaskId(null)}
+              />
+            )}
           </>
         )}
       </div>

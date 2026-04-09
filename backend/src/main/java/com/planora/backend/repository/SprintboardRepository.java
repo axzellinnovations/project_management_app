@@ -23,7 +23,7 @@ public interface SprintboardRepository extends JpaRepository<Sprintboard, Long> 
     @Query("SELECT new com.planora.backend.dto.DashboardBoardDTO(sb.id, s.name, p.id, p.name, sb.updatedAt) " +
            "FROM Sprintboard sb " +
            "JOIN Sprint s ON sb.sprint.id = s.id " +
-           "JOIN Project p ON s.proId = p.id " +
+           "JOIN Project p ON s.project.id = p.id " +
            "JOIN TeamMember tm ON p.team.id = tm.team.id " +
            "WHERE tm.user.userId = :userId " +
            "ORDER BY sb.updatedAt DESC")
