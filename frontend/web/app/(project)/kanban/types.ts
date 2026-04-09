@@ -44,6 +44,7 @@ export interface Task {
   assignee?: Assignee;
   assigneeId?: number;
   assigneeName?: string;
+  assigneePhotoUrl?: string | null;
   reporter?: Assignee;
   reporterId?: number;
   reporterName?: string;

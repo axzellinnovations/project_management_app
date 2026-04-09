@@ -16,7 +16,7 @@ api.interceptors.request.use(
         const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint));
         
         if (!isAuthEndpoint && typeof window !== 'undefined') {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
             }

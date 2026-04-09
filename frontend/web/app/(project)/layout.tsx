@@ -33,7 +33,7 @@ export default function ProjectLayout({
   const projectId = (params?.projectId || params?.id || searchParams.get('projectId')) as string | undefined;
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) {
       router.replace('/login');
       return;

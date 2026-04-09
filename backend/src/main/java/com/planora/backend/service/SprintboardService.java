@@ -5,8 +5,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +16,6 @@ import com.planora.backend.model.Project;
 import com.planora.backend.model.Sprint;
 import com.planora.backend.model.Sprintboard;
 import com.planora.backend.model.Sprintcolumn;
-import com.planora.backend.model.SprintcolumnStatus;
 import com.planora.backend.model.Task;
 import com.planora.backend.model.TeamMember;
 import com.planora.backend.model.TeamRole;
@@ -65,26 +62,6 @@ public class SprintboardService {
     }
 
 
-    private Long getCurrentUserId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-
-        if (auth == null || !auth.isAuthenticated() || auth.getName() == null) {
-            throw new RuntimeException("Unauthorized");
-        }
-
-
-        String email = auth.getName();
-
-
-        User user = userRepository.findByEmail(email);
-
-        if (user == null) {
-            throw new RuntimeException("User not found for email: " + email);
-        }
-
-        return user.getUserId();
-    }
-
     private TeamRole getRoleForProject(Long projectId, Long userId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
@@ -111,11 +88,11 @@ public class SprintboardService {
     // ---------- Sprintboard APIs ----------
 
     @Transactional
-    public Sprintboard createSprintboardForSprint(Long sprintId) {
+    public Sprintboard createSprintboardForSprint(Long sprintId, Long currentUserId) {
         Sprint sprint = sprintRepository.findById(sprintId)
                 .orElseThrow(() -> new RuntimeException("Sprint not found"));
 
-        requireViewBoard(sprint.getProId(), getCurrentUserId());
+        requireViewBoard(sprint.getProId(), currentUserId);
 
         if (sprintboardRepository.existsBySprintId(sprintId)) {
             return sprintboardRepository.findBySprintId(sprintId).orElse(null);
@@ -132,11 +109,11 @@ public class SprintboardService {
         return savedSprintboard;
     }
 
-    public SprintboardResponseDTO getSprintboardBySprintId(Long sprintId) {
+    public SprintboardResponseDTO getSprintboardBySprintId(Long sprintId, Long currentUserId) {
         Sprint sprint = sprintRepository.findById(sprintId)
                 .orElseThrow(() -> new RuntimeException("Sprint not found"));
 
-        requireViewBoard(sprint.getProId(), getCurrentUserId());
+        requireViewBoard(sprint.getProId(), currentUserId);
 
         Sprintboard sprintboard = sprintboardRepository.findBySprintId(sprintId)
                 .orElseThrow(() -> new RuntimeException("Sprintboard not found for sprint"));
@@ -156,7 +133,7 @@ public class SprintboardService {
                     dto.setId(col.getId());
                     dto.setPosition(col.getPosition());
                     dto.setColumnName(col.getColumnName());
-                    dto.setColumnStatus(col.getColumnStatus() != null ? col.getColumnStatus().toString() : "TODO");
+                    dto.setColumnStatus(col.getColumnStatus() != null ? col.getColumnStatus() : "TODO");
                     return dto;
                 })
                 .collect(Collectors.toList());
@@ -171,17 +148,17 @@ public class SprintboardService {
     }
 
     @Transactional(readOnly = true)
-    public List<SprintboardTaskResponseDTO> getTasksBySprintColumn(Long sprintboardId, SprintcolumnStatus columnStatus) {
+    public List<SprintboardTaskResponseDTO> getTasksBySprintColumn(Long sprintboardId, String columnStatus, Long currentUserId) {
         Sprintboard sprintboard = getSprintboardById(sprintboardId);
         Sprint sprint = sprintboard.getSprint();
 
-        requireViewBoard(sprint.getProId(), getCurrentUserId());
+        requireViewBoard(sprint.getProId(), currentUserId);
 
         List<Task> tasks = taskRepository.findByProjectId(sprint.getProId()).stream()
                 .filter(task -> task.getSprint() != null && task.getSprint().getId().equals(sprint.getId()))
                 .filter(task -> {
                     String status = task.getStatus();
-                    return status != null && status.equalsIgnoreCase(columnStatus.toString());
+                    return status != null && status.equalsIgnoreCase(columnStatus);
                 })
                 .collect(Collectors.toList());
 
@@ -198,13 +175,18 @@ public class SprintboardService {
                         dto.setAssigneeName(task.getAssignee().getUser().getFullName());
                         dto.setAssigneePhotoUrl(task.getAssignee().getUser().getProfilePicUrl());
                     }
+                    if (task.getLabels() != null && !task.getLabels().isEmpty()) {
+                        var label = task.getLabels().iterator().next();
+                        dto.setLabelName(label.getName());
+                        dto.setLabelColor(label.getColor());
+                    }
                     return dto;
                 })
                 .collect(Collectors.toList());
     }
 
     @Transactional
-    public void moveTaskToColumn(Long taskId, Long sprintboardId, SprintcolumnStatus newStatus, Long currentUserId) {
+    public void moveTaskToColumn(Long taskId, Long sprintboardId, String newStatus, Long currentUserId) {
         Sprintboard sprintboard = getSprintboardById(sprintboardId);
         Sprint sprint = sprintboard.getSprint();
 
@@ -218,19 +200,17 @@ public class SprintboardService {
         }
 
         String oldStatus = task.getStatus();
-        // Update task status to match the column
-        task.setStatus(newStatus.toString());
+        task.setStatus(newStatus);
 
         taskRepository.save(task);
 
-        String nextStatus = newStatus.toString();
-        if (oldStatus == null || !oldStatus.equalsIgnoreCase(nextStatus)) {
+        if (oldStatus == null || !oldStatus.equalsIgnoreCase(newStatus)) {
             String actorName = userRepository.findById(currentUserId)
                     .map(User::getUsername)
                     .orElse("Unknown");
             String message = actorName + " moved task \"" + task.getTitle()
                     + "\" from " + (oldStatus != null ? oldStatus : "NONE")
-                    + " to " + nextStatus;
+                    + " to " + newStatus;
             notifyTaskStakeholders(task, currentUserId, message);
         }
     }
@@ -256,11 +236,11 @@ public class SprintboardService {
     }
 
     @Transactional
-    public void deleteSprintboard(Long sprintboardId) {
+    public void deleteSprintboard(Long sprintboardId, Long currentUserId) {
         Sprintboard sprintboard = getSprintboardById(sprintboardId);
         Sprint sprint = sprintboard.getSprint();
 
-        requireViewBoard(sprint.getProId(), getCurrentUserId());
+        requireViewBoard(sprint.getProId(), currentUserId);
 
         sprintboardRepository.deleteById(sprintboardId);
     }
@@ -272,12 +252,9 @@ public class SprintboardService {
 
         requireViewBoard(sprint.getProId(), currentUserId);
 
-        SprintcolumnStatus status;
-        try {
-            status = SprintcolumnStatus.valueOf(statusStr.toUpperCase());
-        } catch (Exception e) {
-            status = SprintcolumnStatus.TODO;
-        }
+        String status = (statusStr != null && !statusStr.isBlank())
+                ? statusStr.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_")
+                : "TODO";
 
         // Get max position
         List<Sprintcolumn> columns = springcolumnRepository.findBySprintboardIdOrderByPosition(sprintboardId);
@@ -297,16 +274,16 @@ public class SprintboardService {
         SprintcolumnDTO dto = new SprintcolumnDTO();
         dto.setId(savedCol.getId());
         dto.setColumnName(savedCol.getColumnName());
-        dto.setColumnStatus(savedCol.getColumnStatus().toString());
+        dto.setColumnStatus(savedCol.getColumnStatus());
         dto.setPosition(savedCol.getPosition());
         return dto;
     }
 
-    public SprintboardResponseDTO getSprintboardBySprintboardId(Long sprintboardId) {
+    public SprintboardResponseDTO getSprintboardBySprintboardId(Long sprintboardId, Long currentUserId) {
         Sprintboard sprintboard = getSprintboardById(sprintboardId);
         Sprint sprint = sprintboard.getSprint();
 
-        requireViewBoard(sprint.getProId(), getCurrentUserId());
+        requireViewBoard(sprint.getProId(), currentUserId);
 
         SprintboardResponseDTO response = new SprintboardResponseDTO();
         response.setId(sprintboard.getId());
@@ -323,7 +300,7 @@ public class SprintboardService {
                     dto.setId(col.getId());
                     dto.setPosition(col.getPosition());
                     dto.setColumnName(col.getColumnName());
-                    dto.setColumnStatus(col.getColumnStatus() != null ? col.getColumnStatus().toString() : "TODO");
+                    dto.setColumnStatus(col.getColumnStatus() != null ? col.getColumnStatus() : "TODO");
                     return dto;
                 })
                 .collect(Collectors.toList());

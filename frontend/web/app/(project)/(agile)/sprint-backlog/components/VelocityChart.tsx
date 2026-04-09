@@ -1,10 +1,16 @@
 'use client';
 
 import { useMemo, useRef, useEffect, useState } from 'react';
-import type { SprintItem } from '@/types';
+
+export interface SprintVelocityPoint {
+  sprintId: number;
+  sprintName: string;
+  committedPoints: number;
+  completedPoints: number;
+}
 
 interface VelocityChartProps {
-  sprints: SprintItem[];
+  sprints: SprintVelocityPoint[];
 }
 
 export default function VelocityChart({ sprints }: VelocityChartProps) {
@@ -19,13 +25,11 @@ export default function VelocityChart({ sprints }: VelocityChartProps) {
   }, []);
 
   const data = useMemo(() => {
-    return sprints.map((s) => {
-      const committed = s.tasks.reduce((a, t) => a + (t.storyPoints || 0), 0);
-      const completed = s.tasks
-        .filter((t) => t.status === 'DONE')
-        .reduce((a, t) => a + (t.storyPoints || 0), 0);
-      return { name: s.name, committed, completed };
-    });
+    return sprints.slice(-8).map((s) => ({
+      name: s.sprintName,
+      committed: s.committedPoints,
+      completed: s.completedPoints,
+    }));
   }, [sprints]);
 
   if (data.length === 0) {
@@ -185,7 +189,7 @@ export default function VelocityChart({ sprints }: VelocityChartProps) {
                   textAnchor="middle"
                   className="text-[10px] fill-[#667085]"
                 >
-                  {d.name.length > 12 ? d.name.slice(0, 10) + '…' : d.name}
+                  {(d.name ?? '').length > 12 ? d.name.slice(0, 10) + '…' : (d.name ?? '')}
                 </text>
               </g>
             );

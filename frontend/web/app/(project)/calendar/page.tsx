@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { motion, type PanInfo } from 'framer-motion';
+import { useBreakpoint } from '@/lib/useBreakpoint';
 import CalendarToolbar from './components/CalendarToolbar';
 import MonthCalendarView from './components/MonthCalendarView';
 import WeekCalendarView from './components/WeekCalendarView';
@@ -181,6 +183,14 @@ export default function CalendarPage() {
 
   const handleToday = () => setCurrentDate(new Date());
 
+  const { isMobile } = useBreakpoint();
+
+  const handlePanEnd = (_: unknown, info: PanInfo) => {
+    if (!isMobile) return;
+    if (info.offset.x < -60) handleNext();
+    else if (info.offset.x > 60) handlePrev();
+  };
+
   const handleDayClick = (date: Date) => {
     const yyyy = date.getFullYear();
     const mm = String(date.getMonth() + 1).padStart(2, '0');
@@ -235,11 +245,11 @@ export default function CalendarPage() {
       {!loading && error && <div className="rounded-lg border border-[#FECDCA] bg-[#FEF3F2] p-6 text-sm text-[#B42318]">{error}</div>}
 
       {!loading && !error && (
-        <>
+        <motion.div onPanEnd={handlePanEnd} className="touch-pan-y">
           {view === 'month' && <MonthCalendarView currentDate={currentDate} events={filteredEvents} onDayClick={handleDayClick} />}
           {view === 'week' && <WeekCalendarView currentDate={currentDate} events={filteredEvents} onDayClick={handleDayClick} />}
           {view === 'agenda' && <AgendaCalendarView currentDate={currentDate} events={filteredEvents} />}
-        </>
+        </motion.div>
       )}
 
       {showCreateModal && projectId && (

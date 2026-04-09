@@ -1,12 +1,18 @@
 package com.planora.backend.service;
 
 import com.planora.backend.dto.CalendarEventDTO;
+import com.planora.backend.exception.ForbiddenException;
+import com.planora.backend.model.Project;
 import com.planora.backend.model.Sprint;
 import com.planora.backend.model.Task;
+import com.planora.backend.model.TeamMember;
+import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.SprintRepository;
 import com.planora.backend.repository.TaskRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.planora.backend.repository.TeamMemberRepository;
+import com.planora.backend.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,25 +24,42 @@ import java.util.List;
 @Service
 public class CalendarService {
 
-    @Autowired
-    private TaskRepository taskRepository;
+    private final TaskRepository taskRepository;
+    private final SprintRepository sprintRepository;
+    private final ProjectRepository projectRepository;
+    private final TeamMemberRepository teamMemberRepository;
 
-    @Autowired
-    private SprintRepository sprintRepository;
+    public CalendarService(TaskRepository taskRepository,
+                           SprintRepository sprintRepository,
+                           ProjectRepository projectRepository,
+                           TeamMemberRepository teamMemberRepository) {
+        this.taskRepository = taskRepository;
+        this.sprintRepository = sprintRepository;
+        this.projectRepository = projectRepository;
+        this.teamMemberRepository = teamMemberRepository;
+    }
 
     /**
      * Returns all calendar events (tasks + sprints) for a given project.
      *
-     * @param projectId the project whose items should be returned
+     * @param projectId     the project whose items should be returned
+     * @param currentUserId the requesting user (membership check)
      * @return list of CalendarEventDTOs ready for the frontend
      */
-    public List<CalendarEventDTO> getCalendarEvents(Long projectId) {
+    @Transactional(readOnly = true)
+    public List<CalendarEventDTO> getCalendarEvents(Long projectId, Long currentUserId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+
+        Long teamId = project.getTeam().getId();
+        TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId, currentUserId)
+                .orElseThrow(() -> new ForbiddenException("Access denied: Not a team member"));
+
         List<CalendarEventDTO> events = new ArrayList<>();
 
         // --- TASKS ---
         List<Task> tasks = taskRepository.findByProjectId(projectId);
         for (Task task : tasks) {
-            // Only include tasks that have at least a due date or a start date
             if (task.getDueDate() == null && task.getStartDate() == null) {
                 continue;
             }
@@ -46,19 +69,17 @@ public class CalendarService {
             event.setTitle(task.getTitle());
             event.setDescription(task.getDescription());
             event.setKind("task");
-            event.setType(task.getStatus() != null ? "Task" : "Task"); // extend later if you add a task-type field
+            event.setType("Task");
             event.setStatus(task.getStatus());
             event.setStartDate(task.getStartDate());
-            event.setEndDate(task.getDueDate());   // tasks: end = dueDate
+            event.setEndDate(task.getDueDate());
             event.setDueDate(task.getDueDate());
             event.setHasComment(!task.getComments().isEmpty());
+            event.setHasAttachment(task.getAttachments() != null && !task.getAttachments().isEmpty());
 
-            // Assignee full name (assignee is loaded EAGER on Task)
             if (task.getAssignee() != null && task.getAssignee().getUser() != null) {
                 event.setAssignee(task.getAssignee().getUser().getFullName());
             }
-
-            // Reporter full name
             if (task.getReporter() != null && task.getReporter().getUser() != null) {
                 event.setCreator(task.getReporter().getUser().getFullName());
             }
@@ -67,7 +88,7 @@ public class CalendarService {
         }
 
         // --- SPRINTS ---
-        List<Sprint> sprints = sprintRepository.findByProId(projectId);
+        List<Sprint> sprints = sprintRepository.findByProject_Id(projectId);
         for (Sprint sprint : sprints) {
             CalendarEventDTO event = new CalendarEventDTO();
             event.setId("sprint-" + sprint.getId());
