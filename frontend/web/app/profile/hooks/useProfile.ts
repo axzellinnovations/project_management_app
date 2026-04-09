@@ -31,7 +31,19 @@ type PhotoUploadResponse = {
     errorCode: string | null;
 };
 
-export function useProfileData() {
+function getApiErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof AxiosError) {
+        const data = error.response?.data;
+        if (typeof data === 'string' && data.trim()) return data;
+        if (data && typeof data === 'object' && 'message' in data) {
+            const message = (data as { message?: unknown }).message;
+            if (typeof message === 'string' && message.trim()) return message;
+        }
+    }
+    return fallback;
+}
+
+export function useProfile() {
     const router = useRouter();
 
     const [username, setUsername] = useState('');
@@ -53,33 +65,10 @@ export function useProfileData() {
     const [isSavingName, setIsSavingName] = useState(false);
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
-    const [pwStep, setPwStep] = useState<'idle' | 'sent' | 'done'>('idle');
-    const [isSendingOtp, setIsSendingOtp] = useState(false);
-    const [otp, setOtp] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [isResettingPw, setIsResettingPw] = useState(false);
-
     const [errorMessage, setErrorMessage] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
 
-    // BUG-3: The backend always returns a presigned HTTPS URL (or null). Trust it as-is.
-    const resolvedProfilePicUrl = useMemo(() => {
-        if (!profilePicUrl) return '';
-        return profilePicUrl;
-    }, [profilePicUrl]);
-
-    const getApiErrorMessage = (error: unknown, fallback: string) => {
-        if (error instanceof AxiosError) {
-            const data = error.response?.data;
-            if (typeof data === 'string' && data.trim()) return data;
-            if (data && typeof data === 'object' && 'message' in data) {
-                const message = (data as { message?: unknown }).message;
-                if (typeof message === 'string' && message.trim()) return message;
-            }
-        }
-        return fallback;
-    };
+    const resolvedProfilePicUrl = useMemo(() => profilePicUrl || '', [profilePicUrl]);
 
     useEffect(() => {
         const tokenUser = getUserFromToken();
@@ -115,44 +104,6 @@ export function useProfileData() {
         };
         void loadProfile();
     }, [router]);
-
-    const handleSendOtp = async () => {
-        setErrorMessage('');
-        setSuccessMessage('');
-        if (!email) { setErrorMessage('Email not found.'); return; }
-        try {
-            setIsSendingOtp(true);
-            await api.post('/api/auth/forgot', { email });
-            setPwStep('sent');
-            setSuccessMessage('Reset code sent to your email.');
-        } catch (error: unknown) {
-            setErrorMessage(getApiErrorMessage(error, 'Failed to send reset code.'));
-        } finally {
-            setIsSendingOtp(false);
-        }
-    };
-
-    const handleResetPassword = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        setErrorMessage('');
-        setSuccessMessage('');
-        if (!otp.trim()) { setErrorMessage('Please enter the reset code.'); return; }
-        if (newPassword.length < 6) { setErrorMessage('Password must be at least 6 characters.'); return; }
-        if (newPassword !== confirmPassword) { setErrorMessage('Passwords do not match.'); return; }
-        try {
-            setIsResettingPw(true);
-            await api.post('/api/auth/reset', { token: otp.trim(), newPassword });
-            setPwStep('done');
-            setOtp('');
-            setNewPassword('');
-            setConfirmPassword('');
-            setSuccessMessage('Password changed successfully.');
-        } catch (error: unknown) {
-            setErrorMessage(getApiErrorMessage(error, 'Failed to reset password. Check your reset code.'));
-        } finally {
-            setIsResettingPw(false);
-        }
-    };
 
     const onSaveProfile = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -234,16 +185,8 @@ export function useProfileData() {
         isLoading,
         isSavingName,
         isUploadingPhoto,
-        pwStep, setPwStep,
-        isSendingOtp,
-        otp, setOtp,
-        newPassword, setNewPassword,
-        confirmPassword, setConfirmPassword,
-        isResettingPw,
         errorMessage,
         successMessage,
-        handleSendOtp,
-        handleResetPassword,
         onSaveProfile,
         onUploadPhoto,
     };
