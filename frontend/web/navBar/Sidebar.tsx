@@ -56,7 +56,7 @@ export default function Sidebar() {
 
   const token = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
-    () => localStorage.getItem('token'),
+    () => localStorage.getItem('token') || sessionStorage.getItem('token'),
     () => null,
   );
   const user = useMemo<User | null>(() => {

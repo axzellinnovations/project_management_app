@@ -12,7 +12,7 @@ export default function DashboardLayout({
     const router = useRouter();
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
         if (!token) {
             router.replace('/login');
             return;
