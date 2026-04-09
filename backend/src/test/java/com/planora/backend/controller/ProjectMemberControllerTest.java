@@ -135,7 +135,7 @@ class ProjectMemberControllerTest {
         request.role = "ADMIN";
         request.userId = 20L;
 
-        when(teamMemberService.changeMemberRoleWithPermissions(50L, 20L, "ADMIN", 5L))
+        when(teamMemberService.changeMemberRoleWithPermissions(50L, 20L, "ADMIN", 5L, 8L, "Apollo"))
                 .thenReturn(new TeamMember());
 
         mockMvc.perform(patch("/api/projects/8/members/20/role")
@@ -145,7 +145,7 @@ class ProjectMemberControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
 
-        verify(teamMemberService).changeMemberRoleWithPermissions(50L, 20L, "ADMIN", 5L);
+        verify(teamMemberService).changeMemberRoleWithPermissions(50L, 20L, "ADMIN", 5L, 8L, "Apollo");
     }
 
     @Test
@@ -155,7 +155,7 @@ class ProjectMemberControllerTest {
                         .with(csrf()))
                 .andExpect(status().isOk());
 
-        verify(teamMemberService).removeMemberWithPermissions(50L, 20L, 5L);
+        verify(teamMemberService).removeMemberWithPermissions(50L, 20L, 5L, 8L, "Apollo");
     }
 
 }

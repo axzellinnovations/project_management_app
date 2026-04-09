@@ -4,8 +4,12 @@ import Sidebar from './Sidebar';
 import BottomNav from './BottomNav';
 import TopBar from './TopBar';
 import { Suspense } from 'react';
+import { usePathname } from 'next/navigation';
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
+    const pathname = usePathname();
+    const isChatRoute = pathname?.includes('/chat');
+
     return (
         <div className="flex h-screen overflow-hidden bg-cu-bg">
             <Sidebar />
@@ -17,7 +21,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                     <Suspense fallback={null}>
                         <TopBar />
                     </Suspense>
-                    <div className="flex-1 overflow-y-auto w-full">
+                    <div className={`flex-1 w-full ${isChatRoute ? 'overflow-hidden' : 'overflow-y-auto'}`}>
                         {children}
                     </div>
                 </div>

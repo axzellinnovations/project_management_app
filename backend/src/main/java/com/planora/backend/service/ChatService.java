@@ -460,6 +460,8 @@ public class ChatService {
                 .findFirst();
     }
 
+    // TODO: Refactor sender/recipient resolution to use User ID instead of string aliases.
+    // Current string-alias lookup can cause messages to disappear on mismatch.
     private List<String> resolveUserAliases(String usernameOrEmail) {
         var user = resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {

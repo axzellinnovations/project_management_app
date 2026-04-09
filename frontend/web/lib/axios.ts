@@ -1,5 +1,5 @@
 import axios from "axios";
-import { clearTokens, getRefreshToken, saveRefreshToken, saveToken } from "@/lib/auth";
+import { clearTokens, getRefreshToken, getValidToken, saveRefreshToken, saveToken } from "@/lib/auth";
 
 const api = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080',
@@ -16,7 +16,7 @@ api.interceptors.request.use(
         const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint));
         
         if (!isAuthEndpoint && typeof window !== 'undefined') {
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            const token = getValidToken();
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
             }

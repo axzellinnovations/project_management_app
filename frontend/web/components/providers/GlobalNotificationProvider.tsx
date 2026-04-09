@@ -4,16 +4,18 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { usePathname } from 'next/navigation';
 import SockJS from 'sockjs-client';
 import { CompatClient, Stomp } from '@stomp/stompjs';
-import { getValidToken } from '@/lib/auth';
 import * as notificationsApi from '@/services/notifications-service';
 import { Notification } from '@/services/notifications-service';
 import { toast } from '@/components/ui/Toast';
+import { AUTH_TOKEN_CHANGED_EVENT, getValidToken } from '@/lib/auth';
 
 interface GlobalNotificationContextType {
   notifications: Notification[];
   unreadCount: number;
   markAsRead: (id: number) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  deleteNotificationById: (id: number) => Promise<void>;
+  deleteAllNotifications: () => Promise<{ deleted: number; failed: number }>;
 }
 
 const GlobalNotificationContext = createContext<GlobalNotificationContextType | undefined>(undefined);
@@ -24,8 +26,10 @@ export function GlobalNotificationProvider({ children }: { children: React.React
   const pathname = usePathname();
   // We use refs to avoid re-triggering stomp effects on route path transitions
   const pathnameRef = useRef(pathname);
-  
   const stompClientRef = useRef<CompatClient | null>(null);
+  const activeTokenRef = useRef<string | null>(null);
+  const isConnectingRef = useRef(false);
+  const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
   useEffect(() => {
     pathnameRef.current = pathname;
@@ -44,70 +48,141 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     }
   };
 
-  useEffect(() => {
-    const token = getValidToken();
-    if (!token) return;
-
-    queueMicrotask(() => {
-      void loadInitialData();
-    });
-
-    const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
-    const client = Stomp.over(() => new SockJS(`${backendUrl}/ws`));
-    client.debug = () => {}; 
-    client.reconnect_delay = 5000;
-    
-    stompClientRef.current = client;
-
-    client.connect({ Authorization: `Bearer ${token}` }, () => {
-      client.subscribe('/user/queue/notifications', (payload) => {
-        const newNotif: Notification = JSON.parse(payload.body);
-        
-        // Add to state
-        setNotifications((prev) => {
-          // Prevent duplicates incase of reconnects
-          if (prev.some((n) => n.id === newNotif.id)) return prev;
-          return [newNotif, ...prev];
-        });
-
-        // Current navigation path check
-        const currentPath = pathnameRef.current;
-        const targetPath = (newNotif.link as string) || '';
-        
-        // Conditional toast display: 
-        // Example: If link is /project/123/chat and we are ON /project/123/chat, suppress toast.
-        // We do a loose match (starts with or exactly equal) depending on route structure.
-        const isOnRelevantPage = currentPath && targetPath && currentPath.includes(targetPath);
-
-        if (!isOnRelevantPage) {
-          setUnreadCount((prev) => prev + 1);
-          toast(newNotif.message, 'info', 5000);
-        } else {
-          // If we're on the relevant page, we can instantly mark it as read behind the scenes
-          notificationsApi.markNotificationRead(newNotif.id).catch(() => {});
-          setNotifications((prev) =>
-            prev.map((n) => (n.id === newNotif.id ? { ...n, read: true } : n))
-          );
-        }
-      });
-    }, (error: unknown) => {
-      const errorMessage = typeof error === 'string' ? error : ((error as { headers?: { message?: string } })?.headers?.message || '');
-      const isAuthError = errorMessage.toLowerCase().includes('auth') ||
-                         errorMessage.toLowerCase().includes('jwt') ||
-                         errorMessage.toLowerCase().includes('expired') ||
-                         errorMessage.toLowerCase().includes('invalid');
-
-      if (isAuthError) {
-        console.error('[notifications-ws] Fatal authentication error:', errorMessage);
-        // Don't retry on fatal auth errors
-        return;
-      }
-    });
-
-    return () => {
-      if (stompClientRef.current && stompClientRef.current.connected) {
+  const disconnectClient = () => {
+    isConnectingRef.current = false;
+    if (stompClientRef.current) {
+      if (stompClientRef.current.connected) {
         stompClientRef.current.disconnect();
       }
+      stompClientRef.current = null;
+    }
+  };
+
+  const connectRealtime = (token: string) => {
+    const hasSameActiveConnection =
+      stompClientRef.current?.connected && activeTokenRef.current === token;
+
+    if (hasSameActiveConnection || (isConnectingRef.current && activeTokenRef.current === token)) {
+      return;
+    }
+
+    disconnectClient();
+    isConnectingRef.current = true;
+    activeTokenRef.current = token;
+
+    const client = Stomp.over(() => new SockJS(`${backendUrl}/ws`));
+    client.debug = () => {};
+    client.reconnect_delay = 5000;
+
+    stompClientRef.current = client;
+
+    client.connect(
+      { Authorization: `Bearer ${token}` },
+      () => {
+        isConnectingRef.current = false;
+
+        if (stompClientRef.current !== client) {
+          return;
+        }
+
+        client.subscribe('/user/queue/notifications', (payload) => {
+          const newNotif: Notification = JSON.parse(payload.body);
+
+          // Add to state
+          setNotifications((prev) => {
+            // Prevent duplicates in case of reconnects
+            if (prev.some((n) => n.id === newNotif.id)) return prev;
+            return [newNotif, ...prev];
+          });
+
+          // Current navigation path check
+          const currentPath = pathnameRef.current;
+          const targetPath = (newNotif.link as string) || '';
+
+          // Conditional toast display:
+          // Example: If link is /project/123/chat and we are ON /project/123/chat, suppress toast.
+          // We do a loose match (starts with or exactly equal) depending on route structure.
+          const isOnRelevantPage = currentPath && targetPath && currentPath.includes(targetPath);
+
+          if (!isOnRelevantPage) {
+            setUnreadCount((prev) => prev + 1);
+            toast(newNotif.message, 'info', 5000);
+          } else {
+            // If we're on the relevant page, we can instantly mark it as read behind the scenes
+            notificationsApi.markNotificationRead(newNotif.id).catch(() => {});
+            setNotifications((prev) =>
+              prev.map((n) => (n.id === newNotif.id ? { ...n, read: true } : n))
+            );
+          }
+        });
+      },
+      () => {
+        isConnectingRef.current = false;
+      }
+    );
+  };
+
+  const syncAuthAndConnection = () => {
+    const token = getValidToken();
+
+    if (!token) {
+      activeTokenRef.current = null;
+      disconnectClient();
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
+    const tokenChanged = activeTokenRef.current !== token;
+
+    if (tokenChanged) {
+      void loadInitialData();
+    }
+
+    if (tokenChanged || !stompClientRef.current?.connected) {
+      connectRealtime(token);
+    }
+  };
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'token' || event.key === null) {
+        syncAuthAndConnection();
+      }
+    };
+
+    const handleAuthTokenChanged = () => {
+      syncAuthAndConnection();
+    };
+
+    const handleFocus = () => {
+      syncAuthAndConnection();
+    };
+
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        syncAuthAndConnection();
+      }
+    };
+
+    const initialSyncTimer = window.setTimeout(() => {
+      syncAuthAndConnection();
+    }, 0);
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener(AUTH_TOKEN_CHANGED_EVENT, handleAuthTokenChanged);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(AUTH_TOKEN_CHANGED_EVENT, handleAuthTokenChanged);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.clearTimeout(initialSyncTimer);
+
+      activeTokenRef.current = null;
+      disconnectClient();
     };
   }, []);
 
@@ -133,9 +208,52 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     }
   };
 
+  const deleteNotificationById = async (id: number) => {
+    await notificationsApi.deleteNotification(id);
+    setNotifications((prev) => {
+      const next = prev.filter((notif) => notif.id !== id);
+      setUnreadCount(next.filter((notif) => !notif.read).length);
+      return next;
+    });
+  };
+
+  const deleteAllNotifications = async (): Promise<{ deleted: number; failed: number }> => {
+    const ids = notifications.map((notification) => notification.id);
+    if (ids.length === 0) {
+      return { deleted: 0, failed: 0 };
+    }
+
+    const results = await notificationsApi.deleteAllNotifications(ids);
+    const successfulIds = new Set<number>();
+
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        successfulIds.add(ids[index]);
+      }
+    });
+
+    setNotifications((prev) => {
+      const next = prev.filter((notif) => !successfulIds.has(notif.id));
+      setUnreadCount(next.filter((notif) => !notif.read).length);
+      return next;
+    });
+
+    return {
+      deleted: successfulIds.size,
+      failed: ids.length - successfulIds.size,
+    };
+  };
+
   return (
     <GlobalNotificationContext.Provider
-      value={{ notifications, unreadCount, markAsRead, markAllAsRead }}
+      value={{
+        notifications,
+        unreadCount,
+        markAsRead,
+        markAllAsRead,
+        deleteNotificationById,
+        deleteAllNotifications,
+      }}
     >
       {children}
     </GlobalNotificationContext.Provider>
