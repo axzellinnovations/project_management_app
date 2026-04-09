@@ -2,6 +2,20 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import NotificationsPage from './page';
 import type { Notification } from '@/services/notifications-service';
 
+const apiGetMock = jest.fn();
+const fetchProjectDetailsMock = jest.fn();
+
+jest.mock('@/lib/axios', () => ({
+  __esModule: true,
+  default: {
+    get: (...args: unknown[]) => apiGetMock(...args),
+  },
+}));
+
+jest.mock('@/services/projects-service', () => ({
+  fetchProjectDetails: (...args: unknown[]) => fetchProjectDetailsMock(...args),
+}));
+
 jest.mock('next/link', () => ({
   __esModule: true,
   default: ({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) => (
@@ -29,11 +43,10 @@ const buildNotification = (
 });
 
 describe('NotificationsPage', () => {
-  let confirmSpy: jest.SpyInstance;
-
   beforeEach(() => {
     jest.clearAllMocks();
-    confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    apiGetMock.mockResolvedValue({ data: {} });
+    fetchProjectDetailsMock.mockResolvedValue({ id: 7, name: 'Atlas' });
 
     useGlobalNotificationsMock.mockReturnValue({
       notifications: [],
@@ -45,12 +58,14 @@ describe('NotificationsPage', () => {
     });
   });
 
-  afterEach(() => {
-    confirmSpy.mockRestore();
-  });
-
-  it('renders full notification details and actions', () => {
+  it('renders full notification details, actions, and project summary link', async () => {
     const markAsRead = jest.fn().mockResolvedValue(undefined);
+    apiGetMock.mockImplementation((url: string) => {
+      if (url === '/api/tasks/12') {
+        return Promise.resolve({ data: { projectId: 77, projectName: 'Atlas' } });
+      }
+      return Promise.resolve({ data: {} });
+    });
 
     useGlobalNotificationsMock.mockReturnValue({
       notifications: [
@@ -78,8 +93,14 @@ describe('NotificationsPage', () => {
     expect(screen.getAllByText('Unread').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'Open context' })).toHaveAttribute('href', '/taskcard?taskId=12');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Mark as read' }));
-    expect(markAsRead).toHaveBeenCalledWith(1);
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'Atlas' })).toHaveAttribute('href', '/summary/77');
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Read' })[1]);
+    await waitFor(() => {
+      expect(markAsRead).toHaveBeenCalledWith(1);
+    });
   });
 
   it('filters unread/read notifications', () => {
@@ -116,7 +137,7 @@ describe('NotificationsPage', () => {
     expect(screen.getByText('Unread item')).toBeInTheDocument();
     expect(screen.queryByText('Read item')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Read' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Read' })[0]);
     expect(screen.getByText('Read item')).toBeInTheDocument();
     expect(screen.queryByText('Unread item')).not.toBeInTheDocument();
   });
@@ -147,14 +168,12 @@ describe('NotificationsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => {
-      expect(window.confirm).toHaveBeenCalledWith('Delete this notification?');
       expect(deleteNotificationById).toHaveBeenCalledWith(9);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
 
     await waitFor(() => {
-      expect(window.confirm).toHaveBeenCalledWith('Delete all notifications? This action cannot be undone.');
       expect(deleteAllNotifications).toHaveBeenCalledTimes(1);
     });
   });

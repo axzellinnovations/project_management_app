@@ -39,11 +39,8 @@ const buildNotification = (
 });
 
 describe('NotificationBell', () => {
-  let confirmSpy: jest.SpyInstance;
-
   beforeEach(() => {
     jest.clearAllMocks();
-    confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
     useGlobalNotificationsMock.mockReturnValue({
       notifications: [],
       unreadCount: 0,
@@ -52,10 +49,6 @@ describe('NotificationBell', () => {
       deleteNotificationById: jest.fn().mockResolvedValue(undefined),
       deleteAllNotifications: jest.fn().mockResolvedValue({ deleted: 0, failed: 0 }),
     });
-  });
-
-  afterEach(() => {
-    confirmSpy.mockRestore();
   });
 
   it('does not render unread badge when unread count is zero', () => {
@@ -252,7 +245,6 @@ describe('NotificationBell', () => {
     fireEvent.click(screen.getByLabelText('Delete notification'));
 
     await waitFor(() => {
-      expect(window.confirm).toHaveBeenCalledWith('Delete this notification?');
       expect(deleteNotificationById).toHaveBeenCalledWith(21);
     });
   });
@@ -274,7 +266,6 @@ describe('NotificationBell', () => {
     fireEvent.click(screen.getByText('Delete all'));
 
     await waitFor(() => {
-      expect(window.confirm).toHaveBeenCalledWith('Delete all notifications? This action cannot be undone.');
       expect(deleteAllNotifications).toHaveBeenCalledTimes(1);
     });
   });
@@ -299,7 +290,6 @@ describe('NotificationBell', () => {
     fireEvent.click(screen.getByLabelText('Delete notification'));
 
     await waitFor(() => {
-      expect(window.confirm).toHaveBeenCalledWith('Delete these notifications?');
       expect(deleteNotificationById).toHaveBeenCalledWith(41);
       expect(deleteNotificationById).toHaveBeenCalledWith(42);
       expect(deleteNotificationById).toHaveBeenCalledTimes(2);

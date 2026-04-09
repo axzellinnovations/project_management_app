@@ -139,7 +139,9 @@ function buildNotificationListItems(notifications: Notification[]): Notification
 
 export function NotificationBell() {
   const [showDropdown, setShowDropdown] = useState(false);
+  const [pendingReadIds, setPendingReadIds] = useState<number[]>([]);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([]);
+  const [isMarkingAllRead, setIsMarkingAllRead] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const {
@@ -178,11 +180,6 @@ export function NotificationBell() {
       return;
     }
 
-    const confirmed = window.confirm(
-      ids.length === 1 ? 'Delete this notification?' : 'Delete these notifications?'
-    );
-    if (!confirmed) return;
-
     setPendingDeleteIds((prev) => Array.from(new Set([...prev, ...ids])));
 
     try {
@@ -208,17 +205,42 @@ export function NotificationBell() {
     }
   };
 
-  const markRowAsRead = (ids: number[]) => {
-    ids.forEach((id) => {
-      void markAsRead(id);
-    });
+  const markRowAsRead = async (ids: number[]) => {
+    if (ids.length === 0) {
+      return;
+    }
+
+    setPendingReadIds((prev) => Array.from(new Set([...prev, ...ids])));
+
+    try {
+      const results = await Promise.allSettled(ids.map((id) => markAsRead(id)));
+      const failedCount = results.filter((result) => result.status === 'rejected').length;
+      if (failedCount > 0) {
+        toast(`Failed to mark ${failedCount} notification${failedCount === 1 ? '' : 's'} as read`, 'warning');
+      }
+    } finally {
+      setPendingReadIds((prev) => prev.filter((id) => !ids.includes(id)));
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (unreadCount === 0 || isMarkingAllRead) {
+      return;
+    }
+
+    setIsMarkingAllRead(true);
+    try {
+      await markAllAsRead();
+    } catch (error) {
+      console.error('Failed to mark all notifications as read', error);
+      toast('Failed to mark all notifications as read', 'error');
+    } finally {
+      setIsMarkingAllRead(false);
+    }
   };
 
   const handleDeleteAll = async () => {
     if (notifications.length === 0) return;
-
-    const confirmed = window.confirm('Delete all notifications? This action cannot be undone.');
-    if (!confirmed) return;
 
     setIsDeletingAll(true);
 
@@ -249,12 +271,14 @@ export function NotificationBell() {
         onClick={() => setShowDropdown(!showDropdown)}
         className="relative p-2 rounded-full hover:bg-black/5 transition-colors"
       >
-        <Bell size={20} className="text-cu-text-secondary" />
-        {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 w-4 h-4 bg-cu-danger text-white text-[10px] font-bold flex items-center justify-center rounded-full border border-white">
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
-        )}
+        <span className="relative inline-flex">
+          <Bell size={20} className="text-cu-text-secondary" />
+          {unreadCount > 0 && (
+            <span className="pointer-events-none absolute -right-1 -top-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full border-2 border-white bg-cu-danger px-1 text-[10px] font-bold leading-none text-white shadow-sm">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </span>
       </button>
 
       <AnimatePresence>
@@ -269,10 +293,11 @@ export function NotificationBell() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-white/50">
               <span className="font-bold text-slate-900 text-[14px] font-outfit">Notifications</span>
               <button 
-                onClick={markAllAsRead} 
-                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 transition font-outfit uppercase tracking-wider"
+                onClick={() => void handleMarkAllAsRead()}
+                disabled={unreadCount === 0 || isMarkingAllRead}
+                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 transition font-outfit uppercase tracking-wider disabled:opacity-50"
               >
-                Mark all as read
+                {isMarkingAllRead ? 'Marking...' : 'Mark all as read'}
               </button>
             </div>
             {notifications.length > 0 && (
@@ -295,13 +320,21 @@ export function NotificationBell() {
                     key={item.rowKey}
                     className={`group relative border-b last:border-0 border-slate-50 ${item.isUnread ? 'bg-blue-50/30' : ''}`}
                   >
+                    {(() => {
+                      const isRowReadPending = item.unreadIds.some((id) => pendingReadIds.includes(id));
+                      return (
                     <Link
                       href={item.link}
                       onClick={() => {
-                          markRowAsRead(item.unreadIds);
+                          if (isRowReadPending) {
+                            return;
+                          }
+                          void markRowAsRead(item.unreadIds);
                           setShowDropdown(false);
                       }}
-                      className="block p-4 pr-11 hover:bg-slate-50 transition-colors"
+                      className={`block p-4 pr-11 hover:bg-slate-50 transition-colors ${
+                        isRowReadPending ? 'pointer-events-none opacity-70' : ''
+                      }`}
                     >
                       <div className="flex gap-3">
                         <div className={`w-2 h-2 mt-1.5 rounded-full shrink-0 ${item.isUnread ? 'bg-blue-600' : 'bg-transparent'}`} />
@@ -315,6 +348,8 @@ export function NotificationBell() {
                         </div>
                       </div>
                     </Link>
+                      );
+                    })()}
                     <button
                       type="button"
                       aria-label="Delete notification"

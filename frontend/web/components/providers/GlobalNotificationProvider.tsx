@@ -195,6 +195,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (e) {
       console.error(e);
+      throw e;
     }
   };
 
@@ -205,6 +206,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       setUnreadCount(0);
     } catch (e) {
       console.error(e);
+      throw e;
     }
   };
 

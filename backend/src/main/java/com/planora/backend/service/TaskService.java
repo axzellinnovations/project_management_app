@@ -2,13 +2,14 @@ package com.planora.backend.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,8 +39,6 @@ import com.planora.backend.repository.TaskAccessRepository;
 import com.planora.backend.repository.TaskRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 
 @Service
 public class TaskService {
@@ -427,11 +426,22 @@ public class TaskService {
         taskActivityService.logActivity(taskId, TaskActivityType.COMMENT_ADDED,
                 author.getUsername(), author.getUsername() + " commented: " + preview);
 
-        // Notify assignee if the comment author is not the assignee
-        if (task.getAssignee() != null && !task.getAssignee().getUser().getUserId().equals(currentUserId)) {
+        // Notify task stakeholders (assignee + reporter), excluding the comment author
+        Set<Long> recipientIds = new LinkedHashSet<>();
+
+        if (task.getAssignee() != null && task.getAssignee().getUser() != null) {
+            recipientIds.add(task.getAssignee().getUser().getUserId());
+        }
+        if (task.getReporter() != null && task.getReporter().getUser() != null) {
+            recipientIds.add(task.getReporter().getUser().getUserId());
+        }
+
+        recipientIds.remove(currentUserId);
+        if (!recipientIds.isEmpty()) {
             String message = author.getUsername() + " commented on task: " + task.getTitle();
             String link = "/taskcard?taskId=" + task.getId();
-            notificationService.createNotification(task.getAssignee().getUser(), message, link);
+            userRepository.findAllById(recipientIds)
+                    .forEach(recipient -> notificationService.createNotification(recipient, message, link));
         }
     }
 
