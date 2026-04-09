@@ -342,7 +342,7 @@ export default function SprintBoardPage() {
                   </p>
                   <div className="bg-[#F9FAFB] border border-[#EAECF0] rounded-xl px-4 py-3 mb-5">
                     <p className="text-[14px] font-bold text-[#101828]">{activeSprint.sprintName ?? `Sprint #${activeSprint.id}`}</p>
-                    <p className="text-[12px] text-[#667085] mt-0.5">All tasks in this sprint will be finalized.</p>
+                    <p className="text-[12px] text-[#667085] mt-0.5">The sprint will be marked as complete.</p>
                   </div>
                   <div className="flex gap-3">
                     <button

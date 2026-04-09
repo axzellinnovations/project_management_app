@@ -6,6 +6,8 @@ interface CalendarEventCardProps {
   isSprintSegmentStart?: boolean;
   isSprintSegmentEnd?: boolean;
   onClick?: (event: CalendarEventItem, clientX: number, clientY: number) => void;
+  onDragStart?: (eventId: string) => void;
+  isDragging?: boolean;
 }
 
 export default function CalendarEventCard({
@@ -14,20 +16,26 @@ export default function CalendarEventCard({
   isSprintSegmentStart = true,
   isSprintSegmentEnd = true,
   onClick,
+  onDragStart,
+  isDragging = false,
 }: CalendarEventCardProps) {
   const sprint = event.kind === 'sprint';
+  const draggable = !sprint && event.taskId != null;
 
   const sprintRound = `${isSprintSegmentStart ? 'rounded-l-md' : ''} ${isSprintSegmentEnd ? 'rounded-r-md' : ''}`;
 
   return (
     <div
       title={`${event.title}${event.status ? ` - ${event.status}` : ''}`}
+      draggable={draggable}
+      onDragStart={draggable && onDragStart ? (e) => { e.stopPropagation(); onDragStart(event.id); } : undefined}
       onClick={onClick ? (e) => { e.stopPropagation(); onClick(event, e.clientX, e.clientY); } : undefined}
-      className={
+      className={[
         sprint
           ? `px-2 py-1 text-xs font-semibold text-[#175CD3] bg-[#DFF3FF] border border-[#B2DDFF] ${sprintRound} ${onClick ? 'cursor-pointer hover:brightness-95' : ''}`
-          : `px-2 py-1 text-xs text-[#101828] bg-[#F2F4F7] border border-[#E4E7EC] rounded-md ${onClick ? 'cursor-pointer hover:bg-[#EAECF0]' : ''}`
-      }
+          : `px-2 py-1 text-xs text-[#101828] bg-[#F2F4F7] border border-[#E4E7EC] rounded-md ${onClick ? 'cursor-pointer hover:bg-[#EAECF0]' : ''} ${draggable ? 'cursor-grab' : ''}`,
+        isDragging ? 'opacity-40' : '',
+      ].join(' ')}
     >
       <div className="truncate">{event.title}</div>
       {!compact && !sprint && event.assignee && (

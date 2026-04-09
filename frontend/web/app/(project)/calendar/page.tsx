@@ -12,6 +12,7 @@ import { fetchCalendarEvents } from './api';
 import type { CalendarEventItem, CalendarFilters, CalendarView } from './types';
 import { addDays, addMonths, formatMonthLabel, formatWeekLabel } from './utils/date';
 import CreateTaskModal, { type CreateTaskData } from '@/components/shared/CreateTaskModal';
+import { patchTaskDates } from './api';
 
 const DEFAULT_FILTERS: CalendarFilters = {
   search: '',
@@ -215,6 +216,32 @@ export default function CalendarPage() {
     void loadEvents();
   };
 
+  const handleEventDrop = async (eventId: string, newDate: Date) => {
+    const yyyy = newDate.getFullYear();
+    const mm = String(newDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(newDate.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+
+    const event = events.find((e) => e.id === eventId);
+    if (!event?.taskId) return;
+
+    // Optimistic update
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === eventId
+          ? { ...e, startDate: dateStr, dueDate: dateStr, endDate: dateStr }
+          : e
+      )
+    );
+
+    try {
+      await patchTaskDates(event.taskId, dateStr, dateStr);
+    } catch {
+      // Revert on failure
+      void loadEvents();
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -246,8 +273,8 @@ export default function CalendarPage() {
 
       {!loading && !error && (
         <motion.div onPanEnd={handlePanEnd} className="touch-pan-y">
-          {view === 'month' && <MonthCalendarView currentDate={currentDate} events={filteredEvents} onDayClick={handleDayClick} />}
-          {view === 'week' && <WeekCalendarView currentDate={currentDate} events={filteredEvents} onDayClick={handleDayClick} />}
+          {view === 'month' && <MonthCalendarView currentDate={currentDate} events={filteredEvents} onDayClick={handleDayClick} onEventDrop={handleEventDrop} />}
+          {view === 'week' && <WeekCalendarView currentDate={currentDate} events={filteredEvents} onDayClick={handleDayClick} onEventDrop={handleEventDrop} />}
           {view === 'agenda' && <AgendaCalendarView currentDate={currentDate} events={filteredEvents} />}
         </motion.div>
       )}

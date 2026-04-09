@@ -1176,7 +1176,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
       open={confirmCompleteSprint}
       variant="success"
       title="Complete Sprint"
-      message={`Mark "${sprint.name}" as completed? Incomplete tasks will remain in the backlog for the next sprint.`}
+      message={`Mark "${sprint.name}" as completed?`}
       confirmLabel="Complete Sprint"
       loading={completingSprintLoading}
       onConfirm={doCompleteSprint}
