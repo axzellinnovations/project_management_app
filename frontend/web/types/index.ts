@@ -93,10 +93,15 @@ export interface Task {
   reporterName?: string;
   projectId?: number;
   sprintId?: number;
+  sprintName?: string;
+  milestoneId?: number;
+  milestoneName?: string;
   labels?: Label[];
   subtasks?: Subtask[];
   dependencies?: Dependency[];
   attachments?: TaskAttachmentSummary[];
+  assigneePhotoUrl?: string;
+  reporterPhotoUrl?: string;
 }
 
 export interface TaskActivity {
@@ -112,12 +117,20 @@ export interface TaskData {
   title: string;
   description: string;
   projectName: string;
+  projectId: number;
   status: string;
   priority: string;
   storyPoint: number;
   reporterName: string;
+  reporterId?: number;
   assigneeName: string;
+  assigneeId?: number;
+  assigneePhotoUrl?: string;
   sprintName: string;
+  sprintId?: number;
+  milestoneId?: number;
+  milestoneName?: string;
+  startDate?: string;
   labels: Label[];
   createdAt: string;
   updatedAt: string;
@@ -483,3 +496,43 @@ export const PRIORITY_BG_COLORS: Record<string, string> = {
   NORMAL: 'bg-priority-normal',
   LOW: 'bg-priority-low',
 };
+
+// ── Milestones ─────────────────────────────────────
+
+export interface MilestoneResponse {
+  id: number;
+  projectId: number;
+  name: string;
+  description?: string;
+  dueDate?: string;
+  status: 'OPEN' | 'COMPLETED' | 'ARCHIVED';
+  taskCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MilestoneRequest {
+  name: string;
+  description?: string;
+  dueDate?: string;
+  status?: 'OPEN' | 'COMPLETED' | 'ARCHIVED';
+}
+
+// ── Extended User Profile ──────────────────────────
+
+export interface UserProfile {
+  userId: number;
+  username: string;
+  email: string;
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
+  contactNumber?: string;
+  countryCode?: string;
+  jobTitle?: string;
+  company?: string;
+  position?: string;
+  bio?: string;
+  profilePicUrl?: string;
+  lastActive?: string;
+}
