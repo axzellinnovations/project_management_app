@@ -1,10 +1,14 @@
 package com.planora.backend.controller;
 
 import com.planora.backend.dto.CalendarEventDTO;
+import com.planora.backend.model.UserPrincipal;
 import com.planora.backend.service.CalendarService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
@@ -15,11 +19,13 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/calendar")
-@CrossOrigin(origins = "http://localhost:3000")
 public class CalendarController {
 
-    @Autowired
-    private CalendarService calendarService;
+    private final CalendarService calendarService;
+
+    public CalendarController(CalendarService calendarService) {
+        this.calendarService = calendarService;
+    }
 
     /**
      * Returns all tasks and sprints for a project in calendar-friendly format.
@@ -28,9 +34,10 @@ public class CalendarController {
      */
     @GetMapping("/events")
     public ResponseEntity<List<CalendarEventDTO>> getCalendarEvents(
-            @RequestParam Long projectId) {
+            @RequestParam Long projectId,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
 
-        List<CalendarEventDTO> events = calendarService.getCalendarEvents(projectId);
+        List<CalendarEventDTO> events = calendarService.getCalendarEvents(projectId, currentUser.getUserId());
         return ResponseEntity.ok(events);
     }
 }

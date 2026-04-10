@@ -12,6 +12,8 @@ interface DmsModalsProps {
     selectedInfoDoc: DocumentItem | null;
     setSelectedInfoDoc: (value: DocumentItem | null) => void;
     getFolderName: (folderId: number | null) => string;
+    isUploading?: boolean;
+    uploadProgress?: number;
 }
 
 export default function DmsModals({
@@ -22,12 +24,28 @@ export default function DmsModals({
     selectedInfoDoc,
     setSelectedInfoDoc,
     getFolderName,
+    isUploading = false,
+    uploadProgress = 0,
 }: DmsModalsProps) {
-    if (selectedVersionsDocId === null && selectedInfoDoc === null) {
+    if (selectedVersionsDocId === null && selectedInfoDoc === null && !isUploading) {
         return null;
     }
 
     return (
+        <>
+            {isUploading && (
+                <div className="fixed bottom-8 right-8 z-50 w-72 rounded-xl border border-[#E6E8EC] bg-white p-4 shadow-2xl">
+                    <p className="text-sm font-medium text-[#101828] mb-2">Uploading...</p>
+                    <div className="w-full bg-[#F2F4F7] rounded-full h-2">
+                        <div
+                            style={{ width: `${uploadProgress}%` }}
+                            className="h-2 rounded-full bg-[#1D56D5] transition-all duration-200"
+                        />
+                    </div>
+                    <p className="text-xs text-[#667085] mt-1">{uploadProgress}%</p>
+                </div>
+            )}
+            {(selectedVersionsDocId !== null || selectedInfoDoc !== null) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 backdrop-blur-sm p-4">
             {selectedVersionsDocId !== null && selectedVersionsDoc && (
                 <div className="w-full max-w-2xl rounded-xl border border-[#E6E8EC] bg-white shadow-2xl">
@@ -87,5 +105,7 @@ export default function DmsModals({
                 </div>
             )}
         </div>
+            )}
+        </>
     );
 }

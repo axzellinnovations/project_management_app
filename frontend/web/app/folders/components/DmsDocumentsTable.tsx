@@ -2,11 +2,15 @@
 
 import { DocumentItem } from '@/lib/dms';
 import { Download, Eye, FileClock, FileText, Info, Pencil, RotateCcw, Star, Trash2 } from 'lucide-react';
+import { timeAgo } from '@/app/folders/components/dmsUtils';
+import { ViewMode } from '@/app/folders/components/types';
 
 interface DmsDocumentsTableProps {
     filteredDocuments: DocumentItem[];
     favoriteIds: number[];
     isTrashMode: boolean;
+    mode: ViewMode;
+    projectNameMap: Record<number, string>;
     onToggleFavorite: (documentId: number) => void;
     onView: (documentId: number) => void;
     onDownload: (documentId: number) => void;
@@ -22,6 +26,8 @@ export default function DmsDocumentsTable({
     filteredDocuments,
     favoriteIds,
     isTrashMode,
+    mode,
+    projectNameMap,
     onToggleFavorite,
     onView,
     onDownload,
@@ -38,13 +44,14 @@ export default function DmsDocumentsTable({
                 <thead>
                     <tr className="text-left text-xs uppercase tracking-[0.08em] text-[#667085] border-b border-[#EAECF0] bg-[#FCFCFD]">
                         <th className="px-5 py-3 font-semibold">Name</th>
+                        {mode === 'recent' && <th className="px-5 py-3 font-semibold">Last Modified</th>}
                         <th className="px-5 py-3 font-semibold">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {filteredDocuments.length === 0 && (
                         <tr>
-                            <td className="px-5 py-8 text-sm text-[#667085]" colSpan={2}>
+                            <td className="px-5 py-8 text-sm text-[#667085]" colSpan={mode === 'recent' ? 3 : 2}>
                                 No documents found.
                             </td>
                         </tr>
@@ -52,6 +59,7 @@ export default function DmsDocumentsTable({
 
                     {filteredDocuments.map((doc) => {
                         const isFavorite = favoriteIds.includes(doc.id);
+                        const projectName = projectNameMap[doc.projectId];
 
                         return (
                             <tr key={doc.id} className="border-b border-[#F2F4F7] hover:bg-[#FAFBFC] align-top">
@@ -70,9 +78,19 @@ export default function DmsDocumentsTable({
                                                 </button>
                                             </div>
                                             <p className="text-xs text-[#667085] mt-1">{doc.contentType} • v{doc.latestVersionNumber}</p>
+                                            {/* FEATURE-3: project name in shared mode */}
+                                            {mode === 'shared' && projectName && (
+                                                <p className="text-xs text-[#98A2B3] mt-0.5">{projectName}</p>
+                                            )}
                                         </div>
                                     </div>
                                 </td>
+                                {/* FEATURE-2: last modified column in recent mode */}
+                                {mode === 'recent' && (
+                                    <td className="px-5 py-4 text-xs text-[#667085] whitespace-nowrap">
+                                        {timeAgo(doc.updatedAt)}
+                                    </td>
+                                )}
                                 <td className="px-5 py-4">
                                     <div className="flex flex-wrap items-center gap-2">
                                         {!isTrashMode && (

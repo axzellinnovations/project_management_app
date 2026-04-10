@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "master", "test" ]
+    branches: [ "main", "master", "test", "responsive-pages", "responsive-pages-fixes" ]
   pull_request:
-    branches: [ "main", "master", "test" ]
+    branches: [ "main", "master", "test", "responsive-pages", "responsive-pages-fixes" ]
 
 jobs:
   backend-build:

@@ -1,6 +1,7 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { motion, animate } from 'framer-motion';
 
 const itemVariants = {
     hidden: { opacity: 0, y: 10 },
@@ -48,41 +49,95 @@ function MetricCard({
 }
 
 function SmallCircularProgress({ percentage }: { percentage: number }) {
-    const radius = 20;
+    const [displayValue, setDisplayValue] = useState(0);
+    const radius = 26;
     const circumference = 2 * Math.PI * radius;
+    
+    useEffect(() => {
+        const controls = animate(0, percentage, {
+            duration: 2,
+            ease: "easeOut",
+            onUpdate: (v: number) => setDisplayValue(Math.round(v))
+        });
+        return () => controls.stop();
+    }, [percentage]);
+
     const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
     return (
-        <div className="relative w-[48px] h-[48px] flex items-center justify-center shrink-0">
-            <svg className="transform -rotate-90 w-full h-full">
+        <div className="relative w-[68px] h-[68px] flex items-center justify-center shrink-0">
+            <svg 
+                viewBox="0 0 68 68" 
+                className="transform -rotate-90 w-full h-full overflow-visible"
+            >
+                {/* Background track */}
                 <circle
-                    cx="24"
-                    cy="24"
+                    cx="34"
+                    cy="34"
                     r={radius}
-                    stroke="#E3E8EF"
-                    strokeWidth="4"
+                    stroke="#F3F4F6"
+                    strokeWidth="5"
                     fill="transparent"
                 />
-                <circle
-                    cx="24"
-                    cy="24"
+                
+                {/* Glow layer (Liquid appearance) */}
+                <motion.circle
+                    cx="34"
+                    cy="34"
                     r={radius}
-                    stroke="url(#gradient)"
-                    strokeWidth="4"
+                    stroke="url(#progressGradient)"
+                    strokeWidth="6"
                     fill="transparent"
                     strokeDasharray={circumference}
-                    strokeDashoffset={strokeDashoffset}
+                    initial={{ strokeDashoffset: circumference, opacity: 0 }}
+                    animate={{ 
+                        strokeDashoffset, 
+                        opacity: [0.2, 0.4, 0.2],
+                        scale: [1, 1.02, 1]
+                    }}
+                    transition={{ 
+                        strokeDashoffset: { duration: 2, ease: "easeOut" },
+                        opacity: { repeat: Infinity, duration: 3, ease: "easeInOut" },
+                        scale: { repeat: Infinity, duration: 3, ease: "easeInOut" }
+                    }}
+                    strokeLinecap="round"
+                    className="opacity-40"
+                />
+
+                {/* Main progress stroke */}
+                <motion.circle
+                    cx="34"
+                    cy="34"
+                    r={radius}
+                    stroke="url(#progressGradient)"
+                    strokeWidth="5"
+                    fill="transparent"
+                    strokeDasharray={circumference}
+                    initial={{ strokeDashoffset: circumference }}
+                    animate={{ strokeDashoffset }}
+                    transition={{ duration: 2, ease: "easeOut" }}
                     strokeLinecap="round"
                 />
+
                 <defs>
-                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#0052CC" />
-                        <stop offset="100%" stopColor="#0747A6" />
+                    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <motion.stop 
+                            offset="0%" 
+                            animate={{ stopColor: ["#0052CC", "#3B82F6", "#0052CC"] }}
+                            transition={{ repeat: Infinity, duration: 4 }}
+                        />
+                        <motion.stop 
+                            offset="100%" 
+                            animate={{ stopColor: ["#0747A6", "#2563EB", "#0747A6"] }}
+                            transition={{ repeat: Infinity, duration: 4 }}
+                        />
                     </linearGradient>
                 </defs>
             </svg>
-            <div className="absolute flex items-center justify-center">
-                <span className="font-arimo text-[12px] font-bold text-[#101828]">{percentage}%</span>
+            
+            {/* Percentage text */}
+            <div className="absolute flex flex-col items-center justify-center pt-0.5">
+                <span className="font-arimo text-[14px] font-bold text-[#101828] leading-none">{displayValue}%</span>
             </div>
         </div>
     );
@@ -100,16 +155,16 @@ export default function MetricsGrid() {
             <motion.div 
                 variants={itemVariants} 
                 whileHover={{ y: -2, transition: { duration: 0.2 } }} 
-                className="bg-white rounded-[10px] border border-gray-200 p-5 shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,82,204,0.08)] hover:border-[#0052CC]/20 transition-all duration-200 h-[120px] flex items-center justify-between group pointer-events-auto cursor-default"
+                className="bg-white rounded-[10px] border border-gray-200 p-5 shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,82,204,0.08)] hover:border-[#0052CC]/20 transition-all duration-200 h-[120px] flex items-center justify-between group pointer-events-auto cursor-default overflow-hidden"
             >
-                <div className="flex flex-col h-full justify-between">
-                    <p className="font-arimo text-[14px] text-gray-500 font-medium group-hover:text-[#0052CC] transition-colors">Overall Progress</p>
+                <div className="flex flex-col h-full justify-center min-w-0 pr-2">
+                    <p className="font-arimo text-[14px] text-gray-500 font-medium group-hover:text-[#0052CC] transition-colors truncate mb-1">Overall Progress</p>
                     <div className="flex flex-col">
-                         <span className="font-arimo text-[24px] text-[#0052CC] leading-none font-bold mt-1">On Track</span>
+                         <span className="font-arimo text-[24px] text-[#0052CC] leading-none font-bold truncate">On Track</span>
                     </div>
                 </div>
-                <div className="mt-auto mb-1">
-                    <SmallCircularProgress percentage={0} />
+                <div className="flex items-center shrink-0">
+                    <SmallCircularProgress percentage={68} />
                 </div>
             </motion.div>
 

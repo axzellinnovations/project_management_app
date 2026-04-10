@@ -1,52 +1,20 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import api from '@/lib/axios';
+import { useForgotPasswordForm } from './useForgotPasswordForm';
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      const response = await api.post('/api/auth/forgot', {
-        email: email.toLowerCase()
-      });
-
-      setSuccess(response.data);
-      setSubmitted(true);
-      setEmail('');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      console.error("Forgot password error:", err);
-      
-      let errorMessage = 'Failed to process request. Please try again.';
-      const errorData = err.response?.data;
-      
-      // Handle different error response formats
-      if (typeof errorData === 'string') {
-        errorMessage = errorData;
-      } else if (errorData?.message) {
-        errorMessage = errorData.message;
-      }
-      
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const {
+    email, setEmail,
+    isLoading,
+    submitted, setSubmitted,
+    error,
+    success,
+    handleSubmit,
+  } = useForgotPasswordForm();
 
   return (
-    <div className='min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] p-4'>
+    <div className='min-h-screen flex flex-col items-center justify-center p-4'>
       {/* Back to Login Link */}
       <div className="w-full max-w-[420px] mb-4">
         <Link href="/login" className='inline-flex items-center text-sm text-gray-500 hover:text-gray-900 transition-colors'>
@@ -69,7 +37,7 @@ export default function ForgotPasswordPage() {
       </div>
 
       {/* Main Card Container */}
-      <div className='w-full max-w-[420px] bg-white rounded-[24px] shadow-sm p-8'>
+      <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-8'>
         {submitted ? (
           // Success Message
           <div className="text-center py-8">
@@ -101,30 +69,33 @@ export default function ForgotPasswordPage() {
           <form className='space-y-5' onSubmit={handleSubmit}>
             {/* Error Message */}
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              <div id="forgot-error" role="alert" aria-live="polite" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
                 {error}
               </div>
             )}
 
             {/* Success Message */}
             {success && (
-              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+              <div role="status" aria-live="polite" className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
                 {success}
               </div>
             )}
 
             {/* Email Input */}
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">
+              <label htmlFor="forgot-email" className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">
                 Email Address
               </label>
               <input
+                id="forgot-email"
                 type="email"
+                autoComplete="email"
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value.toLowerCase())}
                 required
+                aria-describedby={error ? 'forgot-error' : undefined}
               />
             </div>
 

@@ -1,3 +1,5 @@
+@import '../styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,47 +9,41 @@
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
   }
-  
+
   html {
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  
+
   @media (min-width: 640px) {
-    html {
-      font-size: 14.5px;
-    }
+    html { font-size: 14.5px; }
   }
-  
+
   @media (min-width: 768px) {
-    html {
-      font-size: 15px;
-    }
+    html { font-size: 15px; }
   }
-  
+
   /* Ensure proper touch targets on mobile */
   @media (max-width: 639px) {
-    button, a {
-      min-height: 44px;
-    }
+    button, a { min-height: 44px; }
   }
 }
 
 body {
-  @apply bg-white text-slate-900 text-sm;
+  @apply bg-cu-bg text-cu-text-primary text-base font-inter;
 }
 
 h1 {
-  @apply text-3xl md:text-4xl font-bold;
+  @apply text-2xl font-bold tracking-tight;
 }
 
 h2 {
-  @apply text-2xl font-semibold;
+  @apply text-xl font-semibold;
 }
 
 h3 {
-  @apply text-lg font-medium;
+  @apply text-md font-medium;
 }
 
 button, a {
@@ -74,4 +70,129 @@ button, a {
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #D1D5DB;
+}
+
+/* ── No-scrollbar utility ── */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.mask-fade {
+  -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  mask-image: linear-gradient(to right, black 85%, transparent 100%);
+}
+
+/* ── Glass panel — glassmorphism card ── */
+.glass-panel {
+  background: hsla(0, 0%, 100%, 0.72);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 4px 24px -4px rgba(16, 24, 40, 0.08);
+}
+
+/* ── Skeleton shimmer ── */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #F3F4F6 25%, #E9EAEC 50%, #F3F4F6 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* ── Mobile bottom-nav spacing ── */
+@media (max-width: 767px) {
+  .main-content-area {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ── Scroll-snap horizontal carousel (Kanban mobile) ── */
+.snap-x-mandatory {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.snap-start { scroll-snap-align: start; }
+
+/* ── Card hover elevation ── */
+.card-hover {
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 8px 24px -4px rgba(16, 24, 40, 0.12);
+}
+
+/* ── FAB (Floating Action Button) — clears BottomNav on any page ── */
+.fab {
+  position: fixed;
+  bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  right: 1.5rem;
+  z-index: 105;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 9999px;
+  background: var(--cu-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px -4px var(--cu-primary);
+  transition: transform 120ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 120ms ease;
+}
+.fab:active {
+  transform: scale(0.92);
+  box-shadow: 0 2px 8px -2px var(--cu-primary);
+}
+@media (min-width: 768px) {
+  .fab-mobile-only { display: none; }
+}
+
+/* ── Mobile page padding — consistent content inset on all pages ── */
+.mobile-page-padding {
+  padding: 1.25rem 1rem 1.25rem 1rem;
+}
+@media (min-width: 640px) {
+  .mobile-page-padding {
+    padding: 1.5rem;
+  }
+}
+
+/* ── Swipe action reveal layers ── */
+.swipe-action-right {
+  background: #16A34A;
+  color: #fff;
+}
+.swipe-action-left {
+  background: #DC2626;
+  color: #fff;
+}
+
+/* ── Section sticky header ── */
+.sticky-section-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ── Touch list row — consistent interactive rows ── */
+.touch-row {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+}
+
+/* ── Bottom sheet backdrop animation ── */
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
 }

@@ -2,11 +2,14 @@ package com.planora.backend.service;
 
 import com.planora.backend.dto.BurndownDataPointDTO;
 import com.planora.backend.dto.BurndownResponseDTO;
+import com.planora.backend.dto.SprintResponseDTO;
+import com.planora.backend.dto.SprintVelocityDTO;
 import com.planora.backend.model.Sprint;
 import com.planora.backend.model.Task;
 import com.planora.backend.repository.SprintRepository;
 import com.planora.backend.repository.TaskRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -34,16 +37,19 @@ public class BurndownService {
      * Builds a burndown chart response for the given sprint.
      * Optionally filters the visible date range with {@code from}/{@code to}.
      *
-     * @param sprintId   ID of the sprint
-     * @param fromDate   optional start of visible range (defaults to sprint startDate)
-     * @param toDate     optional end of visible range (defaults to sprint endDate or today)
+     * @param sprintId        ID of the sprint
+     * @param fromDate        optional start of visible range (defaults to sprint startDate)
+     * @param toDate          optional end of visible range (defaults to sprint endDate or today)
+     * @param currentUserId   ID of the requesting user (used for membership check)
      */
+    @Transactional(readOnly = true)
     public BurndownResponseDTO getBurndownData(Long sprintId,
                                                LocalDate fromDate,
-                                               LocalDate toDate) {
+                                               LocalDate toDate,
+                                               Long currentUserId) {
 
         // Authorisation re-used from SprintService (throws if not a member)
-        Sprint sprint = sprintService.getSprintById(sprintId);
+        Sprint sprint = sprintService.getSprintEntityById(sprintId);
 
         LocalDate sprintStart = sprint.getStartDate();
         LocalDate sprintEnd   = sprint.getEndDate() != null ? sprint.getEndDate()
@@ -114,5 +120,31 @@ public class BurndownService {
                 total,
                 points
         );
+    }
+
+    /**
+     * Returns velocity data (committed vs completed story points) for every
+     * COMPLETED sprint in the given project. Uses SprintService for the
+     * membership auth check.
+     *
+     * @param projectId     ID of the project
+     * @param currentUserId ID of the requesting user
+     */
+    @Transactional(readOnly = true)
+    public List<SprintVelocityDTO> getVelocityData(Long projectId, Long currentUserId) {
+        List<SprintResponseDTO> sprints = sprintService.getSprintsByProject(projectId, currentUserId);
+
+        return sprints.stream()
+                .filter(s -> "COMPLETED".equals(s.getStatus()))
+                .map(s -> {
+                    List<Task> tasks = taskRepository.findBySprintId(s.getId());
+                    int committed = tasks.stream().mapToInt(Task::getStoryPoint).sum();
+                    int completed = tasks.stream()
+                            .filter(t -> "DONE".equalsIgnoreCase(t.getStatus()))
+                            .mapToInt(Task::getStoryPoint)
+                            .sum();
+                    return new SprintVelocityDTO(s.getId(), s.getName(), committed, completed);
+                })
+                .collect(Collectors.toList());
     }
 }

@@ -5,11 +5,14 @@ import TaskHeader from './TaskHeader';
 import TaskMainContent from './TaskMainContent';
 import TaskSidebar from './TaskSidebar';
 import api from '@/lib/axios';
+import { toast } from '@/components/ui';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface TaskData {
   id: number;
   title: string;
   description: string;
+  projectId: number;
   projectName: string;
   status: string;
   priority: string;
@@ -17,6 +20,8 @@ interface TaskData {
   reporterName: string;
   assigneeName: string;
   sprintName: string;
+  milestoneId?: number | null;
+  milestoneName?: string | null;
   labels: Array<{ id: number; name: string }>;
   createdAt: string;
   updatedAt: string;
@@ -55,6 +60,12 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const updateTask = async (updates: Partial<{
     title: string;
     description: string;
@@ -62,6 +73,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
     priority: string;
     storyPoint: number;
     dueDate: string;
+    milestoneId: number | null;
   }>) => {
     if (!taskData) return;
     try {
@@ -69,17 +81,26 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
       await fetchTaskData();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
-      alert('Failed to update task: ' + (axiosErr?.response?.data?.message || 'Unknown error'));
+      toast('Failed to update task: ' + (axiosErr?.response?.data?.message || 'Unknown error'), 'error');
     }
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-6xl bg-white h-[90vh] shadow-2xl flex flex-col font-sans rounded-lg overflow-hidden"
+    <div className="fixed inset-0 z-[9999]" onClick={onClose}>
+      {/* Backdrop */}
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        exit={{ opacity: 0 }} 
+        className="absolute inset-0 bg-black/30 backdrop-blur-sm" 
+      />
+      {/* Slide-over panel */}
+      <motion.div
+        initial={{ x: '100%', boxShadow: '-10px 0 30px rgba(0,0,0,0)' }}
+        animate={{ x: 0, boxShadow: '-10px 0 30px rgba(0,0,0,0.1)' }}
+        exit={{ x: '100%', boxShadow: '-10px 0 30px rgba(0,0,0,0)' }}
+        transition={{ type: 'spring', damping: 26, stiffness: 220 }}
+        className="absolute inset-y-0 right-0 w-full md:w-[900px] bg-white flex flex-col font-sans overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {loading && (
@@ -113,17 +134,22 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
               taskId={`TASK-${taskData.id}`}
               onClose={onClose}
             />
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
               <TaskMainContent
                 title={taskData.title}
                 description={taskData.description}
                 subtasks={taskData.subtasks || []}
                 dependencies={taskData.dependencies || []}
                 taskId={taskData.id}
+                projectId={taskData.projectId}
                 onUpdateTitle={(title) => updateTask({ title })}
                 onUpdateDescription={(description) => updateTask({ description })}
+                onSubtaskAdded={fetchTaskData}
+                onDependencyChanged={fetchTaskData}
               />
               <TaskSidebar
+                taskId={taskData.id}
+                projectId={taskData.projectId}
                 status={taskData.status}
                 assignee={taskData.assigneeName}
                 reporter={taskData.reporterName}
@@ -131,6 +157,8 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                 priority={taskData.priority}
                 sprint={taskData.sprintName}
                 storyPoint={taskData.storyPoint}
+                milestoneId={taskData.milestoneId}
+                milestoneName={taskData.milestoneName}
                 dates={{
                   created: taskData.createdAt,
                   updated: taskData.updatedAt,
@@ -139,11 +167,21 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                 onUpdateStatus={(status) => updateTask({ status })}
                 onUpdatePriority={(priority) => updateTask({ priority })}
                 onUpdateStoryPoint={(storyPoint) => updateTask({ storyPoint })}
+                onUpdateDueDate={(dueDate) => updateTask({ dueDate })}
+                onUpdateMilestone={(milestoneId) => updateTask({ milestoneId })}
+                onUnassign={async () => {
+                  try {
+                    await api.delete(`/api/tasks/${taskData.id}/assignee`);
+                    await fetchTaskData();
+                  } catch {
+                    toast('Failed to remove assignee', 'error');
+                  }
+                }}
               />
             </div>
           </>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

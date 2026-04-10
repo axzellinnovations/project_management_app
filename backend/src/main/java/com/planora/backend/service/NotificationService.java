@@ -1,17 +1,21 @@
 package com.planora.backend.service;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Locale;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.planora.backend.dto.NotificationResponseDTO;
 import com.planora.backend.model.Notification;
 import com.planora.backend.model.User;
 import com.planora.backend.repository.NotificationRepository;
-import jakarta.persistence.EntityNotFoundException;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.stream.Collectors;
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 public class NotificationService {
@@ -19,6 +23,14 @@ public class NotificationService {
     @Autowired
     private NotificationRepository notificationRepository;
 
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+
+    /**
+     * Unconditionally creates and persists a notification.
+     * Used by TaskService for task-assignment and comment events
+     * (where duplicates are not a concern).
+     */
     @Transactional
     public void createNotification(User recipient, String message, String link) {
         Notification notification = new Notification();
@@ -27,7 +39,43 @@ public class NotificationService {
         notification.setLink(link);
         notification.setRead(false);
         notification.setCreatedAt(LocalDateTime.now());
-        notificationRepository.save(notification);
+        notification = notificationRepository.save(notification);
+
+        // Disptach via websocket for global realtime overlay
+        NotificationResponseDTO dto = NotificationResponseDTO.builder()
+                .id(notification.getId())
+                .message(notification.getMessage())
+                .link(notification.getLink())
+                .isRead(notification.isRead())
+                .createdAt(notification.getCreatedAt())
+                .build();
+
+        String destinationUsername = recipient.getUsername().toLowerCase(Locale.ROOT);
+        messagingTemplate.convertAndSendToUser(
+                destinationUsername,
+                "/queue/notifications",
+                dto
+        );
+    }
+
+    /**
+     * Creates a notification only if an identical one (same recipient, message,
+     * and link) has NOT already been created within the last 60 seconds.
+     *
+     * This prevents duplicate notifications when chat events (DMs, @mentions)
+     * may be triggered by multiple code paths for the same underlying message.
+     */
+    @Transactional
+    public void createNotificationIfNotDuplicate(User recipient, String message, String link) {
+        // Dedup window: 60 seconds
+        LocalDateTime window = LocalDateTime.now().minusSeconds(60);
+        boolean alreadyExists = notificationRepository
+                .existsByRecipientUserIdAndMessageAndLinkAndCreatedAtAfter(
+                        recipient.getUserId(), message, link, window
+                );
+        if (!alreadyExists) {
+            createNotification(recipient, message, link);
+        }
     }
 
     public List<NotificationResponseDTO> getUserNotifications(Long userId) {
@@ -69,5 +117,9 @@ public class NotificationService {
         
         unread.forEach(n -> n.setRead(true));
         notificationRepository.saveAll(unread);
+    }
+
+    public void deleteNotification(Long id) {
+        notificationRepository.deleteById(id);
     }
 }

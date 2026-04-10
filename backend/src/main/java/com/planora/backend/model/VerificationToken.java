@@ -34,10 +34,12 @@ public class VerificationToken {
 
     @Getter
     @Setter
+    @Builder.Default
     private boolean used = false;
 
     @Setter
     @Getter
+    @Builder.Default
     private int attempts = 0;
 
     @Getter

@@ -1,6 +1,8 @@
 package com.planora.backend.configuration;
 
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -21,6 +23,8 @@ import com.planora.backend.service.JWTService;
 @Configuration
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
+    private static final Logger log = LoggerFactory.getLogger(WebSocketConfig.class);
 
     private final JWTService jwtService;
     private final UserRepository userRepository;
@@ -53,7 +57,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
 
                 if (accessor == null) {
-                    System.err.println("[WebSocket] No StompHeaderAccessor found");
+                    log.error("[WebSocket] No StompHeaderAccessor found");
                     return message;
                 }
 
@@ -62,10 +66,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         // Read JWT token from Authorization header (Bearer token)
                         String auth = accessor.getFirstNativeHeader("Authorization");
                         
-                        System.out.println("[WebSocket] CONNECT received with Authorization header: " + (auth != null ? "Present" : "Missing"));
+                        log.info("[WebSocket] CONNECT received with Authorization header: {}", auth != null ? "Present" : "Missing");
 
                         if (auth == null || auth.trim().isEmpty()) {
-                            System.err.println("[WebSocket] Missing Authorization header");
+                            log.error("[WebSocket] Missing Authorization header");
                             throw new IllegalArgumentException("Missing Authorization header");
                         }
 
@@ -74,37 +78,42 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                                 auth.substring("Bearer ".length()).trim() :
                                 auth.trim();
 
-                        System.out.println("[WebSocket] Token received, extracting username...");
+                        log.info("[WebSocket] Token received, extracting username...");
                         
                         // Extract username from token
                         String email = jwtService.extractUserName(token);
-                        System.out.println("[WebSocket] Extracted email from token: " + email);
+                        log.info("[WebSocket] Extracted email from token: {}", email);
 
                         // Find user by email
                         User user = userRepository.findByEmail(email);
                         
                         if (user == null) {
-                            System.err.println("[WebSocket] User not found in database for email: " + email);
+                            log.error("[WebSocket] User not found in database for email: {}", email);
                             throw new IllegalArgumentException("User not found in database");
                         }
 
                         String username = user.getUsername();
                         
                         if (username == null || username.trim().isEmpty()) {
-                            System.err.println("[WebSocket] Invalid username in token for user: " + email);
+                            log.error("[WebSocket] Invalid username in token for user: {}", email);
                             throw new IllegalArgumentException("Invalid username in token");
                         }
 
                         String normalizedUsername = username.toLowerCase();
 
-                        System.out.println("[WebSocket] Setting user principal: " + normalizedUsername);
+                        log.info("[WebSocket] Setting user principal: {}", normalizedUsername);
                         accessor.setUser(new StompPrincipal(normalizedUsername));
                         accessor.getSessionAttributes().put("username", normalizedUsername);
                         
-                        System.out.println("[WebSocket] Authentication successful for user: " + normalizedUsername);
+                        log.info("[WebSocket] Authentication successful for user: {}", normalizedUsername);
+                    } catch (io.jsonwebtoken.ExpiredJwtException e) {
+                        log.error("[WebSocket] Authentication failed: JWT expired");
+                        throw new IllegalArgumentException("JWT expired");
+                    } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
+                        log.error("[WebSocket] Authentication failed: {}", e.getMessage());
+                        throw new IllegalArgumentException("JWT invalid: " + e.getMessage());
                     } catch (Exception e) {
-                        System.err.println("[WebSocket] Authentication error: " + e.getMessage());
-                        e.printStackTrace();
+                        log.error("[WebSocket] Unexpected authentication error: {}", e.getMessage(), e);
                         throw new IllegalArgumentException("WebSocket authentication failed: " + e.getMessage());
                     }
                 }

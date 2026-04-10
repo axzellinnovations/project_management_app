@@ -6,6 +6,7 @@ import TaskHeader from './TaskHeader';
 import TaskMainContent from './TaskMainContent';
 import TaskSidebar from './TaskSidebar';
 import api from '@/lib/axios';
+import { toast } from '@/components/ui';
 
 interface TaskData {
   id: number;
@@ -86,7 +87,7 @@ function TaskPageContent() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to update task:', err);
-      alert('Failed to update task: ' + (err.response?.data?.message || err.message));
+      toast('Failed to update task: ' + (err.response?.data?.message || err.message), 'error');
     }
   };
 
@@ -102,9 +103,11 @@ function TaskPageContent() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border border-gray-300 border-t-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading task...</p>
+        <div className="w-full max-w-6xl bg-white rounded-xl p-6 space-y-4">
+          <div className="skeleton h-8 w-48 rounded-lg" />
+          <div className="skeleton h-5 w-full rounded-lg" />
+          <div className="skeleton h-5 w-3/4 rounded-lg" />
+          <div className="skeleton h-40 w-full rounded-xl mt-4" />
         </div>
       </div>
     );
@@ -128,8 +131,8 @@ function TaskPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl bg-white border border-gray-200 h-[90vh] shadow-2xl flex flex-col font-sans rounded-lg overflow-hidden">
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-3 sm:p-4">
+      <div className="w-full max-w-6xl bg-white border border-gray-200 shadow-2xl flex flex-col font-sans rounded-xl overflow-hidden" style={{ maxHeight: '92dvh' }}>
         
         {/* 1. Header Component */}
         <TaskHeader 
@@ -138,7 +141,7 @@ function TaskPageContent() {
           onClose={handleClose} 
         />
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden">
           
           {/* 2. Main Content Component (Left Side) */}
           <TaskMainContent 
@@ -151,7 +154,7 @@ function TaskPageContent() {
               onUpdateDescription={(description) => updateTask({ description })}
           />
 
-          {/* 3. Sidebar Component (Right Side) */}
+          {/* 3. Sidebar Component (Right Side) — full width on mobile, fixed on lg+ */}
           <TaskSidebar 
               status={taskData.status}
               assignee={taskData.assigneeName}

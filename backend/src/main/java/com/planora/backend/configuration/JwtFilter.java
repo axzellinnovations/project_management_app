@@ -37,6 +37,7 @@ public class JwtFilter extends OncePerRequestFilter {
             "/api/auth/resend",
             "/api/auth/forgot",
             "/api/auth/reset",
+            "/api/auth/refresh",
             "/ws/**",
             "/v3/api-docs/**",
             "/swagger-ui/**",
@@ -89,8 +90,7 @@ public class JwtFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
         } catch (UsernameNotFoundException e) {
             logger.info("User not found for token: {}", e.getMessage());
-            // Continue the filter chain without authentication
-            filterChain.doFilter(request, response);
+            sendErrorResponse(response, "User not found");
         } catch (ExpiredJwtException e) {
             logger.info("JWT Token expired: {}", e.getMessage());
             sendErrorResponse(response, "Token has expired");
