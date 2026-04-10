@@ -1,42 +1,28 @@
-"use client";
-import React, { useState, useEffect } from 'react';
-import { ChevronDown, X } from 'lucide-react';
-import Image from 'next/image';
-import api from '@/lib/axios';
+'use client';
+import React from 'react';
+import StatusSection from './sidebar/StatusSection';
+import AssigneeSection from './sidebar/AssigneeSection';
+import MultiAssigneeSection from './sidebar/MultiAssigneeSection';
+import ReporterSection from './sidebar/ReporterSection';
+import LabelSection from './sidebar/LabelSection';
+import SprintSection from './sidebar/SprintSection';
+import MilestoneSection from './sidebar/MilestoneSection';
+import PrioritySection from './sidebar/PrioritySection';
+import StoryPointSection from './sidebar/StoryPointSection';
+import DateSection from './sidebar/DateSection';
+import RecurrenceSection from './sidebar/RecurrenceSection';
+import CustomFieldsSection from './sidebar/CustomFieldsSection';
 
-// BUG-7: Module-level singleton so the user list is fetched at most once per
-// browser session regardless of how many task cards the user opens.
-type UserMapEntry = { username?: string; fullName?: string; profilePicUrl?: string | null };
-
-let userMapCache: Record<string, string | null> | null = null;
-let userMapFetchPromise: Promise<Record<string, string | null>> | null = null;
-
-function getOrFetchUserMap(): Promise<Record<string, string | null>> {
-    if (userMapCache !== null) return Promise.resolve(userMapCache);
-    if (userMapFetchPromise !== null) return userMapFetchPromise;
-
-    userMapFetchPromise = api
-        .get<UserMapEntry[]>('/api/auth/users')
-        .then(response => {
-            const map: Record<string, string | null> = {};
-            response.data.forEach(u => {
-                if (u.username) map[u.username] = u.profilePicUrl || null;
-                if (u.fullName) map[u.fullName] = u.profilePicUrl || null;
-            });
-            userMapCache = map;
-            userMapFetchPromise = null;
-            return map;
-        })
-        .catch(() => {
-            userMapFetchPromise = null;
-            return {};
-        });
-
-    return userMapFetchPromise;
+interface MultiAssignee {
+  memberId: number;
+  userId: number;
+  name: string;
+  photoUrl: string | null;
 }
 
 interface TaskSidebarProps {
   taskId?: number;
+  projectId?: number;
   status: string;
   assignee: string | null;
   reporter: string | null;
@@ -44,6 +30,11 @@ interface TaskSidebarProps {
   priority: string;
   sprint: string | null;
   storyPoint: number;
+  milestoneId?: number | null;
+  milestoneName?: string | null;
+  assignees?: MultiAssignee[];
+  recurrenceRule?: string | null;
+  recurrenceEnd?: string | null;
   dates: {
     created: string;
     updated: string;
@@ -53,315 +44,64 @@ interface TaskSidebarProps {
   onUpdatePriority?: (priority: string) => void;
   onUpdateStoryPoint?: (storyPoint: number) => void;
   onUpdateDueDate?: (dueDate: string) => void;
+  onUpdateMilestone?: (milestoneId: number | null) => void;
+  onUpdateRecurrence?: (rule: string | null, end: string | null) => void;
   onUnassign?: () => void;
+  onAssigneesChanged?: () => void;
 }
 
-const TaskSidebar: React.FC<TaskSidebarProps> = ({ 
-  taskId: _taskId, status, assignee, reporter, labels, priority, sprint, storyPoint, dates,
-  onUpdateStatus, onUpdatePriority, onUpdateStoryPoint, onUpdateDueDate, onUnassign
-}) => {
-  const [isStatusOpen, setIsStatusOpen] = useState(false);
-  const [isPriorityOpen, setIsPriorityOpen] = useState(false);
-  const [isEditingStoryPoint, setIsEditingStoryPoint] = useState(false);
-  const [editedStoryPoint, setEditedStoryPoint] = useState(storyPoint);
-  const [usersMap, setUsersMap] = useState<Record<string, string | null>>({});
-
-  // BUG-7: Use the module-level singleton — only one fetch per browser session.
-  useEffect(() => {
-    void getOrFetchUserMap().then(setUsersMap);
-  }, []);
-
-  // BUG-3: Backend always returns a presigned HTTPS URL (or null). Trust it as-is.
-  const resolveProfilePic = (url?: string | null) => {
-    if (!url) return '';
-    return url;
-  };
-
-  // Update local state when props change
-  useEffect(() => {
-    setEditedStoryPoint(storyPoint);
-  }, [storyPoint]);
-
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleClickOutside = () => {
-      setIsStatusOpen(false);
-      setIsPriorityOpen(false);
-    };
-
-    if (isStatusOpen || isPriorityOpen) {
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
-    }
-  }, [isStatusOpen, isPriorityOpen]);
-
-  const priorityConfig: Record<string, { text: string; bg: string; hover: string; dot: string }> = {
-    URGENT: { text: 'text-red-600', bg: 'bg-red-50', hover: 'hover:bg-red-100', dot: 'bg-red-500' },
-    HIGH:   { text: 'text-orange-600', bg: 'bg-orange-50', hover: 'hover:bg-orange-100', dot: 'bg-orange-500' },
-    MEDIUM: { text: 'text-amber-600', bg: 'bg-amber-50', hover: 'hover:bg-amber-100', dot: 'bg-amber-400' },
-    LOW:    { text: 'text-gray-500', bg: 'bg-gray-100', hover: 'hover:bg-gray-200', dot: 'bg-gray-400' },
-  };
-
-  const getPriorityStyle = (p: string) => priorityConfig[p] ?? priorityConfig.LOW;
-  const priorityOptions = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
-  const statusOptions = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
-
-  const handleStatusChange = (newStatus: string) => {
-    onUpdateStatus?.(newStatus);
-    setIsStatusOpen(false);
-  };
-
-  const handlePriorityChange = (newPriority: string) => {
-    onUpdatePriority?.(newPriority);
-    setIsPriorityOpen(false);
-  };
-
-  const handleStoryPointSave = () => {
-    if (editedStoryPoint !== storyPoint && editedStoryPoint >= 0) {
-      onUpdateStoryPoint?.(editedStoryPoint);
-    }
-    setIsEditingStoryPoint(false);
-  };
-
-  return (
-    <div className="w-full md:w-80 bg-gray-50/50 p-5 overflow-y-auto border-t md:border-t-0 md:border-l border-gray-100 flex-shrink-0 scrollbar-thin min-h-0">
-      
-      {/* Status Dropdown */}
-      <div className="mb-6">
-        <label className="text-xs font-semibold text-gray-500 uppercase mb-2 block tracking-wide">Status</label>
-        <div className="relative">
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsStatusOpen(!isStatusOpen);
-            }}
-            className="w-full flex items-center justify-between px-3 py-2 bg-white border border-gray-300 text-gray-800 font-semibold text-sm rounded hover:bg-gray-50 transition-colors shadow-sm uppercase"
-          >
-            <span>{(status ?? 'TODO').replace('_', ' ')}</span>
-            <ChevronDown size={16} className="text-gray-500" />
-          </button>
-          {isStatusOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-10">
-              {statusOptions.map((option) => (
-                <button
-                  key={option}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleStatusChange(option);
-                  }}
-                  className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm text-gray-700 border-b border-gray-100 last:border-b-0 uppercase hover:text-blue-600 transition-colors"
-                >
-                  {option.replace('_', ' ')}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Details Group */}
-      <div className="border rounded-md border-gray-200 bg-white mb-6 shadow-sm">
-        <div className="px-4 py-3 border-b border-gray-100 font-semibold text-sm text-gray-700">
-          Details
-        </div>
-        
-        <div className="p-4 space-y-5">
-          
-          {assignee && (
-            <SidebarField label="Assignee">
-               <div className="flex items-center gap-2 hover:bg-gray-50 p-1 -ml-1 rounded group">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold overflow-hidden">
-                      {usersMap[assignee] ? (
-                         <Image 
-                           src={resolveProfilePic(usersMap[assignee])} 
-                           alt={assignee} 
-                           width={24} 
-                           height={24} 
-                           className="w-full h-full object-cover" 
-                           unoptimized 
-                         />
-                      ) : (
-                         assignee.charAt(0).toUpperCase()
-                      )}
-                  </div>
-                  <span className="text-sm text-blue-600 flex-1">{assignee}</span>
-                  {onUnassign && (
-                    <button
-                      onClick={onUnassign}
-                      title="Remove assignee"
-                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-               </div>
-            </SidebarField>
-          )}
-
-          {reporter && (
-            <SidebarField label="Reporter">
-               <div className="flex items-center gap-2 hover:bg-gray-50 p-1 -ml-1 rounded cursor-pointer group">
-                  <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold overflow-hidden">
-                      {usersMap[reporter] ? (
-                         <Image 
-                           src={resolveProfilePic(usersMap[reporter])} 
-                           alt={reporter} 
-                           width={24} 
-                           height={24} 
-                           className="w-full h-full object-cover" 
-                           unoptimized 
-                         />
-                      ) : (
-                         reporter.charAt(0).toUpperCase()
-                      )}
-                  </div>
-                  <span className="text-sm text-blue-600 group-hover:underline">{reporter}</span>
-               </div>
-            </SidebarField>
-          )}
-
-          {labels && labels.length > 0 && (
-            <SidebarField label="Labels">
-              <div className="flex flex-wrap gap-2">
-                {labels.map(label => (
-                  <span key={label} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded hover:bg-gray-200 cursor-pointer transition-colors">
-                    {label}
-                  </span>
-                ))}
-                <button className="text-xs text-gray-400 hover:text-gray-600 transition-colors">+ Add</button>
-              </div>
-            </SidebarField>
-          )}
-
-          {sprint && (
-            <SidebarField label="Sprint">
-              <span className="text-sm text-blue-600 hover:underline cursor-pointer">{sprint}</span>
-            </SidebarField>
-          )}
-
-          {storyPoint > 0 && (
-            <SidebarField label="Story Points">
-              {isEditingStoryPoint ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={editedStoryPoint}
-                    onChange={(e) => setEditedStoryPoint(parseInt(e.target.value) || 0)}
-                    onBlur={handleStoryPointSave}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleStoryPointSave();
-                      if (e.key === 'Escape') {
-                        setEditedStoryPoint(storyPoint);
-                        setIsEditingStoryPoint(false);
-                      }
-                    }}
-                    autoFocus
-                    className="w-20 bg-gray-100 text-gray-700 text-xs font-bold px-2 py-1 rounded-full border-2 border-blue-500 focus:outline-none"
-                  />
-                </div>
-              ) : (
-                <span 
-                  onClick={() => setIsEditingStoryPoint(true)}
-                  className="bg-gray-100 text-gray-700 text-xs font-bold px-2 py-1 rounded-full inline-block cursor-pointer hover:bg-gray-200 transition-colors"
-                >
-                  {storyPoint}
-                </span>
-              )}
-            </SidebarField>
-          )}
-
-          {priority && (
-            <SidebarField label="Priority">
-              <div className="relative">
-                <div 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsPriorityOpen(!isPriorityOpen);
-                  }}
-                  className={`flex items-center gap-2 text-sm font-semibold px-2 py-1 rounded w-fit cursor-pointer transition-colors ${getPriorityStyle(priority).text} ${getPriorityStyle(priority).bg} ${getPriorityStyle(priority).hover}`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${getPriorityStyle(priority).dot}`} />
-                  {priority}
-                  <ChevronDown size={12} className="opacity-60" />
-                </div>
-                {isPriorityOpen && (
-                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[130px] overflow-hidden">
-                    {priorityOptions.map((option) => (
-                      <button
-                        key={option}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePriorityChange(option);
-                        }}
-                        className={`w-full text-left px-3 py-2 text-sm border-b border-gray-50 last:border-b-0 flex items-center gap-2 transition-colors ${getPriorityStyle(option).hover} ${getPriorityStyle(option).text} font-medium`}
-                      >
-                        <span className={`w-2 h-2 rounded-full ${getPriorityStyle(option).dot}`} />
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </SidebarField>
-          )}
-
-        </div>
-      </div>
-
-      {/* Dates Group */}
-      <div className="border rounded-md border-gray-200 bg-white shadow-sm">
-        <div className="px-4 py-3 border-b border-gray-100 font-semibold text-sm text-gray-700">
-          Dates
-        </div>
+const TaskSidebar: React.FC<TaskSidebarProps> = ({
+  taskId, projectId, status, assignee, reporter, labels, priority, sprint, storyPoint,
+  milestoneId, milestoneName, assignees, recurrenceRule, recurrenceEnd, dates,
+  onUpdateStatus, onUpdatePriority, onUpdateStoryPoint, onUpdateDueDate, onUpdateMilestone,
+  onUpdateRecurrence, onUnassign, onAssigneesChanged,
+}) => (
+  <div className="w-full md:w-72 bg-[#F7F8FA] border-t md:border-t-0 md:border-l border-[#EAECF0] flex-shrink-0 overflow-y-auto scrollbar-thin min-h-0">
+    <div className="p-4 space-y-4">
+      <StatusSection status={status} onUpdateStatus={onUpdateStatus} />
+      <div className="border border-[#E5E7EB] rounded-xl bg-white shadow-sm overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-[#F2F4F7] text-[10px] font-bold text-[#6A7282] uppercase tracking-wider">Details</div>
         <div className="p-4 space-y-4">
-           {dates.dueDate && (
-             <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500 font-medium">Due date</span>
-                {onUpdateDueDate ? (
-                  <input
-                    type="date"
-                    defaultValue={dates.dueDate ? dates.dueDate.substring(0, 10) : ''}
-                    onChange={(e) => { if (e.target.value) onUpdateDueDate(e.target.value); }}
-                    className="text-sm text-gray-800 bg-gray-50 px-2 py-1 rounded border border-gray-200 focus:outline-none focus:border-blue-500 cursor-pointer"
-                  />
-                ) : (
-                  <span className="text-sm text-gray-800 bg-gray-50 px-2 py-1 rounded border border-gray-100">
-                    {new Date(dates.dueDate).toLocaleDateString()}
-                  </span>
-                )}
-             </div>
-           )}
-           {dates.created && (
-             <div className="flex flex-col gap-1">
-                <span className="text-xs text-gray-500 font-medium">Created</span>
-                <span className="text-xs text-gray-600">{new Date(dates.created).toLocaleString()}</span>
-             </div>
-           )}
-           {dates.updated && (
-             <div className="flex flex-col gap-1">
-                <span className="text-xs text-gray-500 font-medium">Updated</span>
-                <span className="text-xs text-gray-600">{new Date(dates.updated).toLocaleString()}</span>
-             </div>
-           )}
+          {(!assignees || assignees.length === 0) && (
+            <AssigneeSection assignee={assignee} onUnassign={onUnassign} />
+          )}
+          {taskId != null && (
+            <MultiAssigneeSection
+              taskId={taskId}
+              projectId={projectId}
+              assignees={assignees ?? []}
+              onChanged={onAssigneesChanged ?? (() => {})}
+            />
+          )}
+          <ReporterSection reporter={reporter} />
+          <LabelSection labels={labels} />
+          <SprintSection sprint={sprint} />
+          <MilestoneSection
+            projectId={projectId}
+            milestoneId={milestoneId}
+            milestoneName={milestoneName}
+            onUpdateMilestone={onUpdateMilestone}
+          />
+          <StoryPointSection storyPoint={storyPoint} onUpdateStoryPoint={onUpdateStoryPoint} />
+          <PrioritySection priority={priority} onUpdatePriority={onUpdatePriority} />
+          {onUpdateRecurrence && (
+            <RecurrenceSection
+              recurrenceRule={recurrenceRule}
+              recurrenceEnd={recurrenceEnd}
+              onUpdate={onUpdateRecurrence}
+            />
+          )}
         </div>
       </div>
-
-      <div className="mt-8 text-xs text-gray-400 flex justify-between px-1">
-        <button className="hover:text-gray-600">Configure fields</button>
-        <button className="hover:text-gray-600">Plain Text</button>
+      <DateSection dates={dates} onUpdateDueDate={onUpdateDueDate} />
+      {taskId != null && projectId != null && (
+        <CustomFieldsSection taskId={taskId} projectId={projectId} />
+      )}
+      <div className="text-[10px] text-[#9CA3AF] flex justify-between px-1 pb-2">
+        <button className="hover:text-[#374151] transition-colors">Configure fields</button>
+        <button className="hover:text-[#374151] transition-colors">Plain Text</button>
       </div>
-
     </div>
-  );
-};
-
-// Helper for Sidebar rows
-const SidebarField = ({ label, children }: { label: string, children: React.ReactNode }) => (
-  <div className="flex flex-col gap-1">
-    <span className="text-xs text-gray-500 font-medium">{label}</span>
-    {children}
   </div>
 );
 

@@ -39,10 +39,18 @@ public class TaskRequestDTO {
     private Long assigneeId;
     private Long reporterId;
 
+    private List<Long> assigneeIds;   // multiple assignees (V4)
+
     private Long sprintId;
     private Long KanbanColumnId;
 
     private Long parentId;
 
     private List<Long> labelIds;
+
+    private Long milestoneId;
+
+    // Recurring task fields (V7)
+    private String recurrenceRule;    // DAILY | WEEKLY | MONTHLY | YEARLY
+    private java.time.LocalDate recurrenceEnd;
 }

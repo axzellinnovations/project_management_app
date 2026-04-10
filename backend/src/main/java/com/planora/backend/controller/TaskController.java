@@ -4,9 +4,11 @@ import com.planora.backend.dto.CommentRequestDTO;
 import com.planora.backend.dto.TaskActivityResponseDTO;
 import com.planora.backend.dto.TaskRequestDTO;
 import com.planora.backend.dto.TaskResponseDTO;
+import com.planora.backend.dto.TaskTemplateDTO;
 import com.planora.backend.model.UserPrincipal;
 import com.planora.backend.service.TaskActivityService;
 import com.planora.backend.service.TaskService;
+import com.planora.backend.service.TaskTemplateService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -29,6 +31,9 @@ public class TaskController {
 
     @Autowired
     TaskActivityService activityService;
+
+    @Autowired
+    TaskTemplateService templateService;
 
     @Autowired
     SimpMessagingTemplate messagingTemplate;
@@ -288,5 +293,15 @@ public class TaskController {
             @AuthenticationPrincipal UserPrincipal currentUser
     ){
         return new ResponseEntity<>(activityService.getActivities(taskId), HttpStatus.OK);
+    }
+
+    /** Save the task as a reusable template for the project. */
+    @PostMapping("/{taskId}/save-as-template")
+    public ResponseEntity<TaskTemplateDTO> saveAsTemplate(
+            @PathVariable Long taskId,
+            @RequestBody TaskTemplateDTO.SaveFromTaskRequest req,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        TaskTemplateDTO dto = templateService.saveTaskAsTemplate(taskId, req.getTemplateName(), currentUser.getUserId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(dto);
     }
 }

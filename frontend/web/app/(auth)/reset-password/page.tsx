@@ -87,7 +87,7 @@ export default function ResetPasswordPage() {
       </div>
 
       {/* Main Card Container */}
-      <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-8'>
+      <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-4 sm:p-8'>
         {submitted ? (
           <SuccessMessage />
         ) : (

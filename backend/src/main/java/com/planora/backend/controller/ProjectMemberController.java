@@ -24,6 +24,7 @@ import com.planora.backend.repository.TaskRepository;
 import com.planora.backend.repository.TeamInvitationRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.service.TeamMemberService;
+import com.planora.backend.service.UserService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -36,6 +37,7 @@ public class ProjectMemberController {
     private final TeamInvitationRepository teamInvitationRepository;
     private final TaskRepository taskRepository;
     private final TeamMemberService teamMemberService;
+        private final UserService userService;
 
         public enum MemberEventAction {
                 MEMBER_JOINED,
@@ -105,7 +107,7 @@ public class ProjectMemberController {
                                 .username(member.getUser().getUsername())
                                 .fullName(member.getUser().getFullName())
                                 .email(member.getUser().getEmail())
-                                .profilePicUrl(member.getUser().getProfilePicUrl())
+                                .profilePicUrl(userService.generatePresignedUrl(member.getUser().getProfilePicUrl()))
                                 .build())
                         .lastActive(member.getUser().getLastActive())
                         .taskCount(taskRepository.countByAssigneeAndProject_TeamId(member, teamId))

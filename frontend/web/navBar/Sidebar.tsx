@@ -201,11 +201,17 @@ export default function Sidebar() {
   /* ── effects ── */
   useEffect(() => {
     if (!user?.email) return;
-    api.get('/api/auth/users').then(res => {
-      const found = res.data.find((u: UserSummary) => u.email.toLowerCase() === user.email.toLowerCase());
-      if (found?.profilePicUrl) setProfilePicUrl(found.profilePicUrl);
+    // Use cached URL instantly, then revalidate
+    const cached = localStorage.getItem('planora:profilePicUrl');
+    if (cached) setProfilePicUrl(cached);
+    api.get('/api/user/profile').then(res => {
+      const url: string | undefined = res.data?.profilePicUrl;
+      if (url) {
+        setProfilePicUrl(url);
+        localStorage.setItem('planora:profilePicUrl', url);
+      }
     }).catch(() => {});
-  }, [user]);
+  }, [user?.email]);
 
   useEffect(() => {
     if (window.innerWidth >= 768) {

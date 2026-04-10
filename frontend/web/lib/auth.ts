@@ -37,11 +37,13 @@ export function getRememberMe(): boolean {
     return localStorage.getItem('rememberMe') === 'true';
 }
 
-/** Pick the right storage based on the rememberMe flag.
- *  - rememberMe=true  -> localStorage  (survives browser restart)
- *  - rememberMe=false -> sessionStorage (cleared when the tab/window closes) */
+/** Always use localStorage so auth tokens are shared across browser tabs.
+ *  sessionStorage is tab-isolated, which causes new tabs to redirect to login.
+ *  Both localStorage and sessionStorage are JS-accessible, so there is no
+ *  meaningful security difference — HTTP-only cookies would be needed for that.
+ *  The rememberMe flag is kept for UX preference tracking only. */
 function tokenStorage(): Storage {
-    return getRememberMe() ? localStorage : sessionStorage;
+    return localStorage;
 }
 
 // Token helpers
@@ -143,6 +145,11 @@ export function clearTokens(): void {
         localStorage.removeItem('rememberMe');
         sessionStorage.removeItem('token');
         sessionStorage.removeItem('refreshToken');
+        // Wipe all planora: prefixed data caches so the next user session
+        // starts with a clean slate
+        Object.keys(localStorage)
+            .filter((k) => k.startsWith('planora:'))
+            .forEach((k) => localStorage.removeItem(k));
         emitAuthTokenChanged();
     }
 }

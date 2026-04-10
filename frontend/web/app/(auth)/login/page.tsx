@@ -1,78 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import api from '@/lib/axios';
-import { getValidToken, saveToken, saveRefreshToken, setRememberMe } from '@/lib/auth';
-
+import { Eye, EyeOff } from 'lucide-react';
+import { useLoginForm } from './useLoginForm';
 
 export default function LoginPage() {
-    const router = useRouter();
-
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [remember, setRemember] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState('');
-
-    // NTH-3: Skip login page if already authenticated
-    useEffect(() => {
-        if (getValidToken()) {
-            router.replace('/dashboard');
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        setIsLoading(true);
-        setError('');
-
-        try {
-            // 1. Sign in using backend API
-            const response = await api.post('/api/auth/login', {
-                email: email.toLowerCase(),
-                password: password
-            });
-
-            // 2. Check if login was successful
-            if (response.data.success) {
-                // NTH-2: Persist rememberMe flag before saving tokens so saveToken
-                // picks the right storage (localStorage vs sessionStorage).
-                setRememberMe(remember);
-                saveToken(response.data.token);
-                if (response.data.refreshToken) {
-                    saveRefreshToken(response.data.refreshToken);
-                }
-
-                // 3. Redirect to dashboard
-                router.push('/dashboard');
-            } else {
-                setError(response.data.message || 'Login failed. Please try again.');
-            }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (error: any) {
-            let errorMessage = "Login failed. Please try again.";
-            const errorData = error.response?.data;
-
-            if (typeof errorData === 'string') {
-                errorMessage = errorData;
-            } else if (errorData?.message) {
-                errorMessage = errorData.message;
-            }
-
-            if (error.response?.status === 403) {
-                setError(errorMessage || "Email is not verified. Please check your email.");
-            } else if (error.response?.status === 401) {
-                setError(errorMessage || "Incorrect username or password");
-            } else {
-                setError(errorMessage);
-            }
-        } finally {
-            setIsLoading(false);
-        }
-    };
+  const {
+    email, setEmail,
+    password, setPassword,
+    remember, setRemember,
+    showPassword, setShowPassword,
+    isLoading,
+    error,
+    handleLogin,
+  } = useLoginForm();
 
     return (
 
@@ -100,7 +41,7 @@ export default function LoginPage() {
             </div>
 
             {/* 3. Main Card Container */}
-            <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-8'>
+            <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-4 sm:p-8'>
                 {/* The Tab Switcher */}
                 <div className='flex bg-gray-100 p-1.5 rounded-xl mb-8' role="tablist">
                     <button
@@ -143,7 +84,10 @@ export default function LoginPage() {
                             id="login-email"
                             type="email"
                             autoComplete="email"
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
+                            autoCapitalize="off"
+                            autoCorrect="off"
+                            inputMode="email"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-[16px] sm:text-sm"
                             placeholder="Enter your email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value.toLowerCase())}
@@ -154,17 +98,28 @@ export default function LoginPage() {
 
                     <div>
                         <label htmlFor="login-password" className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">Password</label>
-                        <input
-                            id="login-password"
-                            type="password"
-                            autoComplete="current-password"
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
-                            placeholder="Enter your password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            aria-describedby={error ? 'login-error' : undefined}
-                            aria-invalid={!!error}
-                        />
+                        <div className="relative">
+                            <input
+                                id="login-password"
+                                type={showPassword ? 'text' : 'password'}
+                                autoComplete="current-password"
+                                className="w-full px-4 py-3 pr-11 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-[16px] sm:text-sm"
+                                placeholder="Enter your password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                aria-describedby={error ? 'login-error' : undefined}
+                                aria-invalid={!!error}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword((v) => !v)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                tabIndex={-1}
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                            >
+                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                        </div>
                     </div>
 
                     {/* NTH-2: Remember-me checkbox + Forgot password link */}
@@ -187,7 +142,7 @@ export default function LoginPage() {
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className={`w-full font-bold py-2 rounded-lg transition-colors text-white ${isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                        className={`w-full font-bold py-2 min-h-[44px] rounded-lg transition-colors text-white ${isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
                     >
                         {isLoading ? 'Signing in...' : 'Sign In'}
                     </button>

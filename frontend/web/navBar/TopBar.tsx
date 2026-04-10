@@ -108,8 +108,11 @@ function TopBarContent() {
 
     base.push(
       { id: 'chats', label: 'Chats' },
+      { id: 'notifications', label: 'Notifications' },
+      { id: 'milestones', label: 'Milestones' },
       { id: 'members', label: 'Members' },
-      { id: 'pages', label: 'Pages' }
+      { id: 'pages', label: 'Pages' },
+      { id: 'list', label: 'List' }
     );
 
     return base;
@@ -120,8 +123,11 @@ function TopBarContent() {
     if (pathname.startsWith('/timeline')) return 'timeline';
     if (pathname.startsWith('/sprint-backlog') || pathname.startsWith('/backlog')) return 'backlog';
     if (pathname.startsWith('/kanban') || pathname.startsWith('/sprint-board')) return 'board';
+    if (pathname.startsWith('/list')) return 'list';
     if (pathname.startsWith('/calendar')) return 'calendar';
     if (pathname.startsWith('/burndown')) return 'burndown';
+    if (pathname.startsWith('/milestones')) return 'milestones';
+    if (pathname.startsWith('/workload')) return 'workload';
     if (pathname.startsWith('/project/') && pathname.includes('/chat')) return 'chats';
     if (pathname.startsWith('/members')) return 'members';
     if (pathname.startsWith('/pages')) return 'pages';
@@ -156,20 +162,18 @@ function TopBarContent() {
   }, [projectId, storedProjectType]);
 
   useEffect(() => {
-    if (user?.email) {
-      const loadProfilePic = async () => {
-        try {
-          const response = await api.get('/api/auth/users');
-          interface UserSummary { email: string; profilePicUrl?: string; }
-          const currentUser = response.data.find(
-            (u: UserSummary) => u.email.toLowerCase() === user.email.toLowerCase()
-          );
-          if (currentUser?.profilePicUrl) setProfilePicUrl(currentUser.profilePicUrl);
-        } catch { }
-      };
-      void loadProfilePic();
-    }
-  }, [user]);
+    if (!user?.email) return;
+    // Use cached URL instantly, then revalidate
+    const cached = localStorage.getItem('planora:profilePicUrl');
+    if (cached) setProfilePicUrl(cached);
+    api.get('/api/user/profile').then(res => {
+      const url: string | undefined = res.data?.profilePicUrl;
+      if (url) {
+        setProfilePicUrl(url);
+        localStorage.setItem('planora:profilePicUrl', url);
+      }
+    }).catch(() => {});
+  }, [user?.email]);
 
   // Close project dropdown on outside click
   useEffect(() => {
@@ -222,10 +226,13 @@ function TopBarContent() {
       case 'timeline': return withProjectId('/timeline');
       case 'backlog': return isAgile ? withProjectId('/sprint-backlog') : withProjectId('/backlog');
       case 'board': return isAgile ? withProjectId('/sprint-board') : withProjectId('/kanban');
+      case 'list': return withProjectId('/list');
       case 'calendar': return withProjectId('/calendar');
       case 'burndown': return withProjectId('/burndown');
       case 'chats': return projectId ? `/project/${projectId}/chat` : '/dashboard';
       case 'notifications': return projectId ? `/notifications?projectId=${projectId}` : '/notifications';
+      case 'milestones': return withProjectId('/milestones');
+      case 'workload': return withProjectId('/workload');
       case 'members': return projectId ? `/members/${projectId}` : '/members';
       case 'pages': return withProjectId('/pages');
       default: return projectId ? `/summary/${projectId}` : '/dashboard';
@@ -246,6 +253,9 @@ function TopBarContent() {
       '/sprint-board',
       '/calendar',
       '/burndown',
+      '/list',
+      '/milestones',
+      '/workload',
       '/pages',
       '/notifications',
       '/members',
@@ -270,7 +280,7 @@ function TopBarContent() {
 
   /* ── Project page TopBar ── */
   return (
-    <div className="w-full h-[120px] relative flex flex-col shrink-0 bg-white border-b border-slate-200 sticky top-0 z-[100]">
+    <div className="w-full h-[120px] sticky top-0 flex flex-col shrink-0 bg-white border-b border-slate-200 z-[100]">
       {/* Top Header Section */}
       <div className="flex-1 px-4 sm:px-8 flex items-center justify-between pt-2">
         <div className="flex items-center gap-4">

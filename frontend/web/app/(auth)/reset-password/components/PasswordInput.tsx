@@ -27,11 +27,12 @@ export default function PasswordInput({
       <div className="relative">
         <input
           type={showPassword ? 'text' : 'password'}
-          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-[16px] sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
           placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
+          autoComplete="new-password"
           required
         />
         <button

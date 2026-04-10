@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import SidebarLayout from '@/navBar/SidebarLayout';
 import api from '@/lib/axios';
@@ -35,6 +35,9 @@ export default function ProjectLayout({
   // Try to resolve projectId from path params or query params
   const projectId = (params?.projectId || params?.id || searchParams.get('projectId')) as string | undefined;
 
+  // Guard: only run syncProjectContext once per projectId
+  const syncedProjectIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     const token = getValidToken();
     if (!token) {
@@ -43,6 +46,9 @@ export default function ProjectLayout({
     }
 
     if (!projectId) return;
+    // Skip if we already synced this project
+    if (syncedProjectIdRef.current === projectId) return;
+    syncedProjectIdRef.current = projectId;
 
     // Keep localStorage in sync so TopBar, Sidebar, etc. work correctly
     localStorage.setItem('currentProjectId', projectId);

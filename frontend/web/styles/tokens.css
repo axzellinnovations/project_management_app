@@ -79,6 +79,27 @@
   --cu-space-10: 2.5rem;  /* 40px */
   --cu-space-12: 3rem;    /* 48px */
 
+  /* ── Button height scale ── */
+  --cu-btn-xs: 28px;   /* compact table actions */
+  --cu-btn-sm: 32px;   /* secondary desktop actions */
+  --cu-btn-md: 36px;   /* default desktop button */
+  --cu-btn-lg: 44px;   /* mobile-safe button */
+
+  /* ── Input height scale ── */
+  --cu-input-sm: 32px;
+  --cu-input-md: 36px;
+  --cu-input-lg: 40px;
+
+  /* ── Z-index scale ── */
+  --cu-z-base:       1;
+  --cu-z-dropdown:   50;
+  --cu-z-overlay:    90;
+  --cu-z-topbar:     100;
+  --cu-z-bottomnav:  110;
+  --cu-z-modal:      200;
+  --cu-z-toast:      250;
+  --cu-z-sidebar:    500;
+
   /* ── Border radius ── */
   --cu-radius-sm: 4px;
   --cu-radius-md: 6px;
@@ -103,4 +124,41 @@
   --cu-sidebar-collapsed: 56px;
   --cu-topbar-height: 48px;
   --cu-detail-panel-width: 400px;
+}
+
+/* ══════════════════════════════════════════════════
+   Dark Mode Overrides
+   Applied when <html class="dark"> is present
+   ══════════════════════════════════════════════════ */
+html.dark {
+  /* Surface */
+  --cu-bg: #111827;
+  --cu-bg-secondary: #0F172A;
+  --cu-bg-tertiary: #1E293B;
+
+  /* Border */
+  --cu-border: #334155;
+  --cu-border-light: #1E293B;
+
+  /* Text */
+  --cu-text-primary: #F1F5F9;
+  --cu-text-secondary: #94A3B8;
+  --cu-text-tertiary: #64748B;
+
+  /* Sidebar — keep dark but slightly lighter than main bg */
+  --cu-sidebar: #0F172A;
+  --cu-sidebar-hover: #1E293B;
+  --cu-sidebar-active: #293548;
+  --cu-sidebar-border: #1E293B;
+  --cu-sidebar-text: #94A3B8;
+  --cu-sidebar-text-bright: #F1F5F9;
+}
+
+/* ── Mobile: enforce minimum touch targets ── */
+@media (max-width: 639px) {
+  :root {
+    --cu-btn-md: 44px;
+    --cu-btn-sm: 44px;
+    --cu-input-md: 44px;
+  }
 }

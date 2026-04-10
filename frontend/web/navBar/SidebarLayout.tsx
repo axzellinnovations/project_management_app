@@ -5,6 +5,7 @@ import BottomNav from './BottomNav';
 import TopBar from './TopBar';
 import { Suspense } from 'react';
 import { usePathname } from 'next/navigation';
+import CommandPalette from '@/components/ui/CommandPalette';
 
 interface SidebarLayoutProps {
     children: React.ReactNode;
@@ -35,6 +36,8 @@ export default function SidebarLayout({ children, showTopBar = true }: SidebarLa
                     </div>
                 </div>
             </div>
+            <BottomNav />
+            <CommandPalette />
         </div>
     );
 }

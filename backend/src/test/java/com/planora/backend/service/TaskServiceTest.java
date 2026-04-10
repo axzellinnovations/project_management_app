@@ -21,6 +21,7 @@ import com.planora.backend.repository.TaskAccessRepository;
 import com.planora.backend.repository.TaskRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
+import com.planora.backend.repository.MilestoneRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -65,9 +68,13 @@ class TaskServiceTest {
     @Mock
     private TaskAccessRepository taskAccessRepository;
     @Mock
+    private MilestoneRepository milestoneRepository;
+    @Mock
     private NotificationService notificationService;
     @Mock
     private TaskActivityService taskActivityService;
+    @Mock
+    private UserService userService;
 
     @InjectMocks
     private TaskService taskService;
@@ -120,6 +127,9 @@ class TaskServiceTest {
         actorMember.setRole(TeamRole.MEMBER);
         actorMember.setUser(actorUser);
         actorMember.setTeam(team);
+
+        lenient().when(userService.generatePresignedUrl(nullable(String.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     private Task buildTask(Long taskId) {

@@ -1,47 +1,17 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import api from '@/lib/axios';
+import { useForgotPasswordForm } from './useForgotPasswordForm';
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      const response = await api.post('/api/auth/forgot', {
-        email: email.toLowerCase()
-      });
-
-      setSuccess(response.data);
-      setSubmitted(true);
-      setEmail('');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      let errorMessage = 'Failed to process request. Please try again.';
-      const errorData = err.response?.data;
-      
-      // Handle different error response formats
-      if (typeof errorData === 'string') {
-        errorMessage = errorData;
-      } else if (errorData?.message) {
-        errorMessage = errorData.message;
-      }
-      
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const {
+    email, setEmail,
+    isLoading,
+    submitted, setSubmitted,
+    error,
+    success,
+    handleSubmit,
+  } = useForgotPasswordForm();
 
   return (
     <div className='min-h-screen flex flex-col items-center justify-center p-4'>
@@ -67,7 +37,7 @@ export default function ForgotPasswordPage() {
       </div>
 
       {/* Main Card Container */}
-      <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-8'>
+      <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-4 sm:p-8'>
         {submitted ? (
           // Success Message
           <div className="text-center py-8">
@@ -120,7 +90,10 @@ export default function ForgotPasswordPage() {
                 id="forgot-email"
                 type="email"
                 autoComplete="email"
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
+                autoCapitalize="off"
+                autoCorrect="off"
+                inputMode="email"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-[16px] sm:text-sm"
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value.toLowerCase())}
@@ -133,7 +106,7 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className={`w-full font-bold py-2.5 rounded-lg transition-colors text-white ${
+              className={`w-full font-bold py-2.5 min-h-[44px] rounded-lg transition-colors text-white ${
                 isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
               }`}
             >
