@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import SockJS from 'sockjs-client';
-import { CompatClient, Stomp } from '@stomp/stompjs';
 
 import { getValidToken } from '@/lib/auth';
+import { useGlobalNotifications } from '@/components/providers/GlobalNotificationProvider';
 import * as chatApi from '@/services/chat-service';
 import type {
   ChatFeatureFlags,
@@ -86,9 +85,7 @@ export const useChat = (projectId: string) => {
   const [error, setError] = useState('');
   const [hasRestoredSelection, setHasRestoredSelection] = useState(false);
   const hasRestoredSelectionRef = useRef(false);
-
-  // â”€â”€ Connection ref â”€â”€
-  const stompClientRef = useRef<CompatClient | null>(null);
+  const { realtimeConnected, subscribeRealtime, sendRealtime } = useGlobalNotifications();
 
   // â”€â”€ Domain hooks â”€â”€
   const msg = useChatMessages(projectId);
@@ -122,12 +119,10 @@ export const useChat = (projectId: string) => {
   const selectionStorageKey = `chat-selection:${projectId}`;
 
   // â”€â”€ Helpers â”€â”€
-  const isStompConnected = () => Boolean(stompClientRef.current?.connected);
+  const isStompConnected = () => realtimeConnected;
   const stompSend = useCallback((dest: string, body: string) => {
-    if (stompClientRef.current?.connected) {
-      stompClientRef.current.send(dest, {}, body);
-    }
-  }, []);
+    sendRealtime(dest, body);
+  }, [sendRealtime]);
 
   const showCommandNotice = useCallback((message: string) => {
     setCommandNotice(message);
@@ -423,190 +418,6 @@ export const useChat = (projectId: string) => {
     }
   }, []);
 
-  // â”€â”€ STOMP connection â”€â”€
-  const connectToChat = useCallback(
-    (token: string, username: string, aliases: string[]) => {
-      try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
-        const client = Stomp.over(() => new SockJS(`${backendUrl}/ws`));
-        client.debug = () => {};
-        client.reconnect_delay = 5000;
-        const normalizedAliases = new Set(aliases.map(a => a.toLowerCase()));
-        
-        stompClientRef.current = client;
-
-        client.connect({ Authorization: `Bearer ${token}` }, () => {
-          setIsSocketConnected(true);
-          setError('');
-
-          // â”€â”€ Team channel â”€â”€
-          client.subscribe(`/topic/project/${projectId}/public`, payload => {
-            const inc: ChatMessage = JSON.parse(payload.body);
-            if (inc.type === 'JOIN' && inc.sender !== username) {
-              setUsers(prev => (prev.includes(inc.sender) ? prev : [...prev, inc.sender]));
-              return;
-            }
-            if (inc.type !== 'JOIN' && !inc.roomId && !inc.recipient) {
-              if (inc.parentMessageId) return;
-              setMessages(prev => mergeMessage(prev, inc));
-              setTeamLastMessage(inc);
-              if (
-                inc.sender.toLowerCase() !== username &&
-                selectedRoomIdRef.current === null &&
-                !selectedUserRef.current
-              ) {
-                setTeamUnseenCount(0);
-                markTeamAsRead();
-              } else if (inc.sender.toLowerCase() !== username) {
-                setTeamUnseenCount(prev => prev + 1);
-              }
-              if (inc.id) loadMsgReactions(inc.id);
-            }
-          });
-
-          // â”€â”€ Private messages â”€â”€
-          client.subscribe(`/user/queue/project/${projectId}/messages`, payload => {
-            const inc: ChatMessage = JSON.parse(payload.body);
-            const sender = inc.sender?.toLowerCase() || '';
-            const recipient = inc.recipient?.toLowerCase() || '';
-            const isFromCurrent = normalizedAliases.has(sender);
-            const partner = isFromCurrent ? recipient : sender;
-            if (!partner || inc.parentMessageId) return;
-
-            mergePrivateMessage(partner, inc, selectedUserRef.current, isFromCurrent);
-            const activeKey =
-              selectedUserRef.current && isSameIdentity(selectedUserRef.current, partner)
-                ? selectedUserRef.current.toLowerCase()
-                : partner;
-            setPrivateLastMessages(prev => ({
-              ...prev,
-              [activeKey]: inc,
-              ...(activeKey !== partner ? { [partner]: inc } : {}),
-            }));
-            if (!isFromCurrent && !(selectedUserRef.current && isSameIdentity(selectedUserRef.current, partner))) {
-              const key = selectedUserRef.current && isSameIdentity(selectedUserRef.current, partner)
-                ? selectedUserRef.current.toLowerCase() : partner;
-              setPrivateUnseenCounts(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }));
-            }
-            setUsers(prev => (prev.some(u => isSameIdentity(u, partner)) ? prev : [...prev, partner]));
-            if (inc.id) loadMsgReactions(inc.id);
-          });
-
-          // â”€â”€ Room events â”€â”€
-          client.subscribe(`/topic/project/${projectId}/rooms`, payload => {
-            const event: RoomEvent = JSON.parse(payload.body);
-            if ((event.action === 'CREATED' || event.action === 'UPDATED') && event.room) {
-              const norm = normalizeRoom(event.room as unknown as Record<string, unknown>);
-              if (!Number.isFinite(norm.id)) return;
-              setRooms(prev =>
-                prev.some(r => r.id === norm.id)
-                  ? prev.map(r => (r.id === norm.id ? norm : r))
-                  : [...prev, norm],
-              );
-              setRoomUnseenCounts(prev => ({ ...prev, [norm.id]: prev[norm.id] || 0 }));
-              setRoomLastMessages(prev => ({ ...prev, [norm.id]: prev[norm.id] || null }));
-              return;
-            }
-            if (event.action === 'DELETED') {
-              const rid = Number(event.roomId);
-              setRooms(prev => prev.filter(r => r.id !== rid));
-              setRoomMessages(prev => { const n = { ...prev }; delete n[rid]; return n; });
-              setRoomUnseenCounts(prev => { const n = { ...prev }; delete n[rid]; return n; });
-              setRoomLastMessages(prev => { const n = { ...prev }; delete n[rid]; return n; });
-            }
-          });
-
-          // â”€â”€ Presence â”€â”€
-          client.subscribe(`/topic/project/${projectId}/presence`, payload => {
-            const event: PresenceEvent = JSON.parse(payload.body);
-            setOnlineUsers((event.onlineUsers || []).map(u => u.toLowerCase()));
-          });
-
-          // â”€â”€ Team typing â”€â”€
-          client.subscribe(`/topic/project/${projectId}/typing/team`, payload => {
-            const event: TypingEvent = JSON.parse(payload.body);
-            const s = event.sender?.toLowerCase();
-            if (!s || s === username.toLowerCase()) return;
-            setTeamTypingUsers(prev =>
-              event.typing ? (prev.includes(s) ? prev : [...prev, s]) : prev.filter(u => u !== s),
-            );
-          });
-
-          // â”€â”€ Private typing â”€â”€
-          client.subscribe(`/user/queue/project/${projectId}/typing/private`, payload => {
-            const event: TypingEvent = JSON.parse(payload.body);
-            const s = event.sender?.toLowerCase();
-            if (!s || s === username.toLowerCase()) return;
-            setPrivateTypingUsers(prev =>
-              event.typing ? (prev.includes(s) ? prev : [...prev, s]) : prev.filter(u => u !== s),
-            );
-          });
-
-          // â”€â”€ Unread badge â”€â”€
-          client.subscribe(`/user/queue/project/${projectId}/unread-badge`, payload => {
-            const badge: UnreadBadgeSummary = JSON.parse(payload.body);
-            setUnreadBadge({
-              teamUnread: Number(badge.teamUnread) || 0,
-              roomsUnread: Number(badge.roomsUnread) || 0,
-              directsUnread: Number(badge.directsUnread) || 0,
-              totalUnread: Number(badge.totalUnread) || 0,
-            });
-          });
-
-          // â”€â”€ Mentions â”€â”€
-          client.subscribe(`/user/queue/project/${projectId}/mentions`, payload => {
-            const mention: MentionEvent = JSON.parse(payload.body);
-            const ctx =
-              mention.scope === 'ROOM' ? 'group chat'
-                : mention.scope === 'PRIVATE' ? 'direct chat'
-                  : mention.scope === 'THREAD' ? 'thread' : 'team chat';
-            showCommandNotice(`You are mentioned by ${mention.sender} in ${ctx}.`);
-            trackTelemetry('chat_mention_received', mention.scope || 'chat', `messageId=${mention.messageId || ''}`);
-
-            if (mention.scope === 'ROOM' && mention.roomId) {
-              const rid = Number(mention.roomId);
-              if (selectedRoomIdRef.current !== rid) {
-                setRoomMentionCounts(prev => ({ ...prev, [rid]: (prev[rid] || 0) + 1 }));
-              }
-            } else if (
-              (mention.scope === 'TEAM' || !mention.scope) &&
-              (selectedRoomIdRef.current !== null || selectedUserRef.current !== null)
-            ) {
-              setTeamMentionCount(prev => prev + 1);
-            }
-          });
-
-          // ——— Join + presence ping ———
-          client.send(`/app/project/${projectId}/presence.ping`, {}, JSON.stringify({}));
-        }, (error: unknown) => {
-          setIsSocketConnected(false);
-
-          const errorMessage = typeof error === 'string' ? error : ((error as { headers?: { message?: string } })?.headers?.message || '');
-          const isAuthError = errorMessage.toLowerCase().includes('auth') ||
-                             errorMessage.toLowerCase().includes('jwt') ||
-                             errorMessage.toLowerCase().includes('expired') ||
-                             errorMessage.toLowerCase().includes('invalid');
-
-          if (isAuthError) {
-            setError('Your session has expired. Please log in again.');
-            console.error('[chat-ws] Fatal authentication error:', errorMessage);
-            // Don't retry on fatal auth errors
-            return;
-          }
-
-          setError('Connection failed. Is the backend running?');
-          console.error('[chat-ws] Connection error:', error);
-        });
-      } catch (err) {
-        setIsSocketConnected(false);
-        setError('Socket initialization failed.');
-        console.error('[chat-ws] Initialization error:', err);
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [projectId, showCommandNotice, trackTelemetry],
-  );
-
   // â”€â”€ Initialization â”€â”€
   useEffect(() => {
     const initialize = async () => {
@@ -648,7 +459,6 @@ export const useChat = (projectId: string) => {
         await presence.loadPresence();
         await unread.loadUnreadBadge();
         restoreSelection(loadedUsers, loadedRooms);
-        connectToChat(token, username, effectiveAliases);
         await msg.loadHistory(reactions.hydrateReactions);
       } catch {
         setError('Invalid authentication token.');
@@ -657,29 +467,203 @@ export const useChat = (projectId: string) => {
     };
 
     initialize();
-    return () => {
-      setIsSocketConnected(false);
-      if (stompClientRef.current?.connected) stompClientRef.current.disconnect();
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    setIsSocketConnected(realtimeConnected);
+  }, [realtimeConnected]);
+
+  // â”€â”€ Base realtime subscriptions (shared singleton connection) â”€â”€
+  useEffect(() => {
+    if (!realtimeConnected || !currentUser || currentUserAliases.length === 0) return;
+
+    setError('');
+    const normalizedAliases = new Set(currentUserAliases.map(a => a.toLowerCase()));
+    const subs: Array<{ unsubscribe: () => void }> = [];
+
+    const addSub = (sub: { unsubscribe: () => void } | null) => {
+      if (sub) subs.push(sub);
+    };
+
+    addSub(subscribeRealtime(`/topic/project/${projectId}/public`, payload => {
+      const inc: ChatMessage = JSON.parse(payload.body);
+      if (inc.type === 'JOIN' && inc.sender !== currentUser) {
+        setUsers(prev => (prev.includes(inc.sender) ? prev : [...prev, inc.sender]));
+        return;
+      }
+      if (inc.type !== 'JOIN' && !inc.roomId && !inc.recipient) {
+        if (inc.parentMessageId) return;
+        setMessages(prev => mergeMessage(prev, inc));
+        setTeamLastMessage(inc);
+        if (
+          inc.sender.toLowerCase() !== currentUser &&
+          selectedRoomIdRef.current === null &&
+          !selectedUserRef.current
+        ) {
+          setTeamUnseenCount(0);
+          markTeamAsRead();
+        } else if (inc.sender.toLowerCase() !== currentUser) {
+          setTeamUnseenCount(prev => prev + 1);
+        }
+        if (inc.id) loadMsgReactions(inc.id);
+      }
+    }));
+
+    addSub(subscribeRealtime(`/user/queue/project/${projectId}/messages`, payload => {
+      const inc: ChatMessage = JSON.parse(payload.body);
+      const sender = inc.sender?.toLowerCase() || '';
+      const recipient = inc.recipient?.toLowerCase() || '';
+      const isFromCurrent = normalizedAliases.has(sender);
+      const partner = isFromCurrent ? recipient : sender;
+      if (!partner || inc.parentMessageId) return;
+
+      mergePrivateMessage(partner, inc, selectedUserRef.current, isFromCurrent);
+      const activeKey =
+        selectedUserRef.current && isSameIdentity(selectedUserRef.current, partner)
+          ? selectedUserRef.current.toLowerCase()
+          : partner;
+      setPrivateLastMessages(prev => ({
+        ...prev,
+        [activeKey]: inc,
+        ...(activeKey !== partner ? { [partner]: inc } : {}),
+      }));
+      if (!isFromCurrent && !(selectedUserRef.current && isSameIdentity(selectedUserRef.current, partner))) {
+        const key = selectedUserRef.current && isSameIdentity(selectedUserRef.current, partner)
+          ? selectedUserRef.current.toLowerCase() : partner;
+        setPrivateUnseenCounts(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }));
+      }
+      setUsers(prev => (prev.some(u => isSameIdentity(u, partner)) ? prev : [...prev, partner]));
+      if (inc.id) loadMsgReactions(inc.id);
+    }));
+
+    addSub(subscribeRealtime(`/topic/project/${projectId}/rooms`, payload => {
+      const event: RoomEvent = JSON.parse(payload.body);
+      if ((event.action === 'CREATED' || event.action === 'UPDATED') && event.room) {
+        const norm = normalizeRoom(event.room as unknown as Record<string, unknown>);
+        if (!Number.isFinite(norm.id)) return;
+        setRooms(prev =>
+          prev.some(r => r.id === norm.id)
+            ? prev.map(r => (r.id === norm.id ? norm : r))
+            : [...prev, norm],
+        );
+        setRoomUnseenCounts(prev => ({ ...prev, [norm.id]: prev[norm.id] || 0 }));
+        setRoomLastMessages(prev => ({ ...prev, [norm.id]: prev[norm.id] || null }));
+        return;
+      }
+      if (event.action === 'DELETED') {
+        const rid = Number(event.roomId);
+        setRooms(prev => prev.filter(r => r.id !== rid));
+        setRoomMessages(prev => { const n = { ...prev }; delete n[rid]; return n; });
+        setRoomUnseenCounts(prev => { const n = { ...prev }; delete n[rid]; return n; });
+        setRoomLastMessages(prev => { const n = { ...prev }; delete n[rid]; return n; });
+      }
+    }));
+
+    addSub(subscribeRealtime(`/topic/project/${projectId}/presence`, payload => {
+      const event: PresenceEvent = JSON.parse(payload.body);
+      setOnlineUsers((event.onlineUsers || []).map(u => u.toLowerCase()));
+    }));
+
+    addSub(subscribeRealtime(`/topic/project/${projectId}/typing/team`, payload => {
+      const event: TypingEvent = JSON.parse(payload.body);
+      const s = event.sender?.toLowerCase();
+      if (!s || s === currentUser.toLowerCase()) return;
+      setTeamTypingUsers(prev =>
+        event.typing ? (prev.includes(s) ? prev : [...prev, s]) : prev.filter(u => u !== s),
+      );
+    }));
+
+    addSub(subscribeRealtime(`/user/queue/project/${projectId}/typing/private`, payload => {
+      const event: TypingEvent = JSON.parse(payload.body);
+      const s = event.sender?.toLowerCase();
+      if (!s || s === currentUser.toLowerCase()) return;
+      setPrivateTypingUsers(prev =>
+        event.typing ? (prev.includes(s) ? prev : [...prev, s]) : prev.filter(u => u !== s),
+      );
+    }));
+
+    addSub(subscribeRealtime(`/user/queue/project/${projectId}/unread-badge`, payload => {
+      const badge: UnreadBadgeSummary = JSON.parse(payload.body);
+      setUnreadBadge({
+        teamUnread: Number(badge.teamUnread) || 0,
+        roomsUnread: Number(badge.roomsUnread) || 0,
+        directsUnread: Number(badge.directsUnread) || 0,
+        totalUnread: Number(badge.totalUnread) || 0,
+      });
+    }));
+
+    addSub(subscribeRealtime(`/user/queue/project/${projectId}/mentions`, payload => {
+      const mention: MentionEvent = JSON.parse(payload.body);
+      const ctx =
+        mention.scope === 'ROOM' ? 'group chat'
+          : mention.scope === 'PRIVATE' ? 'direct chat'
+            : mention.scope === 'THREAD' ? 'thread' : 'team chat';
+      showCommandNotice(`You are mentioned by ${mention.sender} in ${ctx}.`);
+      trackTelemetry('chat_mention_received', mention.scope || 'chat', `messageId=${mention.messageId || ''}`);
+
+      if (mention.scope === 'ROOM' && mention.roomId) {
+        const rid = Number(mention.roomId);
+        if (selectedRoomIdRef.current !== rid) {
+          setRoomMentionCounts(prev => ({ ...prev, [rid]: (prev[rid] || 0) + 1 }));
+        }
+      } else if (
+        (mention.scope === 'TEAM' || !mention.scope) &&
+        (selectedRoomIdRef.current !== null || selectedUserRef.current !== null)
+      ) {
+        setTeamMentionCount(prev => prev + 1);
+      }
+    }));
+
+    sendRealtime(`/app/project/${projectId}/presence.ping`, JSON.stringify({}));
+
+    return () => {
+      subs.forEach(sub => sub.unsubscribe());
+    };
+  }, [
+    realtimeConnected,
+    currentUser,
+    currentUserAliases,
+    projectId,
+    subscribeRealtime,
+    sendRealtime,
+    setMessages,
+    setTeamLastMessage,
+    setTeamUnseenCount,
+    markTeamAsRead,
+    loadMsgReactions,
+    mergePrivateMessage,
+    setPrivateLastMessages,
+    setPrivateUnseenCounts,
+    setRooms,
+    setRoomUnseenCounts,
+    setRoomLastMessages,
+    setRoomMessages,
+    setOnlineUsers,
+    setTeamTypingUsers,
+    setPrivateTypingUsers,
+    setUnreadBadge,
+    showCommandNotice,
+    trackTelemetry,
+    setRoomMentionCounts,
+    setTeamMentionCount,
+  ]);
+
   // â”€â”€ Presence heartbeat â”€â”€
   useEffect(() => {
-    if (!isSocketConnected || !stompClientRef.current) return;
+    if (!isSocketConnected) return;
     const interval = window.setInterval(() => {
-      stompClientRef.current?.send(`/app/project/${projectId}/presence.ping`, {}, JSON.stringify({}));
+      sendRealtime(`/app/project/${projectId}/presence.ping`, JSON.stringify({}));
     }, 30_000);
     return () => window.clearInterval(interval);
-  }, [projectId, isSocketConnected]);
+  }, [projectId, isSocketConnected, sendRealtime]);
 
   // â”€â”€ Per-room STOMP subscriptions â”€â”€
   useEffect(() => {
-    if (!isSocketConnected || !stompClientRef.current) return;
-    const client = stompClientRef.current;
+    if (!isSocketConnected) return;
 
     const subs = rm.rooms.flatMap(room => {
-      const msgSub = client.subscribe(`/topic/project/${projectId}/room/${room.id}`, payload => {
+      const msgSub = subscribeRealtime(`/topic/project/${projectId}/room/${room.id}`, payload => {
         const inc: ChatMessage = JSON.parse(payload.body);
         if (inc.type === 'JOIN' || !inc.roomId || inc.parentMessageId) return;
         setRoomMessages(prev => ({
@@ -696,7 +680,7 @@ export const useChat = (projectId: string) => {
         if (inc.id) loadMsgReactions(inc.id);
       });
 
-      const typeSub = client.subscribe(`/topic/project/${projectId}/typing/room/${room.id}`, payload => {
+      const typeSub = subscribeRealtime(`/topic/project/${projectId}/typing/room/${room.id}`, payload => {
         const event: TypingEvent = JSON.parse(payload.body);
         const s = event.sender?.toLowerCase();
         if (!s || s === currentUser.toLowerCase()) return;
@@ -712,28 +696,28 @@ export const useChat = (projectId: string) => {
         });
       });
 
-      return [msgSub, typeSub];
+      return [msgSub, typeSub].filter((sub): sub is { unsubscribe: () => void } => Boolean(sub));
     });
 
-    return () => subs.forEach(s => s?.unsubscribe());
-  }, [projectId, rm.rooms, isSocketConnected, currentUser, setRoomMessages, setRoomLastMessages, setRoomUnseenCounts, loadMsgReactions, setRoomTypingUsers]);
+    return () => subs.forEach(s => s.unsubscribe());
+  }, [projectId, rm.rooms, isSocketConnected, currentUser, subscribeRealtime, setRoomMessages, setRoomLastMessages, setRoomUnseenCounts, loadMsgReactions, setRoomTypingUsers]);
 
   // â”€â”€ Thread subscription â”€â”€
   useEffect(() => {
-    if (!isSocketConnected || !stompClientRef.current || !threads.activeThreadRootRef.current?.id) return;
-    const rootId = threads.activeThreadRootRef.current.id;
-    const sub = stompClientRef.current.subscribe(`/topic/project/${projectId}/thread/${rootId}`, payload => {
+    if (!isSocketConnected || !threads.activeThreadRoot?.id) return;
+    const rootId = threads.activeThreadRoot.id;
+    const sub = subscribeRealtime(`/topic/project/${projectId}/thread/${rootId}`, payload => {
       const inc: ChatMessage = JSON.parse(payload.body);
       setThreadMessages(prev => mergeMessage(prev, inc));
       if (inc.id) loadMsgReactions(inc.id);
     });
+    if (!sub) return;
     return () => sub.unsubscribe();
-  }, [projectId, isSocketConnected, threads.activeThreadRootRef, threads.activeThreadRootRef.current, setThreadMessages, loadMsgReactions]);
+  }, [projectId, isSocketConnected, threads.activeThreadRoot, subscribeRealtime, setThreadMessages, loadMsgReactions]);
 
   // â”€â”€ Per-message reaction subscriptions â”€â”€
   useEffect(() => {
-    if (!isSocketConnected || !stompClientRef.current) return;
-    const client = stompClientRef.current;
+    if (!isSocketConnected) return;
     const ids = new Set<number>();
 
     msg.messages.forEach(m => { if (m.id) ids.add(m.id); });
@@ -742,14 +726,14 @@ export const useChat = (projectId: string) => {
     threads.threadMessages.forEach(m => { if (m.id) ids.add(m.id); });
 
     const subs = Array.from(ids).map(id =>
-      client.subscribe(`/topic/project/${projectId}/messages/${id}/reactions`, payload => {
+      subscribeRealtime(`/topic/project/${projectId}/messages/${id}/reactions`, payload => {
         const r: ChatReactionSummary[] = JSON.parse(payload.body);
         setMessageReactions(prev => ({ ...prev, [id]: r }));
       }),
-    );
+    ).filter((sub): sub is { unsubscribe: () => void } => Boolean(sub));
 
     return () => subs.forEach(s => s.unsubscribe());
-  }, [projectId, isSocketConnected, msg.messages, msg.privateMessages, msg.roomMessages, threads.threadMessages, setMessageReactions]);
+  }, [projectId, isSocketConnected, subscribeRealtime, msg.messages, msg.privateMessages, msg.roomMessages, threads.threadMessages, setMessageReactions]);
 
   // â”€â”€ Selection cleanup â”€â”€
   useEffect(() => {

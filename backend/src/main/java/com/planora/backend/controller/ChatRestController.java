@@ -506,6 +506,28 @@ public class ChatRestController {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
+    @PostMapping("/rooms/{roomId}/read")
+    public ResponseEntity<Void> markRoomChatAsRead(@PathVariable Long projectId,
+                                                   @PathVariable Long roomId,
+                                                   Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        validateRoomMembership(roomId, username);
+        chatService.markRoomAsRead(projectId, roomId, username);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @PostMapping("/direct/read")
+    public ResponseEntity<Void> markDirectChatAsRead(@PathVariable Long projectId,
+                                                     @RequestParam("with") String withUser,
+                                                     Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        validateProjectMembership(projectId, withUser);
+        chatService.markPrivateConversationAsRead(projectId, username, withUser);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
     public static record ChatRoomRequest(String name, List<String> members) {}
 
     @PostMapping("/rooms")

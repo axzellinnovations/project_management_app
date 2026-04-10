@@ -3,56 +3,65 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { UserIcon, MessageSquareIcon, SearchIcon } from './SidebarIcons';
+import { UserIcon, MessageSquareIcon } from './SidebarIcons';
+import type { ChatInboxActivity } from '@/services/chat-service';
 
-/* ── Types ── */
-interface ChatRoomSummary {
-  roomId: number;
-  roomName?: string;
-  lastMessage?: string;
-  lastMessageSender?: string;
-  lastMessageTimestamp?: string;
-  unseenCount?: number;
+function formatRelativeTime(timestamp?: string | null): string {
+  if (!timestamp) return 'No timestamp';
+
+  const time = new Date(timestamp).getTime();
+  if (Number.isNaN(time)) return 'Unknown time';
+
+  const diffMs = Date.now() - time;
+  const diffMin = Math.floor(diffMs / 60000);
+
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m`;
+
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h`;
+
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d`;
+
+  return new Date(timestamp).toLocaleDateString();
 }
 
-interface DirectMessageSummary {
-  username: string;
-  lastMessage?: string;
-  lastMessageSender?: string;
-  lastMessageTimestamp?: string;
-  unseenCount?: number;
-}
+function InboxDropdownItem({ item, onClick }: { item: ChatInboxActivity; onClick: () => void }) {
+  const label = item.chatType === 'ROOM'
+    ? (item.roomName || 'Channel')
+    : item.chatType === 'DIRECT'
+      ? (item.username || 'Direct Message')
+      : 'Team Chat';
 
-interface ChatSummaries {
-  rooms: ChatRoomSummary[];
-  directMessages: DirectMessageSummary[];
-}
+  const icon = item.chatType === 'DIRECT'
+    ? <UserIcon size={14} />
+    : <MessageSquareIcon size={14} />;
 
-/* ── Inbox Dropdown Item ── */
-function InboxDropdownItem({
-  item, icon, label, onClick
-}: {
-  item: ChatRoomSummary | DirectMessageSummary;
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
   return (
     <div
-      className="group flex items-start gap-2.5 px-3 py-2 hover:bg-cu-hover transition-colors cursor-pointer"
+      className="group flex items-start gap-2.5 px-3 py-2.5 hover:bg-cu-hover transition-colors cursor-pointer"
       onClick={onClick}
     >
       <div className="w-8 h-8 rounded-full bg-cu-primary/10 flex items-center justify-center text-cu-primary flex-shrink-0 mt-0.5">
         {icon}
       </div>
       <div className="flex flex-col flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-semibold text-cu-text-muted uppercase tracking-wide truncate">
+            {item.projectName}
+          </span>
+          <span className="text-[10px] text-cu-text-muted">{formatRelativeTime(item.lastMessageTimestamp)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-1 mt-0.5">
           <span className="text-[12px] font-semibold text-cu-text-primary truncate">{label}</span>
-          {(item.unseenCount ?? 0) > 0 && (
-            <div className="w-1.5 h-1.5 rounded-full bg-cu-success flex-shrink-0" />
+          {item.unread && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-cu-primary text-white">
+              {item.unseenCount > 99 ? '99+' : item.unseenCount}
+            </span>
           )}
         </div>
-        <div className="text-[10.5px] text-cu-text-secondary truncate leading-normal">
+        <div className="text-[10.5px] text-cu-text-secondary truncate leading-normal mt-0.5">
           {item.lastMessageSender && <span className="font-medium mr-1 text-cu-text-primary">{item.lastMessageSender}:</span>}
           {item.lastMessage || 'No messages yet'}
         </div>
@@ -61,43 +70,50 @@ function InboxDropdownItem({
   );
 }
 
-/* ── Inbox Dropdown ── */
 export function InboxDropdown({
-  fixedTop, fixedLeft, summaries, loading, search, onSearch, onClose
+  fixedTop,
+  fixedLeft,
+  activities,
+  loading,
+  error,
+  onRetry,
+  onClose,
 }: {
   fixedTop: number;
   fixedLeft: number;
-  summaries: ChatSummaries | null;
+  activities: ChatInboxActivity[];
   loading: boolean;
-  search: string;
-  onSearch: (v: string) => void;
+  error: string | null;
+  onRetry: () => void;
   onClose: () => void;
 }) {
   const router = useRouter();
-  const pid = typeof window !== 'undefined' ? localStorage.getItem('currentProjectId') : null;
 
-  const allItems = [
-    ...(summaries?.rooms || []).map(r => ({ ...r, type: 'ROOM' as const })),
-    ...(summaries?.directMessages || []).map(d => ({ ...d, type: 'DM' as const })),
-  ];
+  const displayItems = activities.slice(0, 4);
 
-  // 1. Filter to only chats that have at least one message
-  const activeItems = allItems.filter(item => item.lastMessageTimestamp != null);
+  const openActivity = (item: ChatInboxActivity) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('currentProjectId', String(item.projectId));
+      localStorage.setItem('currentProjectName', item.projectName || `Project ${item.projectId}`);
+      window.dispatchEvent(new CustomEvent('planora:project-accessed'));
+    }
 
-  // 2. Sort strictly chronologically
-  const sortedActiveItems = activeItems.sort((a, b) => {
-    const timeA = new Date(a.lastMessageTimestamp!).getTime();
-    const timeB = new Date(b.lastMessageTimestamp!).getTime();
-    return timeB - timeA;
-  });
+    const basePath = `/project/${item.projectId}/chat`;
+    if (item.chatType === 'ROOM' && item.roomId) {
+      router.push(`${basePath}?roomId=${item.roomId}`);
+      onClose();
+      return;
+    }
 
-  // 3. Limit to top 3 items consistently
-  const displayItems = search 
-    ? sortedActiveItems.filter(item => {
-        const label = item.type === 'ROOM' ? (item as ChatRoomSummary).roomName : (item as DirectMessageSummary).username;
-        return (label || '').toLowerCase().includes(search.toLowerCase());
-      }).slice(0, 3)
-    : sortedActiveItems.slice(0, 3);
+    if (item.chatType === 'DIRECT' && item.username) {
+      router.push(`${basePath}?with=${encodeURIComponent(item.username)}`);
+      onClose();
+      return;
+    }
+
+    router.push(`${basePath}?view=team`);
+    onClose();
+  };
 
   return (
     <div
@@ -113,57 +129,39 @@ export function InboxDropdown({
         maxHeight: '400px'
       }}
     >
-      {/* Search bar */}
-      <div className="px-3 pt-3 pb-2 border-b border-cu-border-light">
-        <div className="relative">
-          <div className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none">
-            <SearchIcon />
-          </div>
-          <input
-            type="text"
-            value={search}
-            onChange={e => onSearch(e.target.value)}
-            placeholder="Search messages…"
-            autoFocus
-            className="w-full pl-7 pr-3 py-1.5 text-[12px] bg-cu-bg-tertiary border border-cu-border rounded-lg placeholder-cu-text-muted text-cu-text-primary focus:outline-none focus:ring-1 focus:ring-cu-primary/30 focus:border-cu-primary/40 transition-all"
-          />
-        </div>
+      <div className="px-3 pt-2.5 pb-2 border-b border-cu-border-light">
+        <div className="text-[10px] font-bold text-cu-text-muted uppercase tracking-wider">Recent Activity</div>
       </div>
 
-      {/* Content list */}
       <div className="overflow-y-auto flex-1 py-1 custom-scrollbar">
-        {loading && !summaries ? (
+        {loading ? (
           <div className="px-3 py-3 flex flex-col gap-3 animate-pulse">
             <div className="h-3 w-32 bg-gray-100 rounded" />
             <div className="h-3 w-24 bg-gray-100 rounded" />
             <div className="h-3 w-28 bg-gray-100 rounded" />
+            <div className="h-3 w-20 bg-gray-100 rounded" />
+          </div>
+        ) : error ? (
+          <div className="px-3 py-5 text-center">
+            <p className="text-[12px] text-cu-text-secondary">{error}</p>
+            <button
+              onClick={onRetry}
+              className="mt-2 text-[11px] font-semibold text-cu-primary hover:text-cu-primary-dark"
+            >
+              Retry
+            </button>
           </div>
         ) : (
           <>
             {displayItems.length > 0 ? (
               <div className="mb-1">
-                <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-cu-text-muted uppercase tracking-wider">
-                  {search ? 'Search Results' : 'Recent Activity'}
-                </div>
-                {displayItems.map((item) => {
-                  const isRoom = item.type === 'ROOM';
-                  const label = isRoom ? (item as ChatRoomSummary).roomName || 'General' : (item as DirectMessageSummary).username;
-                  return (
-                    <InboxDropdownItem
-                      key={isRoom ? `room-${(item as ChatRoomSummary).roomId}` : `dm-${(item as DirectMessageSummary).username}`}
-                      item={item}
-                      icon={isRoom ? <MessageSquareIcon size={14} /> : <UserIcon size={14} />}
-                      label={label}
-                      onClick={() => {
-                        const url = isRoom 
-                          ? `/projects/${pid}/chat?roomId=${(item as ChatRoomSummary).roomId}`
-                          : `/projects/${pid}/chat?with=${(item as DirectMessageSummary).username}`;
-                        router.push(url);
-                        onClose();
-                      }}
-                    />
-                  );
-                })}
+                {displayItems.map((item) => (
+                  <InboxDropdownItem
+                    key={`${item.chatType}-${item.projectId}-${item.roomId || item.username || 'team'}`}
+                    item={item}
+                    onClick={() => openActivity(item)}
+                  />
+                ))}
               </div>
             ) : (
               <div className="px-3 py-6 text-center">
@@ -175,10 +173,9 @@ export function InboxDropdown({
         )}
       </div>
 
-      {/* View all footer */}
       <div className="border-t border-cu-border-light px-3 py-2 bg-cu-bg-tertiary">
         <Link
-          href={`/projects/${pid}/chat`}
+          href="/inbox"
           onClick={onClose}
           className="flex items-center justify-between w-full text-[12px] font-medium text-cu-primary hover:text-cu-primary-dark transition-colors"
         >

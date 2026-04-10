@@ -1,7 +1,25 @@
-﻿import { useState, useCallback } from 'react';
+﻿import { useState, useCallback, useEffect } from 'react';
 import * as chatApi from '@/services/chat-service';
 import type { ChatMessage } from '@/app/(project)/project/[id]/chat/components/chat';
 import { mergeMessage, isSameIdentity } from './chat-utils';
+
+const ROOM_MESSAGES_CACHE_PREFIX = 'planora:chat-room-messages:';
+const ROOM_MESSAGES_CACHE_LIMIT = 50;
+
+interface RoomMessagesCachePayload {
+  timestamp: number;
+  messages: ChatMessage[];
+}
+
+function toWindowedRoomMessages(messages: ChatMessage[]): ChatMessage[] {
+  if (!Array.isArray(messages)) return [];
+  if (messages.length <= ROOM_MESSAGES_CACHE_LIMIT) return messages;
+  return messages.slice(-ROOM_MESSAGES_CACHE_LIMIT);
+}
+
+function getRoomCacheKey(projectId: string, roomId: number): string {
+  return `${ROOM_MESSAGES_CACHE_PREFIX}${projectId}:${roomId}`;
+}
 
 export function useChatMessages(projectId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -10,6 +28,39 @@ export function useChatMessages(projectId: string) {
   const [teamLastMessage, setTeamLastMessage] = useState<ChatMessage | null>(null);
   const [privateLastMessages, setPrivateLastMessages] = useState<Record<string, ChatMessage | null>>({});
   const [roomLastMessages, setRoomLastMessages] = useState<Record<number, ChatMessage | null>>({});
+
+  const readRoomMessagesCache = useCallback((roomId: number): ChatMessage[] | null => {
+    if (typeof window === 'undefined') return null;
+    const raw = window.sessionStorage.getItem(getRoomCacheKey(projectId, roomId));
+    if (!raw) return null;
+
+    try {
+      const parsed = JSON.parse(raw) as RoomMessagesCachePayload;
+      if (!Array.isArray(parsed.messages)) return null;
+      return toWindowedRoomMessages(parsed.messages);
+    } catch {
+      window.sessionStorage.removeItem(getRoomCacheKey(projectId, roomId));
+      return null;
+    }
+  }, [projectId]);
+
+  const writeRoomMessagesCache = useCallback((roomId: number, messages: ChatMessage[]) => {
+    if (typeof window === 'undefined') return;
+    const payload: RoomMessagesCachePayload = {
+      timestamp: Date.now(),
+      messages: toWindowedRoomMessages(messages),
+    };
+    window.sessionStorage.setItem(getRoomCacheKey(projectId, roomId), JSON.stringify(payload));
+  }, [projectId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    Object.entries(roomMessages).forEach(([roomIdRaw, list]) => {
+      const roomId = Number(roomIdRaw);
+      if (!Number.isFinite(roomId)) return;
+      writeRoomMessagesCache(roomId, list || []);
+    });
+  }, [roomMessages, writeRoomMessagesCache]);
 
   const updateMessageEverywhere = useCallback(
     (incoming: ChatMessage, optimistic = false) => {
@@ -67,16 +118,25 @@ export function useChatMessages(projectId: string) {
 
   const loadRoomHistory = useCallback(
     async (roomId: number, hydrateReactions?: (msgs: ChatMessage[]) => void) => {
+      const cached = readRoomMessagesCache(roomId);
+      if (cached && cached.length > 0) {
+        setRoomMessages(prev => ({ ...prev, [roomId]: cached }));
+        setRoomLastMessages(prev => ({ ...prev, [roomId]: cached[cached.length - 1] || null }));
+        hydrateReactions?.(cached);
+      }
+
       try {
         const data = await chatApi.fetchRoomMessages(projectId, roomId);
-        setRoomMessages(prev => ({ ...prev, [roomId]: data }));
-        setRoomLastMessages(prev => ({ ...prev, [roomId]: data.length > 0 ? data[data.length - 1] : null }));
-        hydrateReactions?.(data);
+        const windowed = toWindowedRoomMessages(data);
+        setRoomMessages(prev => ({ ...prev, [roomId]: windowed }));
+        setRoomLastMessages(prev => ({ ...prev, [roomId]: windowed.length > 0 ? windowed[windowed.length - 1] : null }));
+        writeRoomMessagesCache(roomId, windowed);
+        hydrateReactions?.(windowed);
       } catch (err) {
         console.error('Failed to load room history', err);
       }
     },
-    [projectId],
+    [projectId, readRoomMessagesCache, writeRoomMessagesCache],
   );
 
   const loadPrivateHistory = useCallback(

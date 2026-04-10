@@ -1,9 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import SockJS from 'sockjs-client';
-import { CompatClient, Stomp } from '@stomp/stompjs';
+import { CompatClient, IMessage, Stomp } from '@stomp/stompjs';
 import * as notificationsApi from '@/services/notifications-service';
 import { Notification } from '@/services/notifications-service';
 import { toast } from '@/components/ui/Toast';
@@ -12,6 +12,16 @@ import { AUTH_TOKEN_CHANGED_EVENT, getValidToken } from '@/lib/auth';
 interface GlobalNotificationContextType {
   notifications: Notification[];
   unreadCount: number;
+  realtimeConnected: boolean;
+  subscribeRealtime: (
+    destination: string,
+    callback: (message: IMessage) => void,
+  ) => { unsubscribe: () => void } | null;
+  sendRealtime: (
+    destination: string,
+    body: string,
+    headers?: Record<string, string>,
+  ) => void;
   markAsRead: (id: number) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   deleteNotificationById: (id: number) => Promise<void>;
@@ -23,6 +33,7 @@ const GlobalNotificationContext = createContext<GlobalNotificationContextType | 
 export function GlobalNotificationProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const pathname = usePathname();
   // We use refs to avoid re-triggering stomp effects on route path transitions
   const pathnameRef = useRef(pathname);
@@ -50,6 +61,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
 
   const disconnectClient = () => {
     isConnectingRef.current = false;
+    setRealtimeConnected(false);
     if (stompClientRef.current) {
       if (stompClientRef.current.connected) {
         stompClientRef.current.disconnect();
@@ -80,6 +92,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       { Authorization: `Bearer ${token}` },
       () => {
         isConnectingRef.current = false;
+        setRealtimeConnected(true);
 
         if (stompClientRef.current !== client) {
           return;
@@ -118,6 +131,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       },
       () => {
         isConnectingRef.current = false;
+        setRealtimeConnected(false);
       }
     );
   };
@@ -186,6 +200,27 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     };
   }, []);
 
+  const subscribeRealtime = useCallback(
+    (
+      destination: string,
+      callback: (message: IMessage) => void,
+    ): { unsubscribe: () => void } | null => {
+      const client = stompClientRef.current;
+      if (!client?.connected) return null;
+      return client.subscribe(destination, callback);
+    },
+    [],
+  );
+
+  const sendRealtime = useCallback(
+    (destination: string, body: string, headers?: Record<string, string>) => {
+      const client = stompClientRef.current;
+      if (!client?.connected) return;
+      client.send(destination, headers || {}, body);
+    },
+    [],
+  );
+
   const markAsRead = async (id: number) => {
     try {
       await notificationsApi.markNotificationRead(id);
@@ -251,6 +286,9 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       value={{
         notifications,
         unreadCount,
+        realtimeConnected,
+        subscribeRealtime,
+        sendRealtime,
         markAsRead,
         markAllAsRead,
         deleteNotificationById,

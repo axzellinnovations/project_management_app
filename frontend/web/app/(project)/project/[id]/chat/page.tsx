@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, WifiOff, RefreshCw, Search, X, ArrowLeft } from 'lucide-react';
 import { useChat } from './components/useChat';
@@ -12,7 +12,12 @@ import { ThreadPanel } from './components/threadPanel';
 
 export default function ChatInterface() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const projectId = params.id as string;
+  const roomIdParam = searchParams.get('roomId');
+  const withParam = searchParams.get('with');
+  const viewParam = searchParams.get('view');
+  const handledQueryRef = useRef<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -163,6 +168,32 @@ export default function ChatInterface() {
       trackTelemetry('chat_screen_opened', 'chat', `project=${projectId}`);
     }
   }, [featureFlags.phaseEEnabled, featureFlags.telemetryEnabled, projectId, trackTelemetry]);
+
+  useEffect(() => {
+    const key = `${roomIdParam || ''}|${withParam || ''}|${viewParam || ''}`;
+    if (!key || handledQueryRef.current === key) return;
+
+    if (roomIdParam) {
+      const parsedRoomId = Number(roomIdParam);
+      if (Number.isFinite(parsedRoomId) && parsedRoomId > 0) {
+        selectRoom(parsedRoomId);
+        handledQueryRef.current = key;
+        return;
+      }
+    }
+
+    if (withParam) {
+      selectPrivateUser(withParam.toLowerCase());
+      handledQueryRef.current = key;
+      return;
+    }
+
+    if (viewParam === 'team') {
+      selectRoom(null);
+      selectPrivateUser(null);
+      handledQueryRef.current = key;
+    }
+  }, [roomIdParam, withParam, viewParam, selectRoom, selectPrivateUser]);
 
   useEffect(() => {
     if (hasSelectedRoom) loadRoomHistory(selectedRoomId as number);

@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useMembersSync, type MemberPayload } from "./useMembersSync";
 import * as membersApi from "@/services/members-service";
-import axios from "@/lib/axios";
 import { getUserFromToken } from "@/lib/auth";
+import { getOrFetchUserMap, upsertUserMapEntry } from "@/app/taskcard/sidebar/userMapCache";
 
 export interface Member {
   id: number;
@@ -29,15 +29,18 @@ export interface PendingInvite {
 
 export type MemberCombined = Member & { invitedAt?: string };
 
-interface AuthUserSummary {
-  userId?: number;
-  username?: string;
-  fullName?: string;
-  email?: string;
-  profilePicUrl?: string | null;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+const MEMBERS_CACHE_KEY_PREFIX = "planora:members:";
+
+interface MembersCachePayload {
+  members: Member[];
+  pending: PendingInvite[];
+  timestamp: number;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+function getMembersCacheKey(projectId: string): string {
+  return `${MEMBERS_CACHE_KEY_PREFIX}${projectId}`;
+}
 
 export function timeAgo(dateString?: string) {
   if (!dateString) return "-";
@@ -93,58 +96,79 @@ export function useMembersData(projectId: string) {
 
   useEffect(() => {
     let cancelled = false;
+    let hasHydratedFromCache = false;
+    let cachedMembers: Member[] = [];
+    let cachedPending: PendingInvite[] = [];
+
+    if (typeof window !== "undefined" && projectId) {
+      const raw = window.sessionStorage.getItem(getMembersCacheKey(projectId));
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as MembersCachePayload;
+          if (Array.isArray(parsed.members)) {
+            cachedMembers = parsed.members;
+            setMembers(parsed.members);
+            hasHydratedFromCache = true;
+          }
+          if (Array.isArray(parsed.pending)) {
+            cachedPending = parsed.pending;
+            setPending(parsed.pending);
+            hasHydratedFromCache = true;
+          }
+          if (hasHydratedFromCache) {
+            setLoading(false);
+          }
+        } catch {
+          window.sessionStorage.removeItem(getMembersCacheKey(projectId));
+        }
+      }
+    }
 
     async function fetchData() {
-      setLoading(true);
+      if (!hasHydratedFromCache) {
+        setLoading(true);
+      }
+
       try {
-        const [membersRes, pendingRes, usersRes] = await Promise.allSettled([
+        const [membersRes, pendingRes, usersMapRes] = await Promise.allSettled([
           membersApi.fetchMembers(projectId).then(data => ({ data: data as unknown as Member[] })),
           membersApi.fetchPendingInvites(projectId).then(data => ({ data: data as unknown as PendingInvite[] })),
-          axios.get("/api/auth/users"),
+          getOrFetchUserMap(),
         ]);
 
         if (cancelled) return;
 
+        let nextMembers = cachedMembers;
+        let nextPending = cachedPending;
+
         if (membersRes.status === "fulfilled") {
-          setMembers(Array.isArray(membersRes.value.data) ? membersRes.value.data : []);
+          nextMembers = Array.isArray(membersRes.value.data) ? membersRes.value.data : [];
+          setMembers(nextMembers);
         } else {
           console.error("Failed to fetch members:", membersRes.reason);
-          setMembers([]);
         }
 
         if (pendingRes.status === "fulfilled") {
-          setPending(Array.isArray(pendingRes.value.data) ? pendingRes.value.data : []);
-          if (Array.isArray(pendingRes.value.data)) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            console.log('Pending invites:', pendingRes.value.data.map((p: any) => ({ email: p.email, role: p.role })));
-          }
+          nextPending = Array.isArray(pendingRes.value.data) ? pendingRes.value.data : [];
+          setPending(nextPending);
         } else {
           console.error("Failed to fetch pending invites:", pendingRes.reason);
-          setPending([]);
         }
 
-        const pics: Record<string, string | null> = {};
-        if (usersRes.status === "fulfilled" && Array.isArray(usersRes.value.data)) {
-          usersRes.value.data.forEach((u: AuthUserSummary) => {
-            const pic = u.profilePicUrl ?? null;
-            if (typeof u.userId === "number") {
-              pics[`id:${u.userId}`] = pic;
-            }
-            if (u.email) {
-              pics[`email:${u.email.toLowerCase()}`] = pic;
-            }
-            if (u.username) {
-              pics[`username:${u.username.toLowerCase()}`] = pic;
-            }
-            if (u.fullName) {
-              pics[`fullname:${u.fullName.toLowerCase()}`] = pic;
-            }
-          });
-        } else if (usersRes.status === "rejected") {
-          console.warn("Profile picture lookup unavailable:", usersRes.reason);
+        if (usersMapRes.status === "fulfilled") {
+          setUserProfilePics(usersMapRes.value);
+        } else {
+          console.warn("Profile picture lookup unavailable:", usersMapRes.reason);
         }
 
-        setUserProfilePics(pics);
+        if (typeof window !== "undefined") {
+          const payload: MembersCachePayload = {
+            members: nextMembers,
+            pending: nextPending,
+            timestamp: Date.now(),
+          };
+          window.sessionStorage.setItem(getMembersCacheKey(projectId), JSON.stringify(payload));
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -162,6 +186,17 @@ export function useMembersData(projectId: string) {
       cancelled = true;
     };
   }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId || loading || typeof window === "undefined") return;
+
+    const payload: MembersCachePayload = {
+      members,
+      pending,
+      timestamp: Date.now(),
+    };
+    window.sessionStorage.setItem(getMembersCacheKey(projectId), JSON.stringify(payload));
+  }, [projectId, members, pending, loading]);
 
   // Real-time sync via STOMP
   const handleRoleChangedLive = useCallback((userId: number, newRole: string) => {
@@ -192,6 +227,21 @@ export function useMembersData(projectId: string) {
         },
       ];
     });
+
+    upsertUserMapEntry({
+      userId: payload.userId,
+      email: payload.email,
+      username: payload.username,
+      fullName: payload.fullName,
+      profilePicUrl: payload.profilePicUrl,
+    });
+    setUserProfilePics(prev => ({
+      ...prev,
+      ...(typeof payload.userId === "number" ? { [`id:${payload.userId}`]: payload.profilePicUrl || null } : {}),
+      ...(payload.email ? { [`email:${payload.email.toLowerCase()}`]: payload.profilePicUrl || null } : {}),
+      ...(payload.username ? { [`username:${payload.username.toLowerCase()}`]: payload.profilePicUrl || null } : {}),
+      ...(payload.fullName ? { [`fullname:${payload.fullName.toLowerCase()}`]: payload.profilePicUrl || null } : {}),
+    }));
   }, []);
 
   useMembersSync(projectId, {

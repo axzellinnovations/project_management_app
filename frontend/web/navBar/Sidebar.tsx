@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef } from 'react';
 import { AUTH_TOKEN_CHANGED_EVENT, clearTokens, getUserFromToken, getValidToken, User } from '@/lib/auth';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import api from '@/lib/axios';
+import { fetchChatInbox, type ChatInboxResponse } from '@/services/chat-service';
 
 /* ── Hooks ── */
 import { useSidebarProjects } from '@/hooks/useSidebarProjects';
@@ -22,18 +23,7 @@ import {
 /* ── Types ── */
 interface UserSummary { email: string; profilePicUrl?: string; }
 interface Project { id: number; name: string; projectKey?: string; isFavorite?: boolean; }
-interface ChatRoomSummary {
-  roomId: number; roomName?: string; lastMessage?: string;
-  lastMessageSender?: string; unseenCount?: number;
-}
-interface DirectMessageSummary {
-  username: string; lastMessage?: string;
-  lastMessageSender?: string; unseenCount?: number;
-}
-interface ChatSummaries {
-  rooms: ChatRoomSummary[];
-  directMessages: DirectMessageSummary[];
-}
+const INBOX_STALE_MS = 5 * 60_000;
 
 interface InboxNavRowProps {
   collapsed: boolean;
@@ -85,7 +75,6 @@ const subscribeToBrowserStorage = (onChange: () => void) => {
 export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   const token = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
@@ -96,12 +85,6 @@ export default function Sidebar() {
     if (!token) return null;
     return getUserFromToken();
   }, [token]);
-
-  const currentProjectId = useSyncExternalStore<string | null>(
-    subscribeToBrowserStorage,
-    () => localStorage.getItem('currentProjectId'),
-    () => null,
-  );
 
   const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
@@ -122,10 +105,10 @@ export default function Sidebar() {
   } = useSidebarProjects(pathname);
 
 
-  const [chatSummaries, setChatSummaries] = useState<ChatSummaries | null>(null);
+  const [chatInbox, setChatInbox] = useState<ChatInboxResponse | null>(null);
   const [inboxOpen, setInboxOpen] = useState(false);
-  const [inboxSearch, setInboxSearch] = useState('');
   const [loadingInbox, setLoadingInbox] = useState(false);
+  const [inboxError, setInboxError] = useState<string | null>(null);
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -155,16 +138,24 @@ export default function Sidebar() {
   const favRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
   const inboxRef = useRef<HTMLDivElement>(null);
+  const lastInboxFetchedAtRef = useRef(0);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   /* ── fetch chats ── */
-  const fetchChatSummaries = useCallback(async (projId: number) => {
+  const fetchInboxActivity = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    if (!force && lastInboxFetchedAtRef.current > 0 && Date.now() - lastInboxFetchedAtRef.current < INBOX_STALE_MS) {
+      return;
+    }
+
     setLoadingInbox(true);
+    setInboxError(null);
     try {
-      const res = await api.get(`/api/projects/${projId}/chat/summaries`);
-      setChatSummaries(res.data);
+      const data = await fetchChatInbox({ projectLimit: 10, activityLimit: 4, status: 'all' });
+      setChatInbox(data);
+      lastInboxFetchedAtRef.current = Date.now();
     } catch (error) {
-      console.error('Sidebar: failed to fetch chat summaries', error);
+      console.error('Sidebar: failed to fetch inbox activity', error);
+      setInboxError('Failed to load inbox');
     } finally {
       setLoadingInbox(false);
     }
@@ -186,18 +177,19 @@ export default function Sidebar() {
   }, []);
 
   useEffect(() => {
-    const projectId =
-      (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('projectId'))
-      || localStorage.getItem('currentProjectId')
-      || (recentProjects.length > 0 ? recentProjects[0].id.toString() : null);
+    void fetchInboxActivity();
+  }, [pathname, fetchInboxActivity, recentProjects.length]);
 
-    if (!projectId) {
-      setChatSummaries(null);
-      return;
-    }
+  useEffect(() => {
+    const handleInboxUpdated = () => {
+      void fetchInboxActivity({ force: true });
+    };
 
-    void fetchChatSummaries(parseInt(projectId));
-  }, [pathname, fetchChatSummaries, recentProjects]);
+    window.addEventListener('planora:chat-inbox-updated', handleInboxUpdated);
+    return () => {
+      window.removeEventListener('planora:chat-inbox-updated', handleInboxUpdated);
+    };
+  }, [fetchInboxActivity]);
 
   /* click-outside to close dropdowns */
   useEffect(() => {
@@ -254,8 +246,8 @@ export default function Sidebar() {
       const rect = inboxRef.current.getBoundingClientRect();
       setDropdownPos({ top: rect.top, left: rect.right + 8 });
     }
+    void fetchInboxActivity();
     setInboxOpen(p => !p);
-    setInboxSearch('');
   };
 
   /* handlers */
@@ -286,13 +278,15 @@ export default function Sidebar() {
     (p.projectKey || '').toLowerCase().includes(recentSearch.toLowerCase())
   );
   
-  const inboxItems = useMemo(() => {
-    if (!chatSummaries) return [];
-    return [
-      ...(chatSummaries.rooms || []),
-      ...(chatSummaries.directMessages || []),
-    ].filter(item => (item.unseenCount || 0) > 0);
-  }, [chatSummaries]);
+  const inboxItems = useMemo(
+    () => chatInbox?.recentActivities?.slice(0, 4) || [],
+    [chatInbox],
+  );
+
+  const inboxBadgeCount = useMemo(() => {
+    if (!chatInbox) return 0;
+    return Number(chatInbox.totalUnread) || 0;
+  }, [chatInbox]);
 
 
   const closeDropdowns = () => { setFavOpen(false); setRecentOpen(false); };
@@ -365,7 +359,7 @@ export default function Sidebar() {
               <InboxNavRow
                 collapsed={collapsed}
                 active={inboxOpen}
-                unseenCount={inboxItems.length}
+                unseenCount={inboxBadgeCount}
                 onClick={openInboxDropdown}
               />
             </div>
@@ -429,10 +423,10 @@ export default function Sidebar() {
           <InboxDropdown
             fixedTop={dropdownPos.top}
             fixedLeft={dropdownPos.left}
-            summaries={chatSummaries}
+            activities={inboxItems}
             loading={loadingInbox}
-            search={inboxSearch}
-            onSearch={setInboxSearch}
+            error={inboxError}
+            onRetry={fetchInboxActivity}
             onClose={() => setInboxOpen(false)}
           />
         )}
