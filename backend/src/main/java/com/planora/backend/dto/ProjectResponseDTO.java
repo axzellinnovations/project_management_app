@@ -27,5 +27,7 @@ public class ProjectResponseDTO {
     private String teamName;
     private Boolean isFavorite;
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private LocalDateTime favoriteMarkedAt;
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastAccessedAt;
 }

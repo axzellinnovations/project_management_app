@@ -63,7 +63,7 @@ public class TaskController {
     @PutMapping("/{taskId}")
     public ResponseEntity<TaskResponseDTO> updateTask(
             @PathVariable Long taskId,
-            @RequestBody TaskRequestDTO request,
+            @Valid @RequestBody TaskRequestDTO request,
             @AuthenticationPrincipal UserPrincipal currentUser){
         Long currentUserId = currentUser.getUserId();
         TaskResponseDTO task = service.updateTask(taskId, request, currentUserId);

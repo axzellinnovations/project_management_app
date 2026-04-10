@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
-export default function NotificationsRedirect() {
+export default function InboxPage() {
   redirect('/dashboard/notifications');
 }

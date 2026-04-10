@@ -129,7 +129,6 @@ function TopBarContent() {
     if (pathname.startsWith('/milestones')) return 'milestones';
     if (pathname.startsWith('/workload')) return 'workload';
     if (pathname.startsWith('/project/') && pathname.includes('/chat')) return 'chats';
-    if (pathname.startsWith('/notifications')) return 'notifications';
     if (pathname.startsWith('/members')) return 'members';
     if (pathname.startsWith('/pages')) return 'pages';
     return 'summary';
@@ -152,6 +151,11 @@ function TopBarContent() {
         setIsFavorite(Boolean(projectData?.isFavorite));
         setProjectType(resolvedProjectType);
         localStorage.setItem('currentProjectType', resolvedProjectType);
+
+        if (projectData?.name && localStorage.getItem('currentProjectName') !== projectData.name) {
+          localStorage.setItem('currentProjectName', projectData.name);
+          window.dispatchEvent(new Event('storage'));
+        }
       } catch { setIsFavorite(false); }
     };
     void fetchProjectStatus();
@@ -236,17 +240,36 @@ function TopBarContent() {
   };
 
   const isProjectPage = useMemo(() => {
-    const projectPaths = ['/summary', '/timeline', '/sprint-backlog', '/backlog', '/kanban', '/sprint-board', '/calendar', '/burndown', '/list', '/milestones', '/workload', '/pages', '/notifications', '/members', '/project/'];
-    return projectPaths.some(path => pathname.startsWith(path));
-  }, [pathname]);
+    const hasProjectContext = Boolean(projectId);
+    if (pathname.startsWith('/project/') && pathname.includes('/chat')) {
+      return true;
+    }
+    const projectScopedPaths = [
+      '/summary',
+      '/timeline',
+      '/sprint-backlog',
+      '/backlog',
+      '/kanban',
+      '/sprint-board',
+      '/calendar',
+      '/burndown',
+      '/list',
+      '/milestones',
+      '/workload',
+      '/pages',
+      '/notifications',
+      '/members',
+    ];
+    return hasProjectContext && projectScopedPaths.some(path => pathname.startsWith(path));
+  }, [pathname, projectId]);
 
   /* ── Profile avatar block (shared) ── */
   const profileAvatar = resolvedProfilePicUrl ? (
-    <div className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-white shadow-sm ring-1 ring-slate-200">
-      <Image src={resolvedProfilePicUrl} alt="Profile" width={32} height={32} className="w-full h-full object-cover" unoptimized priority />
+    <div className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-white shadow-sm ring-1 ring-slate-200 max-sm:w-9 max-sm:h-9 max-sm:ring-2 max-sm:ring-blue-100 max-sm:border-[2.5px] max-sm:shadow-md transition-all">
+      <Image src={resolvedProfilePicUrl} alt="Profile" width={36} height={36} className="w-full h-full object-cover" unoptimized />
     </div>
   ) : (
-    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 border-2 border-white flex items-center justify-center text-white text-[11px] font-bold shadow-sm ring-1 ring-slate-200">
+    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 border-2 border-white flex items-center justify-center text-white text-[11px] font-bold shadow-sm ring-1 ring-slate-200 max-sm:w-9 max-sm:h-9 max-sm:ring-2 max-sm:ring-blue-100 max-sm:border-[2.5px] max-sm:text-[13px] max-sm:shadow-md transition-all">
       {user?.username?.charAt(0).toUpperCase() || 'U'}
     </div>
   );
@@ -270,9 +293,9 @@ function TopBarContent() {
           </button>
 
           {/* Project animated icon */}
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-all duration-500 ${isAgile
-            ? 'bg-blue-600'
-            : 'bg-indigo-600'
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-all duration-500 max-sm:w-[42px] max-sm:h-[42px] max-sm:rounded-2xl max-sm:shadow-lg ${isAgile
+            ? 'bg-blue-600 max-sm:shadow-blue-600/30'
+            : 'bg-indigo-600 max-sm:shadow-indigo-600/30'
             }`}>
             {isAgile ? (
               <motion.svg
@@ -301,14 +324,14 @@ function TopBarContent() {
             )}
           </div>
 
-          <div className="flex flex-col justify-center gap-0.5 ml-1">
-            <div className="flex items-center gap-1 text-[11px] font-bold text-slate-400 tracking-[0.05em] leading-tight cursor-default uppercase font-outfit">
+          <div className="flex flex-col justify-center gap-0.5 ml-1 max-sm:gap-0 max-sm:ml-2.5">
+            <div className="flex items-center gap-1 text-[11px] font-bold text-slate-400 tracking-[0.05em] leading-tight cursor-default uppercase font-outfit max-sm:text-[10px] max-sm:font-extrabold max-sm:text-slate-400 max-sm:-mb-0.5">
               <span>Project</span>
               <span className="text-slate-300 font-medium">/</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <h1 className="text-[18px] font-bold text-slate-900 whitespace-nowrap leading-tight font-outfit tracking-tight">
+            <div className="flex items-center gap-2 max-sm:gap-1.5">
+              <h1 className="text-[18px] font-bold text-slate-900 whitespace-nowrap leading-tight font-outfit tracking-tight max-sm:text-[19px] max-sm:font-black max-sm:text-blue-700 max-sm:-tracking-[0.01em]">
                 {projectName}
               </h1>
 
@@ -383,38 +406,40 @@ function TopBarContent() {
 
           {/* Global Search Bar - Hidden on small screens to save space */}
           <div className="flex-1 max-w-[400px] hidden md:block">
-            <GlobalSearch />
+            <GlobalSearch projectId={projectId} />
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
-            {isAgile && (
+          {activeTab === 'backlog' && (
+            <div className="flex items-center gap-2.5 shrink-0">
+              {isAgile && (
+                <button
+                  onClick={() => {
+                    if (!projectId) return;
+                    router.push(`/sprint-backlog?projectId=${projectId}&action=create-sprint`);
+                  }}
+                  className="hidden sm:flex items-center justify-center px-3.5 h-[34px] bg-white hover:bg-slate-50 rounded-lg text-[13px] font-bold text-slate-700 transition-all border border-slate-200 active:scale-95 shadow-sm font-outfit"
+                >
+                  New Sprint
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   if (!projectId) return;
-                  router.push(`/sprint-backlog?projectId=${projectId}&action=create-sprint`);
+                  const path = isAgile ? '/sprint-backlog' : '/backlog';
+                  router.push(`${path}?projectId=${projectId}&action=add-task`);
                 }}
-                className="hidden sm:flex items-center justify-center px-3.5 h-[34px] bg-white hover:bg-slate-50 rounded-lg text-[13px] font-bold text-slate-700 transition-all border border-slate-200 active:scale-95 shadow-sm font-outfit"
+                className="flex items-center justify-center px-4 max-sm:px-0 max-sm:w-9 h-[34px] max-sm:h-9 bg-blue-600 text-white rounded-lg max-sm:rounded-[10px] text-[13px] font-bold hover:bg-blue-700 transition-all font-outfit gap-1.5 max-sm:gap-0 shadow-sm shadow-blue-200 active:scale-95"
               >
-                New Sprint
+                <Plus size={16} strokeWidth={2.5} className="max-sm:w-[18px] max-sm:h-[18px]" />
+                <span className="max-sm:hidden">New Task</span>
               </button>
-            )}
-
-            <button
-              onClick={() => {
-                if (!projectId) return;
-                const path = isAgile ? '/sprint-backlog' : '/backlog';
-                router.push(`${path}?projectId=${projectId}&action=add-task`);
-              }}
-              className="flex items-center justify-center px-4 h-[34px] bg-blue-600 text-white rounded-lg text-[13px] font-bold hover:bg-blue-700 transition-all font-outfit gap-1.5 shadow-sm shadow-blue-200 active:scale-95"
-            >
-              <Plus size={16} strokeWidth={2.5} />
-              New Task
-            </button>
-          </div>
+            </div>
+          )}
 
           <div className="w-[1px] h-6 bg-slate-200 mx-1 hidden lg:block" />
 
-          <div className="flex items-center gap-4 shrink-0">
+          <div className="flex items-center gap-4 max-sm:gap-3 shrink-0">
             <NotificationBell />
             <div className="flex">
               {profileAvatar}

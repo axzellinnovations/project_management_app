@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, Trash2, GripVertical, ChevronDown } from 'lucide-react';
 import api from '@/lib/axios';
 import { toast } from '@/components/ui';
@@ -20,7 +20,7 @@ export default function CustomFieldsManager({ projectId }: Props) {
   const [newOptions, setNewOptions] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const res = await api.get(`/api/projects/${projectId}/custom-fields`);
       setFields(res.data);
@@ -29,9 +29,9 @@ export default function CustomFieldsManager({ projectId }: Props) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
 
-  useEffect(() => { load(); }, [projectId]);
+  useEffect(() => { void load(); }, [load]);
 
   const handleCreate = async () => {
     if (!newName.trim()) return;

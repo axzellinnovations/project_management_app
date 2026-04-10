@@ -7,7 +7,7 @@ import TaskMainContent from './TaskMainContent';
 import TaskSidebar from './TaskSidebar';
 import api from '@/lib/axios';
 import { toast } from '@/components/ui';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 interface MultiAssignee {
   memberId: number;

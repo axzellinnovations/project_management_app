@@ -3,11 +3,14 @@ package com.planora.backend.service;
 import com.planora.backend.dto.ProjectDTO;
 import com.planora.backend.dto.ProjectResponseDTO; // Import your new DTO
 import com.planora.backend.dto.UpdateProjectDTO;
+import com.planora.backend.dto.ProjectMetricsDTO;
+import com.planora.backend.exception.ConflictException;
 import com.planora.backend.model.*;
 import com.planora.backend.repository.ProjectAccessRepository;
 import com.planora.backend.repository.ProjectFavoriteRepository;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.SprintRepository;
+import com.planora.backend.repository.TaskRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.TeamRepository;
 import com.planora.backend.repository.UserRepository;
@@ -15,7 +18,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
@@ -31,6 +36,7 @@ public class ProjectService {
     private final ProjectAccessRepository projectAccessRepository;
     private final ProjectFavoriteRepository projectFavoriteRepository;
     private final SprintRepository sprintRepository;
+    private final TaskRepository taskRepository;
 
     public boolean checkKeyExists(String key) {
         return projectRepository.existsByProjectKey(key);
@@ -39,10 +45,6 @@ public class ProjectService {
     // ---------------- CREATE ----------------
     @Transactional
     public ProjectResponseDTO createProject(ProjectDTO dto) {
-        if (projectRepository.existsByProjectKey(dto.getProjectKey())) {
-            throw new RuntimeException("Project key already in use");
-        }
-
         Project project = new Project();
         project.setName(dto.getName());
         project.setProjectKey(dto.getProjectKey());
@@ -59,6 +61,10 @@ public class ProjectService {
             }
             team = teamRepository.findByName(dto.getTeamName().trim())
                     .orElseThrow(() -> new RuntimeException("Team not found"));
+
+            if (projectRepository.existsByProjectKeyAndTeamId(dto.getProjectKey(), team.getId())) {
+                throw new ConflictException("Project key already in use");
+            }
 
             // Verify user is in the team
             java.util.Optional<TeamMember> optMember = teamMemberRepository.findByTeamIdAndUserUserId(team.getId(),
@@ -88,6 +94,10 @@ public class ProjectService {
             team.setOwner(owner);
             team = teamRepository.save(team);
 
+            if (projectRepository.existsByProjectKeyAndTeamId(dto.getProjectKey(), team.getId())) {
+                throw new ConflictException("Project key already in use");
+            }
+
             // Add owner as TeamMember
             TeamMember newMember = new TeamMember();
             newMember.setTeam(team);
@@ -113,7 +123,7 @@ public class ProjectService {
     }
 
     // ---------------- READ ALL (FOR AUTH USER) ----------------
-    public List<ProjectResponseDTO> getProjectsForUser(Long userId) {
+    public List<ProjectResponseDTO> getProjectsForUser(Long userId, String type, String sort, String order) {
         List<Team> userTeams = teamMemberRepository.findByUserUserId(userId)
                 .stream()
                 .map(TeamMember::getTeam)
@@ -125,15 +135,38 @@ public class ProjectService {
 
         List<Project> userProjects = projectRepository.findByTeamIn(userTeams);
 
-        // Sort projects by effective last access/join time
+        String normalizedType = type == null ? null : type.trim();
+        String normalizedSort = sort == null ? "lastAccessedAt" : sort.trim();
+        String normalizedOrder = order == null ? "desc" : order.trim();
+        boolean asc = "asc".equalsIgnoreCase(normalizedOrder);
+
+        Comparator<ProjectResponseDTO> comparator;
+        if ("name".equalsIgnoreCase(normalizedSort)) {
+            comparator = Comparator.comparing(
+                dto -> dto.getName() == null ? "" : dto.getName(),
+                String.CASE_INSENSITIVE_ORDER);
+        } else if ("updatedAt".equalsIgnoreCase(normalizedSort)) {
+            comparator = Comparator.comparing(
+                dto -> dto.getUpdatedAt() == null ? LocalDateTime.MIN : dto.getUpdatedAt());
+        } else if ("type".equalsIgnoreCase(normalizedSort)) {
+            comparator = Comparator.comparing(
+                dto -> dto.getType() == null ? "" : dto.getType().name(),
+                String.CASE_INSENSITIVE_ORDER);
+        } else {
+            comparator = Comparator.comparing(
+                dto -> dto.getLastAccessedAt() == null ? LocalDateTime.MIN : dto.getLastAccessedAt());
+        }
+
+        if (!asc) {
+            comparator = comparator.reversed();
+        }
+
         return userProjects.stream()
-                .map(p -> convertToResponseDTO(p, userId))
-                .sorted((d1, d2) -> {
-                    LocalDateTime t1 = d1.getLastAccessedAt() != null ? d1.getLastAccessedAt() : LocalDateTime.MIN;
-                    LocalDateTime t2 = d2.getLastAccessedAt() != null ? d2.getLastAccessedAt() : LocalDateTime.MIN;
-                    return t2.compareTo(t1); // Descending order
-                })
-                .collect(Collectors.toList());
+            .map(p -> convertToResponseDTO(p, userId))
+            .filter(dto -> normalizedType == null || normalizedType.isEmpty() ||
+                (dto.getType() != null && dto.getType().name().equalsIgnoreCase(normalizedType)))
+            .sorted(comparator)
+            .collect(Collectors.toList());
     }
 
     @Transactional
@@ -269,6 +302,7 @@ public class ProjectService {
     // Mapping logic: Entity -> DTO
     private ProjectResponseDTO convertToResponseDTO(Project project, Long userId) {
         LocalDateTime lastAccessedAt = null;
+        LocalDateTime favoriteMarkedAt = null;
         if (userId != null) {
             lastAccessedAt = projectAccessRepository
                     .findByProject_IdAndUser_UserId(project.getId(), userId)
@@ -280,6 +314,11 @@ public class ProjectService {
                                 .map(TeamMember::getJoinedAt)
                                 .orElse(null);
                     });
+
+                        favoriteMarkedAt = projectFavoriteRepository
+                            .findByUserAndProject(userRepository.getReferenceById(userId), project)
+                            .map(ProjectFavorite::getCreatedAt)
+                            .orElse(null);
         }
 
         return ProjectResponseDTO.builder()
@@ -296,7 +335,64 @@ public class ProjectService {
                 .teamName(project.getTeam().getName())
                 .isFavorite(userId != null && projectFavoriteRepository.existsByUserAndProject(
                         userRepository.getReferenceById(userId), project))
+                .favoriteMarkedAt(favoriteMarkedAt)
                 .lastAccessedAt(lastAccessedAt)
+                .build();
+    }
+
+    // =====================================================
+    // METRICS
+    // =====================================================
+
+    public ProjectMetricsDTO getProjectMetrics(Long projectId) {
+        Project project = findProjectById(projectId);
+
+        List<Task> allTasks = taskRepository.findByProjectId(projectId);
+
+        // Count total tasks for the project
+        Long totalTasks = (long) allTasks.size();
+
+        // Count completed tasks (status = DONE)
+        Long completedTasks = allTasks.stream()
+            .filter(task -> "DONE".equalsIgnoreCase(task.getStatus()))
+            .count();
+
+        // Count overdue tasks (dueDate < today AND status != DONE)
+        LocalDate today = LocalDate.now();
+        Long overdueTasks = allTasks.stream()
+            .filter(task -> task.getDueDate() != null
+                && task.getDueDate().isBefore(today)
+                && !"DONE".equalsIgnoreCase(task.getStatus()))
+                .count();
+
+        // Count team members
+        Long memberCount = (long) teamMemberRepository.findByTeamId(project.getTeam().getId()).size();
+
+        // Get active sprint and calculate health
+        Sprint activeSprint = sprintRepository.findByProject_Id(projectId).stream()
+            .filter(sprint -> sprint.getStatus() == SprintStatus.ACTIVE)
+            .findFirst()
+                .orElse(null);
+
+        Integer sprintHealth = 0;
+        Long activeSprintId = null;
+        if (activeSprint != null) {
+            activeSprintId = activeSprint.getId();
+            List<Task> sprintTasksList = taskRepository.findBySprintId(activeSprint.getId());
+            Long sprintTasks = (long) sprintTasksList.size();
+            Long sprintCompleted = sprintTasksList.stream()
+                .filter(task -> "DONE".equalsIgnoreCase(task.getStatus()))
+                .count();
+            sprintHealth = sprintTasks > 0 ? (int) ((sprintCompleted * 100) / sprintTasks) : 0;
+        }
+
+        return ProjectMetricsDTO.builder()
+                .totalTasks(totalTasks)
+                .completedTasks(completedTasks)
+                .overdueTasks(overdueTasks)
+                .memberCount(memberCount)
+                .sprintHealth(sprintHealth)
+                .activeSprintId(activeSprintId)
                 .build();
     }
 

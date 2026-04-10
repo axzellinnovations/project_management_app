@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import SockJS from 'sockjs-client';
 import { CompatClient, Stomp } from '@stomp/stompjs';
@@ -35,7 +35,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     pathnameRef.current = pathname;
   }, [pathname]);
 
-  const loadInitialData = async () => {
+  const loadInitialData = useCallback(async () => {
     try {
       const [notifs, count] = await Promise.all([
         notificationsApi.fetchNotifications(),
@@ -46,9 +46,9 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     } catch (e) {
       console.error('Failed to load initial notifications', e);
     }
-  };
+  }, []);
 
-  const disconnectClient = () => {
+  const disconnectClient = useCallback(() => {
     isConnectingRef.current = false;
     if (stompClientRef.current) {
       if (stompClientRef.current.connected) {
@@ -56,9 +56,9 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       }
       stompClientRef.current = null;
     }
-  };
+  }, []);
 
-  const connectRealtime = (token: string) => {
+  const connectRealtime = useCallback((token: string) => {
     const hasSameActiveConnection =
       stompClientRef.current?.connected && activeTokenRef.current === token;
 
@@ -120,9 +120,9 @@ export function GlobalNotificationProvider({ children }: { children: React.React
         isConnectingRef.current = false;
       }
     );
-  };
+  }, [backendUrl, disconnectClient]);
 
-  const syncAuthAndConnection = () => {
+  const syncAuthAndConnection = useCallback(() => {
     const token = getValidToken();
 
     if (!token) {
@@ -142,7 +142,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     if (tokenChanged || !stompClientRef.current?.connected) {
       connectRealtime(token);
     }
-  };
+  }, [connectRealtime, disconnectClient, loadInitialData]);
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
@@ -184,7 +184,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       activeTokenRef.current = null;
       disconnectClient();
     };
-  }, []);
+  }, [syncAuthAndConnection, disconnectClient]);
 
   const markAsRead = async (id: number) => {
     try {

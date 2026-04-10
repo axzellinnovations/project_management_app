@@ -19,6 +19,16 @@ const arimo = Arimo({ subsets: ['latin'], variable: '--font-arimo', preload: fal
 export const metadata: Metadata = {
   title: "Planora",
   description: "Manage projects with Planora",
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Planora',
+  },
+  icons: {
+    icon: '/icons/icon-192x192.png',
+    apple: '/icons/icon-192x192.png',
+  },
 };
 
 export const viewport: Viewport = {
