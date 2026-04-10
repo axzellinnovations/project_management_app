@@ -12,7 +12,6 @@ import DashboardTable from './components/DashboardTable';
 import WelcomeGreeting from '@/components/ui/WelcomeGreeting';
 import { NotificationBell } from '@/navBar/topbar/NotificationBell';
 import Image from 'next/image';
-import { Plus } from 'lucide-react';
 
 interface ProjectSummary {
     id: number;

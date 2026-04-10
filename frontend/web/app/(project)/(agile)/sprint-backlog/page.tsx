@@ -1,14 +1,13 @@
 'use client';
 
 import { AlertTriangle, BarChart3, Rocket } from 'lucide-react';
-import CreateSprintModal from './components/CreateSprintModal';
 import BacklogCard from './components/BacklogCard';
 import ProductBacklogSection from './components/ProductBacklogSection';
 import FilterBar, { type BacklogFilters } from './components/FilterBar';
 import BulkActionBar from './components/BulkActionBar';
 import dynamic from 'next/dynamic';
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 const VelocityChart = dynamic(() => import('./components/VelocityChart'), { ssr: false });
 import type { SprintVelocityPoint } from './components/VelocityChart';
 import api from '@/lib/axios';
@@ -34,7 +33,6 @@ type RawTask = {
 
 export default function SprintBacklogPage() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const projectId = searchParams.get('projectId');
 
   const [loading, setLoading] = useState(true);

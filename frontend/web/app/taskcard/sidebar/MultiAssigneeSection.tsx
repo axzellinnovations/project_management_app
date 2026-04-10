@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useState, useRef } from 'react';
 import Image from 'next/image';
-import { Plus, X, Users } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import api from '@/lib/axios';
 import SidebarField from './SidebarField';
 

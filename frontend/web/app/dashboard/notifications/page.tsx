@@ -68,12 +68,6 @@ function formatRelativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-function formatFullDateTime(iso: string): string {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return 'Invalid timestamp';
-  return parsed.toLocaleString();
-}
-
 function hasActionLink(notification: Notification): boolean {
   return typeof notification.link === 'string' && notification.link.trim().length > 0;
 }

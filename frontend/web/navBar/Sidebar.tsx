@@ -24,7 +24,6 @@ import {
 } from './sidebar/SidebarIcons';
 
 /* ── Types ── */
-interface UserSummary { email: string; profilePicUrl?: string; }
 interface Project { id: number; name: string; projectKey?: string; isFavorite?: boolean; }
 interface ChatRoomSummary {
   roomId: number; roomName?: string; lastMessage?: string;
@@ -116,7 +115,10 @@ export default function Sidebar() {
     () => null,
   );
 
-  const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+  const [profilePicUrl, setProfilePicUrl] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('planora:profilePicUrl');
+  });
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
   const resolvedProfilePicUrl = useMemo(() => {
     if (!profilePicUrl) return '';
@@ -201,9 +203,6 @@ export default function Sidebar() {
   /* ── effects ── */
   useEffect(() => {
     if (!user?.email) return;
-    // Use cached URL instantly, then revalidate
-    const cached = localStorage.getItem('planora:profilePicUrl');
-    if (cached) setProfilePicUrl(cached);
     api.get('/api/user/profile').then(res => {
       const url: string | undefined = res.data?.profilePicUrl;
       if (url) {

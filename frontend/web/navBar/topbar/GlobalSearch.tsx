@@ -96,7 +96,7 @@ export default function GlobalSearch({ projectId }: GlobalSearchProps = {}) {
     debounceTimer.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const params: any = { q: normalized };
+        const params: { q: string; projectId?: string } = { q: normalized };
         if (currentScope === 'PROJECT' && currentProjectId) {
           params.projectId = currentProjectId;
         }

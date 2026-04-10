@@ -7,7 +7,7 @@ import { getMilestones, createMilestone, updateMilestone, deleteMilestone } from
 import type { MilestoneResponse } from '@/types';
 import { type MilestoneStatus } from './components/milestoneConfig';
 import MilestoneCard from './components/MilestoneCard';
-import MilestoneForm, { type MilestoneFormData } from './components/MilestoneForm';
+import MilestoneForm from './components/MilestoneForm';
 
 export default function MilestonesPage() {
   const searchParams = useSearchParams();
