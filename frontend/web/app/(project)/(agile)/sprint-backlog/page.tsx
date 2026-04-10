@@ -779,7 +779,7 @@ export default function SprintBacklogPage() {
           onMoveToBacklog={handleBulkMoveToBacklog}
           onStatusChange={handleBulkStatusChange}
           onDelete={handleBulkDelete}
-          sprints={sprints.filter(s => s.status !== 'COMPLETED').map(s => ({ id: s.id, name: s.name }))}
+          sprints={sprints.filter(s => s.status !== 'COMPLETED')}
         />
       )}
 
