@@ -19,19 +19,29 @@ export function useListTasks() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
+  const cacheKey = projectId ? `planora:tasks:${projectId}` : null;
+
   const loadTasks = useCallback(async () => {
-    if (!projectId) return;
-    setLoading(true);
-    setError(null);
+    if (!projectId || !cacheKey) return;
+    // Serve stale data instantly
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        setTasks(JSON.parse(cached) as Task[]);
+        setLoading(false);
+      } catch { /* ignore corrupt cache */ }
+    }
+    // Always revalidate in background
     try {
       const data = await fetchTasksByProject(projectId);
       setTasks(data as Task[]);
+      sessionStorage.setItem(cacheKey, JSON.stringify(data));
     } catch {
-      setError('Failed to load tasks');
+      if (!cached) setError('Failed to load tasks');
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, cacheKey]);
 
   useEffect(() => { void loadTasks(); }, [loadTasks]);
 
@@ -44,22 +54,32 @@ export function useListTasks() {
   }, [loadTasks]));
 
   const handleStatusChange = useCallback(async (taskId: number, newStatus: string) => {
-    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t));
+    setTasks((prev) => {
+      const next = prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t);
+      if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+      return next;
+    });
     try {
       await api.put(`/api/tasks/${taskId}`, { status: newStatus });
     } catch {
+      if (cacheKey) sessionStorage.removeItem(cacheKey);
       void loadTasks();
     }
-  }, [loadTasks]);
+  }, [loadTasks, cacheKey]);
 
   const handleDelete = useCallback(async (taskId: number) => {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    setTasks((prev) => {
+      const next = prev.filter((t) => t.id !== taskId);
+      if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+      return next;
+    });
     try {
       await api.delete(`/api/tasks/${taskId}`);
     } catch {
+      if (cacheKey) sessionStorage.removeItem(cacheKey);
       void loadTasks();
     }
-  }, [loadTasks]);
+  }, [loadTasks, cacheKey]);
 
   const handleAddTask = useCallback(async (data: CreateTaskData) => {
     if (!projectId) return;
@@ -73,11 +93,15 @@ export function useListTasks() {
         labelIds: data.labelIds,
         dueDate: data.dueDate,
       });
-      setTasks((prev) => [...prev, res.data as Task]);
+      setTasks((prev) => {
+        const next = [...prev, res.data as Task];
+        if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+        return next;
+      });
     } catch (err) {
       console.error('Failed to create task:', err);
     }
-  }, [projectId]);
+  }, [projectId, cacheKey]);
 
   const sortedTasks = useMemo(() => {
     const q = search.trim().toLowerCase();

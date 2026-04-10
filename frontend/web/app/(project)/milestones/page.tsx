@@ -1,5 +1,4 @@
 'use client';
-export const dynamic = 'force-dynamic';
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -21,21 +20,36 @@ export default function MilestonesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<MilestoneResponse | null>(null);
 
+  const cacheKey = projectId ? `planora:milestones:${projectId}` : null;
+
   const loadMilestones = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId || !cacheKey) return;
+    // Serve from cache immediately
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        setMilestones(JSON.parse(cached) as MilestoneResponse[]);
+        setLoading(false);
+      } catch { /* ignore corrupt cache */ }
+    }
+    // Always revalidate in the background
     try {
-      setLoading(true);
       const data = await getMilestones(projectId);
       setMilestones(data);
+      sessionStorage.setItem(cacheKey, JSON.stringify(data));
       setError(null);
     } catch {
-      setError('Failed to load milestones');
+      if (!cached) setError('Failed to load milestones');
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, cacheKey]);
 
   useEffect(() => { void loadMilestones(); }, [loadMilestones]);
+
+  const invalidateCache = useCallback(() => {
+    if (cacheKey) sessionStorage.removeItem(cacheKey);
+  }, [cacheKey]);
 
   const handleCreate = async (data: { name: string; description: string; dueDate: string; status: MilestoneStatus }) => {
     if (!projectId) return;
@@ -46,7 +60,11 @@ export default function MilestonesPage() {
         dueDate: data.dueDate || undefined,
         status: data.status,
       });
-      setMilestones((prev) => [created, ...prev]);
+      setMilestones((prev) => {
+        const next = [created, ...prev];
+        if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+        return next;
+      });
       setShowCreate(false);
     } catch {
       setError('Failed to create milestone');
@@ -62,7 +80,11 @@ export default function MilestonesPage() {
         dueDate: data.dueDate || undefined,
         status: data.status,
       });
-      setMilestones((prev) => prev.map((m) => m.id === updated.id ? updated : m));
+      setMilestones((prev) => {
+        const next = prev.map((m) => m.id === updated.id ? updated : m);
+        if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+        return next;
+      });
       setEditing(null);
     } catch {
       setError('Failed to update milestone');
@@ -73,7 +95,11 @@ export default function MilestonesPage() {
     if (!confirm('Delete this milestone? Tasks will not be deleted.')) return;
     try {
       await deleteMilestone(id);
-      setMilestones((prev) => prev.filter((m) => m.id !== id));
+      setMilestones((prev) => {
+        const next = prev.filter((m) => m.id !== id);
+        if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+        return next;
+      });
     } catch {
       setError('Failed to delete milestone');
     }
@@ -82,10 +108,15 @@ export default function MilestonesPage() {
   const handleStatusChange = async (id: number, status: MilestoneStatus) => {
     const m = milestones.find((x) => x.id === id);
     if (!m) return;
-    setMilestones((prev) => prev.map((x) => x.id === id ? { ...x, status } : x));
+    setMilestones((prev) => {
+      const next = prev.map((x) => x.id === id ? { ...x, status } : x);
+      if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+      return next;
+    });
     try {
       await updateMilestone(id, { name: m.name, status });
     } catch {
+      invalidateCache();
       void loadMilestones();
     }
   };
