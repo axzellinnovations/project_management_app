@@ -37,7 +37,6 @@ export default function ProjectList({
           active={favOpen}
           hasChevron
           chevronOpen={favOpen}
-          badge={favoriteCount}
           onClick={onOpenFav}
         />
       </div>
@@ -50,7 +49,6 @@ export default function ProjectList({
           active={recentOpen}
           hasChevron
           chevronOpen={recentOpen}
-          badge={recentCount}
           onClick={onOpenRecent}
         />
       </div>

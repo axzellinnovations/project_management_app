@@ -111,6 +111,24 @@ export default function SpacesPage() {
 
     return (
         <div className="mobile-page-padding max-w-[1200px] mx-auto pb-28 sm:pb-8">
+            {/* Mobile Top Header */}
+            <div className="flex items-center gap-3 py-4 md:hidden">
+                <button
+                    onClick={() => window.dispatchEvent(new CustomEvent('planora:sidebar:toggle'))}
+                    className="p-2 -ml-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors border border-slate-100"
+                    aria-label="Toggle Sidebar"
+                >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12" />
+                        <line x1="3" y1="6" x2="21" y2="6" />
+                        <line x1="3" y1="18" x2="21" y2="18" />
+                    </svg>
+                </button>
+                <div className="font-outfit text-xl font-extrabold tracking-tight text-[#101828] flex items-center gap-2">
+                    <span className="w-2 h-5 bg-blue-600 rounded-full"></span>
+                    PLANORA
+                </div>
+            </div>
             {/* Header */}
             <div className="flex flex-col gap-1 mb-5">
                 <div className="flex items-center gap-2 text-[13px] text-[#4A5565]">
@@ -118,7 +136,7 @@ export default function SpacesPage() {
                     <span>/</span>
                     <span className="font-medium text-[#101828]">Spaces</span>
                 </div>
-                <h1 className="font-arimo text-2xl sm:text-[32px] font-bold text-[#101828]">All spaces</h1>
+                <h1 className="font-outfit text-2xl sm:text-[32px] font-bold text-[#101828]">All spaces</h1>
             </div>
 
             {/* Filters Bar */}
@@ -206,14 +224,14 @@ export default function SpacesPage() {
 
             {/* Projects */}
             {loading ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="skeleton h-[200px] rounded-xl" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+                        <div key={i} className="skeleton h-[160px] rounded-2xl" />
                     ))}
                 </div>
             ) : filteredAndSortedProjects.length > 0 ? (
                 viewMode === 'grid' ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                         {filteredAndSortedProjects.map((project) => (
                             <RecentProjectCard
                                 key={project.id}
@@ -280,8 +298,20 @@ export default function SpacesPage() {
                                                     </svg>
                                                 </button>
                                                 <Link
+                                                    href={`/members/${project.id}`}
+                                                    className="p-2 rounded-md border border-[#E5E7EB] text-[#6B7280] hover:text-[#0052CC] hover:bg-blue-50 transition-colors"
+                                                    title="Project Members"
+                                                >
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                                        <circle cx="9" cy="7" r="4" />
+                                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                                    </svg>
+                                                </Link>
+                                                <Link
                                                     href={`/summary/${project.id}`}
-                                                    className="px-3 py-1.5 rounded-lg bg-[#155DFC] text-white text-xs font-semibold hover:bg-[#0E4FCC]"
+                                                    className="px-3 py-1.5 rounded-lg bg-[#155DFC] text-white text-xs font-semibold hover:bg-[#0E4FCC] transition-colors"
                                                 >
                                                     Open
                                                 </Link>

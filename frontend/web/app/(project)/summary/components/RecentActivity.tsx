@@ -38,7 +38,7 @@ export default function RecentActivity({ tasks = [], pages = [] }: { tasks?: Tas
         <div className="flex flex-col gap-6">
             
             {/* Recent Activity Feed */}
-            <MotionWrapper delay={0.4} className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
+            <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
                 <h2 className="font-arimo text-[16px] font-semibold text-[#101828] mb-5 border-b border-gray-100 pb-3">Recent Activity Feed</h2>
                 
                 {recentUpdates.length === 0 ? (
@@ -71,7 +71,7 @@ export default function RecentActivity({ tasks = [], pages = [] }: { tasks?: Tas
             </MotionWrapper>
 
             {/* Upcoming Milestones */}
-            <MotionWrapper delay={0.45} className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
+            <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
                 <h2 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4 border-b border-gray-100 pb-3 flex items-center gap-2">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF8B00" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
                     Upcoming Milestones
@@ -100,7 +100,7 @@ export default function RecentActivity({ tasks = [], pages = [] }: { tasks?: Tas
             </MotionWrapper>
 
             {/* Pinned Docs / Wiki */}
-            <MotionWrapper delay={0.5} className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
+            <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
                 <h2 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4 border-b border-gray-100 pb-3 flex items-center gap-2">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2684FF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                     Project Docs

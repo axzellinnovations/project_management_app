@@ -16,9 +16,11 @@ import { NavRow } from './sidebar/NavRows';
 import { ProjectDropdown } from './sidebar/ProjectDropdown';
 import ProjectList from '@/components/layout/sidebar/ProjectList';
 import InboxBadge from '@/components/layout/sidebar/InboxBadge';
+import { useGlobalNotifications } from '@/components/providers/GlobalNotificationProvider';
 import {
   HomeIcon, ProfileIcon,
   InboxIcon,
+  BellIcon,
 } from './sidebar/SidebarIcons';
 
 /* ── Types ── */
@@ -37,28 +39,41 @@ interface ChatSummaries {
   directMessages: DirectMessageSummary[];
 }
 
-interface InboxNavRowProps {
+interface NavRowProps {
   collapsed: boolean;
   active: boolean;
-  unseenCount: number;
+  badge: number;
   onClick: () => void;
 }
 
-function InboxNavRow({ collapsed, active, unseenCount, onClick }: InboxNavRowProps) {
+function InboxNavRow({ collapsed, active, badge, onClick }: NavRowProps) {
   return (
     <NavRow
       icon={
         <div className="relative">
           <InboxIcon />
           <div className="absolute -top-1 -right-2">
-            <InboxBadge count={unseenCount} />
+            <InboxBadge count={badge} />
           </div>
         </div>
       }
       label="Inbox"
       collapsed={collapsed}
       active={active}
-      badge={unseenCount}
+      badge={badge}
+      onClick={onClick}
+    />
+  );
+}
+
+function NotificationsNavRow({ collapsed, active, badge, onClick }: NavRowProps) {
+  return (
+    <NavRow
+      icon={<BellIcon />}
+      label="Notifications"
+      collapsed={collapsed}
+      active={active}
+      badge={badge}
       onClick={onClick}
     />
   );
@@ -79,10 +94,11 @@ const subscribeToBrowserStorage = (onChange: () => void) => {
 
 /* ─────────────────────────────────────────────
    Main Sidebar
-───────────────────────────────────────────── */
+ ───────────────────────────────────────────── */
 export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
+  const { unreadCount: globalUnreadCount } = useGlobalNotifications();
 
   const token = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
@@ -149,6 +165,7 @@ export default function Sidebar() {
   const favRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
   const inboxRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   const getActiveProjectId = useCallback(() => {
@@ -282,12 +299,13 @@ export default function Sidebar() {
     (p.projectKey || '').toLowerCase().includes(recentSearch.toLowerCase())
   );
   
-  const inboxItems = useMemo(() => {
-    if (!chatSummaries) return [];
-    return [
+  const inboxCount = useMemo(() => {
+    if (!chatSummaries) return 0;
+    const items = [
       ...(chatSummaries.rooms || []),
       ...(chatSummaries.directMessages || []),
     ].filter(item => (item.unseenCount || 0) > 0);
+    return items.length;
   }, [chatSummaries]);
 
 
@@ -296,19 +314,20 @@ export default function Sidebar() {
   /* ── render ── */
   return (
     <>
-      {/* Mobile Backdrop Overlay */}
+      {/* Backdrop for mobile */}
       {isMobile && !collapsed && (
         <div
-          className="fixed inset-0 bg-black/40 z-[90] md:hidden transition-opacity"
+          className="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-[9998]"
           onClick={() => setCollapsed(true)}
         />
       )}
 
       <div
-        className={`h-screen flex-shrink-0 z-[500] bg-[#F9FAFB] transition-all duration-300 ease-in-out ${isMobile ? 'fixed left-0 top-0' : 'relative'} ${isMobile && collapsed ? 'pointer-events-none' : ''}`}
+        className={`h-screen flex-shrink-0 z-[9999] bg-[#F9FAFB] transition-all duration-300 ease-in-out ${isMobile ? 'fixed left-0 top-0 translate-x-0' : 'relative'}`}
         style={{
-          width: isMobile ? (collapsed ? '0px' : '260px') : (collapsed ? '64px' : '240px'),
-          opacity: isMobile && collapsed ? 0 : 1
+          width: isMobile ? '260px' : (collapsed ? '64px' : '240px'),
+          transform: isMobile && collapsed ? 'translateX(-100%)' : 'translateX(0)',
+          opacity: isMobile && collapsed ? 0.5 : 1
         }}
       >
         <div className="relative h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col w-[240px] md:w-[inherit]">
@@ -347,9 +366,19 @@ export default function Sidebar() {
             <div ref={inboxRef} className="relative">
               <InboxNavRow
                 collapsed={collapsed}
-                active={pathname.startsWith('/inbox')}
-                unseenCount={inboxItems.length}
-                onClick={() => { closeDropdowns(); router.push('/inbox'); }}
+                active={pathname === '/dashboard/notifications'}
+                badge={inboxCount}
+                onClick={() => { closeDropdowns(); router.push('/dashboard/notifications'); }}
+              />
+            </div>
+
+            {/* Notifications row */}
+            <div ref={notifRef} className="relative">
+              <NotificationsNavRow
+                collapsed={collapsed}
+                active={pathname === '/dashboard/notifications'}
+                badge={globalUnreadCount}
+                onClick={() => { closeDropdowns(); router.push('/dashboard/notifications'); }}
               />
             </div>
 

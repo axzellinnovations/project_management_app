@@ -14,11 +14,13 @@ public class GlobalSearchResponseDTO {
     private List<TaskSearchResultDTO> tasks;
     private List<DocumentSearchResultDTO> documents;
     private List<MemberSearchResultDTO> members;
+    private List<ProjectSearchResultDTO> projects;
 
     public enum SearchResultType {
         TASK,
         DOCUMENT,
-        MEMBER
+        MEMBER,
+        PROJECT
     }
 
     @Data
@@ -54,6 +56,18 @@ public class GlobalSearchResponseDTO {
     public static class MemberSearchResultDTO {
         private Long id;
         private String name;
+        private String subtitle;
+        private String url;
+        private SearchResultType type;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ProjectSearchResultDTO {
+        private Long id;
+        private String title;
         private String subtitle;
         private String url;
         private SearchResultType type;

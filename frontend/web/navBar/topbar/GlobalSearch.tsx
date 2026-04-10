@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/axios';
 
-type SearchResultType = 'TASK' | 'DOCUMENT' | 'MEMBER';
+type SearchResultType = 'TASK' | 'DOCUMENT' | 'MEMBER' | 'PROJECT';
 
 interface SearchResultBase {
   id: number;
@@ -31,19 +31,36 @@ interface MemberSearchResult extends SearchResultBase {
   name: string;
 }
 
+interface ProjectSearchResult extends SearchResultBase {
+  id: number;
+  title: string;
+}
+
 interface GlobalSearchResult {
   tasks: TaskSearchResult[];
   documents: DocumentSearchResult[];
   members: MemberSearchResult[];
+  projects: ProjectSearchResult[];
 }
 
 type FlattenedResult =
   | (TaskSearchResult & { section: 'tasks'; key: string })
   | (DocumentSearchResult & { section: 'documents'; key: string })
-  | (MemberSearchResult & { section: 'members'; key: string });
+  | (MemberSearchResult & { section: 'members'; key: string })
+  | (ProjectSearchResult & { section: 'projects'; key: string });
 
-export default function GlobalSearch() {
+interface GlobalSearchProps {
+  projectId?: string | null;
+}
+
+export default function GlobalSearch({ projectId }: GlobalSearchProps = {}) {
   const [query, setQuery] = useState('');
+  const [scope, setScope] = useState<'PROJECT' | 'GLOBAL'>('PROJECT');
+
+  useEffect(() => {
+    setScope(projectId ? 'PROJECT' : 'GLOBAL');
+  }, [projectId]);
+
   const [results, setResults] = useState<GlobalSearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -62,7 +79,7 @@ export default function GlobalSearch() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const runSearch = useCallback((value: string) => {
+  const runSearch = useCallback((value: string, currentScope: 'PROJECT' | 'GLOBAL', currentProjectId?: string | null) => {
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
     }
@@ -79,9 +96,11 @@ export default function GlobalSearch() {
     debounceTimer.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const { data } = await api.get<GlobalSearchResult>('/api/search', {
-          params: { q: normalized }
-        });
+        const params: any = { q: normalized };
+        if (currentScope === 'PROJECT' && currentProjectId) {
+          params.projectId = currentProjectId;
+        }
+        const { data } = await api.get<GlobalSearchResult>('/api/search', { params });
         setResults(data);
         setSelectedIndex(-1);
       } catch (_err) {
@@ -93,16 +112,17 @@ export default function GlobalSearch() {
   }, []);
 
   useEffect(() => {
-    runSearch(query);
+    runSearch(query, scope, projectId);
 
     return () => {
       if (debounceTimer.current) {
         clearTimeout(debounceTimer.current);
       }
     };
-  }, [query, runSearch]);
+  }, [query, scope, projectId, runSearch]);
 
   const flatResults: FlattenedResult[] = useMemo(() => [
+    ...(results?.projects?.map(item => ({ ...item, section: 'projects' as const, key: `project-${item.id}` })) || []),
     ...(results?.tasks?.map(item => ({ ...item, section: 'tasks' as const, key: `task-${item.id}` })) || []),
     ...(results?.documents?.map(item => ({ ...item, section: 'documents' as const, key: `document-${item.id}` })) || []),
     ...(results?.members?.map(item => ({ ...item, section: 'members' as const, key: `member-${item.id}` })) || []),
@@ -150,6 +170,9 @@ export default function GlobalSearch() {
     if (type === 'DOCUMENT') {
       return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><polyline points="13 2 13 9 20 9" /></svg>;
     }
+    if (type === 'PROJECT') {
+      return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><rect x="7" y="7" width="3" height="10" /><rect x="14" y="7" width="3" height="6" /></svg>;
+    }
     return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
   };
 
@@ -166,7 +189,9 @@ export default function GlobalSearch() {
             ? 'bg-indigo-100 text-indigo-600'
             : item.type === 'DOCUMENT'
               ? 'bg-amber-100 text-amber-600'
-              : 'bg-green-100 text-green-600';
+              : item.type === 'PROJECT'
+                ? 'bg-purple-100 text-purple-600'
+                : 'bg-green-100 text-green-600';
 
           return (
             <button
@@ -193,7 +218,7 @@ export default function GlobalSearch() {
   };
 
   return (
-    <div className="relative flex-1 max-w-[480px]" ref={searchRef}>
+    <div className="relative flex-1 max-w-[480px] z-[200]" ref={searchRef}>
       <div className="relative w-full group">
         <svg 
           className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10 group-focus-within:text-blue-500 transition-colors" 
@@ -231,8 +256,34 @@ export default function GlobalSearch() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-200 rounded-xl shadow-2xl z-[300] overflow-hidden"
+            className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-200 rounded-xl shadow-2xl z-[1050] overflow-hidden"
           >
+            {projectId && (
+              <div className="bg-slate-50/50 border-b border-slate-100 px-4 py-2.5 flex items-center gap-6">
+                 <button 
+                    onClick={() => setScope('PROJECT')}
+                    className="flex items-center gap-2 cursor-pointer group focus:outline-none"
+                    type="button"
+                 >
+                    <div className={`flex items-center justify-center w-4 h-4 rounded-full border-2 transition-all shadow-sm ${scope === 'PROJECT' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                       {scope === 'PROJECT' && <div className="w-1.5 h-1.5 rounded-full bg-white"></div>}
+                    </div>
+                    <span className={`text-[12px] font-semibold transition-colors ${scope === 'PROJECT' ? 'text-slate-900' : 'text-slate-600 group-hover:text-slate-900'}`}>This Project</span>
+                 </button>
+                 
+                 <button 
+                    onClick={() => setScope('GLOBAL')}
+                    className="flex items-center gap-2 cursor-pointer group focus:outline-none"
+                    type="button"
+                 >
+                    <div className={`flex items-center justify-center w-4 h-4 rounded-full border-2 transition-all shadow-sm ${scope === 'GLOBAL' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                       {scope === 'GLOBAL' && <div className="w-1.5 h-1.5 rounded-full bg-white"></div>}
+                    </div>
+                    <span className={`text-[12px] font-semibold transition-colors ${scope === 'GLOBAL' ? 'text-slate-900' : 'text-slate-600 group-hover:text-slate-900'}`}>All Projects</span>
+                 </button>
+              </div>
+            )}
+
             <div className="max-h-[400px] overflow-y-auto py-2">
               {loading ? (
                 <div className="px-4 py-8 flex items-center justify-center gap-2 text-slate-500">
@@ -241,9 +292,10 @@ export default function GlobalSearch() {
                 </div>
               ) : flatResults.length > 0 ? (
                 <>
-                  {renderSection('Tasks', (results?.tasks || []).map(item => ({ ...item, section: 'tasks', key: `task-${item.id}` })), 0)}
-                  {renderSection('Documents', (results?.documents || []).map(item => ({ ...item, section: 'documents', key: `document-${item.id}` })), results?.tasks?.length || 0)}
-                  {renderSection('Members', (results?.members || []).map(item => ({ ...item, section: 'members', key: `member-${item.id}` })), (results?.tasks?.length || 0) + (results?.documents?.length || 0))}
+                  {renderSection('Projects', (results?.projects || []).map(item => ({ ...item, section: 'projects', key: `project-${item.id}` })), 0)}
+                  {renderSection('Tasks', (results?.tasks || []).map(item => ({ ...item, section: 'tasks', key: `task-${item.id}` })), results?.projects?.length || 0)}
+                  {renderSection('Documents', (results?.documents || []).map(item => ({ ...item, section: 'documents', key: `document-${item.id}` })), (results?.projects?.length || 0) + (results?.tasks?.length || 0))}
+                  {renderSection('Members', (results?.members || []).map(item => ({ ...item, section: 'members', key: `member-${item.id}` })), (results?.projects?.length || 0) + (results?.tasks?.length || 0) + (results?.documents?.length || 0))}
                 </>
               ) : isEmpty ? (
                 <div className="px-4 py-8 text-center">

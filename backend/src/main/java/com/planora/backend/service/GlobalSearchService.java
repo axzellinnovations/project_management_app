@@ -46,6 +46,7 @@ public class GlobalSearchService {
                     .tasks(List.of())
                     .documents(List.of())
                     .members(List.of())
+                    .projects(List.of())
                     .build();
         }
 
@@ -61,10 +62,15 @@ public class GlobalSearchService {
         List<GlobalSearchResponseDTO.MemberSearchResultDTO> members = searchMembers(
                 normalizedQuery, projectIds);
 
+        // Search projects (boards) - visible to user
+        List<GlobalSearchResponseDTO.ProjectSearchResultDTO> projects = searchProjects(
+                normalizedQuery, projectIds);
+
         return GlobalSearchResponseDTO.builder()
                 .tasks(tasks)
                 .documents(documents)
                 .members(members)
+                .projects(projects)
                 .build();
     }
 
@@ -153,6 +159,33 @@ public class GlobalSearchService {
                         .type(GlobalSearchResponseDTO.SearchResultType.MEMBER)
                         .build())
                 .distinct()
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Search projects by name.
+     */
+    private List<GlobalSearchResponseDTO.ProjectSearchResultDTO> searchProjects(
+            String query, List<Long> projectIds) {
+        List<Project> projects = entityManager.createQuery(
+                        "SELECT p FROM Project p " +
+                                "WHERE p.id IN :projectIds " +
+                                "AND LOWER(p.name) LIKE LOWER(CONCAT('%', :q, '%')) " +
+                                "ORDER BY p.updatedAt DESC",
+                        Project.class)
+                .setParameter("projectIds", projectIds)
+                .setParameter("q", query)
+                .setMaxResults(5)
+                .getResultList();
+
+        return projects.stream()
+                .map(p -> GlobalSearchResponseDTO.ProjectSearchResultDTO.builder()
+                        .id(p.getId())
+                        .title(p.getName())
+                        .subtitle(p.getType().name() + " Project")
+                        .url("/summary/" + p.getId())
+                        .type(GlobalSearchResponseDTO.SearchResultType.PROJECT)
+                        .build())
                 .collect(Collectors.toList());
     }
 

@@ -83,11 +83,10 @@ export function TabBar({
               </AnimatePresence>
 
               <span
-                className={`font-outfit text-[14px] font-bold transition-all duration-300 whitespace-nowrap relative z-10 ${
-                  activeTab === tab.id
+                className={`font-outfit text-[14px] font-bold transition-all duration-300 whitespace-nowrap relative z-10 ${activeTab === tab.id
                     ? 'text-blue-600 scale-[1.02]'
                     : 'text-slate-500 group-hover:text-slate-800'
-                }`}
+                  }`}
               >
                 {tab.label}
               </span>
@@ -101,25 +100,24 @@ export function TabBar({
         <div ref={moreRef} className="relative flex items-center h-full pl-2 border-l border-slate-100 ml-1">
           <button
             onClick={() => setMoreOpen(p => !p)}
-            className={`flex items-center gap-1.5 px-3 h-[30px] rounded-lg transition-all duration-300 font-outfit text-[13px] font-bold ${
-              activeInOverflow || moreOpen 
-                ? 'text-blue-600 bg-blue-50' 
+            className={`flex items-center gap-1.5 px-3 h-[30px] rounded-lg transition-all duration-300 font-outfit text-[13px] font-bold ${activeInOverflow || moreOpen
+                ? 'text-blue-600 bg-blue-50'
                 : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-            }`}
+              }`}
           >
             More
-            <svg 
-              width="12" height="12" viewBox="0 0 12 12" fill="none" 
+            <svg
+              width="12" height="12" viewBox="0 0 12 12" fill="none"
               className={`transition-transform duration-300 ${moreOpen ? 'rotate-180' : ''}`}
             >
               <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
-          
+
 
           <AnimatePresence>
             {moreOpen && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -131,11 +129,10 @@ export function TabBar({
                     key={tab.id}
                     href={getTabHref(tab.id)}
                     onClick={() => setMoreOpen(false)}
-                    className={`block px-4 py-2.5 text-[13px] transition-all duration-200 font-outfit font-bold ${
-                      activeTab === tab.id
+                    className={`block px-4 py-2.5 text-[13px] transition-all duration-200 font-outfit font-bold ${activeTab === tab.id
                         ? 'text-blue-600 bg-blue-50'
                         : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }`}
+                      }`}
                   >
                     {tab.label}
                   </Link>

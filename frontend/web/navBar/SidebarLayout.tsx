@@ -16,7 +16,7 @@ export default function SidebarLayout({ children, showTopBar = true }: SidebarLa
     const isChatRoute = pathname?.includes('/chat');
 
     return (
-        <div className="flex h-screen overflow-hidden bg-cu-bg">
+        <div className="flex h-[100dvh] overflow-hidden bg-cu-bg relative">
             <Sidebar />
             <div
                 className="flex flex-col flex-1 min-w-0 overflow-hidden"
@@ -30,12 +30,11 @@ export default function SidebarLayout({ children, showTopBar = true }: SidebarLa
                             </Suspense>
                         </div>
                     )}
-                    <div className={`flex-1 w-full ${isChatRoute ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+                    <div className={`flex-1 w-full flex flex-col ${isChatRoute ? 'overflow-hidden' : 'overflow-y-auto'}`}>
                         {children}
                     </div>
                 </div>
             </div>
-            <BottomNav />
         </div>
     );
 }
