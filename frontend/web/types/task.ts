@@ -76,7 +76,7 @@ export interface Task {
   subtasks?: Subtask[];
   dependencies?: Dependency[];
   attachments?: TaskAttachmentSummary[];
-  assigneePhotoUrl?: string;
+  assigneePhotoUrl?: string | null;
   reporterPhotoUrl?: string;
   recurrenceRule?: string;
   recurrenceEnd?: string;
@@ -105,7 +105,7 @@ export interface TaskData {
   reporterId?: number;
   assigneeName: string;
   assigneeId?: number;
-  assigneePhotoUrl?: string;
+  assigneePhotoUrl?: string | null;
   sprintName: string;
   sprintId?: number;
   milestoneId?: number;
