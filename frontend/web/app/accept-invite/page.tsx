@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import api from '@/lib/axios';
+import { getValidToken } from '@/lib/auth';
 
 function AcceptInviteContent() {
     const searchParams = useSearchParams();
@@ -28,7 +29,7 @@ function AcceptInviteContent() {
 
         // Ensure user is logged in
         if (typeof window !== 'undefined') {
-            const authToken = localStorage.getItem('token');
+            const authToken = getValidToken();
             if (!authToken) {
                 // Save token so they can accept after login
                 localStorage.setItem('pendingInviteToken', token);

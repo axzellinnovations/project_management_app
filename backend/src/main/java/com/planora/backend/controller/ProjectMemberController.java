@@ -37,6 +37,49 @@ public class ProjectMemberController {
     private final TaskRepository taskRepository;
     private final TeamMemberService teamMemberService;
 
+        public enum MemberEventAction {
+                MEMBER_JOINED,
+                MEMBER_ROLE_CHANGED,
+                MEMBER_REMOVED
+        }
+
+        public static class MemberPayload {
+                public Long userId;
+                public String username;
+                public String fullName;
+                public String email;
+                public String profilePicUrl;
+                public String role;
+                public Integer taskCount;
+                public String status;
+
+                public MemberPayload(Long userId, String username, String fullName, String email,
+                                                         String profilePicUrl, String role, Integer taskCount, String status) {
+                        this.userId = userId;
+                        this.username = username;
+                        this.fullName = fullName;
+                        this.email = email;
+                        this.profilePicUrl = profilePicUrl;
+                        this.role = role;
+                        this.taskCount = taskCount;
+                        this.status = status;
+                }
+        }
+
+        public static class MemberEvent {
+                public MemberEventAction action;
+                public Long userId;
+                public String role;
+                public MemberPayload member;
+
+                public MemberEvent(MemberEventAction action, Long userId, String role, MemberPayload member) {
+                        this.action = action;
+                        this.userId = userId;
+                        this.role = role;
+                        this.member = member;
+                }
+        }
+
         public static class ChangeRoleRequest {
                 public String role;
                 public Long userId;
@@ -106,8 +149,13 @@ public class ProjectMemberController {
                 .orElseThrow(() -> new RuntimeException("Project not found"));
         Long teamId = project.getTeam().getId();
         Long currentUserId = principal.getUserId();
-        TeamMember updated = teamMemberService.changeMemberRoleWithPermissions(
-                teamId, userId, request.role, currentUserId
+        teamMemberService.changeMemberRoleWithPermissions(
+                teamId,
+                userId,
+                request.role,
+                currentUserId,
+                projectId,
+                project.getName()
         );
         return ResponseEntity.ok().build();
     }
@@ -123,7 +171,11 @@ public class ProjectMemberController {
         Long teamId = project.getTeam().getId();
         Long currentUserId = principal.getUserId();
         teamMemberService.removeMemberWithPermissions(
-                teamId, userId, currentUserId
+                teamId,
+                userId,
+                currentUserId,
+                projectId,
+                project.getName()
         );
         return ResponseEntity.ok().build();
     }

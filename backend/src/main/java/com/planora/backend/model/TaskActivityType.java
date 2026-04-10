@@ -1,0 +1,15 @@
+package com.planora.backend.model;
+
+public enum TaskActivityType {
+    TASK_CREATED,
+    STATUS_CHANGED,
+    PRIORITY_CHANGED,
+    ASSIGNEE_CHANGED,
+    SUBTASK_ADDED,
+    SUBTASK_COMPLETED,
+    COMMENT_ADDED,
+    ATTACHMENT_ADDED,
+    ATTACHMENT_DELETED,
+    LABEL_ADDED,
+    LABEL_REMOVED
+}

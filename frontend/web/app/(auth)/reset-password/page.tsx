@@ -7,7 +7,6 @@ import ResetPasswordForm from './components/ResetPasswordForm';
 import SuccessMessage from './components/SuccessMessage';
 
 export default function ResetPasswordPage() {
-  const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -19,8 +18,8 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setError('');
 
-    if (!email || !otp) {
-      setError('Please enter both email and OTP.');
+    if (!otp) {
+      setError('Please enter the OTP from your email.');
       return;
     }
 
@@ -29,8 +28,8 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters long.');
       return;
     }
 
@@ -38,20 +37,16 @@ export default function ResetPasswordPage() {
 
     try {
       await api.post('/api/auth/reset', {
-        email: email.toLowerCase(),
-        otp: otp,
+        token: otp,
         newPassword: newPassword
       });
 
       setSubmitted(true);
-      setEmail('');
       setOtp('');
       setNewPassword('');
       setConfirmPassword('');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error("Reset password error:", err);
-      
       let errorMessage = 'Failed to reset password. Please try again.';
       const errorData = err.response?.data;
       
@@ -68,7 +63,7 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className='min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] p-4'>
+    <div className='min-h-screen flex flex-col items-center justify-center p-4'>
       {/* Back to Login Link */}
       <div className="w-full max-w-[420px] mb-4">
         <Link href="/login" className='inline-flex items-center text-sm text-gray-500 hover:text-gray-900 transition-colors'>
@@ -87,22 +82,20 @@ export default function ResetPasswordPage() {
           </svg>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Reset Password</h1>
-        <p className="text-gray-500 text-sm mt-2">Enter your email and OTP to create a new password</p>
+        <p className="text-gray-500 text-sm mt-2">Enter the OTP sent to your email and choose a new password</p>
       </div>
 
       {/* Main Card Container */}
-      <div className='w-full max-w-[420px] bg-white rounded-[24px] shadow-sm p-8'>
+      <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-8'>
         {submitted ? (
           <SuccessMessage />
         ) : (
           <ResetPasswordForm
-            email={email}
             otp={otp}
             newPassword={newPassword}
             confirmPassword={confirmPassword}
             error={error}
             isLoading={isLoading}
-            onEmailChange={setEmail}
             onOtpChange={setOtp}
             onPasswordChange={setNewPassword}
             onConfirmPasswordChange={setConfirmPassword}

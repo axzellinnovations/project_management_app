@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+
 @NoArgsConstructor
 @AllArgsConstructor
 @Getter
@@ -16,4 +18,14 @@ public class UserResponseDTO {
     private String email;
     private boolean verified;
     private String profilePicUrl;
+    private LocalDateTime lastActive;
+    // Extended profile fields
+    private String firstName;
+    private String lastName;
+    private String contactNumber;
+    private String countryCode;
+    private String jobTitle;
+    private String company;
+    private String position;
+    private String bio;
 }

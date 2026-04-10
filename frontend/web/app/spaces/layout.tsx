@@ -1,0 +1,14 @@
+'use client';
+
+import React from 'react';
+import SidebarLayout from '@/navBar/SidebarLayout';
+
+export default function SpacesLayout({ children }: { children: React.ReactNode }) {
+    return (
+        <SidebarLayout>
+            <main className="flex-1 overflow-y-auto bg-[#F7F8FA]">
+                {children}
+            </main>
+        </SidebarLayout>
+    );
+}

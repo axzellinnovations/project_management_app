@@ -3,8 +3,12 @@ import type { Metadata, Viewport } from "next";
 import React from "react";
 import { Inter, Outfit, Arimo } from 'next/font/google'
 import "./globals.css";
+import "react-international-phone/style.css";
 
 import { NavigationProvider } from "@/lib/navigation-context";
+import { ToastProvider } from "@/components/ui/Toast";
+import { GlobalNotificationProvider } from "@/components/providers/GlobalNotificationProvider";
+import { ThemeProvider } from "@/components/providers/ThemeProvider";
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' })
@@ -29,11 +33,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} ${outfit.variable} ${arimo.variable} antialiased bg-[#F4F5F7]`}>
+      <body className={`${inter.variable} ${outfit.variable} ${arimo.variable} antialiased font-inter bg-cu-bg-secondary`}>
         <NavigationProvider>
-          <Suspense fallback={null}>
-            {children}
-          </Suspense>
+          <ThemeProvider>
+            <ToastProvider>
+              <GlobalNotificationProvider>
+                <Suspense fallback={null}>
+                  {children}
+                </Suspense>
+              </GlobalNotificationProvider>
+            </ToastProvider>
+          </ThemeProvider>
         </NavigationProvider>
       </body>
     </html>

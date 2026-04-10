@@ -24,25 +24,50 @@ public class UserProfileController {
         return authentication.getName();
     }
 
+    private UserResponseDTO buildUserResponse(User user, String presignedUrl) {
+        UserResponseDTO dto = new UserResponseDTO();
+        dto.setUserId(user.getUserId());
+        dto.setUsername(user.getUsername());
+        dto.setFullName(user.getFullName());
+        dto.setEmail(user.getEmail());
+        dto.setVerified(user.isVerified());
+        dto.setProfilePicUrl(presignedUrl);
+        dto.setLastActive(user.getLastActive());
+        dto.setFirstName(user.getFirstName());
+        dto.setLastName(user.getLastName());
+        dto.setContactNumber(user.getContactNumber());
+        dto.setCountryCode(user.getCountryCode());
+        dto.setJobTitle(user.getJobTitle());
+        dto.setCompany(user.getCompany());
+        dto.setPosition(user.getPosition());
+        dto.setBio(user.getBio());
+        return dto;
+    }
+
+    @GetMapping
+    public ResponseEntity<?> getProfile(Authentication authentication) {
+        try {
+            String email = getAuthenticatedUserEmail(authentication);
+            User user = service.getUserByEmail(email);
+            String presignedUrl = service.generatePresignedUrl(user.getProfilePicUrl());
+            UserResponseDTO response = buildUserResponse(user, presignedUrl);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
+    }
+
     @PutMapping("/update")
     public ResponseEntity<?> updateProfile(
             @Valid @RequestBody UpdateProfileRequest request,
             Authentication authentication) {
         try {
             String email = getAuthenticatedUserEmail(authentication);
-            User updatedUser = service.updateUserDetails(email, request.getFullName());
+            User updatedUser = service.updateUserProfile(email, request);
 
-            // Generate the secure, temporary URL before sending back to the frontend
             String presignedUrl = service.generatePresignedUrl(updatedUser.getProfilePicUrl());
 
-            UserResponseDTO response = new UserResponseDTO(
-                    updatedUser.getUserId(),
-                    updatedUser.getUsername(),
-                    updatedUser.getFullName(),
-                    updatedUser.getEmail(),
-                    updatedUser.isVerified(),
-                    presignedUrl // Use the temporary URL here!
-            );
+            UserResponseDTO response = buildUserResponse(updatedUser, presignedUrl);
             return new ResponseEntity<>(response, HttpStatus.OK);
         } catch (Exception e){
             return new ResponseEntity<>(e.getMessage(), HttpStatus.BAD_REQUEST);

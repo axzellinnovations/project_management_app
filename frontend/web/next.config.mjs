@@ -3,23 +3,28 @@ const nextConfig = {
   output: 'standalone',
   async rewrites() {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8080';
+    const proxy = (path) => ({
+      source: `/api/${path}/:path*`,
+      destination: `${backendUrl}/api/${path}/:path*`,
+    });
     return [
-      {
-        source: '/api/chat/:path*',
-        destination: `${backendUrl}/api/chat/:path*`,
-      },
-      {
-        source: '/api/auth/:path*',
-        destination: `${backendUrl}/api/auth/:path*`,
-      },
-      {
-        source: '/api/projects/:path*',
-        destination: `${backendUrl}/api/projects/:path*`,
-      },
-      {
-        source: '/api/tasks/:path*',
-        destination: `${backendUrl}/api/tasks/:path*`,
-      },
+      proxy('auth'),
+      proxy('projects'),
+      proxy('tasks'),
+      proxy('sprints'),
+      proxy('sprintboards'),
+      proxy('burndown'),
+      proxy('calendar'),
+      proxy('kanban'),
+      proxy('labels'),
+      proxy('users'),
+      proxy('teams'),
+      proxy('notifications'),
+      proxy('chat'),
+      proxy('folders'),
+      proxy('dms'),
+      proxy('milestones'),
+      proxy('user'),
     ];
   },
   images: {

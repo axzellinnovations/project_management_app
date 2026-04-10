@@ -12,7 +12,7 @@ import java.util.*;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@ToString(exclude = {"project", "sprint", "kanbanColumn", "assignee", "reporter", "parentTask", "subTasks", "labels", "comments", "dependencies", "dependents"}) // Prevent infinite loops in logs
+@ToString(exclude = {"project", "sprint", "kanbanColumn", "assignee", "reporter", "parentTask", "subTasks", "labels", "comments", "dependencies", "dependents", "attachments"}) // Prevent infinite loops in logs
 @Table(name = "tasks")
 public class Task {
     @Id
@@ -37,7 +37,7 @@ public class Task {
     @JoinColumn(name = "kanban_column_id")
     private KanbanColumn kanbanColumn;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assignee_id")
     private TeamMember assignee;
 
@@ -60,6 +60,10 @@ public class Task {
 
     private int storyPoint;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "last_modified_by_id")
+    private User lastModifiedBy;
+
     //The "Parent" (If this is null, It's th main taks. If ser, it's a subtask)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
@@ -68,7 +72,7 @@ public class Task {
     @OneToMany(mappedBy = "parentTask" , cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Task> subTasks = new ArrayList<>();
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "task_labels",
             joinColumns = @JoinColumn(name = "task_id"),
@@ -89,6 +93,19 @@ public class Task {
 
     @ManyToMany(mappedBy = "dependencies", fetch = FetchType.LAZY)
     private Set<Task> dependents = new HashSet<>();
+
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<TaskAttachment> attachments = new ArrayList<>();
+
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<TaskAccess> taskAccess = new ArrayList<>();
+
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<TaskActivity> taskActivities = new ArrayList<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "milestone_id")
+    private Milestone milestone;
 
     @Override
     public boolean equals(Object o) {

@@ -6,6 +6,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
 
@@ -35,6 +36,7 @@ public class EmailService {
         }
     }
 
+    @Async("emailTaskExecutor")
     public void sendVerificationEmail(String toEmail, String otp) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -53,6 +55,7 @@ public class EmailService {
         }
     }
 
+    @Async("emailTaskExecutor")
     public void sendPasswordResetRequest(String toEmail, String otp) {
         try {
             MimeMessage message = mailSender.createMimeMessage();

@@ -1,34 +1,47 @@
 package com.planora.backend.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.planora.backend.dto.CommentRequestDTO;
 import com.planora.backend.dto.TaskRequestDTO;
 import com.planora.backend.dto.TaskResponseDTO;
+import com.planora.backend.dto.TaskResponseDTO.DependencyDTO;
+import com.planora.backend.dto.TaskResponseDTO.SubtaskDTO;
+import com.planora.backend.exception.ForbiddenException;
+import com.planora.backend.exception.ResourceNotFoundException;
 import com.planora.backend.model.Comment;
 import com.planora.backend.model.Label;
+import com.planora.backend.model.Milestone;
 import com.planora.backend.model.Priority;
 import com.planora.backend.model.Project;
 import com.planora.backend.model.Sprint;
 import com.planora.backend.model.Task;
+import com.planora.backend.model.TaskAccess;
+import com.planora.backend.model.TaskActivityType;
 import com.planora.backend.model.TeamMember;
 import com.planora.backend.model.TeamRole;
 import com.planora.backend.model.User;
 import com.planora.backend.repository.CommentRepository;
 import com.planora.backend.repository.LabelRepository;
+import com.planora.backend.repository.MilestoneRepository;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.SprintRepository;
+import com.planora.backend.repository.TaskAccessRepository;
 import com.planora.backend.repository.TaskRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
-
-import jakarta.persistence.EntityNotFoundException;
-import jakarta.transaction.Transactional;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 @Service
 public class TaskService {
@@ -57,16 +70,25 @@ public class TaskService {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private TaskAccessRepository taskAccessRepository;
+
+    @Autowired
+    private TaskActivityService taskActivityService;
+
+    @Autowired
+    private MilestoneRepository milestoneRepository;
+
 
     // 1. CREATE TASK
     @Transactional
     public TaskResponseDTO createTask(TaskRequestDTO request, Long currentUserId) {
         // Validate Project
         Project project = projectRepository.findById(request.getProjectId())
-                .orElseThrow(()-> new EntityNotFoundException("Project not found"));
+                .orElseThrow(()-> new ResourceNotFoundException("Project not found"));
 
         //Permission Check
-        validatePermission(project.getTeam().getId(), currentUserId, TeamRole.VIEWER);
+        requireMinimumRole(project.getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
         //Create Task Entity
         Task task = new Task();
@@ -88,9 +110,17 @@ public class TaskService {
         //handle sprint-if provided
         if(request.getSprintId() != null){
             Sprint sprint = sprintRepository.findById(request.getSprintId())
-                    .orElseThrow(()-> new EntityNotFoundException("Entity not found"));
+                    .orElseThrow(()-> new ResourceNotFoundException("Sprint not found"));
             task.setSprint(sprint);
         }
+
+        // handle labels
+        if (request.getLabelIds() != null && !request.getLabelIds().isEmpty()) {
+            for (Long labelId : request.getLabelIds()) {
+                labelRepository.findById(labelId).ifPresent(label -> task.getLabels().add(label));
+            }
+        }
+
         //validate and assign users
         Long teamId = project.getTeam().getId();
 
@@ -99,10 +129,20 @@ public class TaskService {
             task.setAssignee(validateTeamMember(teamId, request.getAssigneeId()));
         }
 
-        //deafult reporter is the creator
+        //default reporter is the creator
         task.setReporter(validateTeamMember(teamId, currentUserId));
 
+        // Set last modified by
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+
         Task savedTask = taskRepository.save(task);
+
+        // Log activity using the reporter that was already resolved above
+        String actorName = savedTask.getReporter() != null
+                ? savedTask.getReporter().getUser().getUsername()
+                : "System";
+        taskActivityService.logActivity(savedTask.getId(), TaskActivityType.TASK_CREATED,
+                actorName, "Task created: " + savedTask.getTitle());
 
         // Notify assignee if set and is not the creator
         if (task.getAssignee() != null && !task.getAssignee().getUser().getUserId().equals(currentUserId)) {
@@ -116,9 +156,10 @@ public class TaskService {
     }
 
     //2. GET TASK BY ID
+    @Transactional(readOnly = true)
     public TaskResponseDTO getTaskById(Long taskId) {
         Task task = taskRepository.findById(taskId)
-                .orElseThrow(()-> new EntityNotFoundException("Task not found"));
+                .orElseThrow(()-> new ResourceNotFoundException("Task not found"));
         return mapToDTO(task);
     }
 
@@ -126,12 +167,16 @@ public class TaskService {
     @Transactional
     public TaskResponseDTO updateTask(Long taskId, TaskRequestDTO request, Long currentUserId) {
         Task task = taskRepository.findById(taskId)
-                .orElseThrow(()-> new EntityNotFoundException("Task not found"));
+                .orElseThrow(()-> new ResourceNotFoundException("Task not found"));
 
         Long teamId = task.getProject().getTeam().getId();
 
         //validate permission
-        validatePermission(teamId, currentUserId, TeamRole.VIEWER);
+        requireMinimumRole(teamId, currentUserId, TeamRole.MEMBER);
+
+        // Track old values for activity logging
+        String oldStatus = task.getStatus();
+        Priority oldPriority = task.getPriority();
 
         //update fields-basic
         if(request.getTitle() != null) task.setTitle(request.getTitle());
@@ -139,7 +184,14 @@ public class TaskService {
         if(request.getPriority() != null) task.setPriority(Priority.valueOf(request.getPriority()));
         if(request.getStatus() != null) task.setStatus(request.getStatus());
 
-        //update fields-other attributes
+        // Set or clear completedAt when status transitions to/from DONE
+        if (request.getStatus() != null && !request.getStatus().equalsIgnoreCase(oldStatus)) {
+            if ("DONE".equalsIgnoreCase(request.getStatus())) {
+                task.setCompletedAt(LocalDateTime.now());
+            } else {
+                task.setCompletedAt(null);
+            }
+        }
         if(request.getStoryPoint() != null) task.setStoryPoint(request.getStoryPoint());
         if(request.getStartDate() != null) task.setStartDate(request.getStartDate());
         if(request.getDueDate() != null) task.setDueDate(request.getDueDate());
@@ -148,8 +200,15 @@ public class TaskService {
         //update sprint(moving to different sprints)
         if(request.getSprintId() != null){
             Sprint sprint = sprintRepository.findById(request.getSprintId())
-                    .orElseThrow(()->new EntityNotFoundException("Sprint not found"));
+                    .orElseThrow(()->new ResourceNotFoundException("Sprint not found"));
             task.setSprint(sprint);
+        }
+
+        // update milestone
+        if (request.getMilestoneId() != null) {
+            Milestone milestone = milestoneRepository.findById(request.getMilestoneId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+            task.setMilestone(milestone);
         }
 
         //update reporter
@@ -157,36 +216,108 @@ public class TaskService {
             TeamMember newReporter= validateTeamMember(teamId, request.getReporterId());
             task.setReporter(newReporter);
         }
-        return mapToDTO(taskRepository.save(task));
+
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+    Task saved = taskRepository.save(task);
+        User actor = userRepository.findById(currentUserId)
+                .orElse(null);
+        String actorName = actor != null ? actor.getUsername() : "Unknown";
+        String taskLink = "/taskcard?taskId=" + saved.getId();
+
+        if (request.getStatus() != null && !request.getStatus().equals(oldStatus)) {
+            taskActivityService.logActivity(saved.getId(), TaskActivityType.STATUS_CHANGED,
+                    actorName, "Status changed from " + oldStatus + " to " + request.getStatus());
+
+            String fromStatus = oldStatus != null ? oldStatus : "NONE";
+            String message = actorName + " changed task status for \"" + saved.getTitle()
+                + "\" from " + fromStatus + " to " + request.getStatus();
+            notifyTaskStakeholders(saved, currentUserId, message, taskLink);
+        }
+        if (request.getPriority() != null) {
+            String oldPriorityName = oldPriority != null ? oldPriority.name() : "NONE";
+            if (!request.getPriority().equals(oldPriorityName)) {
+                taskActivityService.logActivity(saved.getId(), TaskActivityType.PRIORITY_CHANGED,
+                        actorName, "Priority changed from " + oldPriorityName + " to " + request.getPriority());
+
+            String message = actorName + " changed task priority for \"" + saved.getTitle()
+                + "\" from " + oldPriorityName + " to " + request.getPriority();
+            notifyTaskStakeholders(saved, currentUserId, message, taskLink);
+            }
+        }
+        return mapToDTO(saved);
+    }
+
+    /** Lightweight date-only update used by calendar drag-and-drop. */
+    @Transactional
+    public void patchTaskDates(Long taskId, LocalDate startDate, LocalDate dueDate, Long currentUserId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
+        if (startDate != null) task.setStartDate(startDate);
+        if (dueDate != null) task.setDueDate(dueDate);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+        taskRepository.save(task);
     }
 
     //4. DELETE TASK
-    public void deleteTask(Long taskId, Long currentUserId) {
+    @Transactional
+    public Long deleteTask(Long taskId, Long currentUserId) {
         Task task = taskRepository.findById(taskId)
-                .orElseThrow(()-> new EntityNotFoundException("Task not found"));
+                .orElseThrow(()-> new ResourceNotFoundException("Task not found"));
 
-        //validate user- OWNER
+        //validate user - OWNER or ADMIN only
         Long teamId = task.getProject().getTeam().getId();
+        Long projectId = task.getProject().getId();
 
-        //fetch user role
-        TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId,currentUserId)
-                .orElseThrow(()-> new RuntimeException("User is not a member"));
+        TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId, currentUserId)
+                .orElseThrow(()-> new ForbiddenException("User is not a member of this team"));
 
-        if(member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN){
-            throw new RuntimeException("Access Denied: Only Project Owners /Admins can delete tasks.");
+        if (member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN) {
+            throw new ForbiddenException("Access Denied: Only Project Owners or Admins can delete tasks.");
         }
 
+        // Collect notification data BEFORE delete so lazy-loaded associations are accessible
+        String actorName = userRepository.findById(currentUserId)
+                .map(User::getUsername)
+                .orElse("Unknown");
+        String message = actorName + " deleted task: " + task.getTitle();
+        String taskLink = "/kanban?projectId=" + projectId;
+
+        // Collect recipient ids (assignee + reporter, excluding actor)
+        Set<Long> recipientIds = new LinkedHashSet<>();
+        if (task.getAssignee() != null && task.getAssignee().getUser() != null) {
+            recipientIds.add(task.getAssignee().getUser().getUserId());
+        }
+        if (task.getReporter() != null && task.getReporter().getUser() != null) {
+            recipientIds.add(task.getReporter().getUser().getUserId());
+        }
+        recipientIds.remove(currentUserId);
+        List<User> recipients = recipientIds.isEmpty()
+                ? List.of()
+                : userRepository.findAllById(recipientIds);
+
+        // Delete the task first so delete never silently fails after notifications go out
         taskRepository.delete(task);
+
+        // Send notifications after successful delete
+        for (User recipient : recipients) {
+            notificationService.createNotification(recipient, message, taskLink);
+        }
+
+        return projectId;
     }
 
     //5. GET PROJECT BY ID
-    public List<TaskResponseDTO> getTasksByProject(Long projectId, Long currentUserId) {
-        // Check if user has permission to view tasks in this project
+    @Transactional(readOnly = true)
+    public List<TaskResponseDTO> getTasksByProject(Long projectId, Long currentUserId,
+                                                   String status, Long assigneeId,
+                                                   String priority, Long sprintId) {
         Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new RuntimeException("Project not found"));
-        validatePermission(project.getTeam().getId(), currentUserId, null); // Allow all team members to view
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+        requireMinimumRole(project.getTeam().getId(), currentUserId, null);
 
-        return taskRepository.findByProjectId(projectId).stream()
+        return taskRepository.findByProjectIdFiltered(projectId, status, assigneeId, priority, sprintId)
+                .stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }
@@ -197,19 +328,26 @@ public class TaskService {
     @Transactional
     public TaskResponseDTO createSubTask(Long parentId, TaskRequestDTO subTaskRequest, Long currentUserId) {
         Task parent = taskRepository.findById(parentId)
-                .orElseThrow(()-> new EntityNotFoundException("Parent task is not found"));
+                .orElseThrow(()-> new ResourceNotFoundException("Parent task not found"));
 
         //permission check
-        validatePermission(parent.getProject().getId(), currentUserId, TeamRole.VIEWER);
+        requireMinimumRole(parent.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
         //reuse create logic but set parent
+        subTaskRequest.setProjectId(parent.getProject().getId());
         TaskResponseDTO childDTO = createTask(subTaskRequest, currentUserId);
 
         //link parent-child manually
         Task child = taskRepository.findById(childDTO.getId()).orElseThrow();
         child.setParentTask(parent);
+        Task savedChild = taskRepository.save(child);
 
-        return mapToDTO(taskRepository.save(child));
+        User actor = userRepository.findById(currentUserId).orElse(null);
+        String actorName = actor != null ? actor.getUsername() : "Unknown";
+        taskActivityService.logActivity(parentId, TaskActivityType.SUBTASK_ADDED,
+                actorName, actorName + " added subtask: " + savedChild.getTitle());
+
+        return mapToDTO(savedChild);
     }
 
     //DEPENDENCY
@@ -217,22 +355,32 @@ public class TaskService {
     //7. ADD DEPENDENCY
     @Transactional
     public void addDependency(Long taskId, Long blockerId, Long currentUserId) {
-        Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
-        Task blocker = taskRepository.findById(blockerId).orElseThrow();
+        if (taskId.equals(blockerId)) {
+            throw new IllegalArgumentException("A task cannot depend on itself");
+        }
+
+        Task blocker = taskRepository.findById(blockerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Blocker task not found"));
         task.getDependencies().add(blocker);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
     }
 
     //8. REMOVE DEPENDENCY
     @Transactional
     public void removeDependency(Long taskId, Long blockerId, Long currentUserId) {
-        Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
-        Task blocker = taskRepository.findById(blockerId).orElseThrow();
+        Task blocker = taskRepository.findById(blockerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Blocker task not found"));
         task.getDependencies().remove(blocker);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
     }
 
@@ -241,22 +389,28 @@ public class TaskService {
     //9. ADD LABEL
     @Transactional
     public void addLabel(Long taskId, Long labelId, Long currentUserId) {
-        Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
-        Label label = labelRepository.findById(labelId).orElseThrow();
+        Label label = labelRepository.findById(labelId)
+                .orElseThrow(() -> new ResourceNotFoundException("Label not found"));
         task.getLabels().add(label);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
     }
 
     //10. REMOVE LABEL
     @Transactional
     public void removeLabel(Long taskId, Long labelId, Long currentUserId) {
-        Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getId(),currentUserId, TeamRole.VIEWER);
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
-        Label label = labelRepository.findById(labelId).orElseThrow();
+        Label label = labelRepository.findById(labelId)
+                .orElseThrow(() -> new ResourceNotFoundException("Label not found"));
         task.getLabels().remove(label);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
     }
 
@@ -275,6 +429,16 @@ public class TaskService {
 
         commentRepository.save(comment);
 
+        task.setLastModifiedBy(author);
+        taskRepository.save(task);
+
+        // Log activity
+        String preview = request.getContent().length() > 60
+                ? request.getContent().substring(0, 60) + "…"
+                : request.getContent();
+        taskActivityService.logActivity(taskId, TaskActivityType.COMMENT_ADDED,
+                author.getUsername(), author.getUsername() + " commented: " + preview);
+
         // Notify assignee if the comment author is not the assignee
         if (task.getAssignee() != null && !task.getAssignee().getUser().getUserId().equals(currentUserId)) {
             String message = author.getUsername() + " commented on task: " + task.getTitle();
@@ -283,9 +447,11 @@ public class TaskService {
         }
     }
 
+    @Transactional(readOnly = true)
     public List<com.planora.backend.dto.CommentResponseDTO> getComments(Long taskId, Long currentUserId) {
-        Task task = taskRepository.findById(taskId).orElseThrow();
-        validatePermission(task.getProject().getTeam().getId(), currentUserId, null);
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, null);
         
         return commentRepository.findByTaskOrderByCreatedAtAsc(task).stream()
                 .map(c -> com.planora.backend.dto.CommentResponseDTO.builder()
@@ -300,14 +466,21 @@ public class TaskService {
     //12. ASSIGN MEMBER
     @Transactional
     public void assignUser(Long taskID, Long userId, Long currentUserId) {
-        Task task = taskRepository.findById(taskID).orElseThrow();
+        Task task = taskRepository.findById(taskID)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
 
         //permission check
-        validatePermission(task.getProject().getTeam().getId(), currentUserId, TeamRole.VIEWER);
+        requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
         TeamMember assignee = validateTeamMember(task.getProject().getTeam().getId(), userId);
         task.setAssignee(assignee);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
+
+        User actor = userRepository.findById(currentUserId).orElse(null);
+        String actorName = actor != null ? actor.getUsername() : "Unknown";
+        taskActivityService.logActivity(task.getId(), TaskActivityType.ASSIGNEE_CHANGED,
+                actorName, actorName + " assigned task to " + assignee.getUser().getUsername());
 
         if (!userId.equals(currentUserId)) {
             String message = "You were assigned to task: " + task.getTitle();
@@ -316,21 +489,178 @@ public class TaskService {
         }
     }
 
-    //---HELPER-01--- : For Permission Checking ---
-    private void validatePermission(Long teamId, Long userId, TeamRole forbiddenRole){
-        TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId,userId)
-                .orElseThrow(()-> new RuntimeException("User is not a member of this Team"));
+    //13. RECORD TASK ACCESS
+    @Transactional
+    public void recordTaskAccess(Long taskId, Long currentUserId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        User user = userRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // If forbiddenRole is specified, check that user doesn't have that role
-        if(forbiddenRole != null && member.getRole() == forbiddenRole){
-            throw new RuntimeException("Insufficient Permissions: " + forbiddenRole + " cannot perform this action.");
+        TaskAccess access = taskAccessRepository.findByTaskAndUser(task, user)
+                .orElse(new TaskAccess(null, task, user, null));
+        
+        taskAccessRepository.save(access);
+    }
+
+    //14. GET RECENT TASKS
+    @Transactional(readOnly = true)
+    public List<TaskResponseDTO> getRecentTasks(Long currentUserId, int limit) {
+        Pageable pageable = PageRequest.of(0, limit);
+        return taskAccessRepository.findByUserUserIdOrderByLastAccessedAtDesc(currentUserId, pageable)
+                .stream()
+                .map(access -> mapToDTO(access.getTask()))
+                .collect(Collectors.toList());
+    }
+
+    //15. GET ASSIGNED TASKS
+    @Transactional(readOnly = true)
+    public List<TaskResponseDTO> getAssignedTasks(Long currentUserId, int limit) {
+        Pageable pageable = PageRequest.of(0, limit);
+        return taskRepository.findByAssigneeUserUserIdOrderByUpdatedAtDesc(currentUserId, pageable)
+                .stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    //16. GET WORKED ON TASKS
+    @Transactional(readOnly = true)
+    public List<TaskResponseDTO> getWorkedOnTasks(Long currentUserId, int limit) {
+        Pageable pageable = PageRequest.of(0, limit);
+        return taskRepository.findTasksWorkedOnByUser(currentUserId, pageable)
+                .stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    //17. UPDATE PRIORITY
+    @Transactional
+    public TaskResponseDTO updatePriority(Long taskId, String priority, Long currentUserId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
+        String oldPriority = task.getPriority() != null ? task.getPriority().name() : "NONE";
+        task.setPriority(Priority.valueOf(priority));
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+        Task saved = taskRepository.save(task);
+        User actor = userRepository.findById(currentUserId).orElse(null);
+        String actorName = actor != null ? actor.getUsername() : "Unknown";
+
+        if (!priority.equals(oldPriority)) {
+            taskActivityService.logActivity(saved.getId(), TaskActivityType.PRIORITY_CHANGED,
+                    actorName, "Priority changed from " + oldPriority + " to " + priority);
+            String message = actorName + " changed task priority for \"" + saved.getTitle()
+                    + "\" from " + oldPriority + " to " + priority;
+            notifyTaskStakeholders(saved, currentUserId, message, "/taskcard?taskId=" + saved.getId());
         }
+        return mapToDTO(saved);
+    }
+
+    //18. UNASSIGN TASK
+    @Transactional
+    public void unassignTask(Long taskId, Long currentUserId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
+
+        task.setAssignee(null);
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+        taskRepository.save(task);
+
+        User actor = userRepository.findById(currentUserId).orElse(null);
+        String actorName = actor != null ? actor.getUsername() : "Unknown";
+        taskActivityService.logActivity(task.getId(), TaskActivityType.ASSIGNEE_CHANGED,
+                actorName, actorName + " unassigned the task");
+    }
+
+    //19. BULK UPDATE STATUS
+    @Transactional
+    public void bulkUpdateStatus(List<Long> taskIds, String status, Long currentUserId) {
+        List<Task> tasks = taskRepository.findAllById(taskIds);
+        List<Task> doneTransitioned = new java.util.ArrayList<>();
+        for (Task task : tasks) {
+            requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
+            String oldTaskStatus = task.getStatus();
+            task.setStatus(status);
+            if ("DONE".equalsIgnoreCase(status) && !"DONE".equalsIgnoreCase(oldTaskStatus)) {
+                task.setCompletedAt(LocalDateTime.now());
+                doneTransitioned.add(task);
+            } else if (!"DONE".equalsIgnoreCase(status)) {
+                task.setCompletedAt(null);
+            }
+            task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+        }
+        taskRepository.saveAll(tasks);
+
+        // NTH-2: notify stakeholders of tasks that just moved to DONE
+        if (!doneTransitioned.isEmpty()) {
+            User actor = userRepository.findById(currentUserId).orElse(null);
+            String actorName = actor != null ? actor.getUsername() : "Unknown";
+            for (Task doneTask : doneTransitioned) {
+                String message = actorName + " marked \"" + doneTask.getTitle() + "\" as Done";
+                String link = "/taskcard?taskId=" + doneTask.getId();
+                notifyTaskStakeholders(doneTask, currentUserId, message, link);
+            }
+        }
+    }
+
+    //20. BULK DELETE
+    @Transactional
+    public void bulkDelete(List<Long> taskIds, Long currentUserId) {
+        List<Task> tasks = taskRepository.findAllById(taskIds);
+        for (Task task : tasks) {
+            TeamMember member = teamMemberRepository
+                    .findByTeamIdAndUserUserId(task.getProject().getTeam().getId(), currentUserId)
+                    .orElseThrow(() -> new ForbiddenException("User is not a member of the team"));
+            if (member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN) {
+                throw new ForbiddenException("Access Denied: Only Project Owners or Admins can delete tasks.");
+            }
+        }
+        taskRepository.deleteAll(tasks);
+    }
+
+    private void notifyTaskStakeholders(Task task, Long actorUserId, String message, String link) {
+        Set<Long> recipientIds = new LinkedHashSet<>();
+
+        if (task.getAssignee() != null && task.getAssignee().getUser() != null) {
+            recipientIds.add(task.getAssignee().getUser().getUserId());
+        }
+        if (task.getReporter() != null && task.getReporter().getUser() != null) {
+            recipientIds.add(task.getReporter().getUser().getUserId());
+        }
+
+        recipientIds.remove(actorUserId);
+        if (recipientIds.isEmpty()) {
+            return;
+        }
+
+        userRepository.findAllById(recipientIds)
+                .forEach(user -> notificationService.createNotification(user, message, link));
+    }
+
+    //---HELPER-01--- : Require minimum role in team ---
+    private TeamMember requireMinimumRole(Long teamId, Long userId, TeamRole minimumRole) {
+        TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId, userId)
+                .orElseThrow(() -> new ForbiddenException("User is not a member of this team"));
+        if (minimumRole != null && roleRank(member.getRole()) < roleRank(minimumRole)) {
+            throw new ForbiddenException("Insufficient permissions: requires " + minimumRole + " or higher");
+        }
+        return member;
+    }
+
+    private int roleRank(TeamRole role) {
+        return switch (role) {
+            case OWNER  -> 4;
+            case ADMIN  -> 3;
+            case MEMBER -> 2;
+            case VIEWER -> 1;
+        };
     }
 
     //---HELPER-02--- : For Validate User is in Team---
     private TeamMember validateTeamMember(Long teamId, Long userId){
         return teamMemberRepository.findByTeamIdAndUserUserId(teamId, userId)
-                .orElseThrow(()-> new RuntimeException("Cannot assign task: user is not in the team"));
+                .orElseThrow(()-> new ForbiddenException("Cannot assign task: user is not in the team"));
     }
 
     //MAPPING DTO
@@ -340,11 +670,14 @@ public class TaskService {
         dto.setTitle(task.getTitle());
         dto.setDescription(task.getDescription());
         dto.setProjectId(task.getProject().getId());
+        dto.setProjectName(task.getProject().getName());
         dto.setPriority(task.getPriority() != null ? task.getPriority().name(): null);
         dto.setStatus(task.getStatus());
         dto.setStoryPoint(task.getStoryPoint());
         dto.setDueDate(task.getDueDate());
         dto.setStartDate(task.getStartDate());
+        dto.setCreatedAt(task.getCreatedAt());
+        dto.setUpdatedAt(task.getUpdatedAt());
 
         if(task.getSprint() != null){
             dto.setSprintId(task.getSprint().getId());
@@ -361,6 +694,42 @@ public class TaskService {
             dto.setReporterId(task.getReporter().getId());
             dto.setReporterName(task.getReporter().getUser().getUsername());
         }
+
+        if (task.getMilestone() != null) {
+            dto.setMilestoneId(task.getMilestone().getId());
+            dto.setMilestoneName(task.getMilestone().getName());
+        }
+
+        // Map subtasks
+        if(task.getSubTasks() != null){
+            dto.setSubtasks(task.getSubTasks().stream()
+                .map(st -> new SubtaskDTO(st.getId(), st.getTitle(), st.getStatus()))
+                .collect(Collectors.toList()));
+        }
+
+        // Map labels
+        if(task.getLabels() != null){
+            dto.setLabels(task.getLabels().stream()
+                .map(l -> new TaskResponseDTO.LabelDTO(l.getId(), l.getName(), l.getColor()))
+                .collect(Collectors.toList()));
+        }
+
+        // Map dependencies
+        if(task.getDependencies() != null){
+            dto.setDependencies(task.getDependencies().stream()
+                .map(d -> new DependencyDTO(d.getId(), d.getTitle(), "BLOCKED_BY"))
+                .collect(Collectors.toList()));
+        }
+
+        // Map attachments
+        if(task.getAttachments() != null){
+            dto.setAttachments(task.getAttachments().stream()
+                .map(a -> new TaskResponseDTO.AttachmentDTO(
+                    a.getId(), a.getFileName(), a.getContentType(),
+                    a.getFileSize(), a.getUploadedBy().getUsername()))
+                .collect(Collectors.toList()));
+        }
+
         return dto;
     }
 }

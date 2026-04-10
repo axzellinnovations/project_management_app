@@ -16,6 +16,7 @@ export default function VerifyEmailForm() {
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,22 +25,26 @@ export default function VerifyEmailForm() {
 
     try {
       await api.post('/api/auth/reg/verify', { email, otp });
-      alert("Email verified successfully! Please login.");
-      router.push('/login');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      console.error("Verification error:", err);
-      
+      setSuccessMsg('Email verified! Redirecting to login...');
+      setTimeout(() => router.push('/login'), 1500);
+    } catch (_err: unknown) {
+      const errResponse = (_err as { response?: { status?: number; data?: unknown } })?.response;
+      const status = errResponse?.status;
+      const errorData = errResponse?.data;
+
       let errorMessage = 'Invalid OTP. Please try again.';
-      const errorData = err.response?.data;
-      
-      // Handle different error response formats
-      if (typeof errorData === 'string') {
+
+      if (status === 429) {
+        errorMessage = 'Too many failed attempts. Please request a new OTP.';
+      } else if (typeof errorData === 'string' && errorData.trim()) {
         errorMessage = errorData;
-      } else if (errorData?.message) {
-        errorMessage = errorData.message;
+        if (errorData.toLowerCase().includes('attempt')) {
+          errorMessage = 'Too many failed attempts. Please request a new OTP.';
+        }
+      } else if (errorData && typeof errorData === 'object' && 'message' in errorData) {
+        errorMessage = (errorData as { message: string }).message;
       }
-      
+
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -55,22 +60,19 @@ export default function VerifyEmailForm() {
     try {
       const response = await api.post('/api/auth/resend', { email });
       setError('');
-      
-      let successMsg = 'New OTP sent to your email.';
-      if (typeof response.data === 'string') {
-        successMsg = response.data;
-      }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      console.error("Resend error:", err);
+
+      const msg = typeof response.data === 'string' ? response.data : 'New OTP sent to your email.';
+      setSuccessMsg(msg);
+    } catch (_err: unknown) {
       
       let errorMessage = 'Failed to resend OTP. Please try again.';
-      const errorData = err.response?.data;
+      const res = (_err as { response?: { data?: unknown } })?.response;
+      const errorData = res?.data;
       
       if (typeof errorData === 'string') {
         errorMessage = errorData;
-      } else if (errorData?.message) {
-        errorMessage = errorData.message;
+      } else if (errorData && typeof errorData === 'object' && 'message' in errorData) {
+        errorMessage = (errorData as { message: string }).message;
       }
       
       setError(errorMessage);
@@ -91,10 +93,11 @@ export default function VerifyEmailForm() {
 
       <form onSubmit={handleVerify} className="space-y-6">
         <div>
-          <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">
+          <label htmlFor="otp-input" className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">
             Verification Code (OTP)
           </label>
           <input
+            id="otp-input"
             type="text"
             required
             maxLength={6}
@@ -102,12 +105,20 @@ export default function VerifyEmailForm() {
             onChange={(e) => setOtp(e.target.value)}
             className="w-full px-4 py-3 rounded-xl border border-gray-200 text-center text-lg tracking-widest font-mono focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
             placeholder="123456"
+            aria-label="Six-digit verification code"
+            aria-describedby={error ? 'verify-error' : undefined}
           />
         </div>
 
         {error && (
-          <p className="text-xs text-red-600 text-center bg-red-50 p-2 rounded-lg">
+          <p id="verify-error" role="alert" aria-live="polite" className="text-xs text-red-600 text-center bg-red-50 p-2 rounded-lg">
             {error}
+          </p>
+        )}
+
+        {successMsg && (
+          <p role="status" aria-live="polite" className="text-xs text-green-700 text-center bg-green-50 p-2 rounded-lg">
+            {successMsg}
           </p>
         )}
 
@@ -122,6 +133,7 @@ export default function VerifyEmailForm() {
           <button 
             onClick={handleResend}
             disabled={isLoading}
+            aria-label="Resend verification code"
             className="text-blue-600 font-semibold hover:underline disabled:opacity-50"
           >
             Resend

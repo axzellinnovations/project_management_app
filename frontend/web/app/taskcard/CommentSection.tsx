@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import api from '@/lib/axios';
 import { getUserFromToken } from '@/lib/auth';
+import ActivityFeed from './ActivityFeed';
 
 interface Comment {
   id: number;
@@ -194,6 +195,11 @@ const CommentSection: React.FC<CommentSectionProps> = ({ taskId }) => {
             </div>
           )}
         </div>
+      )}
+
+      {/* History Tab */}
+      {activeTab === 'History' && (
+        <ActivityFeed taskId={taskId} />
       )}
     </div>
   );

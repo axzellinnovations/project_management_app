@@ -1,5 +1,6 @@
 package com.planora.backend.dto;
 
+import jakarta.validation.constraints.*;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -11,12 +12,23 @@ import java.util.List;
 @Setter
 @Getter
 public class TaskRequestDTO {
+
+    @NotBlank(message = "Task title is required")
+    @Size(max = 500, message = "Task title must not exceed 500 characters")
     private String title;
+
     private String description;
 
+    @Pattern(regexp = "^(LOW|MEDIUM|HIGH|URGENT)$",
+             message = "Priority must be LOW, MEDIUM, HIGH, or URGENT")
     private String priority;
+
+    @Pattern(regexp = "^[A-Z0-9_]{1,50}$",
+             message = "Status must contain only uppercase letters, digits, or underscores (max 50 chars)")
     private String status;
 
+    @Min(value = 0, message = "Story points must be at least 0")
+    @Max(value = 999, message = "Story points must not exceed 999")
     private Integer storyPoint;
 
     private LocalDate dueDate;
@@ -33,4 +45,6 @@ public class TaskRequestDTO {
     private Long parentId;
 
     private List<Long> labelIds;
+
+    private Long milestoneId;
 }
