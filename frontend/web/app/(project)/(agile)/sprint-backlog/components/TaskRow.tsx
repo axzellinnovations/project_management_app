@@ -159,6 +159,26 @@ function TaskRow({
   const assignPortalRef = useRef<HTMLDivElement>(null);
   const labelPortalRef = useRef<HTMLDivElement>(null);
 
+  const startRename = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRenameValue(task.title);
+    setRenaming(true);
+  }, [task.title]);
+
+  const commitRename = useCallback(async () => {
+    const trimmed = renameValue.trim();
+    if (!trimmed || trimmed === task.title) {
+      setRenaming(false);
+      return;
+    }
+    setRenaming(false);
+    try {
+      await onRenameTask(task.id, trimmed);
+    } catch (error) {
+      console.error('Failed to rename task:', error);
+    }
+  }, [renameValue, task.id, task.title, onRenameTask]);
+
   const taskLabelIds = useMemo(() => new Set((task.labels ?? []).map((l) => l.id)), [task.labels]);
 
   const openLabel = useCallback(() => {
@@ -239,19 +259,235 @@ function TaskRow({
 
   const getMemberName = (m: TaskRowTeamMember) => m.user.fullName || m.user.username;
 
-  const startRename = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setRenameValue(task.title);
-    setRenaming(true);
+  // Responsive logic: check if screen is mobile size (< 768px)
+  const [isMobile, setIsMobile] = useState(false);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const handleTouchStart = () => {
+    if (!isMobile) return;
+    longPressTimer.current = setTimeout(() => {
+      if (window.confirm('Are you sure you want to delete this task?')) {
+        onDeleteTask(task.id);
+      }
+    }, 600); // 600ms for long press
   };
 
-  const commitRename = async () => {
-    const trimmed = renameValue.trim();
-    setRenaming(false);
-    if (trimmed && trimmed !== task.title) {
-      await onRenameTask(task.id, trimmed);
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
     }
   };
+
+  if (isMobile) {
+    return (
+      <div
+        className="group relative flex flex-col rounded-2xl border-l-[6px] border border-[#EAECF0] bg-white shadow-sm hover:shadow-md transition-all duration-200 mb-3 select-none overflow-hidden"
+        style={{ borderLeftColor: statusBorderColor }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {/* Main Content Area: Horizontal Scroll for Metadata */}
+        <div className="flex items-center w-full min-h-[72px]">
+          {/* Static Title Section (Left-aligned) */}
+          <div className="flex-1 min-w-0 p-4 border-r border-[#F2F4F7]">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-bold text-[#98A2B3] tracking-wider">#{task.taskNo || task.id}</span>
+              <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${priorityStyle}`}>
+                {priorityKey}
+              </span>
+            </div>
+            {renaming ? (
+              <input
+                type="text"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void commitRename();
+                  if (e.key === 'Escape') setRenaming(false);
+                }}
+                onBlur={() => void commitRename()}
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+                className="w-full border-b-2 border-[#175CD3] bg-transparent text-[15px] font-bold text-[#101828] outline-none"
+              />
+            ) : (
+              <h3 
+                onClick={(e) => { e.stopPropagation(); startRename(e); }}
+                className={`text-[15px] font-bold text-[#101828] leading-tight truncate cursor-text ${validStatus === 'DONE' ? 'line-through opacity-60' : ''}`}
+              >
+                {task.title}
+              </h3>
+            )}
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {task.labels?.slice(0, 1).map((label) => (
+                <span
+                  key={label.id}
+                  style={hexToLabelStyle(label.color ?? '#6366F1')}
+                  className="px-2 py-0.5 rounded text-[9px] font-bold whitespace-nowrap shadow-sm"
+                >
+                  {label.name}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Horizontally Scrollable Metadata Options */}
+          <div className="flex-1 flex items-center gap-3 px-3 overflow-x-auto no-scrollbar bg-[#F9FAFB]/50">
+            {/* Actions (Pencil / Trash) */}
+            <div className="flex-shrink-0 flex items-center gap-1 border-r border-[#EAECF0] pr-2" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={startRename}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF] active:scale-90 transition-all"
+              >
+                <Pencil size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => canDelete && onDeleteTask(task.id)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#667085] hover:text-[#D92D20] hover:bg-[#FEF3F2] active:scale-90 transition-all"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+
+            {/* Status */}
+            <div className="flex-shrink-0" ref={statusRef} onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => openStatus()}
+                className={`flex h-8 min-w-[90px] items-center justify-center gap-1.5 rounded-lg px-2 text-[9px] font-bold uppercase tracking-wider shadow-sm transition-all active:scale-95 ${displayStyle}`}
+              >
+                <span className="truncate">{displayLabel}</span>
+                <ChevronDown size={10} className="opacity-60 flex-shrink-0" />
+              </button>
+            </div>
+
+            {/* Assignee */}
+            <div className="flex-shrink-0 flex items-center relative group/assignee" ref={assignRef} onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => openAssign()}
+                className="flex items-center active:scale-90 transition-transform"
+              >
+                {task.assigneeName && task.assigneeName !== 'Unassigned' ? (
+                  <AssigneeAvatar name={task.assigneeName} profilePicUrl={task.assigneePhotoUrl} size={28} />
+                ) : (
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-[#EAECF0] text-[#98A2B3]">
+                    <UserPlus size={12} />
+                  </div>
+                )}
+              </button>
+              
+              {/* Desktop Hover Tooltip */}
+              {!isMobile && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-[#101828] text-white text-[10px] font-bold rounded opacity-0 group-hover/assignee:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-[1000]">
+                  {task.assigneeName || 'Unassigned'}
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#101828]" />
+                </div>
+              )}
+            </div>
+
+            {/* Points */}
+            <div className="flex-shrink-0 flex items-center justify-center min-w-[32px]" onClick={(e) => e.stopPropagation()}>
+              <input 
+                type="number" 
+                value={task.storyPoints} 
+                title="Points"
+                onChange={(e) => onStoryPointsChange(task.id, Number(e.target.value))}
+                className="text-[12px] font-bold text-[#101828] bg-[#F2F4F7] rounded-lg px-2 py-1 outline-none w-8 text-center"
+              />
+            </div>
+
+            {/* Date */}
+            {onDueDateChange && (
+              <div className="flex-shrink-0 flex items-center" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => dateRef.current?.showPicker()}
+                  title={`Due Date: ${formatDate(task.dueDate)}`}
+                  className={`text-[11px] font-bold leading-none whitespace-nowrap bg-[#F2F4F7] px-2 py-1.5 rounded-lg ${dueClass === 'overdue' ? 'text-red-600 bg-red-50' : 'text-[#475467]'}`}
+                >
+                  {formatDate(task.dueDate)}
+                </button>
+                <input ref={dateRef} type="date" value={task.dueDate || ''} onChange={(e) => onDueDateChange(task.id, e.target.value)} className="hidden" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Portals for Dropdowns */}
+        {assignOpen && assignRect && typeof document !== 'undefined' && createPortal(
+          <div
+            ref={assignPortalRef}
+            style={{
+              position: 'fixed',
+              top: `${assignRect.bottom + 8}px`,
+              left: Math.min(assignRect.left, window.innerWidth - 220) + 'px',
+              width: 'max-content',
+              minWidth: '200px',
+            }}
+            className="z-[9999] overflow-hidden rounded-xl border border-[#D0D5DD] bg-white shadow-xl animate-in fade-in zoom-in-95 duration-200"
+          >
+            <div className="px-4 py-2 text-[11px] font-bold text-[#475467] border-b border-[#F2F4F7] uppercase tracking-wider">Assign Member</div>
+            <div className="max-h-[240px] overflow-y-auto p-1">
+              {teamMembers.map((m) => (
+                <button
+                  key={m.user.userId}
+                  onClick={() => {
+                    void onAssignTask(task.id, m.user.userId);
+                    setAssignOpen(false);
+                  }}
+                  className="flex w-full items-center gap-3 px-3 py-2 text-[13px] font-medium text-[#344054] hover:bg-[#F9FAFB] rounded-lg transition-colors"
+                >
+                  <AssigneeAvatar name={getMemberName(m)} profilePicUrl={m.user.profilePicUrl} size={24} />
+                  <span className="truncate">{getMemberName(m)}</span>
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body
+        )}
+        
+        {statusOpen && statusRect && typeof document !== 'undefined' && createPortal(
+          <div
+            ref={statusPortalRef}
+            style={{
+              position: 'fixed',
+              top: `${statusRect.bottom + 8}px`,
+              left: Math.min(statusRect.left, window.innerWidth - 180) + 'px',
+              width: '160px',
+            }}
+            className="z-[9999] overflow-hidden rounded-xl border border-[#D0D5DD] bg-white shadow-xl animate-in fade-in zoom-in-95 duration-200"
+          >
+            <div className="px-3 py-2 text-[11px] font-bold text-[#475467] border-b border-[#F2F4F7] uppercase tracking-wider">Move To</div>
+            <div className="p-1">
+              {(Object.keys(STATUS_LABELS) as TaskStatus[]).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    onStatusChange(task.id, s);
+                    setStatusOpen(false);
+                  }}
+                  className={`w-full flex items-center px-3 py-2 text-[13px] font-medium rounded-lg transition-colors ${task.status?.toUpperCase() === s ? 'bg-[#EFF8FF] text-[#175CD3]' : 'text-[#344054] hover:bg-[#F9FAFB]'}`}
+                >
+                  {STATUS_LABELS[s]}
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body
+        )}
+      </div>
+    );
+  }
 
   const rowBg =
     dueClass === 'overdue' || dueClass === 'today'

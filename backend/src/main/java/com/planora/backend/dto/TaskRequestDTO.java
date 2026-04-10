@@ -45,4 +45,6 @@ public class TaskRequestDTO {
     private Long parentId;
 
     private List<Long> labelIds;
+
+    private Long milestoneId;
 }

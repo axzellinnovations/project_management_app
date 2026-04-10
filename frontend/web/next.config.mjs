@@ -23,6 +23,8 @@ const nextConfig = {
       proxy('chat'),
       proxy('folders'),
       proxy('dms'),
+      proxy('milestones'),
+      proxy('user'),
     ];
   },
   images: {

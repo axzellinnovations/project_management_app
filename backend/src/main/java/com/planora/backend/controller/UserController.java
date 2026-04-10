@@ -110,7 +110,8 @@ public class UserController {
                             user.getProfilePicUrl() != null && !user.getProfilePicUrl().isEmpty()
                                     ? service.generatePresignedUrl(user.getProfilePicUrl())
                                     : null,
-                            user.getLastActive()
+                            user.getLastActive(),
+                            null, null, null, null, null, null, null, null
                     ))
                     .collect(Collectors.toList());
 
@@ -158,7 +159,8 @@ public class UserController {
                     user.getEmail(),
                     user.isVerified(),
                     presignedUrl,
-                    user.getLastActive()
+                    user.getLastActive(),
+                    null, null, null, null, null, null, null, null
             );
             return new ResponseEntity<>(dto, HttpStatus.OK);
         } catch (Exception e) {

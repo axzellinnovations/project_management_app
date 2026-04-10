@@ -20,6 +20,8 @@ interface TaskData {
   reporterName: string;
   assigneeName: string;
   sprintName: string;
+  milestoneId?: number | null;
+  milestoneName?: string | null;
   labels: Array<{ id: number; name: string }>;
   createdAt: string;
   updatedAt: string;
@@ -71,6 +73,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
     priority: string;
     storyPoint: number;
     dueDate: string;
+    milestoneId: number | null;
   }>) => {
     if (!taskData) return;
     try {
@@ -146,6 +149,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
               />
               <TaskSidebar
                 taskId={taskData.id}
+                projectId={taskData.projectId}
                 status={taskData.status}
                 assignee={taskData.assigneeName}
                 reporter={taskData.reporterName}
@@ -153,6 +157,8 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                 priority={taskData.priority}
                 sprint={taskData.sprintName}
                 storyPoint={taskData.storyPoint}
+                milestoneId={taskData.milestoneId}
+                milestoneName={taskData.milestoneName}
                 dates={{
                   created: taskData.createdAt,
                   updated: taskData.updatedAt,
@@ -162,6 +168,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                 onUpdatePriority={(priority) => updateTask({ priority })}
                 onUpdateStoryPoint={(storyPoint) => updateTask({ storyPoint })}
                 onUpdateDueDate={(dueDate) => updateTask({ dueDate })}
+                onUpdateMilestone={(milestoneId) => updateTask({ milestoneId })}
                 onUnassign={async () => {
                   try {
                     await api.delete(`/api/tasks/${taskData.id}/assignee`);

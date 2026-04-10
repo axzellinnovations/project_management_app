@@ -22,6 +22,7 @@ import com.planora.backend.exception.ForbiddenException;
 import com.planora.backend.exception.ResourceNotFoundException;
 import com.planora.backend.model.Comment;
 import com.planora.backend.model.Label;
+import com.planora.backend.model.Milestone;
 import com.planora.backend.model.Priority;
 import com.planora.backend.model.Project;
 import com.planora.backend.model.Sprint;
@@ -33,6 +34,7 @@ import com.planora.backend.model.TeamRole;
 import com.planora.backend.model.User;
 import com.planora.backend.repository.CommentRepository;
 import com.planora.backend.repository.LabelRepository;
+import com.planora.backend.repository.MilestoneRepository;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.SprintRepository;
 import com.planora.backend.repository.TaskAccessRepository;
@@ -72,6 +74,9 @@ public class TaskService {
 
     @Autowired
     private TaskActivityService taskActivityService;
+
+    @Autowired
+    private MilestoneRepository milestoneRepository;
 
 
     // 1. CREATE TASK
@@ -196,6 +201,13 @@ public class TaskService {
             Sprint sprint = sprintRepository.findById(request.getSprintId())
                     .orElseThrow(()->new ResourceNotFoundException("Sprint not found"));
             task.setSprint(sprint);
+        }
+
+        // update milestone
+        if (request.getMilestoneId() != null) {
+            Milestone milestone = milestoneRepository.findById(request.getMilestoneId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+            task.setMilestone(milestone);
         }
 
         //update reporter
@@ -691,6 +703,11 @@ public class TaskService {
         if(task.getReporter() != null){
             dto.setReporterId(task.getReporter().getId());
             dto.setReporterName(task.getReporter().getUser().getUsername());
+        }
+
+        if (task.getMilestone() != null) {
+            dto.setMilestoneId(task.getMilestone().getId());
+            dto.setMilestoneName(task.getMilestone().getName());
         }
 
         // Map subtasks

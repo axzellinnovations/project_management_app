@@ -5,6 +5,7 @@ import BottomNav from './BottomNav';
 import TopBar from './TopBar';
 import { Suspense } from 'react';
 import { usePathname } from 'next/navigation';
+import CommandPalette from '@/components/ui/CommandPalette';
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -27,6 +28,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 </div>
             </div>
             <BottomNav />
+            <CommandPalette />
         </div>
     );
 }

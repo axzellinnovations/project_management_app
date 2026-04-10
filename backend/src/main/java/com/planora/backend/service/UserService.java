@@ -19,6 +19,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.planora.backend.dto.LoginResponse;
+import com.planora.backend.dto.UpdateProfileRequest;
 import com.planora.backend.model.User;
 import com.planora.backend.model.VerificationToken;
 import com.planora.backend.repository.TokenRepository;
@@ -315,6 +316,26 @@ public class UserService {
 
         user.setEmail(user.getEmail());
         user.setUsername(user.getUsername());
+
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public User updateUserProfile(String email, UpdateProfileRequest request) {
+        User user = userRepository.findByEmailIgnoreCase(email.toLowerCase())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (request.getFullName() != null && !request.getFullName().isBlank()) {
+            user.setFullName(request.getFullName());
+        }
+        if (request.getFirstName() != null) user.setFirstName(request.getFirstName());
+        if (request.getLastName() != null) user.setLastName(request.getLastName());
+        if (request.getContactNumber() != null) user.setContactNumber(request.getContactNumber());
+        if (request.getCountryCode() != null) user.setCountryCode(request.getCountryCode());
+        if (request.getJobTitle() != null) user.setJobTitle(request.getJobTitle());
+        if (request.getCompany() != null) user.setCompany(request.getCompany());
+        if (request.getPosition() != null) user.setPosition(request.getPosition());
+        if (request.getBio() != null) user.setBio(request.getBio());
 
         return userRepository.save(user);
     }

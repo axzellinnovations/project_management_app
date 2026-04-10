@@ -9,9 +9,9 @@ interface BulkActionBarProps {
   sprints: SprintItem[];
   onMoveToSprint: (sprintId: number) => void;
   onMoveToBacklog: () => void;
-  onBulkStatusChange: (status: string) => void;
-  onBulkDelete: () => void;
-  onClearSelection: () => void;
+  onStatusChange: (status: string) => void;
+  onDelete: () => void;
+  onClear: () => void;
 }
 
 const STATUS_OPTIONS = [
@@ -26,9 +26,9 @@ export default function BulkActionBar({
   sprints,
   onMoveToSprint,
   onMoveToBacklog,
-  onBulkStatusChange,
-  onBulkDelete,
-  onClearSelection,
+  onStatusChange,
+  onDelete,
+  onClear,
 }: BulkActionBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -105,7 +105,7 @@ export default function BulkActionBar({
               {STATUS_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
-                  onClick={() => { onBulkStatusChange(opt.value); setOpenMenu(null); }}
+                  onClick={() => { onStatusChange(opt.value); setOpenMenu(null); }}
                   className="flex w-full items-center px-3 py-2.5 text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB]"
                 >
                   {opt.label}
@@ -117,7 +117,7 @@ export default function BulkActionBar({
 
         {/* Delete */}
         <button
-          onClick={onBulkDelete}
+          onClick={onDelete}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold text-[#F04438] hover:bg-[#FEF3F2] transition-all"
         >
           <Trash2 size={14} />
@@ -127,7 +127,7 @@ export default function BulkActionBar({
         {/* Clear selection */}
         <div className="pl-2 border-l border-[#EAECF0]">
           <button
-            onClick={onClearSelection}
+            onClick={onClear}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-[#667085] hover:bg-[#F2F4F7] hover:text-[#344054] transition-all"
           >
             <X size={16} />
