@@ -13,7 +13,7 @@ CREATE TABLE task_templates (
     story_point   INT          NOT NULL DEFAULT 0,
     label_ids     TEXT,        -- JSON array of label IDs
     created_at    TIMESTAMP    NOT NULL DEFAULT now(),
-    created_by_id BIGINT       REFERENCES users(id) ON DELETE SET NULL
+    created_by_id BIGINT       REFERENCES users(user_id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_task_templates_project ON task_templates(project_id);
