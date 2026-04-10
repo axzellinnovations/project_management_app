@@ -22,7 +22,7 @@ const DateSection: React.FC<DateSectionProps> = ({ dates, onUpdateDueDate }) => 
               type="date"
               defaultValue={dates.dueDate ? dates.dueDate.substring(0, 10) : ''}
               onChange={(e) => { if (e.target.value) onUpdateDueDate(e.target.value); }}
-              className="text-sm text-gray-800 bg-gray-50 px-2 py-1 rounded border border-gray-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+              className="text-sm text-gray-800 bg-gray-50 px-2 py-1 min-h-[44px] sm:min-h-0 rounded border border-gray-200 focus:outline-none focus:border-blue-500 cursor-pointer"
             />
           ) : (
             <span className="text-sm text-gray-800 bg-gray-50 px-2 py-1 rounded border border-gray-100">

@@ -4,6 +4,7 @@ import Image from 'next/image';
 import api from '@/lib/axios';
 import { getUserFromToken } from '@/lib/auth';
 import ActivityFeed from './ActivityFeed';
+import CommentItem from './components/CommentItem';
 
 interface Comment {
   id: number;
@@ -158,36 +159,13 @@ const CommentSection: React.FC<CommentSectionProps> = ({ taskId }) => {
         <div className="mt-6">
           {comments.length > 0 ? (
             <div className="space-y-4">
-              {comments.map((comment) => {
-                const picUrl = usersMap[comment.authorName];
-                const resolvedPicUrl = resolveProfilePic(picUrl);
-
-                return (
-                  <div key={comment.id} className="flex gap-3 pb-4 border-b border-gray-100">
-                    <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden">
-                      {resolvedPicUrl ? (
-                         <Image 
-                           src={resolvedPicUrl} 
-                           alt={comment.authorName} 
-                           width={32} 
-                           height={32} 
-                           className="w-full h-full object-cover" 
-                           unoptimized 
-                         />
-                      ) : (
-                         comment.authorName.charAt(0).toUpperCase()
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-gray-800">{comment.authorName}</span>
-                        <span className="text-xs text-gray-500">{new Date(comment.createdAt).toLocaleString()}</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">{comment.text}</p>
-                    </div>
-                  </div>
-                );
-              })}
+              {comments.map((comment) => (
+                <CommentItem
+                  key={comment.id}
+                  comment={comment}
+                  resolvedPicUrl={resolveProfilePic(usersMap[comment.authorName])}
+                />
+              ))}
             </div>
           ) : (
             <div className="mt-6 text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-200">
