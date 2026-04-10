@@ -50,7 +50,7 @@ export function usePages(projectId: string | number | null): UsePagesReturn {
 
     const cacheKey = `planora:pages:${projectId}`;
     // Serve stale data instantly
-    const cached = sessionStorage.getItem(cacheKey);
+    const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try {
         setPages(JSON.parse(cached) as PageItem[]);
@@ -67,7 +67,7 @@ export function usePages(projectId: string | number | null): UsePagesReturn {
         isStarred: false, // TODO: sync with backend when implemented
       }));
       setPages(pagesData);
-      sessionStorage.setItem(cacheKey, JSON.stringify(pagesData));
+      localStorage.setItem(cacheKey, JSON.stringify(pagesData));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const message = err.response?.data?.message || 'Failed to fetch pages';

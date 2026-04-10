@@ -44,7 +44,7 @@ function TaskPageContent() {
     if (!taskId) return;
     const cacheKey = `planora:task:${taskId}`;
     // Serve from cache immediately
-    const cached = sessionStorage.getItem(cacheKey);
+    const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try {
         setTaskData(JSON.parse(cached) as TaskData);
@@ -54,7 +54,7 @@ function TaskPageContent() {
     try {
       const response = await api.get(`/api/tasks/${taskId}`);
       setTaskData(response.data);
-      sessionStorage.setItem(cacheKey, JSON.stringify(response.data));
+      localStorage.setItem(cacheKey, JSON.stringify(response.data));
       setError(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
@@ -93,7 +93,7 @@ function TaskPageContent() {
     try {
       await api.put(`/api/tasks/${taskId}`, updates);
       // Invalidate cache and refresh
-      sessionStorage.removeItem(`planora:task:${taskId}`);
+      localStorage.removeItem(`planora:task:${taskId}`);
       await fetchTaskData();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {

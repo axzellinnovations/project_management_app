@@ -24,7 +24,7 @@ export function useListTasks() {
   const loadTasks = useCallback(async () => {
     if (!projectId || !cacheKey) return;
     // Serve stale data instantly
-    const cached = sessionStorage.getItem(cacheKey);
+    const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try {
         setTasks(JSON.parse(cached) as Task[]);
@@ -35,7 +35,7 @@ export function useListTasks() {
     try {
       const data = await fetchTasksByProject(projectId);
       setTasks(data as Task[]);
-      sessionStorage.setItem(cacheKey, JSON.stringify(data));
+      localStorage.setItem(cacheKey, JSON.stringify(data));
     } catch {
       if (!cached) setError('Failed to load tasks');
     } finally {
@@ -56,13 +56,13 @@ export function useListTasks() {
   const handleStatusChange = useCallback(async (taskId: number, newStatus: string) => {
     setTasks((prev) => {
       const next = prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t);
-      if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
       return next;
     });
     try {
       await api.put(`/api/tasks/${taskId}`, { status: newStatus });
     } catch {
-      if (cacheKey) sessionStorage.removeItem(cacheKey);
+      if (cacheKey) localStorage.removeItem(cacheKey);
       void loadTasks();
     }
   }, [loadTasks, cacheKey]);
@@ -70,13 +70,13 @@ export function useListTasks() {
   const handleDelete = useCallback(async (taskId: number) => {
     setTasks((prev) => {
       const next = prev.filter((t) => t.id !== taskId);
-      if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
       return next;
     });
     try {
       await api.delete(`/api/tasks/${taskId}`);
     } catch {
-      if (cacheKey) sessionStorage.removeItem(cacheKey);
+      if (cacheKey) localStorage.removeItem(cacheKey);
       void loadTasks();
     }
   }, [loadTasks, cacheKey]);
@@ -95,7 +95,7 @@ export function useListTasks() {
       });
       setTasks((prev) => {
         const next = [...prev, res.data as Task];
-        if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+        if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
         return next;
       });
     } catch (err) {

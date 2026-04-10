@@ -25,7 +25,7 @@ export default function MilestonesPage() {
   const loadMilestones = useCallback(async () => {
     if (!projectId || !cacheKey) return;
     // Serve from cache immediately
-    const cached = sessionStorage.getItem(cacheKey);
+    const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try {
         setMilestones(JSON.parse(cached) as MilestoneResponse[]);
@@ -36,7 +36,7 @@ export default function MilestonesPage() {
     try {
       const data = await getMilestones(projectId);
       setMilestones(data);
-      sessionStorage.setItem(cacheKey, JSON.stringify(data));
+      localStorage.setItem(cacheKey, JSON.stringify(data));
       setError(null);
     } catch {
       if (!cached) setError('Failed to load milestones');
@@ -48,7 +48,7 @@ export default function MilestonesPage() {
   useEffect(() => { void loadMilestones(); }, [loadMilestones]);
 
   const invalidateCache = useCallback(() => {
-    if (cacheKey) sessionStorage.removeItem(cacheKey);
+    if (cacheKey) localStorage.removeItem(cacheKey);
   }, [cacheKey]);
 
   const handleCreate = async (data: { name: string; description: string; dueDate: string; status: MilestoneStatus }) => {
@@ -62,7 +62,7 @@ export default function MilestonesPage() {
       });
       setMilestones((prev) => {
         const next = [created, ...prev];
-        if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+        if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
         return next;
       });
       setShowCreate(false);
@@ -82,7 +82,7 @@ export default function MilestonesPage() {
       });
       setMilestones((prev) => {
         const next = prev.map((m) => m.id === updated.id ? updated : m);
-        if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+        if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
         return next;
       });
       setEditing(null);
@@ -97,7 +97,7 @@ export default function MilestonesPage() {
       await deleteMilestone(id);
       setMilestones((prev) => {
         const next = prev.filter((m) => m.id !== id);
-        if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+        if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
         return next;
       });
     } catch {
@@ -110,7 +110,7 @@ export default function MilestonesPage() {
     if (!m) return;
     setMilestones((prev) => {
       const next = prev.map((x) => x.id === id ? { ...x, status } : x);
-      if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify(next));
+      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
       return next;
     });
     try {
