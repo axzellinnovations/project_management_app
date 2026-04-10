@@ -50,7 +50,7 @@ export interface Assignee {
 export interface Label {
   id: number;
   name: string;
-  color: string;
+  color?: string;
 }
 
 export interface Subtask {
