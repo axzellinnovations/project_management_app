@@ -16,12 +16,38 @@ type MembersCacheEntry = {
   data: Record<number, string | null>;
 };
 
+type TaskEventPatch = {
+  id: number;
+  title: string;
+  storyPoint: number;
+  status: string;
+  priority: string;
+  sprintId: number | null;
+  assigneeName: string | null;
+  assigneePhotoUrl: string | null;
+  startDate: string | null;
+  dueDate: string | null;
+};
+
 const isHttpUrl = (value: string | null | undefined): value is string =>
   Boolean(value && (value.startsWith('http://') || value.startsWith('https://')));
 
 const sanitizeTaskPhoto = (task: Task): Task => ({
   ...task,
   assigneePhotoUrl: isHttpUrl(task.assigneePhotoUrl) ? task.assigneePhotoUrl : undefined,
+});
+
+const normalizeTaskPatch = (patch: TaskEventPatch): Partial<Task> => ({
+  id: patch.id,
+  title: patch.title,
+  storyPoint: patch.storyPoint,
+  status: patch.status,
+  priority: patch.priority,
+  sprintId: patch.sprintId ?? undefined,
+  assigneeName: patch.assigneeName ?? undefined,
+  assigneePhotoUrl: isHttpUrl(patch.assigneePhotoUrl) ? patch.assigneePhotoUrl : undefined,
+  startDate: patch.startDate ?? undefined,
+  dueDate: patch.dueDate ?? undefined,
 });
 
 export function useListTasks() {
@@ -117,14 +143,13 @@ export function useListTasks() {
     } else if (event.type === 'TASK_UPDATED' && event.task) {
       // Merge partial fields — no API call needed
       setTasks((prev) => {
+        const taskPatch = normalizeTaskPatch(event.task as TaskEventPatch);
         const next = prev.map((t) =>
           t.id === event.task!.id
             ? sanitizeTaskPhoto({
                 ...t,
-                ...event.task,
-                assigneePhotoUrl: isHttpUrl(event.task?.assigneePhotoUrl)
-                  ? event.task.assigneePhotoUrl
-                  : t.assigneePhotoUrl,
+                ...taskPatch,
+                assigneePhotoUrl: taskPatch.assigneePhotoUrl ?? t.assigneePhotoUrl,
               })
             : t
         );
