@@ -788,7 +788,7 @@ export default function SprintBacklogPage() {
           isOpen={showCreateTaskModal}
           onClose={() => setShowCreateTaskModal(false)}
           onCreateTask={createTask}
-          projectId={projectId!}
+          projectId={Number(projectId!)}
         />
       )}
 
