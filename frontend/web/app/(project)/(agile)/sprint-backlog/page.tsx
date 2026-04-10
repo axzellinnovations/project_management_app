@@ -18,6 +18,7 @@ import { getProjectLabels, createLabel } from '@/services/labels-service';
 import type { TaskItem, SprintItem, Label } from '@/types';
 import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
 import CreateTaskModal, { type CreateTaskData } from '@/components/shared/CreateTaskModal';
+import { useTaskStore } from '@/stores/task-store';
 
 type RawTask = {
   id: number;
@@ -36,8 +37,12 @@ export default function SprintBacklogPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const projectId = searchParams.get('projectId');
+  const projectIdNum = projectId ? Number(projectId) : null;
 
-  const [loading, setLoading] = useState(true);
+  const cachedTasks       = useTaskStore((s) => (projectIdNum ? s.tasksByProject[projectIdNum] : undefined));
+  const setTasksForProject = useTaskStore((s) => s.setTasksForProject);
+
+  const [loading, setLoading] = useState(!cachedTasks);
   const [error, setError] = useState<string | null>(null);
   const [productTasks, setProductTasks] = useState<TaskItem[]>([]);
   const [sprints, setSprints] = useState<SprintItem[]>([]);
@@ -141,6 +146,12 @@ export default function SprintBacklogPage() {
 
         const mappedTasks = rawTasks.map((t, i) => mapRawTask(t, i));
 
+        // Update global task cache for stale-while-revalidate on next visit
+        if (projectIdNum) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setTasksForProject(projectIdNum, rawTasks as any);
+        }
+
         const backlogTasks = mappedTasks.filter((t) => !t.sprintId);
 
         const sprintTaskMap = new Map<number, TaskItem[]>();
@@ -162,19 +173,18 @@ export default function SprintBacklogPage() {
           tasks: sprintTaskMap.get(s.id) ?? []
         })));
 
-        // Fetch active sprint board columns for custom status support
+        // Fetch board columns in background — non-blocking so it doesn't delay render
         const activeSprint = rawSprints.find((s: { status: string }) => s.status === 'ACTIVE');
         if (activeSprint) {
-          try {
-            const boardRes = await api.get(`/api/sprintboards/sprint/${activeSprint.id}`);
-            const defaultStatuses = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
-            const extra = (boardRes.data.columns ?? [])
-              .filter((c: { columnStatus: string; columnName: string }) => !defaultStatuses.includes(c.columnStatus))
-              .map((c: { columnStatus: string; columnName: string }) => ({ value: c.columnStatus, label: c.columnName }));
-            setActiveBoardStatuses(extra);
-          } catch {
-            // silent — no custom statuses
-          }
+          api.get(`/api/sprintboards/sprint/${activeSprint.id}`)
+            .then((boardRes) => {
+              const defaultStatuses = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
+              const extra = (boardRes.data.columns ?? [])
+                .filter((c: { columnStatus: string; columnName: string }) => !defaultStatuses.includes(c.columnStatus))
+                .map((c: { columnStatus: string; columnName: string }) => ({ value: c.columnStatus, label: c.columnName }));
+              setActiveBoardStatuses(extra);
+            })
+            .catch(() => { /* silent — no custom statuses */ });
         }
         setProductTasks(backlogTasks);
         setError(null);
