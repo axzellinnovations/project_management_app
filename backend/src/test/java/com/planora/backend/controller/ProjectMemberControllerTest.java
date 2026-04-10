@@ -14,6 +14,7 @@ import com.planora.backend.repository.TeamInvitationRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.service.TeamMemberService;
 import com.planora.backend.service.JWTService;
+import com.planora.backend.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -53,6 +55,8 @@ class ProjectMemberControllerTest {
     private TaskRepository taskRepository;
     @MockBean
     private TeamMemberService teamMemberService;
+    @MockBean
+    private UserService userService;
     @MockBean
     private JWTService jwtService;
     @MockBean
@@ -80,6 +84,8 @@ class ProjectMemberControllerTest {
         principal = new UserPrincipal(user);
 
         when(projectRepository.findById(8L)).thenReturn(Optional.of(project));
+        when(userService.generatePresignedUrl(nullable(String.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
