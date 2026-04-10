@@ -129,11 +129,25 @@ public class TaskService {
             task.setAssignee(validateTeamMember(teamId, request.getAssigneeId()));
         }
 
+        // handle multiple assignees (V4)
+        if (request.getAssigneeIds() != null && !request.getAssigneeIds().isEmpty()) {
+            for (Long aid : request.getAssigneeIds()) {
+                task.getAssignees().add(validateTeamMember(teamId, aid));
+            }
+        }
+
         //default reporter is the creator
         task.setReporter(validateTeamMember(teamId, currentUserId));
 
         // Set last modified by
         task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+
+        // Recurring task fields (V7)
+        if (request.getRecurrenceRule() != null) {
+            task.setRecurrenceRule(request.getRecurrenceRule());
+            task.setRecurrenceEnd(request.getRecurrenceEnd());
+            task.setNextOccurrence(computeNextOccurrence(task.getDueDate(), request.getRecurrenceRule()));
+        }
 
         Task savedTask = taskRepository.save(task);
 
@@ -215,6 +229,21 @@ public class TaskService {
         if(request.getReporterId() != null){
             TeamMember newReporter= validateTeamMember(teamId, request.getReporterId());
             task.setReporter(newReporter);
+        }
+
+        // update multiple assignees (V4)
+        if (request.getAssigneeIds() != null) {
+            task.getAssignees().clear();
+            for (Long aid : request.getAssigneeIds()) {
+                task.getAssignees().add(validateTeamMember(teamId, aid));
+            }
+        }
+
+        // update recurrence (V7)
+        if (request.getRecurrenceRule() != null) {
+            task.setRecurrenceRule(request.getRecurrenceRule());
+            task.setRecurrenceEnd(request.getRecurrenceEnd());
+            task.setNextOccurrence(computeNextOccurrence(task.getDueDate(), request.getRecurrenceRule()));
         }
 
         task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
@@ -690,6 +719,17 @@ public class TaskService {
             dto.setAssigneePhotoUrl(task.getAssignee().getUser().getProfilePicUrl());
         }
 
+        // Map multiple assignees (V4)
+        if (task.getAssignees() != null) {
+            dto.setAssignees(task.getAssignees().stream()
+                .map(m -> new TaskResponseDTO.AssigneeDTO(
+                    m.getId(),
+                    m.getUser().getUserId(),
+                    m.getUser().getUsername(),
+                    m.getUser().getProfilePicUrl()))
+                .collect(Collectors.toList()));
+        }
+
         if(task.getReporter() != null){
             dto.setReporterId(task.getReporter().getId());
             dto.setReporterName(task.getReporter().getUser().getUsername());
@@ -730,6 +770,27 @@ public class TaskService {
                 .collect(Collectors.toList()));
         }
 
+        // Map recurrence fields (V7)
+        dto.setRecurrenceRule(task.getRecurrenceRule());
+        dto.setRecurrenceEnd(task.getRecurrenceEnd());
+        dto.setNextOccurrence(task.getNextOccurrence());
+        if (task.getRecurrenceParent() != null) {
+            dto.setRecurrenceParentId(task.getRecurrenceParent().getId());
+        }
+
         return dto;
+    }
+
+    /** Compute the next occurrence date after today based on recurrence rule. */
+    private LocalDate computeNextOccurrence(LocalDate base, String rule) {
+        LocalDate from = (base != null && base.isAfter(LocalDate.now())) ? base : LocalDate.now();
+        if (rule == null) return null;
+        return switch (rule.toUpperCase()) {
+            case "DAILY"   -> from.plusDays(1);
+            case "WEEKLY"  -> from.plusWeeks(1);
+            case "MONTHLY" -> from.plusMonths(1);
+            case "YEARLY"  -> from.plusYears(1);
+            default        -> null;
+        };
     }
 }

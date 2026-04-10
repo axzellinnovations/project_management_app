@@ -4,8 +4,10 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +58,10 @@ public class UserService {
 
     @Value("${aws.region}")
     private String region;
+
+    /** In-memory presigned URL cache: S3 key → (url, expiry). TTL = 55 min (URLs expire at 60 min). */
+    private final Map<String, Object[]> presignedUrlCache = new ConcurrentHashMap<>();
+    private static final Duration PRESIGN_TTL = Duration.ofMinutes(55);
 
     public UserService(UserRepository userRepository, JWTService jwtService, AuthenticationManager authenticationManager, TokenRepository tokenRepository, EmailService emailService, S3Client s3Client, S3Presigner s3Presigner) {
         this.userRepository = userRepository;
@@ -145,6 +151,10 @@ public class UserService {
                 User authenticatedUser = userRepository.findByEmailIgnoreCase(user.getEmail().toLowerCase()).orElse(null);
                 String accessToken  = jwtService.generateToken(user.getEmail().toLowerCase(), authenticatedUser.getUsername());
                 String refreshToken = jwtService.generateRefreshToken(user.getEmail().toLowerCase());
+
+                // Store the JTI of the new refresh token for rotation tracking
+                storeRefreshTokenJti(authenticatedUser, refreshToken);
+
                 LoginResponse response = new LoginResponse();
                 response.setSuccess(true);
                 response.setMessage("Login successful");
@@ -181,8 +191,37 @@ public class UserService {
             if (user == null || !user.isVerified()) {
                 return null;
             }
+
+            // Verify this specific refresh token's JTI was issued and not yet used
+            String jti = jwtService.extractJti(refreshToken);
+            if (jti == null) {
+                logger.warn("Refresh token missing JTI claim for user: {}", email);
+                return null;
+            }
+
+            VerificationToken storedToken = tokenRepository.findByUserAndTokenType(user, VerificationToken.TokenType.REFRESH_TOKEN);
+            if (storedToken == null || storedToken.isUsed() || storedToken.isExpired()) {
+                logger.warn("Refresh token JTI not found or already used for user: {}", email);
+                return null;
+            }
+            if (!jti.equals(storedToken.getToken())) {
+                logger.warn("Refresh token JTI mismatch for user: {} — possible token reuse attack", email);
+                // Invalidate all refresh tokens for this user as a security measure
+                tokenRepository.delete(storedToken);
+                return null;
+            }
+
+            // Invalidate the used refresh token
+            storedToken.setUsed(true);
+            tokenRepository.save(storedToken);
+
+            // Issue new tokens
             String newAccessToken  = jwtService.generateToken(email, user.getUsername());
             String newRefreshToken = jwtService.generateRefreshToken(email);
+
+            // Store the new refresh token JTI
+            storeRefreshTokenJti(user, newRefreshToken);
+
             LoginResponse response = new LoginResponse();
             response.setSuccess(true);
             response.setMessage("Token refreshed");
@@ -193,6 +232,30 @@ public class UserService {
             logger.warn("Refresh token validation failed: {}", e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Stores the JTI of the given refresh token for the user, replacing any existing refresh token record.
+     * The JTI is a UUID extracted from the JWT claims — short enough to store in the token column.
+     */
+    private void storeRefreshTokenJti(User user, String refreshToken) {
+        String jti = jwtService.extractJti(refreshToken);
+        if (jti == null) return;
+
+        // Remove existing REFRESH_TOKEN record for this user (unique constraint: one per user per type)
+        VerificationToken existing = tokenRepository.findByUserAndTokenType(user, VerificationToken.TokenType.REFRESH_TOKEN);
+        if (existing != null) {
+            tokenRepository.delete(existing);
+            tokenRepository.flush();
+        }
+
+        VerificationToken jtiRecord = new VerificationToken();
+        jtiRecord.setUser(user);
+        jtiRecord.setToken(jti);
+        jtiRecord.setTokenType(VerificationToken.TokenType.REFRESH_TOKEN);
+        jtiRecord.setExpiry(java.time.Instant.now().plus(java.time.Duration.ofDays(7)));
+        jtiRecord.setUsed(false);
+        tokenRepository.save(jtiRecord);
     }
 
     @Transactional
@@ -423,7 +486,7 @@ public class UserService {
     /**
      * Generates a presigned S3 URL valid for 60 minutes.
      * Accepts either a raw S3 object key or a legacy full S3 URL for backward compatibility.
-     * Returns null/empty for null/empty input.
+     * Returns null/empty for null/empty input. Results are cached for 55 minutes.
      */
     public String generatePresignedUrl(String stored) {
         if (stored == null || stored.isEmpty()) {
@@ -431,6 +494,16 @@ public class UserService {
         }
 
         String key = extractKeyFromStoredValue(stored);
+
+        // Check cache first
+        Object[] cached = presignedUrlCache.get(key);
+        if (cached != null) {
+            Instant expiry = (Instant) cached[1];
+            if (Instant.now().isBefore(expiry)) {
+                return (String) cached[0];
+            }
+            presignedUrlCache.remove(key);
+        }
 
         try {
             GetObjectRequest getObjectRequest = GetObjectRequest.builder()
@@ -443,7 +516,9 @@ public class UserService {
                     .getObjectRequest(getObjectRequest)
                     .build();
 
-            return s3Presigner.presignGetObject(presignRequest).url().toString();
+            String url = s3Presigner.presignGetObject(presignRequest).url().toString();
+            presignedUrlCache.put(key, new Object[]{url, Instant.now().plus(PRESIGN_TTL)});
+            return url;
         } catch (Exception e) {
             logger.error("Failed to generate presigned URL for key={}: {}", key, e.getMessage());
             return null;

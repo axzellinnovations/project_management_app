@@ -54,6 +54,7 @@ public class VerificationToken {
 
     public enum TokenType {
         VERIFICATION,
-        PASSWORD_RESET
+        PASSWORD_RESET,
+        REFRESH_TOKEN
     }
 }
