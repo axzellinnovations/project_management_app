@@ -21,6 +21,7 @@ const TaskRow = React.memo(function TaskRow({
   const [menuOpen, setMenuOpen] = useState(false);
   const statusRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const assigneePhotoUrl = task.assigneePhotoUrl?.startsWith('http') ? task.assigneePhotoUrl : null;
 
   const sConf = STATUS_CONFIG[task.status] ?? STATUS_CONFIG.TODO;
   const pConf = task.priority ? PRIORITY_CONFIG[task.priority] : null;
@@ -89,11 +90,20 @@ const TaskRow = React.memo(function TaskRow({
       <div className="w-28 shrink-0 hidden md:flex items-center gap-1.5 overflow-hidden">
         {task.assigneeName ? (
           <>
-            <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold overflow-hidden shrink-0">
-              {task.assigneePhotoUrl
+            <div className="relative w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-[10px] font-bold overflow-hidden shrink-0">
+              <span>{task.assigneeName.charAt(0).toUpperCase()}</span>
+              {assigneePhotoUrl
                 // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={task.assigneePhotoUrl} alt={task.assigneeName} className="w-full h-full object-cover" />
-                : task.assigneeName.charAt(0).toUpperCase()
+                ? <img
+                    key={assigneePhotoUrl}
+                    src={assigneePhotoUrl}
+                    alt={task.assigneeName}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    onError={(event) => {
+                      event.currentTarget.style.display = 'none';
+                    }}
+                  />
+                : null
               }
             </div>
             <span className="text-[11px] text-[#374151] truncate">{task.assigneeName}</span>

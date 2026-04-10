@@ -68,6 +68,14 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
   };
 
   useEffect(() => {
+    // Serve from localStorage cache instantly, then revalidate
+    const cached = localStorage.getItem(`planora:task:${taskId}`);
+    if (cached) {
+      try {
+        setTaskData(JSON.parse(cached) as TaskData);
+        setLoading(false);
+      } catch { /* ignore */ }
+    }
     fetchTaskData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
@@ -90,10 +98,15 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
     recurrenceEnd: string | null;
   }>) => {
     if (!taskData) return;
+    // Optimistic update — apply immediately so the UI feels instant
+    setTaskData((prev) => prev ? { ...prev, ...updates } : prev);
     try {
       await api.put(`/api/tasks/${taskId}`, updates);
-      await fetchTaskData();
+      // Bust the taskcard page cache so standalone page shows fresh data
+      localStorage.removeItem(`planora:task:${taskId}`);
     } catch (err: unknown) {
+      // Revert by re-fetching actual server state
+      await fetchTaskData();
       const axiosErr = err as { response?: { data?: { message?: string } } };
       toast('Failed to update task: ' + (axiosErr?.response?.data?.message || 'Unknown error'), 'error');
     }

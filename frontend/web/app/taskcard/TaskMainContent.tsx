@@ -62,7 +62,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-5 md:p-8 border-r border-gray-100 scrollbar-thin scrollbar-thumb-gray-200 min-h-0">
+    <div className="flex-1 overflow-y-auto p-5 md:p-6 border-r border-[#EAECF0] scrollbar-thin scrollbar-thumb-[#E5E7EB] min-h-0">
       
       {/* Title */}
       <div className="group mb-6">
@@ -80,12 +80,12 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
               }
             }}
             autoFocus
-            className="w-full text-2xl font-semibold text-gray-900 bg-white border-2 border-blue-500 rounded px-2 py-1 focus:outline-none"
+            className="w-full text-[22px] font-bold text-[#101828] bg-white border-2 border-[#155DFC] rounded-lg px-2 py-1 focus:outline-none font-outfit tracking-tight"
           />
         ) : (
           <h1 
             onClick={() => setIsEditingTitle(true)}
-            className="text-2xl font-semibold text-gray-900 hover:bg-gray-50 p-1 rounded -ml-1 cursor-text transition-colors"
+            className="text-[22px] font-bold text-[#101828] tracking-tight hover:bg-[#F8FAFF] px-2 py-1 rounded-lg -ml-2 cursor-text transition-colors font-outfit"
           >
             {title}
           </h1>
