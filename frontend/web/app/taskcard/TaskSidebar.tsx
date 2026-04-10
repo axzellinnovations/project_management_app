@@ -56,51 +56,51 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
   onUpdateStatus, onUpdatePriority, onUpdateStoryPoint, onUpdateDueDate, onUpdateMilestone,
   onUpdateRecurrence, onUnassign, onAssigneesChanged,
 }) => (
-  <div className="w-full md:w-80 bg-gray-50/50 p-5 overflow-y-auto border-t md:border-t-0 md:border-l border-gray-100 flex-shrink-0 scrollbar-thin min-h-0">
-    <StatusSection status={status} onUpdateStatus={onUpdateStatus} />
-    <div className="border rounded-md border-gray-200 bg-white mb-6 shadow-sm">
-      <div className="px-4 py-3 border-b border-gray-100 font-semibold text-sm text-gray-700">Details</div>
-      <div className="p-4 space-y-5">
-        {/* Legacy single assignee (shown only when no multi-assignees) */}
-        {(!assignees || assignees.length === 0) && (
-          <AssigneeSection assignee={assignee} onUnassign={onUnassign} />
-        )}
-        {/* Multiple assignees */}
-        {taskId != null && (
-          <MultiAssigneeSection
-            taskId={taskId}
+  <div className="w-full md:w-72 bg-[#F7F8FA] border-t md:border-t-0 md:border-l border-[#EAECF0] flex-shrink-0 overflow-y-auto scrollbar-thin min-h-0">
+    <div className="p-4 space-y-4">
+      <StatusSection status={status} onUpdateStatus={onUpdateStatus} />
+      <div className="border border-[#E5E7EB] rounded-xl bg-white shadow-sm overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-[#F2F4F7] text-[10px] font-bold text-[#6A7282] uppercase tracking-wider">Details</div>
+        <div className="p-4 space-y-4">
+          {(!assignees || assignees.length === 0) && (
+            <AssigneeSection assignee={assignee} onUnassign={onUnassign} />
+          )}
+          {taskId != null && (
+            <MultiAssigneeSection
+              taskId={taskId}
+              projectId={projectId}
+              assignees={assignees ?? []}
+              onChanged={onAssigneesChanged ?? (() => {})}
+            />
+          )}
+          <ReporterSection reporter={reporter} />
+          <LabelSection labels={labels} />
+          <SprintSection sprint={sprint} />
+          <MilestoneSection
             projectId={projectId}
-            assignees={assignees ?? []}
-            onChanged={onAssigneesChanged ?? (() => {})}
+            milestoneId={milestoneId}
+            milestoneName={milestoneName}
+            onUpdateMilestone={onUpdateMilestone}
           />
-        )}
-        <ReporterSection reporter={reporter} />
-        <LabelSection labels={labels} />
-        <SprintSection sprint={sprint} />
-        <MilestoneSection
-          projectId={projectId}
-          milestoneId={milestoneId}
-          milestoneName={milestoneName}
-          onUpdateMilestone={onUpdateMilestone}
-        />
-        <StoryPointSection storyPoint={storyPoint} onUpdateStoryPoint={onUpdateStoryPoint} />
-        <PrioritySection priority={priority} onUpdatePriority={onUpdatePriority} />
-        {onUpdateRecurrence && (
-          <RecurrenceSection
-            recurrenceRule={recurrenceRule}
-            recurrenceEnd={recurrenceEnd}
-            onUpdate={onUpdateRecurrence}
-          />
-        )}
+          <StoryPointSection storyPoint={storyPoint} onUpdateStoryPoint={onUpdateStoryPoint} />
+          <PrioritySection priority={priority} onUpdatePriority={onUpdatePriority} />
+          {onUpdateRecurrence && (
+            <RecurrenceSection
+              recurrenceRule={recurrenceRule}
+              recurrenceEnd={recurrenceEnd}
+              onUpdate={onUpdateRecurrence}
+            />
+          )}
+        </div>
       </div>
-    </div>
-    <DateSection dates={dates} onUpdateDueDate={onUpdateDueDate} />
-    {taskId != null && projectId != null && (
-      <CustomFieldsSection taskId={taskId} projectId={projectId} />
-    )}
-    <div className="mt-8 text-xs text-gray-400 flex justify-between px-1">
-      <button className="hover:text-gray-600">Configure fields</button>
-      <button className="hover:text-gray-600">Plain Text</button>
+      <DateSection dates={dates} onUpdateDueDate={onUpdateDueDate} />
+      {taskId != null && projectId != null && (
+        <CustomFieldsSection taskId={taskId} projectId={projectId} />
+      )}
+      <div className="text-[10px] text-[#9CA3AF] flex justify-between px-1 pb-2">
+        <button className="hover:text-[#374151] transition-colors">Configure fields</button>
+        <button className="hover:text-[#374151] transition-colors">Plain Text</button>
+      </div>
     </div>
   </div>
 );

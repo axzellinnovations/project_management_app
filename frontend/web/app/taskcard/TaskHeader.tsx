@@ -49,12 +49,12 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({ project, taskId, numericTaskId,
   };
 
   return (
-    <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100 bg-white sticky top-0 z-10 flex-shrink-0">
-      <div className="flex items-center gap-2 text-sm text-gray-500 min-w-0">
-        <Layout size={15} className="text-blue-600 flex-shrink-0" />
-        <span className="font-medium text-gray-700 truncate">{project}</span>
-        <span className="flex-shrink-0">/</span>
-        <span className="text-gray-900 font-medium flex-shrink-0">{taskId}</span>
+    <div className="px-4 py-3 flex items-center justify-between border-b border-[#EAECF0] bg-white sticky top-0 z-10 flex-shrink-0">
+      <div className="flex items-center gap-2 text-sm min-w-0">
+        <Layout size={15} className="text-[#155DFC] flex-shrink-0" />
+        <span className="font-medium text-[#6A7282] truncate">{project}</span>
+        <span className="flex-shrink-0 text-[#9CA3AF]">/</span>
+        <span className="text-[#101828] font-semibold flex-shrink-0">{taskId}</span>
       </div>
 
       <div className="flex items-center gap-1 flex-shrink-0">
@@ -89,7 +89,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({ project, taskId, numericTaskId,
         <button
           onClick={handleCopyLink}
           title="Copy link"
-          className="p-2 hover:bg-gray-100 rounded flex items-center gap-1.5 text-gray-500 text-xs transition-colors"
+          className="p-2 hover:bg-[#F8FAFF] rounded-lg flex items-center gap-1.5 text-[#6A7282] hover:text-[#155DFC] text-xs transition-colors"
         >
           {copied ? <Check size={15} className="text-green-500" /> : <Link2 size={15} />}
           <span className="hidden sm:inline">{copied ? 'Copied!' : 'Copy link'}</span>
@@ -97,7 +97,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({ project, taskId, numericTaskId,
         <div className="relative">
           <button
             onClick={() => setDropdownOpen((v) => !v)}
-            className="p-2 hover:bg-gray-100 rounded text-gray-500 transition-colors"
+            className="p-2 hover:bg-[#F8FAFF] rounded-lg text-[#6A7282] hover:text-[#155DFC] transition-colors"
             title="More options"
           >
             <MoreHorizontal size={18} />
@@ -105,10 +105,10 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({ project, taskId, numericTaskId,
           {dropdownOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setDropdownOpen(false)} />
-              <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-gray-200 rounded-md shadow-lg z-20 py-1">
+              <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-[#E5E7EB] rounded-xl shadow-lg z-20 py-1">
                 <button
                   onClick={openTemplateInput}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[#374151] hover:bg-[#F8FAFF] transition-colors"
                 >
                   <FileText size={15} className="text-gray-400" />
                   Save as Template
@@ -119,7 +119,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({ project, taskId, numericTaskId,
         </div>
         <button
           onClick={onClose}
-          className="p-2 hover:bg-gray-100 rounded text-gray-500 transition-colors"
+          className="p-2 hover:bg-[#FFF0F0] rounded-lg text-[#6A7282] hover:text-red-500 transition-colors"
           title="Close"
         >
           <X size={18} />

@@ -89,8 +89,8 @@ const TaskRow = React.memo(function TaskRow({
       <div className="w-28 shrink-0 hidden md:flex items-center gap-1.5 overflow-hidden">
         {task.assigneeName ? (
           <>
-            <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold overflow-hidden shrink-0">
-              {task.assigneePhotoUrl
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-[10px] font-bold overflow-hidden shrink-0">
+              {task.assigneePhotoUrl?.startsWith('http')
                 // eslint-disable-next-line @next/next/no-img-element
                 ? <img src={task.assigneePhotoUrl} alt={task.assigneeName} className="w-full h-full object-cover" />
                 : task.assigneeName.charAt(0).toUpperCase()
