@@ -12,7 +12,7 @@ import java.util.*;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@ToString(exclude = {"project", "sprint", "kanbanColumn", "assignee", "reporter", "parentTask", "subTasks", "labels", "comments", "dependencies", "dependents", "attachments"}) // Prevent infinite loops in logs
+@ToString(exclude = {"project", "sprint", "kanbanColumn", "assignee", "assignees", "reporter", "parentTask", "subTasks", "labels", "comments", "dependencies", "dependents", "attachments"}) // Prevent infinite loops in logs
 @Table(name = "tasks")
 public class Task {
     @Id
@@ -40,6 +40,14 @@ public class Task {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assignee_id")
     private TeamMember assignee;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "task_assignees",
+            joinColumns = @JoinColumn(name = "task_id"),
+            inverseJoinColumns = @JoinColumn(name = "member_id")
+    )
+    private Set<TeamMember> assignees = new HashSet<>();
 
     @Enumerated(EnumType.STRING)
     private Priority priority;
@@ -106,6 +114,20 @@ public class Task {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "milestone_id")
     private Milestone milestone;
+
+    // Recurring task fields (V7 migration)
+    @Column(name = "recurrence_rule")
+    private String recurrenceRule;   // DAILY | WEEKLY | MONTHLY | YEARLY
+
+    @Column(name = "recurrence_end")
+    private LocalDate recurrenceEnd;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "recurrence_parent_id")
+    private Task recurrenceParent;
+
+    @Column(name = "next_occurrence")
+    private LocalDate nextOccurrence;
 
     @Override
     public boolean equals(Object o) {
