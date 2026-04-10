@@ -23,9 +23,20 @@ export default function CreateSprintModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const nameInputRef = React.useRef<HTMLInputElement>(null);
+
   // Sync default name when modal opens
   React.useEffect(() => {
-    if (isOpen) setName(defaultName);
+    if (isOpen) {
+      setName(defaultName);
+      // Use a small timeout to ensure the input is rendered and focused
+      setTimeout(() => {
+        if (nameInputRef.current) {
+          nameInputRef.current.focus();
+          nameInputRef.current.setSelectionRange(defaultName.length, defaultName.length);
+        }
+      }, 50);
+    }
   }, [isOpen, defaultName]);
 
   const resetForm = () => {
@@ -85,16 +96,15 @@ export default function CreateSprintModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* Sprint Name */}
           <div className="space-y-2">
             <label className="text-[13px] font-bold text-[#344054]">SPRINT NAME</label>
             <input
+              ref={nameInputRef}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Sprint 1"
               className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#EAECF0] rounded-xl text-sm focus:ring-2 focus:ring-[#155DFC]/20 focus:outline-none transition-all font-medium"
-              autoFocus
             />
             {error && <p className="text-red-500 text-xs font-medium">{error}</p>}
           </div>
@@ -125,8 +135,8 @@ export default function CreateSprintModal({
             </div>
           </div>
 
-          {/* Sprint Goal */}
-          <div className="space-y-2">
+          {/* Sprint Goal - Hidden on Mobile */}
+          <div className="hidden sm:block space-y-2">
             <label className="text-[13px] font-bold text-[#344054] flex items-center gap-2">
               <Target size={14} className="text-[#98A2B3]" /> SPRINT GOAL
             </label>

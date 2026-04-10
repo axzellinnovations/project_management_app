@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { AlertTriangle, BarChart3, Rocket } from 'lucide-react';
+import CreateSprintModal from './components/CreateSprintModal';
 import BacklogCard from './components/BacklogCard';
 import ProductBacklogSection from './components/ProductBacklogSection';
 import FilterBar, { type BacklogFilters } from './components/FilterBar';
 import BulkActionBar from './components/BulkActionBar';
 import dynamic from 'next/dynamic';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 const VelocityChart = dynamic(() => import('./components/VelocityChart'), { ssr: false });
 import type { SprintVelocityPoint } from './components/VelocityChart';
 import api from '@/lib/axios';
@@ -15,7 +17,7 @@ import { toast } from '@/components/ui';
 import { getProjectLabels, createLabel } from '@/services/labels-service';
 import type { TaskItem, SprintItem, Label } from '@/types';
 import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
-import { type CreateTaskData } from '@/components/shared/CreateTaskModal';
+import CreateTaskModal, { type CreateTaskData } from '@/components/shared/CreateTaskModal';
 
 type RawTask = {
   id: number;
@@ -617,91 +619,118 @@ export default function SprintBacklogPage() {
   };
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-[#F8F9FB]">
-      <div className="flex-1 overflow-auto p-4 sm:p-6 custom-scrollbar">
-        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 pb-28 sm:pb-8">
-          {loading && (
-            <div className="space-y-4">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="skeleton rounded-xl h-32" />
+    <div className="flex flex-col min-h-screen bg-slate-50">
+      {/* Sticky Header with Glassmorphism */}
+      <div className="sticky top-0 z-40 w-full glass-panel border-b border-[#E4E7EC] px-4 py-4 sm:px-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Project Backlog</h1>
+            <p className="text-[13px] sm:text-[14px] text-slate-500 font-medium">Plan sprints and manage product tasks</p>
+          </div>
+          
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              onClick={() => setShowVelocity(!showVelocity)}
+              className={`flex h-11 items-center gap-2 rounded-xl px-4 text-[13px] font-bold shadow-sm transition-all active:scale-95 ${
+                showVelocity 
+                  ? 'bg-slate-900 text-white hover:bg-slate-800' 
+                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <BarChart3 size={18} />
+              <span className="hidden sm:inline">Velocity</span>
+            </button>
+            
+            {(currentUserRole === 'OWNER' || currentUserRole === 'ADMIN') && (
+              <button
+                onClick={() => { void createSprint(`${projectKey} Sprint ${sprints.length + 1}`); }}
+                className="flex h-10 sm:h-11 items-center gap-1.5 sm:gap-2 rounded-lg sm:rounded-xl bg-[#155DFC] px-3 sm:px-5 text-[12px] sm:text-[13px] font-bold text-white shadow-lg shadow-blue-500/20 hover:bg-[#1149C9] transform active:scale-95 transition-all duration-200"
+              >
+                <Rocket size={15} />
+                <span className="whitespace-nowrap">Create Sprint</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <FilterBar
+            filters={filters}
+            onChange={setFilters}
+            assigneeNames={allAssigneeNames}
+          />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-auto p-4 sm:p-8 custom-scrollbar">
+        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-8 pb-32 sm:pb-8">
+          {loading ? (
+            <div className="space-y-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-40 w-full animate-pulse rounded-2xl bg-white shadow-sm border border-slate-100" />
               ))}
             </div>
-          )}
-
-          {!loading && error && (
-            <div className="flex flex-col items-center justify-center h-64 gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-                <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.268 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-200 shadow-sm">
+              <div className="h-16 w-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-4">
+                <AlertTriangle size={32} />
               </div>
-              <p className="text-red-500 text-lg font-semibold">{error}</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setError(null);
-                    setLoading(true);
-                    window.location.reload();
-                  }}
-                  className="px-4 py-2 bg-[#155DFC] text-white rounded-lg font-bold text-sm hover:bg-[#1149C9] transition-all"
-                >
-                  Retry
-                </button>
-                <button
-                  onClick={() => router.push('/dashboard')}
-                  className="px-4 py-2 border border-[#D0D5DD] text-[#344054] rounded-lg font-bold text-sm hover:bg-[#F9FAFB] transition-all"
-                >
-                  Go to Dashboard
-                </button>
-              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Something went wrong</h3>
+              <p className="text-slate-500 max-w-sm text-center mb-8 px-6">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="h-12 px-8 bg-slate-900 text-white rounded-xl font-bold text-[14px] hover:bg-slate-800 transition-all active:scale-95"
+              >
+                Try Again
+              </button>
             </div>
-          )}
-
-          {!loading && !error && (
+          ) : (
             <>
-              <FilterBar
-                filters={filters}
-                onChange={setFilters}
-                assigneeNames={allAssigneeNames}
-              />
-
-              {/* ── Column header bar ── */}
-              <div className="hidden sm:grid items-center border border-[#EAECF0] rounded-lg bg-[#F2F4F7] px-3 py-1.5 text-[12px] font-bold uppercase tracking-wide text-[#667085] select-none" style={{ gridTemplateColumns: '28px 3px 44px 72px 1fr 36px 110px 88px 40px 52px' }}>
-                <span />
-                <span />
-                <span>#</span>
-                <span>Priority</span>
-                <span className="pl-2">Title</span>
-                <span className="text-center">Assignee</span>
-                <span className="text-center">Status</span>
-                <span className="text-center">Due</span>
-                <span className="text-center">Pts</span>
-                <span />
+              {/* Sprints Section */}
+              <div className="space-y-8">
+                {filteredSprints.length > 0 ? (
+                  filteredSprints.map((sprint) => (
+                    <BacklogCard
+                      key={sprint.id}
+                      sprint={sprint}
+                      projectId={projectId!}
+                      currentUserRole={currentUserRole}
+                      onDropTask={moveTaskToSprint}
+                      onCreateTask={createSprintTask}
+                      onToggleTask={toggleTaskSelection}
+                      onDeleteTask={(taskId, sprintId) => {
+                        setSprints((prev) =>
+                          prev.map((s) =>
+                            s.id === sprintId
+                              ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }
+                              : s
+                          )
+                        );
+                      }}
+                      onSprintDeleted={handleSprintDeleted}
+                      projectLabels={projectLabels}
+                      onCreateLabel={handleCreateLabel}
+                      extraStatuses={sprint.status === 'ACTIVE' ? activeBoardStatuses : []}
+                    />
+                  ))
+                ) : !filters.search && (
+                  <div className="flex flex-col items-center justify-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                    <div className="h-16 w-16 bg-slate-50 text-slate-400 rounded-3xl flex items-center justify-center mb-5">
+                      <Rocket size={32} />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900 mb-1">No Active Sprints</h3>
+                    <p className="text-slate-500 text-[14px] mb-8">Create a sprint to start planning your development cycle.</p>
+                    <button
+                      onClick={() => { void createSprint(`${projectKey} Sprint ${sprints.length + 1}`); }}
+                      className="h-11 px-6 bg-[#155DFC] text-white rounded-xl font-bold text-[13px] hover:bg-[#1149C9] shadow-md shadow-blue-500/10 transition-all"
+                    >
+                      Create First Sprint
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {filteredSprints.map((sprint) => (
-                <BacklogCard
-                  key={sprint.id}
-                  sprint={sprint}
-                  projectId={projectId!}
-                  currentUserRole={currentUserRole}
-                  onDropTask={moveTaskToSprint}
-                  onCreateTask={createSprintTask}
-                  onToggleTask={toggleTaskSelection}
-                  onDeleteTask={(taskId, sprintId) => {
-                    setSprints((prev) =>
-                      prev.map((s) =>
-                        s.id === sprintId
-                          ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }
-                          : s
-                      )
-                    );
-                  }}
-                  onSprintDeleted={handleSprintDeleted}
-                  projectLabels={projectLabels}
-                  onCreateLabel={handleCreateLabel}
-                  extraStatuses={sprint.status === 'ACTIVE' ? activeBoardStatuses : []}
-                />
-              ))}
-
+              {/* Product Backlog Section */}
               <ProductBacklogSection
                 tasks={filteredProductTasks}
                 projectId={projectId!}
@@ -728,36 +757,48 @@ export default function SprintBacklogPage() {
                 onCreateLabel={handleCreateLabel}
               />
 
-              {sprints.length > 0 && (
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setShowVelocity((v) => !v)}
-                    className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[12px] font-bold transition-colors ${showVelocity
-                        ? 'border-[#175CD3] bg-[#EFF8FF] text-[#175CD3]'
-                        : 'border-[#D0D5DD] bg-white text-[#344054] hover:bg-[#F9FAFB]'
-                      }`}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
-                    {showVelocity ? 'Hide Velocity' : 'Show Velocity'}
-                  </button>
-                </div>
-              )}
-              {showVelocity && sprints.length > 0 && <VelocityChart sprints={velocityData} />}
-
-              <BulkActionBar
-                selectedCount={selectedCount}
-                sprints={sprints}
-                onMoveToSprint={handleBulkMoveToSprint}
-                onMoveToBacklog={handleBulkMoveToBacklog}
-                onBulkStatusChange={handleBulkStatusChange}
-                onBulkDelete={handleBulkDelete}
-                onClearSelection={handleClearSelection}
-              />
+              {showVelocity && <div className="mt-8"><VelocityChart sprints={velocityData} /></div>}
             </>
           )}
         </div>
       </div>
+
+      {/* Floating Action Button (FAB) for Mobile with Gradient */}
+      <button
+        onClick={() => setShowCreateTaskModal(true)}
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 sm:hidden items-center justify-center rounded-2xl bg-gradient-to-br from-[#155DFC] to-[#004EEB] text-white shadow-xl shadow-blue-500/40 transform active:scale-95 transition-all duration-200"
+      >
+        <span className="text-2xl font-bold">+</span>
+      </button>
+
+      {selectedCount > 0 && (
+        <BulkActionBar
+          selectedCount={selectedCount}
+          onClear={handleClearSelection}
+          onMoveToSprint={handleBulkMoveToSprint}
+          onMoveToBacklog={handleBulkMoveToBacklog}
+          onStatusChange={handleBulkStatusChange}
+          onDelete={handleBulkDelete}
+          sprints={sprints.filter(s => s.status !== 'COMPLETED').map(s => ({ id: s.id, name: s.name }))}
+        />
+      )}
+
+      {showCreateTaskModal && (
+        <CreateTaskModal
+          isOpen={showCreateTaskModal}
+          onClose={() => setShowCreateTaskModal(false)}
+          onCreateTask={createTask}
+          projectId={projectId!}
+        />
+      )}
+
+      <style jsx global>{`
+        .glass-panel {
+          background: rgba(255, 255, 255, 0.8);
+          backdrop-filter: blur(12px) saturate(180%);
+          -webkit-backdrop-filter: blur(12px) saturate(180%);
+        }
+      `}</style>
     </div>
   );
 }
