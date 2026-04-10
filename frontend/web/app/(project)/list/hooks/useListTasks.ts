@@ -9,6 +9,21 @@ import type { CreateTaskData } from '@/components/shared/CreateTaskModal';
 import type { Task } from '@/types';
 import { STATUS_ORDER } from '../lib/list-config';
 
+const MEMBERS_CACHE_TTL_MS = 1000 * 60 * 30;
+
+type MembersCacheEntry = {
+  expiresAt: number;
+  data: Record<number, string | null>;
+};
+
+const isHttpUrl = (value: string | null | undefined): value is string =>
+  Boolean(value && (value.startsWith('http://') || value.startsWith('https://')));
+
+const sanitizeTaskPhoto = (task: Task): Task => ({
+  ...task,
+  assigneePhotoUrl: isHttpUrl(task.assigneePhotoUrl) ? task.assigneePhotoUrl : undefined,
+});
+
 export function useListTasks() {
   const searchParams = useSearchParams();
   const projectIdStr = searchParams.get('projectId');
@@ -27,15 +42,33 @@ export function useListTasks() {
     if (!projectId || !membersCacheKey) return {};
     const cached = localStorage.getItem(membersCacheKey);
     if (cached) {
-      try { return JSON.parse(cached) as Record<number, string | null>; } catch { /* ignore */ }
+      try {
+        const parsed = JSON.parse(cached) as MembersCacheEntry | Record<number, string | null>;
+        if ('expiresAt' in parsed && 'data' in parsed) {
+          if (parsed.expiresAt > Date.now()) {
+            return parsed.data;
+          }
+        } else {
+          const legacyHasInvalidValue = Object.values(parsed).some((value) => value && !isHttpUrl(value));
+          if (!legacyHasInvalidValue) {
+            return parsed;
+          }
+        }
+      } catch {
+        /* ignore */
+      }
     }
     try {
       const res = await api.get(`/api/projects/${projectId}/members`);
       const map: Record<number, string | null> = {};
       (res.data as { user: { userId: number; profilePicUrl?: string } }[]).forEach((m) => {
-        map[m.user.userId] = m.user.profilePicUrl ?? null;
+        map[m.user.userId] = isHttpUrl(m.user.profilePicUrl) ? m.user.profilePicUrl : null;
       });
-      localStorage.setItem(membersCacheKey, JSON.stringify(map));
+      const entry: MembersCacheEntry = {
+        expiresAt: Date.now() + MEMBERS_CACHE_TTL_MS,
+        data: map,
+      };
+      localStorage.setItem(membersCacheKey, JSON.stringify(entry));
       return map;
     } catch {
       return {};
@@ -48,7 +81,7 @@ export function useListTasks() {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try {
-        setTasks(JSON.parse(cached) as Task[]);
+        setTasks((JSON.parse(cached) as Task[]).map(sanitizeTaskPhoto));
         setLoading(false);
       } catch { /* ignore corrupt cache */ }
     }
@@ -62,7 +95,7 @@ export function useListTasks() {
         t.assigneeId && membersMap[t.assigneeId]
           ? { ...t, assigneePhotoUrl: membersMap[t.assigneeId] ?? undefined }
           : t
-      );
+      ).map(sanitizeTaskPhoto);
       setTasks(enriched);
       localStorage.setItem(cacheKey, JSON.stringify(enriched));
     } catch {
@@ -85,7 +118,15 @@ export function useListTasks() {
       // Merge partial fields — no API call needed
       setTasks((prev) => {
         const next = prev.map((t) =>
-          t.id === event.task!.id ? { ...t, ...event.task } : t
+          t.id === event.task!.id
+            ? sanitizeTaskPhoto({
+                ...t,
+                ...event.task,
+                assigneePhotoUrl: isHttpUrl(event.task?.assigneePhotoUrl)
+                  ? event.task.assigneePhotoUrl
+                  : t.assigneePhotoUrl,
+              })
+            : t
         );
         if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
         return next;
@@ -95,7 +136,7 @@ export function useListTasks() {
       void api.get(`/api/tasks/${event.task.id}`).then((res) => {
         setTasks((prev) => {
           if (prev.some((t) => t.id === event.task!.id)) return prev;
-          const next = [...prev, res.data as Task];
+          const next = [...prev, sanitizeTaskPhoto(res.data as Task)];
           if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
           return next;
         });

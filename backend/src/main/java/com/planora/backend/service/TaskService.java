@@ -79,6 +79,9 @@ public class TaskService {
     @Autowired
     private MilestoneRepository milestoneRepository;
 
+    @Autowired
+    private UserService userService;
+
 
     // 1. CREATE TASK
     @Transactional
@@ -716,7 +719,7 @@ public class TaskService {
         if(task.getAssignee() != null){
             dto.setAssigneeId(task.getAssignee().getId());
             dto.setAssigneeName(task.getAssignee().getUser().getUsername());
-            dto.setAssigneePhotoUrl(task.getAssignee().getUser().getProfilePicUrl());
+            dto.setAssigneePhotoUrl(userService.generatePresignedUrl(task.getAssignee().getUser().getProfilePicUrl()));
         }
 
         // Map multiple assignees (V4)
@@ -726,7 +729,7 @@ public class TaskService {
                     m.getId(),
                     m.getUser().getUserId(),
                     m.getUser().getUsername(),
-                    m.getUser().getProfilePicUrl()))
+                    userService.generatePresignedUrl(m.getUser().getProfilePicUrl())))
                 .collect(Collectors.toList()));
         }
 
