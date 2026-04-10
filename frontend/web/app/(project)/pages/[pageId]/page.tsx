@@ -1,12 +1,12 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import React from 'react';
+import React, { useState } from 'react';
 import DocumentSidebar from '../components/DocumentSidebar';
 import Editor from '../components/Editor';
 import {
   Download, Upload, Trash2, CheckCircle2, Loader2,
-  Save, FileEdit, History, X, PanelLeft,
+  Save, FileEdit, History, X, PanelLeft, MoreHorizontal,
 } from 'lucide-react';
 import { usePageEditor } from './usePageEditor';
 import { useRouter } from 'next/navigation';
@@ -21,6 +21,8 @@ export default function PageDetailPage() {
     handleUpdateContent, handleManualCreate, handleDeletePage,
     handleFileImport, handleExport,
   } = usePageEditor();
+
+  const [showMobileActions, setShowMobileActions] = useState(false);
 
   if (!projectId) {
     return (
@@ -117,7 +119,8 @@ export default function PageDetailPage() {
               </div>
 
               {/* Action buttons */}
-              <div className="flex items-center gap-1.5 ml-3 flex-shrink-0">
+              {/* Action buttons – desktop */}
+              <div className="hidden md:flex items-center gap-1.5 ml-3 flex-shrink-0">
                 <input
                   type="file" ref={fileInputRef} className="hidden"
                   accept=".md,.html" onChange={handleFileImport}
@@ -159,6 +162,55 @@ export default function PageDetailPage() {
                 >
                   <Trash2 size={16} />
                 </button>
+              </div>
+
+              {/* Action button – mobile (three-dot) */}
+              <div className="flex md:hidden ml-2 relative">
+                <input
+                  type="file" ref={fileInputRef} className="hidden"
+                  accept=".md,.html" onChange={handleFileImport}
+                />
+                <button
+                  onClick={() => setShowMobileActions((v) => !v)}
+                  className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  aria-label="More actions"
+                >
+                  <MoreHorizontal size={18} />
+                </button>
+                {showMobileActions && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowMobileActions(false)} />
+                    <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
+                      <button
+                        onClick={() => { fileInputRef.current?.click(); setShowMobileActions(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <Upload size={16} className="text-gray-400" /> Import
+                      </button>
+                      <button
+                        onClick={() => { handleExport(); setShowMobileActions(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <Download size={16} className="text-gray-400" /> Export .md
+                      </button>
+                      {!isDraft && (
+                        <button
+                          onClick={() => { setShowHistory(!showHistory); setShowMobileActions(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <History size={16} className="text-gray-400" /> Version History
+                        </button>
+                      )}
+                      <div className="h-px bg-gray-100 my-1" />
+                      <button
+                        onClick={() => { handleDeletePage(); setShowMobileActions(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={16} /> {isDraft ? 'Discard Draft' : 'Delete Document'}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
