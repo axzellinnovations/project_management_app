@@ -33,7 +33,7 @@ const StatusSection: React.FC<StatusSectionProps> = ({ status, onUpdateStatus })
       <div className="relative">
         <button
           onClick={(e) => { e.stopPropagation(); setIsOpen((v) => !v); }}
-          className={`w-full flex items-center justify-between px-3 py-2 border rounded text-sm font-semibold transition-colors shadow-sm ${cfg.badge} border-transparent hover:opacity-80`}
+          className={`w-full flex items-center justify-between px-3 py-2 min-h-[44px] sm:min-h-0 sm:py-2 border rounded text-sm font-semibold transition-colors shadow-sm ${cfg.badge} border-transparent hover:opacity-80`}
         >
           <div className="flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
@@ -49,7 +49,7 @@ const StatusSection: React.FC<StatusSectionProps> = ({ status, onUpdateStatus })
                 <button
                   key={option}
                   onClick={(e) => { e.stopPropagation(); onUpdateStatus?.(option); setIsOpen(false); }}
-                  className={`w-full text-left px-3 py-2 text-sm border-b border-gray-50 last:border-b-0 flex items-center gap-2 transition-colors hover:opacity-80 font-medium ${s.badge}`}
+                  className={`w-full text-left px-3 py-2 min-h-[44px] sm:min-h-0 text-sm border-b border-gray-50 last:border-b-0 flex items-center gap-2 transition-colors hover:opacity-80 font-medium ${s.badge}`}
                 >
                   <span className={`w-2 h-2 rounded-full ${s.dot}`} />
                   {s.label}

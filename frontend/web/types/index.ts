@@ -1,9 +1,14 @@
 /* ═══════════════════════════════════════════════════
-   Consolidated TypeScript Types — Planora
-   Canonical source for all shared data types.
+   Planora Types — Barrel Re-export
+   Import from '@/types' to access all shared types.
    ═══════════════════════════════════════════════════ */
 
-// ── Enums ──────────────────────────────────────────
+export * from './task';
+export * from './project';
+export * from './dms';
+export * from './chat';
+export * from './user';
+
 
 export enum TaskStatus {
   TODO = 'TODO',
@@ -536,3 +541,10 @@ export interface UserProfile {
   profilePicUrl?: string;
   lastActive?: string;
 }
+=======
+export * from './task';
+export * from './project';
+export * from './dms';
+export * from './chat';
+export * from './user';
+>>>>>>> origin/responsive-pages

@@ -68,6 +68,8 @@ export default function RegisterPage() {
             label="Username" type="text" value={username} required
             onChange={(e) => setUsername(e.target.value)} placeholder="Pick a username"
             aria-describedby={error ? 'register-error' : undefined}
+            autoComplete="username"
+            autoCapitalize="off"
           />
 
           <InputField
@@ -81,6 +83,10 @@ export default function RegisterPage() {
             label="Email Address" type="email" value={email} required
             onChange={(e) => setEmail(e.target.value.toLowerCase())} placeholder="Enter your email"
             aria-describedby={error ? 'register-error' : undefined}
+            autoComplete="email"
+            autoCapitalize="off"
+            autoCorrect="off"
+            inputMode="email"
           />
 
           {/* NTH-1: Password field with strength meter */}
@@ -90,6 +96,7 @@ export default function RegisterPage() {
               label="Password" type="password" value={password} required showToggle
               onChange={(e) => setPassword(e.target.value)} placeholder="Create a password (min 8 chars)"
               aria-describedby="pw-strength"
+              autoComplete="new-password"
             />
             {password.length > 0 && (
               <div id="pw-strength" className="mt-2" aria-label={`Password strength: ${STRENGTH_LABELS[strength]}`}>
@@ -110,6 +117,7 @@ export default function RegisterPage() {
             id="reg-confirm-password"
             label="Confirm Password" type="password" value={confirmPassword} required showToggle
             onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm your password"
+            autoComplete="new-password"
           />
 
           <Button type="submit" isLoading={isLoading}>
