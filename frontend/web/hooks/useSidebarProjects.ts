@@ -8,7 +8,7 @@ interface Project {
   isFavorite?: boolean;
 }
 
-export function useSidebarProjects(pathname: string) {
+export function useSidebarProjects(_pathname?: string) {
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
   const [favoriteProjects, setFavoriteProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,12 +29,8 @@ export function useSidebarProjects(pathname: string) {
     }
   }, []);
 
-  // Initial load + reload on pathname change
+  // Initial load only — event listeners handle subsequent refreshes
   useEffect(() => { void fetchProjects(); }, [fetchProjects]);
-  useEffect(() => {
-    const timer = setTimeout(() => void fetchProjects(), 600);
-    return () => clearTimeout(timer);
-  }, [pathname, fetchProjects]);
 
   // Listen for custom events (favorite toggled, project accessed)
   useEffect(() => {

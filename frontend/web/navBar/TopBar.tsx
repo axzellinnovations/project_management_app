@@ -158,20 +158,18 @@ function TopBarContent() {
   }, [projectId, storedProjectType]);
 
   useEffect(() => {
-    if (user?.email) {
-      const loadProfilePic = async () => {
-        try {
-          const response = await api.get('/api/auth/users');
-          interface UserSummary { email: string; profilePicUrl?: string; }
-          const currentUser = response.data.find(
-            (u: UserSummary) => u.email.toLowerCase() === user.email.toLowerCase()
-          );
-          if (currentUser?.profilePicUrl) setProfilePicUrl(currentUser.profilePicUrl);
-        } catch { }
-      };
-      void loadProfilePic();
-    }
-  }, [user]);
+    if (!user?.email) return;
+    // Use cached URL instantly, then revalidate
+    const cached = localStorage.getItem('planora:profilePicUrl');
+    if (cached) setProfilePicUrl(cached);
+    api.get('/api/user/profile').then(res => {
+      const url: string | undefined = res.data?.profilePicUrl;
+      if (url) {
+        setProfilePicUrl(url);
+        localStorage.setItem('planora:profilePicUrl', url);
+      }
+    }).catch(() => {});
+  }, [user?.email]);
 
   // Close project dropdown on outside click
   useEffect(() => {
