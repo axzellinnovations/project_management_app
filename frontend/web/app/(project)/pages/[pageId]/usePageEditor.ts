@@ -44,7 +44,7 @@ export function usePageEditor() {
     if (!pageId || pageId === 'new') return;
     const doc = new Y.Doc();
     ydocRef.current = doc;
-    setYdoc(doc);
+    setYdoc(doc); // eslint-disable-line react-hooks/set-state-in-effect
     const wsUrl = (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
       ? `wss://${window.location.host}/yjs`
       : 'ws://localhost:8080/yjs';
@@ -168,7 +168,6 @@ export function usePageEditor() {
     const colors = ['#f97316', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
     const color = colors[(u.userId ?? 0) % colors.length];
     return { name: u.fullName ?? u.username ?? u.email ?? 'Anonymous', color };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return {
