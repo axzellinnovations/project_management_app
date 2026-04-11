@@ -54,15 +54,17 @@ const MultiAssigneeSection: React.FC<MultiAssigneeSectionProps> = ({
   const currentIds = new Set(assignees.map((a) => a.memberId));
 
   const addAssignee = async (memberId: number) => {
-    const updated = [...assignees.map((a) => a.memberId), memberId];
-    await api.put(`/api/tasks/${taskId}`, { assigneeIds: updated });
+    const member = members.find((m) => m.memberId === memberId);
+    if (!member) return;
+    const updated = [...assignees.map((a) => a.userId), member.userId];
+    await api.patch(`/api/tasks/${taskId}/assignees`, { assigneeIds: updated });
     onChanged();
     setOpen(false);
   };
 
   const removeAssignee = async (memberId: number) => {
-    const updated = assignees.filter((a) => a.memberId !== memberId).map((a) => a.memberId);
-    await api.put(`/api/tasks/${taskId}`, { assigneeIds: updated });
+    const updated = assignees.filter((a) => a.memberId !== memberId).map((a) => a.userId);
+    await api.patch(`/api/tasks/${taskId}/assignees`, { assigneeIds: updated });
     onChanged();
   };
 

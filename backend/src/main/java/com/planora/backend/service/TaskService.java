@@ -521,6 +521,30 @@ public class TaskService {
         }
     }
 
+    //12b. UPDATE MULTI-ASSIGNEES (dedicated PATCH endpoint)
+    @Transactional
+    public TaskResponseDTO updateAssignees(Long taskId, List<Long> userIds, Long currentUserId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+
+        Long teamId = task.getProject().getTeam().getId();
+        requireMinimumRole(teamId, currentUserId, TeamRole.MEMBER);
+
+        task.getAssignees().clear();
+        for (Long uid : userIds) {
+            task.getAssignees().add(validateTeamMember(teamId, uid));
+        }
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+        Task saved = taskRepository.save(task);
+
+        User actor = userRepository.findById(currentUserId).orElse(null);
+        String actorName = actor != null ? actor.getUsername() : "Unknown";
+        taskActivityService.logActivity(saved.getId(), TaskActivityType.ASSIGNEE_CHANGED,
+                actorName, actorName + " updated assignees");
+
+        return mapToDTO(saved);
+    }
+
     //13. RECORD TASK ACCESS
     @Transactional
     public void recordTaskAccess(Long taskId, Long currentUserId) {
