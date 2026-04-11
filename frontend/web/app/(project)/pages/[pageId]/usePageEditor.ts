@@ -5,6 +5,9 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { usePageContent } from './hooks/usePageContent';
 import TurndownService from 'turndown';
 import { marked } from 'marked';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+import { getUserFromToken } from '@/lib/auth';
 
 export function usePageEditor() {
   const router = useRouter();
@@ -32,6 +35,26 @@ export function usePageEditor() {
   const [showHistory, setShowHistory] = useState(false);
   const [showDocSidebar, setShowDocSidebar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const ydocRef = useRef<Y.Doc | null>(null);
+  const providerRef = useRef<WebsocketProvider | null>(null);
+
+  // Yjs collaborative editing setup
+  useEffect(() => {
+    if (!pageId || pageId === 'new') return;
+    const ydoc = new Y.Doc();
+    ydocRef.current = ydoc;
+    const wsUrl = (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
+      ? `wss://${window.location.host}/yjs`
+      : 'ws://localhost:8080/yjs';
+    const provider = new WebsocketProvider(wsUrl, `page-${pageId}`, ydoc);
+    providerRef.current = provider;
+    return () => {
+      provider.destroy();
+      ydoc.destroy();
+      ydocRef.current = null;
+      providerRef.current = null;
+    };
+  }, [pageId]);
 
   const handleUpdateContent = useCallback(async (htmlContent: string) => {
     if (!selectedPage || !projectId) return;
@@ -156,5 +179,13 @@ export function usePageEditor() {
     handleDeletePage,
     handleFileImport,
     handleExport,
+    ydoc: ydocRef.current,
+    collaborationUser: (() => {
+      const u = getUserFromToken();
+      if (!u) return undefined;
+      const colors = ['#f97316', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
+      const color = colors[(u.userId ?? 0) % colors.length];
+      return { name: u.fullName ?? u.username ?? u.email ?? 'Anonymous', color };
+    })(),
   };
 }

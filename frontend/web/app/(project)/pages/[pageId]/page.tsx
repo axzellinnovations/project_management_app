@@ -20,6 +20,7 @@ export default function PageDetailPage() {
     filteredPages, error, searchQuery, setSearchQuery,
     handleUpdateContent, handleManualCreate, handleDeletePage,
     handleFileImport, handleExport,
+    ydoc, collaborationUser,
   } = usePageEditor();
 
   const [showMobileActions, setShowMobileActions] = useState(false);
@@ -220,6 +221,8 @@ export default function PageDetailPage() {
                 <Editor
                   content={selectedPage.content || ''}
                   onUpdate={handleUpdateContent}
+                  ydoc={ydoc ?? undefined}
+                  collaborationUser={collaborationUser}
                 />
               </div>
 
