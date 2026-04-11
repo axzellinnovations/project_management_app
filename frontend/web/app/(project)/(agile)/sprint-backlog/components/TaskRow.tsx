@@ -574,7 +574,11 @@ function TaskRow({
     <div
       className={`group relative flex items-center min-h-[36px] rounded-lg ${rowBg} hover:bg-[#F9FAFB] cursor-pointer transition-colors duration-150`}
       style={{ borderLeft: `3px solid ${statusBorderColor}` }}
-      onClick={() => !renaming && onOpenTask?.(task.id)}
+      onClick={() => {
+        if (!renaming) {
+          onOpenTask?.(task.id);
+        }
+      }}
       onTouchStart={onTouchStartInternal}
       onTouchEnd={onTouchEndInternal}
       onTouchMove={onTouchMoveInternal}
@@ -628,20 +632,17 @@ function TaskRow({
               className={`text-[12px] font-semibold text-[#101828] truncate min-w-0 select-none ${validStatus === 'DONE' ? 'line-through opacity-60' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
+                // If double-click isn't used (mobile behavior emulation), 
+                // we'll use a timer. But for desktop/standard tests, 
+                // we must allow a single click to trigger onOpenTask.
                 const now = Date.now();
                 const DOUBLE_TAP_DELAY = 300;
-                if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+                if (lastTapRef.current > 0 && now - lastTapRef.current < DOUBLE_TAP_DELAY) {
                   startRename(e);
                   lastTapRef.current = 0;
                 } else {
                   lastTapRef.current = now;
-                  // Optional: delay single click action to verify it's not a double
-                  setTimeout(() => {
-                    if (Date.now() - lastTapRef.current >= DOUBLE_TAP_DELAY) {
-                      // Only open if it wasn't a double tap
-                      onOpenTask?.(task.id);
-                    }
-                  }, DOUBLE_TAP_DELAY);
+                  onOpenTask?.(task.id);
                 }
               }}
               onDoubleClick={(e) => {
