@@ -627,7 +627,7 @@ export default function SprintBacklogPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50">
+    <div className="flex flex-col h-full bg-slate-50">
       {/* Sticky Header with Glassmorphism */}
       <div className="flex-shrink-0 z-40 w-full glass-panel border-b border-[#E4E7EC] px-4 py-4 sm:px-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -670,7 +670,7 @@ export default function SprintBacklogPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-4 sm:p-8 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-8 custom-scrollbar">
         <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-8 pb-32 sm:pb-8">
           {loading ? (
             <div className="space-y-6">
