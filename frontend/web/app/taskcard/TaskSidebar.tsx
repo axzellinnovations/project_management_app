@@ -58,7 +58,10 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
 }) => (
   <div className="w-full md:w-72 bg-[#F7F8FA] border-t md:border-t-0 md:border-l border-[#EAECF0] flex-shrink-0 overflow-y-auto scrollbar-thin min-h-0">
     <div className="p-4 space-y-4">
-      <StatusSection status={status} onUpdateStatus={onUpdateStatus} />
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-1">
+        <StatusSection status={status} onUpdateStatus={onUpdateStatus} />
+        <PrioritySection priority={priority} onUpdatePriority={onUpdatePriority} />
+      </div>
       <div className="border border-[#E5E7EB] rounded-xl bg-white shadow-sm overflow-hidden">
         <div className="px-4 py-2.5 border-b border-[#F2F4F7] text-[10px] font-bold text-[#6A7282] uppercase tracking-wider">Details</div>
         <div className="p-4 space-y-4">
@@ -83,7 +86,6 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
             onUpdateMilestone={onUpdateMilestone}
           />
           <StoryPointSection storyPoint={storyPoint} onUpdateStoryPoint={onUpdateStoryPoint} />
-          <PrioritySection priority={priority} onUpdatePriority={onUpdatePriority} />
           {onUpdateRecurrence && (
             <RecurrenceSection
               recurrenceRule={recurrenceRule}
