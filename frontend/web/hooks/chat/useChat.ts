@@ -119,7 +119,7 @@ export const useChat = (projectId: string) => {
   const selectionStorageKey = `chat-selection:${projectId}`;
 
   // â”€â”€ Helpers â”€â”€
-  const isStompConnected = () => realtimeConnected;
+  const isStompConnected = useCallback(() => realtimeConnected, [realtimeConnected]);
   const stompSend = useCallback((dest: string, body: string) => {
     sendRealtime(dest, body);
   }, [sendRealtime]);
@@ -225,7 +225,7 @@ export const useChat = (projectId: string) => {
       }
       msgSend(content, currentUser, stompSend, trackTelemetry, recipient);
     },
-    [currentUser, msgSend, stompSend, trackTelemetry],
+    [currentUser, msgSend, stompSend, trackTelemetry, isStompConnected],
   );
 
   const sendRoomMessage = useCallback(
@@ -236,28 +236,28 @@ export const useChat = (projectId: string) => {
       }
       msgSendRoom(content, roomId, currentUser, stompSend, trackTelemetry);
     },
-    [currentUser, msgSendRoom, stompSend, trackTelemetry],
+    [currentUser, msgSendRoom, stompSend, trackTelemetry, isStompConnected],
   );
 
   const editMessage = useCallback(
     async (messageId: number, content: string) => {
       await msgEdit(messageId, content, isStompConnected() ? stompSend : undefined);
     },
-    [msgEdit, stompSend],
+    [msgEdit, stompSend, isStompConnected],
   );
 
   const deleteMessage = useCallback(
     async (messageId: number) => {
       await msgDelete(messageId, isStompConnected() ? stompSend : undefined);
     },
-    [msgDelete, stompSend],
+    [msgDelete, stompSend, isStompConnected],
   );
 
   const toggleReaction = useCallback(
     async (messageId: number, emoji: string) => {
       await reactionsToggle(messageId, emoji, isStompConnected() ? stompSend : undefined);
     },
-    [reactionsToggle, stompSend],
+    [reactionsToggle, stompSend, isStompConnected],
   );
 
   const searchMessages = useCallback(
@@ -277,7 +277,7 @@ export const useChat = (projectId: string) => {
         updateMessageEverywhere,
       );
     },
-    [currentUser, threadsSendReply, stompSend, updateMessageEverywhere],
+    [currentUser, threadsSendReply, stompSend, updateMessageEverywhere, isStompConnected],
   );
 
   const openThread = useCallback(
@@ -342,7 +342,7 @@ export const useChat = (projectId: string) => {
         JSON.stringify({ scope: 'TEAM', isTyping }),
       );
     },
-    [projectId, stompSend],
+    [projectId, stompSend, isStompConnected],
   );
 
   const selectPrivateUser = useCallback((user: string | null) => {

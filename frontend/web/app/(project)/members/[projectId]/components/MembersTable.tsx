@@ -33,22 +33,23 @@ export function MembersTable({
 }: MembersTableProps) {
   return (
     <div className="bg-white rounded-lg shadow">
-      <div className="max-md:-mx-4">
+      <div>
         <div
-          className="relative overflow-x-auto max-md:px-4"
+          className="relative overflow-x-auto mobile-scroll touch-pan-x pb-2"
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
-          <table className="min-w-full max-md:min-w-[920px] text-sm">
+          <div className="md:hidden text-center text-[11px] text-gray-400 mb-2">Swipe sideways to view all columns</div>
+          <table className="min-w-full max-md:min-w-[680px] text-xs sm:text-sm">
             <thead>
               <tr className="border-b">
-                <th className="px-6 py-3 text-left font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[220px] max-md:border-r max-md:border-gray-100">
+                <th className="px-6 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[170px] max-md:border-r max-md:border-gray-100">
                   Member
                 </th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[150px] max-md:border-l max-md:border-gray-100">Role</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[130px] max-md:border-l max-md:border-gray-100">Status</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[170px] max-md:border-l max-md:border-gray-100">Last Active</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[130px] max-md:border-l max-md:border-gray-100">Tasks</th>
-                <th className="px-4 py-3 whitespace-nowrap max-md:min-w-[130px] max-md:border-l max-md:border-gray-100"></th>
+                <th className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[120px] max-md:border-l max-md:border-gray-100">Role</th>
+                <th className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[100px] max-md:border-l max-md:border-gray-100">Status</th>
+                <th className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[120px] max-md:border-l max-md:border-gray-100">Last Active</th>
+                <th className="px-4 py-3 text-left text-xs sm:text-sm font-semibold text-gray-700 whitespace-nowrap max-md:min-w-[90px] max-md:border-l max-md:border-gray-100">Tasks</th>
+                <th className="px-4 py-3 whitespace-nowrap max-md:min-w-[110px] max-md:border-l max-md:border-gray-100"></th>
               </tr>
             </thead>
             <tbody>
@@ -63,7 +64,7 @@ export function MembersTable({
 
                 return (
                   <tr key={member.id + member.user.email} className="border-b hover:bg-gray-50">
-                    <td className="px-6 py-3 flex items-center gap-3 max-md:min-w-[220px] max-md:border-r max-md:border-gray-100">
+                    <td className="px-6 py-3 flex items-center gap-3 max-md:min-w-[170px] max-md:border-r max-md:border-gray-100">
                       {resolvedProfilePicUrl && !brokenProfileImages[avatarKey] ? (
                         <Image
                           src={resolvedProfilePicUrl}
@@ -79,26 +80,26 @@ export function MembersTable({
                           {member.user.fullName ? member.user.fullName.split(' ').map((name) => name[0]).join('') : member.user.email[0]?.toUpperCase()}
                         </div>
                       )}
-                      <div className="max-md:max-w-[180px]">
-                        <div className="font-medium text-gray-900 truncate">{member.user.fullName || member.user.email}</div>
+                      <div className="max-md:max-w-[135px]">
+                        <div className="font-medium text-gray-900 text-[12px] sm:text-sm truncate">{member.user.fullName || member.user.email}</div>
                         <div className="text-xs text-gray-500 truncate">{member.user.email}</div>
                       </div>
                     </td>
 
-                    <td className="px-4 py-3 align-middle whitespace-nowrap max-md:min-w-[140px] max-md:border-l max-md:border-gray-100">
+                    <td className="px-4 py-3 align-middle whitespace-nowrap max-md:min-w-[120px] max-md:border-l max-md:border-gray-100">
                       {canChangeRole(member) && member.user.userId ? (
-                        <div className="relative">
+                        <div className="relative inline-flex items-center">
                           <select
                             value={member.role}
                             onChange={(event) => onRoleChange(member.user.userId, event.target.value)}
                             disabled={changingRoleId === member.user.userId}
-                            className={`appearance-none outline-none cursor-pointer pl-7 pr-4 py-2 max-md:min-h-[44px] rounded-md text-xs font-semibold uppercase tracking-wider ${ROLE_COLORS[member.role] || 'bg-gray-100 text-gray-700'}`}
+                            className={`appearance-none outline-none cursor-pointer pl-8 pr-7 h-10 max-md:min-h-[44px] rounded-md text-sm font-semibold leading-none ${ROLE_COLORS[member.role] || 'bg-gray-100 text-gray-700'}`}
                           >
                             {getAvailableOptions().map((opt) => (
-                              <option key={opt} value={opt}>{opt}</option>
+                              <option key={opt} value={opt}>{ROLE_LABELS[opt] || opt}</option>
                             ))}
                           </select>
-                          <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                          <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-3.5 h-3.5">
                             {member.role === 'OWNER' && ICONS.owner}
                             {member.role === 'ADMIN' && ICONS.adminRole}
                             {member.role === 'MEMBER' && ICONS.member}
@@ -113,7 +114,7 @@ export function MembersTable({
                           </div>
                         </div>
                       ) : (
-                        <span className={`px-2 py-1 rounded text-xs font-medium flex items-center gap-1 w-max ${ROLE_COLORS[member.role] || 'bg-gray-100 text-gray-700'}`}>
+                        <span className={`px-2 py-1 h-9 rounded text-sm font-semibold inline-flex items-center gap-1.5 w-max leading-none ${ROLE_COLORS[member.role] || 'bg-gray-100 text-gray-700'}`}>
                           {member.role === 'OWNER' && ICONS.owner}
                           {member.role === 'ADMIN' && ICONS.adminRole}
                           {member.role === 'MEMBER' && ICONS.member}
@@ -123,17 +124,17 @@ export function MembersTable({
                       )}
                     </td>
 
-                    <td className="px-4 py-3 align-middle whitespace-nowrap max-md:min-w-[120px] max-md:border-l max-md:border-gray-100">
+                    <td className="px-4 py-3 align-middle whitespace-nowrap text-xs sm:text-sm max-md:min-w-[100px] max-md:border-l max-md:border-gray-100">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${STATUS_COLORS[member.status] || 'bg-gray-100 text-gray-700'}`}>{member.status}</span>
                     </td>
 
-                    <td className="px-4 py-3 align-middle whitespace-nowrap max-md:min-w-[160px] max-md:border-l max-md:border-gray-100">
+                    <td className="px-4 py-3 align-middle whitespace-nowrap text-xs sm:text-sm max-md:min-w-[120px] max-md:border-l max-md:border-gray-100">
                       {member.status === 'Pending' ? 'Never' : member.lastActive ? timeAgo(member.lastActive) : '-'}
                     </td>
 
-                    <td className="px-4 py-3 font-semibold text-blue-700 align-middle whitespace-nowrap max-md:min-w-[120px] max-md:border-l max-md:border-gray-100">{member.taskCount}</td>
+                    <td className="px-4 py-3 font-semibold text-blue-700 align-middle whitespace-nowrap text-xs sm:text-sm max-md:min-w-[90px] max-md:border-l max-md:border-gray-100">{member.taskCount}</td>
 
-                    <td className="px-4 py-3 text-right align-middle whitespace-nowrap max-md:min-w-[120px] max-md:border-l max-md:border-gray-100">
+                    <td className="px-4 py-3 text-right align-middle whitespace-nowrap max-md:min-w-[110px] max-md:border-l max-md:border-gray-100">
                       {canRemoveMember(member) && (
                         <button
                           onClick={() => onRequestRemove(member)}

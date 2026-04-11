@@ -81,7 +81,23 @@ export default function ChatInterface() {
     teamMentionCount,
   } = useChat(projectId);
 
-  const [showChatSidebar, setShowChatSidebar] = useState(true);
+  const [showChatSidebar, setShowChatSidebar] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const hasQuerySelection = Boolean(roomIdParam || withParam || viewParam === 'team');
+    return !(window.innerWidth < 1024 && hasQuerySelection);
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+        setShowChatSidebar(true);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleSelectUser = (u: string | null) => {
     selectPrivateUser(u);
@@ -224,7 +240,7 @@ export default function ChatInterface() {
   }
 
   return (
-    <div className="flex bg-[#F7F8FA] overflow-hidden h-full min-h-0">
+    <div className="flex bg-[#F7F8FA] overflow-hidden h-full min-h-0 pb-[calc(3.75rem+env(safe-area-inset-bottom,0px))] md:pb-0">
 
       {/* ── Sidebar ── */}
       <div className={showChatSidebar ? 'flex w-full lg:w-auto' : 'hidden lg:flex'}>

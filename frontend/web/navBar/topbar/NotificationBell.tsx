@@ -138,6 +138,7 @@ function buildNotificationListItems(notifications: Notification[]): Notification
 }
 
 export function NotificationBell() {
+  const [hasMounted, setHasMounted] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [pendingReadIds, setPendingReadIds] = useState<number[]>([]);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([]);
@@ -154,6 +155,10 @@ export function NotificationBell() {
   } = useGlobalNotifications();
 
   const listItems = useMemo(() => buildNotificationListItems(notifications), [notifications]);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!showDropdown) {
@@ -273,7 +278,7 @@ export function NotificationBell() {
       >
         <span className="relative inline-flex items-center justify-center leading-none">
           <Bell size={20} strokeWidth={2.2} className="block text-current" />
-          {unreadCount > 0 && (
+          {hasMounted && unreadCount > 0 && (
             <span
               className="pointer-events-none absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-cu-danger px-1 text-[10px] font-bold leading-none text-white shadow-sm"
               aria-label={`${unreadCount} unread notifications`}

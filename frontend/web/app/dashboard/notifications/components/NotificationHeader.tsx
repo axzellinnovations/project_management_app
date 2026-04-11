@@ -29,7 +29,7 @@ export function NotificationHeader({
           type="button"
           onClick={onMarkAllAsRead}
           disabled={unreadCount === 0}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#D0D5DD] bg-white px-3 py-2 text-xs font-bold text-[#344054] hover:bg-[#F9FAFB] disabled:opacity-50 transition-all active:scale-95 font-outfit"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#D0D5DD] bg-white px-3 py-2.5 min-h-[44px] sm:min-h-0 text-xs font-bold text-[#344054] hover:bg-[#F9FAFB] disabled:opacity-50 transition-all active:scale-95 font-outfit"
         >
           <CheckCheck size={14} />
           Mark all as read
@@ -38,7 +38,7 @@ export function NotificationHeader({
           type="button"
           onClick={onDeleteAll}
           disabled={totalCount === 0 || isDeletingAll}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-100 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-all active:scale-95 font-outfit"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-100 bg-white px-3 py-2.5 min-h-[44px] sm:min-h-0 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-all active:scale-95 font-outfit"
         >
           <Trash2 size={14} />
           {isDeletingAll ? 'Deleting...' : 'Delete all'}

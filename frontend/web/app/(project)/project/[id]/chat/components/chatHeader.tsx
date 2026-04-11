@@ -74,7 +74,7 @@ export function ChatHeader({
         : 'Team workspace';
 
   return (
-    <div className="h-14 sm:h-16 px-3 sm:px-5 flex items-center justify-between border-b border-gray-100 flex-shrink-0 sticky top-0 z-30 bg-white/95 supports-[backdrop-filter]:backdrop-blur backdrop-blur">
+    <div className="h-12 sm:h-14 md:h-16 px-2.5 sm:px-5 flex items-center justify-between border-b border-gray-100 flex-shrink-0 sticky top-0 z-30 bg-white/95 supports-[backdrop-filter]:backdrop-blur backdrop-blur">
       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <button
           className="lg:hidden h-11 w-11 -ml-1 rounded-full hover:bg-gray-100 text-gray-600 flex items-center justify-center flex-shrink-0"
@@ -83,18 +83,18 @@ export function ChatHeader({
         >
           <ArrowLeft size={18} />
         </button>
-        <div className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+        <div className="w-9 h-9 sm:w-9 sm:h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
           {headerIcon}
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-[15px] font-semibold text-gray-900 truncate">{headerTitle}</h2>
+            <h2 className="text-[14px] sm:text-[15px] font-semibold text-gray-900 truncate">{headerTitle}</h2>
             <span
               className={`w-2 h-2 rounded-full flex-shrink-0 transition-colors ${isConnected ? 'bg-emerald-400' : 'bg-amber-400'}`}
               title={isConnected ? 'Connected' : 'Disconnected'}
             />
           </div>
-          <p className="text-[12px] text-gray-400 truncate">{headerSub}</p>
+          <p className="text-[11px] sm:text-[12px] text-gray-400 truncate">{headerSub}</p>
         </div>
       </div>
 
@@ -109,7 +109,7 @@ export function ChatHeader({
         {phaseDEnabled && (
           <button
             onClick={onToggleSearch}
-            className="w-11 h-11 sm:w-9 sm:h-9 rounded-xl hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+            className="w-11 h-11 sm:w-10 sm:h-10 md:w-9 md:h-9 rounded-xl hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
             title="Search messages"
             aria-label="Toggle message search"
           >

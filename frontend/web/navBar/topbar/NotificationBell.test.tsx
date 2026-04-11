@@ -57,7 +57,7 @@ describe('NotificationBell', () => {
     expect(screen.queryByText('9+')).not.toBeInTheDocument();
   });
 
-  it('renders unread badge as 9+ when unread count is above nine', () => {
+  it('renders unread badge as 9+ when unread count is above nine', async () => {
     useGlobalNotificationsMock.mockReturnValue({
       notifications: [buildNotification(1, false)],
       unreadCount: 12,
@@ -69,7 +69,9 @@ describe('NotificationBell', () => {
 
     render(<NotificationBell />);
 
-    expect(screen.getByText('9+')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('9+')).toBeInTheDocument();
+    });
   });
 
   it('opens dropdown and shows empty state when there are no notifications', () => {

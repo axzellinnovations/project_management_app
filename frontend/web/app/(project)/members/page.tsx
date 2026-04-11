@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Users } from 'lucide-react';
 import EmptyState from '@/components/shared/EmptyState';
@@ -15,26 +15,19 @@ function normalizeProjectId(value: string | null | undefined): string | null {
 export default function MembersLegacyRoutePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(null);
-  const [isResolved, setIsResolved] = useState(false);
-
-  useEffect(() => {
-    const fromQuery = normalizeProjectId(searchParams.get('projectId'));
-    const fromStorage =
-      typeof window !== 'undefined'
-        ? normalizeProjectId(window.localStorage.getItem('currentProjectId'))
-        : null;
-
-    setResolvedProjectId(fromQuery || fromStorage);
-    setIsResolved(true);
-  }, [searchParams]);
+  const fromQuery = normalizeProjectId(searchParams.get('projectId'));
+  const fromStorage =
+    typeof window !== 'undefined'
+      ? normalizeProjectId(window.localStorage.getItem('currentProjectId'))
+      : null;
+  const resolvedProjectId = fromQuery || fromStorage;
 
   useEffect(() => {
     if (!resolvedProjectId) return;
     router.replace(`/members/${resolvedProjectId}`);
   }, [resolvedProjectId, router]);
 
-  if (!isResolved || resolvedProjectId) {
+  if (resolvedProjectId) {
     return (
       <div className="mobile-page-padding max-w-5xl mx-auto py-8 text-sm text-slate-500">
         Opening members...

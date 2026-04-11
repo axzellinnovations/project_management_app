@@ -32,6 +32,7 @@ export default function ProjectLayout({
   const searchParams = useSearchParams();
   const isChatRoute = pathname?.includes('/chat');
   const isInboxRoute = pathname?.startsWith('/inbox');
+  const isMembersRoute = pathname?.startsWith('/members');
 
   // Try to resolve projectId from path params or query params
   const projectId = (params?.projectId || params?.id || searchParams.get('projectId')) as string | undefined;
@@ -85,8 +86,8 @@ export default function ProjectLayout({
         className={
           isChatRoute
             ? 'h-full min-h-0 flex flex-col overflow-hidden'
-            : isInboxRoute
-              ? 'min-h-full'
+            : isInboxRoute || isMembersRoute
+              ? 'flex-1 min-h-0'
               : 'flex-1 min-h-0 overflow-hidden'
         }
       >

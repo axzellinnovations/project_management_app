@@ -89,12 +89,12 @@ export function NotificationsList({
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2 mt-3.5 sm:mt-4">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-3.5 sm:mt-4">
                       {unread && (
                         <button
                           type="button"
                           onClick={() => onMarkAsRead(notification.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 transition-all active:scale-95 font-outfit"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 sm:py-1.5 min-h-[44px] sm:min-h-0 text-[11px] font-bold text-blue-700 hover:bg-blue-100 transition-all active:scale-95 font-outfit"
                         >
                           <CheckCheck size={13} />
                           Read
@@ -104,7 +104,7 @@ export function NotificationsList({
                       {actionLink && (
                         <Link
                           href={actionLink}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-all active:scale-95 font-outfit"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 sm:py-1.5 min-h-[44px] sm:min-h-0 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-all active:scale-95 font-outfit"
                         >
                           <ExternalLink size={13} />
                           Open details
@@ -114,7 +114,7 @@ export function NotificationsList({
                       {relatedProject && (
                         <Link
                           href={`/summary/${relatedProject.projectId}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-all active:scale-95 font-outfit"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 sm:py-1.5 min-h-[44px] sm:min-h-0 text-[11px] font-bold text-slate-700 hover:bg-slate-50 transition-all active:scale-95 font-outfit"
                         >
                           {relatedProject.projectName}
                         </Link>
@@ -124,7 +124,7 @@ export function NotificationsList({
                         type="button"
                         onClick={(event) => onDeleteSingle(event, notification.id)}
                         disabled={isDeleting}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-red-50 bg-white px-3 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50 transition-all active:scale-95 disabled:opacity-50 font-outfit sm:ml-auto"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-red-50 bg-white px-3 py-2 sm:py-1.5 min-h-[44px] sm:min-h-0 text-[11px] font-bold text-red-600 hover:bg-red-50 transition-all active:scale-95 disabled:opacity-50 font-outfit sm:ml-auto"
                       >
                         <Trash2 size={13} />
                         {isDeleting ? 'Removing...' : 'Remove'}

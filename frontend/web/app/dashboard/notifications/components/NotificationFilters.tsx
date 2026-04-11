@@ -17,7 +17,7 @@ export function NotificationFilters({ filter, onFilterChange }: NotificationFilt
           key={option.key}
           type="button"
           onClick={() => onFilterChange(option.key)}
-          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all font-outfit ${
+          className={`px-4 py-2 sm:py-1.5 min-h-[44px] sm:min-h-0 rounded-lg text-xs font-bold transition-all font-outfit ${
             filter === option.key
               ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200'
               : 'text-slate-500 hover:text-slate-800'

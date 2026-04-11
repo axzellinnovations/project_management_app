@@ -126,7 +126,6 @@ export default function Sidebar() {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     let isCurrentlyMobile = window.innerWidth < 768;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMobile(isCurrentlyMobile);
     if (isCurrentlyMobile) setCollapsed(true);
 
@@ -177,7 +176,6 @@ export default function Sidebar() {
   /* -- effects -- */
   useEffect(() => {
     if (window.innerWidth >= 768) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCollapsed(localStorage.getItem('planora:sidebar:collapsed') === 'true');
     }
   }, []);

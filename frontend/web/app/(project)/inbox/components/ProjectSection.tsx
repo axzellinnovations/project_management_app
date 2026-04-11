@@ -18,7 +18,7 @@ export const ProjectSection = memo(function ProjectSection({
 
   return (
     <section
-      className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5"
+      className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 md:p-5"
       style={{ contentVisibility: 'auto', containIntrinsicSize: '420px' }}
     >
       <div className="flex items-center justify-between gap-3 mb-3">
@@ -46,7 +46,7 @@ export const ProjectSection = memo(function ProjectSection({
           <button
             type="button"
             onClick={() => setShowAllActivities((prev) => !prev)}
-            className="px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+            className="px-3 py-2 min-h-[44px] rounded-lg text-[13px] sm:text-[12px] font-semibold border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
           >
             {showAllActivities
               ? 'Show less'

@@ -23,11 +23,11 @@ export default function InboxPage() {
   } = useInboxData();
 
   return (
-    <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-8 flex flex-col gap-5">
+    <div className="mobile-page-padding max-w-[900px] mx-auto pb-28 sm:pb-8 flex flex-col gap-4 sm:gap-5">
       <div className="flex items-start gap-3">
         <div>
-          <h1 className="text-[22px] md:text-[26px] font-bold text-slate-900 tracking-tight">Chat Inbox</h1>
-          <p className="text-[13px] text-slate-600 mt-1">
+          <h1 className="text-[18px] sm:text-[22px] md:text-[26px] font-bold text-slate-900 tracking-tight">Chat Inbox</h1>
+          <p className="text-[12px] sm:text-[13px] text-slate-600 mt-1">
             All chat activity grouped by project. Open any conversation directly from here.
           </p>
         </div>
@@ -36,7 +36,7 @@ export default function InboxPage() {
       <div className="flex items-center gap-2 flex-wrap">
         <button
           onClick={() => setFilter('all')}
-          className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${
+          className={`px-3 py-2 min-h-[44px] rounded-lg text-[13px] sm:text-[12px] font-semibold transition-colors ${
             filter === 'all' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
           }`}
         >
@@ -44,7 +44,7 @@ export default function InboxPage() {
         </button>
         <button
           onClick={() => setFilter('unread')}
-          className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${
+          className={`px-3 py-2 min-h-[44px] rounded-lg text-[13px] sm:text-[12px] font-semibold transition-colors ${
             filter === 'unread' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
           }`}
         >
@@ -54,7 +54,7 @@ export default function InboxPage() {
         <button
           onClick={() => void markAllAsRead()}
           disabled={unreadCount === 0 || loading || isMarkingAllRead}
-          className="px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-2 min-h-[44px] rounded-lg text-[13px] sm:text-[12px] font-semibold transition-colors border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isMarkingAllRead ? 'Marking…' : 'Mark All Read'}
         </button>

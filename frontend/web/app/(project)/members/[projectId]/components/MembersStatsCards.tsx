@@ -12,8 +12,8 @@ export function MembersStatsCards({
   pendingCount,
 }: MembersStatsCardsProps) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-      <div className="bg-white rounded-xl shadow p-4 flex flex-row items-center justify-between min-w-[180px]">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+      <div className="bg-white rounded-xl shadow p-4 flex flex-row items-center justify-between min-w-0">
         <div>
           <div className="text-gray-500 text-sm mb-1">Total Members</div>
           <div className="text-xl font-semibold text-gray-900">{totalMembers}</div>
@@ -27,7 +27,7 @@ export function MembersStatsCards({
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow p-4 flex flex-row items-center justify-between min-w-[180px]">
+      <div className="bg-white rounded-xl shadow p-4 flex flex-row items-center justify-between min-w-0">
         <div>
           <div className="text-gray-500 text-sm mb-1">Active</div>
           <div className="text-xl font-semibold text-gray-900">{activeCount}</div>
@@ -39,7 +39,7 @@ export function MembersStatsCards({
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow p-4 flex flex-row items-center justify-between min-w-[180px]">
+      <div className="bg-white rounded-xl shadow p-4 flex flex-row items-center justify-between min-w-0">
         <div>
           <div className="text-gray-500 text-sm mb-1">Admins</div>
           <div className="text-xl font-semibold text-gray-900">{adminCount}</div>
@@ -53,7 +53,7 @@ export function MembersStatsCards({
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow p-4 flex flex-row items-center justify-between min-w-[180px]">
+      <div className="bg-white rounded-xl shadow p-4 flex flex-row items-center justify-between min-w-0">
         <div>
           <div className="text-gray-500 text-sm mb-1">Pending</div>
           <div className="text-xl font-semibold text-gray-900">{pendingCount}</div>
