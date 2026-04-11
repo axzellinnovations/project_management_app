@@ -80,7 +80,7 @@ const MilestoneCard: React.FC<MilestoneCardProps> = ({ milestone, onEdit, onDele
         <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => setMenuOpen((v) => !v)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors opacity-0 group-hover:opacity-100"
+            className="p-1.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors sm:opacity-0 sm:group-hover:opacity-100 opacity-100"
           >
             <MoreHorizontal size={15} />
           </button>
@@ -88,13 +88,13 @@ const MilestoneCard: React.FC<MilestoneCardProps> = ({ milestone, onEdit, onDele
             <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden min-w-[120px]">
               <button
                 onClick={() => { onEdit(milestone); setMenuOpen(false); }}
-                className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 text-gray-700"
+                className="w-full text-left px-3 py-2 min-h-[44px] text-sm flex items-center gap-2 hover:bg-gray-50 text-gray-700"
               >
                 <Edit2 size={13} /> Edit
               </button>
               <button
                 onClick={() => { onDelete(milestone.id); setMenuOpen(false); }}
-                className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-red-50 text-red-600"
+                className="w-full text-left px-3 py-2 min-h-[44px] text-sm flex items-center gap-2 hover:bg-red-50 text-red-600"
               >
                 <Trash2 size={13} /> Delete
               </button>

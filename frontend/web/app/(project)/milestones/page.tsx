@@ -134,7 +134,7 @@ export default function MilestonesPage() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full bg-gray-50 overflow-y-auto">
-      <div className="max-w-3xl mx-auto w-full px-4 py-6">
+      <div className="max-w-5xl mx-auto w-full px-4 py-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -145,7 +145,7 @@ export default function MilestonesPage() {
           </div>
           <button
             onClick={() => { setShowCreate(true); setEditing(null); }}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm transition-colors"
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 min-h-[44px] rounded-lg shadow-sm transition-colors"
           >
             <Plus size={14} /> New Milestone
           </button>
@@ -176,7 +176,7 @@ export default function MilestonesPage() {
             <p className="text-sm text-gray-400 mt-1">Create one to track major goals</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {milestones.map((m) =>
               editing?.id === m.id ? (
                 <MilestoneForm
