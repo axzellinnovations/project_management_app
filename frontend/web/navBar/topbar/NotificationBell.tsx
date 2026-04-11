@@ -269,13 +269,16 @@ export function NotificationBell() {
     <div className="relative" ref={rootRef}>
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className="relative p-2 rounded-full hover:bg-black/5 transition-colors"
+        className="relative inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-600 hover:text-slate-800 hover:bg-black/5 transition-colors max-sm:h-9 max-sm:w-9"
       >
-        <span className="relative inline-flex">
-          <Bell size={20} className="text-cu-text-secondary" />
+        <span className="relative inline-flex items-center justify-center leading-none">
+          <Bell size={20} strokeWidth={2.2} className="block text-current" />
           {unreadCount > 0 && (
-            <span className="pointer-events-none absolute -right-1 -top-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full border-2 border-white bg-cu-danger px-1 text-[10px] font-bold leading-none text-white shadow-sm">
-              {unreadCount > 9 ? '9+' : unreadCount}
+            <span
+              className="pointer-events-none absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-cu-danger px-1 text-[10px] font-bold leading-none text-white shadow-sm"
+              aria-label={`${unreadCount} unread notifications`}
+            >
+              <span className="tabular-nums">{unreadCount > 9 ? '9+' : unreadCount}</span>
             </span>
           )}
         </span>

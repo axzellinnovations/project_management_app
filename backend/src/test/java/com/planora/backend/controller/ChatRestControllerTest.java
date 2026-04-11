@@ -17,6 +17,7 @@ import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
 import com.planora.backend.service.ChatWebhookService;
 import com.planora.backend.service.JWTService;
+import com.planora.backend.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,6 +69,8 @@ class ChatRestControllerTest {
     @MockBean
     private ChatDocumentService chatDocumentService;
     @MockBean
+    private NotificationService notificationService;
+    @MockBean
     private JWTService jwtService;
     @MockBean
     private UserDetailsService userDetailsService;
@@ -97,6 +100,7 @@ class ChatRestControllerTest {
         when(userRepository.findByUsernameIgnoreCase("alice")).thenReturn(Optional.of(alice));
         when(userRepository.findByEmailIgnoreCase("alice")).thenReturn(Optional.of(alice));
         when(teamMemberRepository.findByTeamIdAndUserUserId(7L, 10L)).thenReturn(Optional.of(member));
+        when(teamMemberRepository.findByTeamId(7L)).thenReturn(List.of(member));
     }
 
     @Test
@@ -223,5 +227,52 @@ class ChatRestControllerTest {
                 .andExpect(jsonPath("$.phaseEEnabled").value(true))
                 .andExpect(jsonPath("$.webhooksEnabled").value(true))
                 .andExpect(jsonPath("$.telemetryEnabled").value(true));
+    }
+
+    @Test
+    @WithMockUser(username = "alice")
+    void createRoom_notifiesOnlyAddedMembers() throws Exception {
+        User bob = new User();
+        bob.setUserId(11L);
+        bob.setUsername("bob");
+        bob.setEmail("bob@example.com");
+
+        TeamMember bobMember = new TeamMember();
+        bobMember.setUser(bob);
+        bobMember.setTeam(team);
+
+        TeamMember aliceMember = new TeamMember();
+        aliceMember.setUser(alice);
+        aliceMember.setTeam(team);
+
+        when(userRepository.findByUsernameIgnoreCase("bob")).thenReturn(Optional.of(bob));
+        when(userRepository.findByEmailIgnoreCase("bob")).thenReturn(Optional.of(bob));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(7L, 11L)).thenReturn(Optional.of(bobMember));
+        when(teamMemberRepository.findByTeamId(7L)).thenReturn(List.of(bobMember, aliceMember));
+
+        ChatRoom savedRoom = new ChatRoom();
+        savedRoom.setId(91L);
+        savedRoom.setName("incident");
+        savedRoom.setProjectId(5L);
+        savedRoom.setCreatedBy("alice");
+        savedRoom.setArchived(false);
+
+        when(chatRoomRepository.save(any(ChatRoom.class))).thenReturn(savedRoom);
+        when(chatRoomMemberRepository.findByChatRoomIdAndUserUserId(eq(91L), anyLong())).thenReturn(Optional.empty());
+
+        var request = new ChatRestController.ChatRoomRequest("incident", List.of("bob"));
+
+        mockMvc.perform(post("/api/projects/5/chat/rooms")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(91L))
+                .andExpect(jsonPath("$.name").value("incident"));
+
+        verify(notificationService).createNotification(
+                eq(bob),
+                contains("added you to #incident"),
+                eq("/project/5/chat?roomId=91"));
     }
 }

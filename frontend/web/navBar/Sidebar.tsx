@@ -7,7 +7,6 @@ import { fetchChatInbox, type ChatInboxResponse } from '@/services/chat-service'
 
 /* -- Hooks -- */
 import { useSidebarProjects } from '@/hooks/useSidebarProjects';
-import useNotificationSocket from '@/hooks/useNotificationSocket';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 /* -- Sub-components -- */
@@ -44,14 +43,14 @@ function InboxNavRow({ collapsed, active, badge, onClick }: NavRowProps) {
         <div className="relative">
           <InboxIcon />
           <div className="absolute -top-1 -right-2">
-            <InboxBadge count={badge} />
+            <InboxBadge count={badge} size="overlay" cap={99} />
           </div>
         </div>
       }
       label="Inbox"
       collapsed={collapsed}
       active={active}
-      badge={badge}
+      badge={0}
       onClick={onClick}
     />
   );
@@ -89,7 +88,7 @@ const subscribeToBrowserStorage = (onChange: () => void) => {
 export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { unreadCount: globalUnreadCount } = useGlobalNotifications();
+  const { unreadCount: globalUnreadCount, notifications } = useGlobalNotifications();
 
   const token = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
@@ -148,16 +147,8 @@ export default function Sidebar() {
   const recentRef = useRef<HTMLDivElement>(null);
   const inboxRef = useRef<HTMLDivElement>(null);
   const lastInboxFetchedAtRef = useRef(0);
+  const latestSyncedNotificationRef = useRef<number | null>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-
-  const getActiveProjectId = useCallback(() => {
-    if (typeof window === 'undefined') return null;
-    return (
-      new URLSearchParams(window.location.search).get('projectId')
-      || localStorage.getItem('currentProjectId')
-      || (recentProjects.length > 0 ? recentProjects[0].id.toString() : null)
-    );
-  }, [recentProjects]);
 
   /* -- fetch inbox activity -- */
   const fetchInboxActivity = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
@@ -180,16 +171,8 @@ export default function Sidebar() {
   }, []);
 
   const refreshInboxCounts = useCallback(() => {
-    const projectId = getActiveProjectId();
-    if (!projectId) return;
     void fetchInboxActivity({ force: true });
-  }, [getActiveProjectId, fetchInboxActivity]);
-
-  useNotificationSocket({
-    token,
-    enabled: Boolean(token),
-    onNotification: refreshInboxCounts,
-  });
+  }, [fetchInboxActivity]);
 
   /* -- effects -- */
   useEffect(() => {
@@ -213,6 +196,18 @@ export default function Sidebar() {
       window.removeEventListener('planora:chat-inbox-updated', handleInboxUpdated);
     };
   }, [fetchInboxActivity]);
+
+  useEffect(() => {
+    const latest = notifications[0];
+    if (!latest || latest.id === latestSyncedNotificationRef.current) {
+      return;
+    }
+
+    latestSyncedNotificationRef.current = latest.id;
+    if (typeof latest.link === 'string' && latest.link.includes('/chat')) {
+      refreshInboxCounts();
+    }
+  }, [notifications, refreshInboxCounts]);
 
   /* click-outside to close dropdowns */
   useEffect(() => {

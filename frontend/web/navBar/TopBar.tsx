@@ -119,6 +119,7 @@ function TopBarContent() {
     if (pathname.startsWith('/list')) return 'list';
     if (pathname.startsWith('/calendar')) return 'calendar';
     if (pathname.startsWith('/burndown')) return 'burndown';
+    if (pathname.startsWith('/dashboard/notifications') || pathname.startsWith('/notifications')) return 'notifications';
     if (pathname.startsWith('/milestones')) return 'milestones';
     if (pathname.startsWith('/workload')) return 'workload';
     if (pathname.startsWith('/inbox')) return 'inbox';
@@ -221,7 +222,14 @@ function TopBarContent() {
   };
 
   const isProjectPage = useMemo(() => {
+    if (pathname.startsWith('/dashboard/notifications')) {
+      return true;
+    }
+
     const hasProjectContext = Boolean(projectId);
+    if (pathname.startsWith('/inbox')) {
+      return true;
+    }
     if (pathname.startsWith('/project/') && pathname.includes('/chat')) {
       return true;
     }
@@ -422,7 +430,7 @@ function TopBarContent() {
 
           <div className="flex items-center gap-4 max-sm:gap-3 shrink-0">
             <NotificationBell />
-            <div className="flex">
+            <div className="flex items-center">
               {profileAvatar}
             </div>
           </div>

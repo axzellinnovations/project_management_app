@@ -1,5 +1,6 @@
 ﻿import { useState, useCallback } from 'react';
 import * as chatApi from '@/services/chat-service';
+import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
 import type {
   ChatMessage,
   DirectChatSummary,
@@ -9,6 +10,7 @@ import type {
 
 const CHAT_SUMMARIES_TTL_MS = 5 * 60_000;
 const chatSummariesCache = new Map<string, { timestamp: number; data: chatApi.ChatSummaries }>();
+const CHAT_UNREAD_BADGE_TTL_MS = 60_000;
 
 function applySummariesState(
   summaries: chatApi.ChatSummaries,
@@ -97,14 +99,34 @@ export function useChatUnread(projectId: string) {
   }, [projectId]);
 
   const loadUnreadBadge = useCallback(async () => {
+    const badgeCacheKey = buildSessionCacheKey('chat-unread-badge', [projectId]);
+    if (badgeCacheKey) {
+      const cachedBadge = getSessionCache<UnreadBadgeSummary>(badgeCacheKey, { allowStale: true });
+      if (cachedBadge.data) {
+        setUnreadBadge({
+          teamUnread: Number(cachedBadge.data.teamUnread) || 0,
+          roomsUnread: Number(cachedBadge.data.roomsUnread) || 0,
+          directsUnread: Number(cachedBadge.data.directsUnread) || 0,
+          totalUnread: Number(cachedBadge.data.totalUnread) || 0,
+        });
+        if (!cachedBadge.isStale) {
+          return;
+        }
+      }
+    }
+
     try {
       const badge = await chatApi.fetchUnreadBadge(projectId);
-      setUnreadBadge({
+      const normalizedBadge = {
         teamUnread: Number(badge.teamUnread) || 0,
         roomsUnread: Number(badge.roomsUnread) || 0,
         directsUnread: Number(badge.directsUnread) || 0,
         totalUnread: Number(badge.totalUnread) || 0,
-      });
+      };
+      setUnreadBadge(normalizedBadge);
+      if (badgeCacheKey) {
+        setSessionCache(badgeCacheKey, normalizedBadge, CHAT_UNREAD_BADGE_TTL_MS);
+      }
     } catch {
       // silently ignore
     }
@@ -117,10 +139,24 @@ export function useChatUnread(projectId: string) {
     ) => {
       const cached = chatSummariesCache.get(projectId);
       const isCacheFresh = Boolean(cached && Date.now() - cached.timestamp < CHAT_SUMMARIES_TTL_MS);
+      const summariesCacheKey = buildSessionCacheKey('chat-summaries', [projectId]);
 
-      if (cached) {
+      if (!cached && summariesCacheKey) {
+        const persisted = getSessionCache<chatApi.ChatSummaries>(summariesCacheKey, { allowStale: true });
+        if (persisted.data) {
+          chatSummariesCache.set(projectId, {
+            timestamp: persisted.isStale ? 0 : Date.now(),
+            data: persisted.data,
+          });
+        }
+      }
+
+      const activeCache = chatSummariesCache.get(projectId);
+      const hasFreshCache = Boolean(activeCache && Date.now() - activeCache.timestamp < CHAT_SUMMARIES_TTL_MS);
+
+      if (activeCache) {
         applySummariesState(
-          cached.data,
+          activeCache.data,
           setTeamUnseenCount,
           setPrivateUnseenCounts,
           setRoomUnseenCounts,
@@ -130,13 +166,16 @@ export function useChatUnread(projectId: string) {
         );
       }
 
-      if (isCacheFresh) {
+      if (isCacheFresh || hasFreshCache) {
         return;
       }
 
       try {
         const summaries = await chatApi.fetchChatSummaries(projectId);
         chatSummariesCache.set(projectId, { timestamp: Date.now(), data: summaries });
+        if (summariesCacheKey) {
+          setSessionCache(summariesCacheKey, summaries, CHAT_SUMMARIES_TTL_MS);
+        }
         applySummariesState(
           summaries,
           setTeamUnseenCount,
@@ -147,7 +186,7 @@ export function useChatUnread(projectId: string) {
           setRoomLastMessages,
         );
       } catch (err) {
-        if (!cached) {
+        if (!activeCache) {
           console.error('Error fetching chat summaries:', err);
         }
       }

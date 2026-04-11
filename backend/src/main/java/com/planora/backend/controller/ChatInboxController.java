@@ -34,8 +34,8 @@ public class ChatInboxController {
             normalizedStatus = "all";
         }
 
-        int normalizedProjectLimit = Math.min(Math.max(projectLimit, 1), 100);
-        int normalizedActivityLimit = Math.min(Math.max(activityLimit, 1), 500);
+        int normalizedProjectLimit = projectLimit <= 0 ? 0 : Math.min(projectLimit, 500);
+        int normalizedActivityLimit = activityLimit <= 0 ? 1 : Math.min(activityLimit, 1000);
         if (userId == null || authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
             return ResponseEntity.status(401).build();
         }

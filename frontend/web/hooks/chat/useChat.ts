@@ -297,16 +297,26 @@ export const useChat = (projectId: string) => {
     async (roomId: number) => {
       await msgLoadRoom(roomId, hydrateReactions);
       setRoomUnseenCounts(prev => ({ ...prev, [roomId]: 0 }));
+      try {
+        await chatApi.markRoomAsRead(projectId, roomId);
+      } catch {
+        // Keep UI responsive even if read-state sync fails.
+      }
     },
-    [msgLoadRoom, hydrateReactions, setRoomUnseenCounts],
+    [msgLoadRoom, hydrateReactions, setRoomUnseenCounts, projectId],
   );
 
   const loadPrivateHistory = useCallback(
     async (recipient: string) => {
       await msgLoadPrivate(recipient, currentUser, hydrateReactions);
       setPrivateUnseenCounts(prev => ({ ...prev, [recipient]: 0 }));
+      try {
+        await chatApi.markDirectConversationAsRead(projectId, recipient);
+      } catch {
+        // Keep UI responsive even if read-state sync fails.
+      }
     },
-    [msgLoadPrivate, currentUser, hydrateReactions, setPrivateUnseenCounts],
+    [msgLoadPrivate, currentUser, hydrateReactions, setPrivateUnseenCounts, projectId],
   );
 
   const sendTyping = useCallback(

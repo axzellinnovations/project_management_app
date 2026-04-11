@@ -18,6 +18,7 @@ import java.util.concurrent.Executor;
 
 import com.planora.backend.model.ChatMessage;
 import com.planora.backend.model.ChatMessage.ChatType;
+import com.planora.backend.repository.ChatMessageRepository;
 import com.planora.backend.repository.ChatRoomMemberRepository;
 import com.planora.backend.repository.ChatRoomRepository;
 import com.planora.backend.repository.ProjectRepository;
@@ -82,6 +83,9 @@ public class ChatController {
     @Autowired
     private ChatWebhookService chatWebhookService;
 
+    @Autowired
+    private ChatMessageRepository chatMessageRepository;
+
     // ── Added for persistent chat notifications ───────────────────────────────
     // Injects NotificationService so that DMs and @mentions create bell
     // notifications visible in the TopBar, not just transient WebSocket events.
@@ -136,20 +140,7 @@ public class ChatController {
             publishMentionNotifications(projectId, saved, "PRIVATE");
             chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "PRIVATE", saved);
             publishUnreadBadgesForProject(projectId);
-
-            // ── NOTIFICATION: persistent bell alert for the DM recipient ──────────
-            var senderUser = resolveUserByEmailOrUsername(canonicalSender);
-            var recipientUser = resolveUserByEmailOrUsername(canonicalRecipient);
-            if (recipientUser != null && senderUser != null
-                    && !recipientUser.getUserId().equals(senderUser.getUserId())) {
-                String senderDisplay = (senderUser.getFullName() != null && !senderUser.getFullName().isBlank())
-                        ? senderUser.getFullName() : senderUser.getUsername();
-                String project = projectRepository.findById(projectId)
-                        .map(p -> p.getName()).orElse("the project");
-                String notifMessage = senderDisplay + " sent you a message in \"" + project + "\"";
-                String notifLink = "/project/" + projectId + "/chat";
-                notificationService.createNotificationIfNotDuplicate(recipientUser, notifMessage, notifLink);
-            }
+            publishPrivateMessageNotification(projectId, saved);
         });
     }
 
@@ -203,6 +194,7 @@ public class ChatController {
         
         chatTaskExecutor.execute(() -> {
             publishMentionNotifications(projectId, saved, "THREAD");
+            publishThreadReplyNotifications(projectId, rootMessageId, saved);
             chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "THREAD", saved);
         });
     }
@@ -250,6 +242,8 @@ public class ChatController {
         simpMessagingTemplate.convertAndSend(
                 "/topic/project/" + projectId + "/messages/" + messageId + "/reactions",
             Objects.requireNonNull(reactions));
+
+        chatTaskExecutor.execute(() -> publishReactionNotification(projectId, messageId, username, payload.emoji()));
     }
 
     private void validateRoomMembership(Long roomId, String usernameOrEmail) {
@@ -522,6 +516,125 @@ public class ChatController {
                         simpMessagingTemplate.convertAndSendToUser(user.getEmail().toLowerCase(), destination, savedMessage);
                     }
                 });
+    }
+
+    private void publishPrivateMessageNotification(Long projectId, ChatMessage savedMessage) {
+        if (savedMessage == null || savedMessage.getSender() == null || savedMessage.getRecipient() == null) {
+            return;
+        }
+
+        var senderUser = resolveUserByEmailOrUsername(savedMessage.getSender());
+        var recipientUser = resolveUserByEmailOrUsername(savedMessage.getRecipient());
+        if (recipientUser == null || senderUser == null
+                || recipientUser.getUserId() == null
+                || senderUser.getUserId() == null
+                || recipientUser.getUserId().equals(senderUser.getUserId())) {
+            return;
+        }
+
+        String senderDisplay = senderUser.getFullName() != null && !senderUser.getFullName().isBlank()
+                ? senderUser.getFullName()
+                : senderUser.getUsername();
+        String project = projectRepository.findById(projectId)
+                .map(p -> p.getName()).orElse("the project");
+        String notifMessage = senderDisplay + " sent you a message in \"" + project + "\"";
+        String senderAlias = resolveCanonicalChatIdentifier(savedMessage.getSender());
+        String notifLink = "/project/" + projectId + "/chat?with=" + senderAlias;
+
+        // Keep parity with group-chat path: always persist and push in realtime.
+        notificationService.createNotification(recipientUser, notifMessage, notifLink);
+    }
+
+    private void publishThreadReplyNotifications(Long projectId, Long rootMessageId, ChatMessage savedReply) {
+        if (savedReply == null) {
+            return;
+        }
+
+        var root = chatMessageRepository.findByIdAndProjectId(rootMessageId, projectId).orElse(null);
+        if (root == null) {
+            return;
+        }
+
+        if (root.getRoomId() != null) {
+            publishRoomChatNotifications(projectId, root.getRoomId(), savedReply);
+            return;
+        }
+
+        if (root.getRecipient() != null && !root.getRecipient().isBlank()) {
+            publishPrivateThreadReplyNotification(projectId, root, savedReply);
+            return;
+        }
+
+        publishTeamChatNotifications(projectId, savedReply);
+    }
+
+    private void publishPrivateThreadReplyNotification(Long projectId, ChatMessage rootMessage, ChatMessage savedReply) {
+        var senderUser = resolveUserByEmailOrUsername(savedReply.getSender());
+        if (senderUser == null || senderUser.getUserId() == null) {
+            return;
+        }
+
+        var rootSender = resolveUserByEmailOrUsername(rootMessage.getSender());
+        var rootRecipient = resolveUserByEmailOrUsername(rootMessage.getRecipient());
+        com.planora.backend.model.User counterpart = null;
+
+        if (rootSender != null && rootSender.getUserId() != null
+                && senderUser.getUserId().equals(rootSender.getUserId())) {
+            counterpart = rootRecipient;
+        } else if (rootRecipient != null && rootRecipient.getUserId() != null
+                && senderUser.getUserId().equals(rootRecipient.getUserId())) {
+            counterpart = rootSender;
+        }
+
+        if (counterpart == null || counterpart.getUserId() == null
+                || counterpart.getUserId().equals(senderUser.getUserId())) {
+            return;
+        }
+
+        String senderDisplay = senderUser.getFullName() != null && !senderUser.getFullName().isBlank()
+                ? senderUser.getFullName()
+                : senderUser.getUsername();
+        String project = projectRepository.findById(projectId).map(p -> p.getName()).orElse("the project");
+        String notifMessage = senderDisplay + " replied in a thread in \"" + project + "\"";
+        String notifLink = "/project/" + projectId + "/chat?with=" + resolveCanonicalChatIdentifier(savedReply.getSender());
+
+        notificationService.createNotification(counterpart, notifMessage, notifLink);
+    }
+
+    private void publishReactionNotification(Long projectId, Long messageId, String actorAlias, String emoji) {
+        var message = chatMessageRepository.findByIdAndProjectId(messageId, projectId).orElse(null);
+        if (message == null || message.getSender() == null || message.getSender().isBlank()) {
+            return;
+        }
+
+        var actorUser = resolveUserByEmailOrUsername(actorAlias);
+        var messageSender = resolveUserByEmailOrUsername(message.getSender());
+        if (actorUser == null || messageSender == null
+                || actorUser.getUserId() == null || messageSender.getUserId() == null
+                || actorUser.getUserId().equals(messageSender.getUserId())) {
+            return;
+        }
+
+        String actorDisplay = actorUser.getFullName() != null && !actorUser.getFullName().isBlank()
+                ? actorUser.getFullName()
+                : actorUser.getUsername();
+        String normalizedEmoji = emoji != null && !emoji.isBlank() ? emoji.trim() : "a reaction";
+        String notifMessage = actorDisplay + " reacted " + normalizedEmoji + " to your message";
+        String notifLink = buildNotificationLinkForMessage(projectId, message, resolveCanonicalChatIdentifier(actorAlias));
+
+        notificationService.createNotification(messageSender, notifMessage, notifLink);
+    }
+
+    private String buildNotificationLinkForMessage(Long projectId, ChatMessage message, String actorAlias) {
+        if (message.getRoomId() != null) {
+            return "/project/" + projectId + "/chat?roomId=" + message.getRoomId();
+        }
+
+        if (message.getRecipient() != null && !message.getRecipient().isBlank()) {
+            return "/project/" + projectId + "/chat?with=" + actorAlias;
+        }
+
+        return "/project/" + projectId + "/chat?view=team";
     }
 
     private void publishMentionNotifications(Long projectId, ChatMessage savedMessage, String scope) {

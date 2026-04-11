@@ -79,7 +79,7 @@ public class ChatInboxService {
             return new ChatInboxResponse(List.of(), List.of(), 0, 0, 0);
         }
 
-        List<ProjectResponseDTO> projects = projectService.getProjectsForUser(userId);
+        List<ProjectResponseDTO> projects = projectService.getProjectsForUser(userId, null, null, null);
         if (projectLimit > 0 && projects.size() > projectLimit) {
             projects = projects.subList(0, projectLimit);
         }

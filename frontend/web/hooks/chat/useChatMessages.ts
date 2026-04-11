@@ -2,14 +2,14 @@
 import * as chatApi from '@/services/chat-service';
 import type { ChatMessage } from '@/app/(project)/project/[id]/chat/components/chat';
 import { mergeMessage, isSameIdentity } from './chat-utils';
+import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
 
-const ROOM_MESSAGES_CACHE_PREFIX = 'planora:chat-room-messages:';
 const ROOM_MESSAGES_CACHE_LIMIT = 50;
-
-interface RoomMessagesCachePayload {
-  timestamp: number;
-  messages: ChatMessage[];
-}
+const TEAM_MESSAGES_CACHE_LIMIT = 80;
+const PRIVATE_MESSAGES_CACHE_LIMIT = 80;
+const ROOM_MESSAGES_CACHE_TTL_MS = 120_000;
+const TEAM_MESSAGES_CACHE_TTL_MS = 90_000;
+const PRIVATE_MESSAGES_CACHE_TTL_MS = 90_000;
 
 function toWindowedRoomMessages(messages: ChatMessage[]): ChatMessage[] {
   if (!Array.isArray(messages)) return [];
@@ -17,8 +17,22 @@ function toWindowedRoomMessages(messages: ChatMessage[]): ChatMessage[] {
   return messages.slice(-ROOM_MESSAGES_CACHE_LIMIT);
 }
 
-function getRoomCacheKey(projectId: string, roomId: number): string {
-  return `${ROOM_MESSAGES_CACHE_PREFIX}${projectId}:${roomId}`;
+function toWindowedMessages(messages: ChatMessage[], limit: number): ChatMessage[] {
+  if (!Array.isArray(messages)) return [];
+  if (messages.length <= limit) return messages;
+  return messages.slice(-limit);
+}
+
+function getRoomCacheKey(projectId: string, roomId: number): string | null {
+  return buildSessionCacheKey('chat-room-messages', [projectId, roomId]);
+}
+
+function getTeamCacheKey(projectId: string): string | null {
+  return buildSessionCacheKey('chat-team-messages', [projectId]);
+}
+
+function getPrivateCacheKey(projectId: string, recipient: string): string | null {
+  return buildSessionCacheKey('chat-private-messages', [projectId, recipient.toLowerCase()]);
 }
 
 export function useChatMessages(projectId: string) {
@@ -29,38 +43,80 @@ export function useChatMessages(projectId: string) {
   const [privateLastMessages, setPrivateLastMessages] = useState<Record<string, ChatMessage | null>>({});
   const [roomLastMessages, setRoomLastMessages] = useState<Record<number, ChatMessage | null>>({});
 
-  const readRoomMessagesCache = useCallback((roomId: number): ChatMessage[] | null => {
-    if (typeof window === 'undefined') return null;
-    const raw = window.sessionStorage.getItem(getRoomCacheKey(projectId, roomId));
-    if (!raw) return null;
+  const readRoomMessagesCache = useCallback((roomId: number): { data: ChatMessage[]; isStale: boolean } | null => {
+    const cacheKey = getRoomCacheKey(projectId, roomId);
+    if (!cacheKey) return null;
 
-    try {
-      const parsed = JSON.parse(raw) as RoomMessagesCachePayload;
-      if (!Array.isArray(parsed.messages)) return null;
-      return toWindowedRoomMessages(parsed.messages);
-    } catch {
-      window.sessionStorage.removeItem(getRoomCacheKey(projectId, roomId));
-      return null;
-    }
+    const cached = getSessionCache<ChatMessage[]>(cacheKey, { allowStale: true });
+    if (!cached.data || !Array.isArray(cached.data)) return null;
+
+    return {
+      data: toWindowedRoomMessages(cached.data),
+      isStale: cached.isStale,
+    };
+  }, [projectId]);
+
+  const readTeamMessagesCache = useCallback((): { data: ChatMessage[]; isStale: boolean } | null => {
+    const cacheKey = getTeamCacheKey(projectId);
+    if (!cacheKey) return null;
+
+    const cached = getSessionCache<ChatMessage[]>(cacheKey, { allowStale: true });
+    if (!cached.data || !Array.isArray(cached.data)) return null;
+
+    return {
+      data: toWindowedMessages(cached.data, TEAM_MESSAGES_CACHE_LIMIT),
+      isStale: cached.isStale,
+    };
+  }, [projectId]);
+
+  const readPrivateMessagesCache = useCallback((recipient: string): { data: ChatMessage[]; isStale: boolean } | null => {
+    const cacheKey = getPrivateCacheKey(projectId, recipient);
+    if (!cacheKey) return null;
+
+    const cached = getSessionCache<ChatMessage[]>(cacheKey, { allowStale: true });
+    if (!cached.data || !Array.isArray(cached.data)) return null;
+
+    return {
+      data: toWindowedMessages(cached.data, PRIVATE_MESSAGES_CACHE_LIMIT),
+      isStale: cached.isStale,
+    };
   }, [projectId]);
 
   const writeRoomMessagesCache = useCallback((roomId: number, messages: ChatMessage[]) => {
-    if (typeof window === 'undefined') return;
-    const payload: RoomMessagesCachePayload = {
-      timestamp: Date.now(),
-      messages: toWindowedRoomMessages(messages),
-    };
-    window.sessionStorage.setItem(getRoomCacheKey(projectId, roomId), JSON.stringify(payload));
+    const cacheKey = getRoomCacheKey(projectId, roomId);
+    if (!cacheKey) return;
+    setSessionCache(cacheKey, toWindowedRoomMessages(messages), ROOM_MESSAGES_CACHE_TTL_MS);
+  }, [projectId]);
+
+  const writeTeamMessagesCache = useCallback((messages: ChatMessage[]) => {
+    const cacheKey = getTeamCacheKey(projectId);
+    if (!cacheKey) return;
+    setSessionCache(cacheKey, toWindowedMessages(messages, TEAM_MESSAGES_CACHE_LIMIT), TEAM_MESSAGES_CACHE_TTL_MS);
+  }, [projectId]);
+
+  const writePrivateMessagesCache = useCallback((recipient: string, messages: ChatMessage[]) => {
+    const cacheKey = getPrivateCacheKey(projectId, recipient);
+    if (!cacheKey) return;
+    setSessionCache(cacheKey, toWindowedMessages(messages, PRIVATE_MESSAGES_CACHE_LIMIT), PRIVATE_MESSAGES_CACHE_TTL_MS);
   }, [projectId]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
     Object.entries(roomMessages).forEach(([roomIdRaw, list]) => {
       const roomId = Number(roomIdRaw);
       if (!Number.isFinite(roomId)) return;
       writeRoomMessagesCache(roomId, list || []);
     });
   }, [roomMessages, writeRoomMessagesCache]);
+
+  useEffect(() => {
+    writeTeamMessagesCache(messages);
+  }, [messages, writeTeamMessagesCache]);
+
+  useEffect(() => {
+    Object.entries(privateMessages).forEach(([partner, list]) => {
+      writePrivateMessagesCache(partner, list || []);
+    });
+  }, [privateMessages, writePrivateMessagesCache]);
 
   const updateMessageEverywhere = useCallback(
     (incoming: ChatMessage, optimistic = false) => {
@@ -104,25 +160,40 @@ export function useChatMessages(projectId: string) {
 
   const loadHistory = useCallback(
     async (hydrateReactions?: (msgs: ChatMessage[]) => void) => {
+      const cached = readTeamMessagesCache();
+      if (cached?.data.length) {
+        setMessages(cached.data);
+        setTeamLastMessage(cached.data[cached.data.length - 1] || null);
+        hydrateReactions?.(cached.data);
+        if (!cached.isStale) {
+          return;
+        }
+      }
+
       try {
         const data = await chatApi.fetchTeamMessages(projectId);
-        setMessages(data);
-        setTeamLastMessage(data.length > 0 ? data[data.length - 1] : null);
-        hydrateReactions?.(data);
+        const windowed = toWindowedMessages(data, TEAM_MESSAGES_CACHE_LIMIT);
+        setMessages(windowed);
+        setTeamLastMessage(windowed.length > 0 ? windowed[windowed.length - 1] : null);
+        writeTeamMessagesCache(windowed);
+        hydrateReactions?.(windowed);
       } catch (err) {
         console.error('Failed to load message history', err);
       }
     },
-    [projectId],
+    [projectId, readTeamMessagesCache, writeTeamMessagesCache],
   );
 
   const loadRoomHistory = useCallback(
     async (roomId: number, hydrateReactions?: (msgs: ChatMessage[]) => void) => {
       const cached = readRoomMessagesCache(roomId);
-      if (cached && cached.length > 0) {
-        setRoomMessages(prev => ({ ...prev, [roomId]: cached }));
-        setRoomLastMessages(prev => ({ ...prev, [roomId]: cached[cached.length - 1] || null }));
-        hydrateReactions?.(cached);
+      if (cached?.data.length) {
+        setRoomMessages(prev => ({ ...prev, [roomId]: cached.data }));
+        setRoomLastMessages(prev => ({ ...prev, [roomId]: cached.data[cached.data.length - 1] || null }));
+        hydrateReactions?.(cached.data);
+        if (!cached.isStale) {
+          return;
+        }
       }
 
       try {
@@ -147,19 +218,34 @@ export function useChatMessages(projectId: string) {
     ) => {
       if (!recipient || !currentUser) return;
 
-      try {
-        const data = await chatApi.fetchPrivateMessages(projectId, currentUser, recipient);
-        setPrivateMessages(prev => ({ ...prev, [recipient]: data }));
+      const cached = readPrivateMessagesCache(recipient);
+      if (cached?.data.length) {
+        setPrivateMessages(prev => ({ ...prev, [recipient]: cached.data }));
         setPrivateLastMessages(prev => ({
           ...prev,
-          [recipient]: data.length > 0 ? data[data.length - 1] : null,
+          [recipient]: cached.data[cached.data.length - 1] || null,
         }));
-        hydrateReactions?.(data);
+        hydrateReactions?.(cached.data);
+        if (!cached.isStale) {
+          return;
+        }
+      }
+
+      try {
+        const data = await chatApi.fetchPrivateMessages(projectId, currentUser, recipient);
+        const windowed = toWindowedMessages(data, PRIVATE_MESSAGES_CACHE_LIMIT);
+        setPrivateMessages(prev => ({ ...prev, [recipient]: windowed }));
+        setPrivateLastMessages(prev => ({
+          ...prev,
+          [recipient]: windowed.length > 0 ? windowed[windowed.length - 1] : null,
+        }));
+        writePrivateMessagesCache(recipient, windowed);
+        hydrateReactions?.(windowed);
       } catch (err) {
         console.error('Failed to load private history', err);
       }
     },
-    [projectId],
+    [projectId, readPrivateMessagesCache, writePrivateMessagesCache],
   );
 
   const sendMessage = useCallback(

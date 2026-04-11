@@ -31,6 +31,7 @@ export default function ProjectLayout({
   const params = useParams();
   const searchParams = useSearchParams();
   const isChatRoute = pathname?.includes('/chat');
+  const isInboxRoute = pathname?.startsWith('/inbox');
 
   // Try to resolve projectId from path params or query params
   const projectId = (params?.projectId || params?.id || searchParams.get('projectId')) as string | undefined;
@@ -80,7 +81,15 @@ export default function ProjectLayout({
 
   return (
     <SidebarLayout>
-      <main className={isChatRoute ? 'h-full min-h-0 flex flex-col overflow-hidden' : 'flex-1 min-h-0 overflow-hidden'}>
+      <main
+        className={
+          isChatRoute
+            ? 'h-full min-h-0 flex flex-col overflow-hidden'
+            : isInboxRoute
+              ? 'min-h-full'
+              : 'flex-1 min-h-0 overflow-hidden'
+        }
+      >
         {children}
       </main>
     </SidebarLayout>

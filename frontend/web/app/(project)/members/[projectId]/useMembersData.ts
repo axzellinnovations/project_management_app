@@ -3,58 +3,19 @@ import { useMembersSync, type MemberPayload } from "./useMembersSync";
 import * as membersApi from "@/services/members-service";
 import { getUserFromToken } from "@/lib/auth";
 import { getOrFetchUserMap, upsertUserMapEntry } from "@/app/taskcard/sidebar/userMapCache";
+import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
+import type { Member, MemberCombined, MembersCachePayload, PendingInvite } from "./types";
+import {
+  buildCombinedMembers,
+  canManageMember,
+  resolveProfilePicUrl as resolveProfilePicUrlValue,
+  timeAgo,
+} from "./utils";
 
-export interface Member {
-  id: number;
-  role: string;
-  user: {
-    userId: number;
-    username: string;
-    fullName: string;
-    email: string;
-    profilePicUrl?: string;
-  };
-  lastActive?: string;
-  taskCount: number;
-  status: string;
-}
-
-export interface PendingInvite {
-  id: number;
-  email: string;
-  invitedAt: string;
-  status: string;
-  role: string;
-}
-
-export type MemberCombined = Member & { invitedAt?: string };
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
-const MEMBERS_CACHE_KEY_PREFIX = "planora:members:";
-
-interface MembersCachePayload {
-  members: Member[];
-  pending: PendingInvite[];
-  timestamp: number;
-}
-
-function getMembersCacheKey(projectId: string): string {
-  return `${MEMBERS_CACHE_KEY_PREFIX}${projectId}`;
-}
-
-export function timeAgo(dateString?: string) {
-  if (!dateString) return "-";
-  const date = new Date(dateString);
-  const now = new Date();
-  const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
-  if (diff < 60) return `${diff} seconds ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
-  if (diff < 172800) return `1 day ago`;
-  return `${Math.floor(diff / 86400)} days ago`;
-}
+export { timeAgo };
 
 export function useMembersData(projectId: string) {
+  const membersCacheKey = buildSessionCacheKey('members', [projectId]);
   const [members, setMembers] = useState<Member[]>([]);
   const [pending, setPending] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,26 +61,21 @@ export function useMembersData(projectId: string) {
     let cachedMembers: Member[] = [];
     let cachedPending: PendingInvite[] = [];
 
-    if (typeof window !== "undefined" && projectId) {
-      const raw = window.sessionStorage.getItem(getMembersCacheKey(projectId));
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as MembersCachePayload;
-          if (Array.isArray(parsed.members)) {
-            cachedMembers = parsed.members;
-            setMembers(parsed.members);
-            hasHydratedFromCache = true;
-          }
-          if (Array.isArray(parsed.pending)) {
-            cachedPending = parsed.pending;
-            setPending(parsed.pending);
-            hasHydratedFromCache = true;
-          }
-          if (hasHydratedFromCache) {
-            setLoading(false);
-          }
-        } catch {
-          window.sessionStorage.removeItem(getMembersCacheKey(projectId));
+    if (membersCacheKey) {
+      const cached = getSessionCache<MembersCachePayload>(membersCacheKey, { allowStale: true });
+      if (cached.data) {
+        if (Array.isArray(cached.data.members)) {
+          cachedMembers = cached.data.members;
+          setMembers(cached.data.members);
+          hasHydratedFromCache = true;
+        }
+        if (Array.isArray(cached.data.pending)) {
+          cachedPending = cached.data.pending;
+          setPending(cached.data.pending);
+          hasHydratedFromCache = true;
+        }
+        if (hasHydratedFromCache) {
+          setLoading(false);
         }
       }
     }
@@ -161,13 +117,13 @@ export function useMembersData(projectId: string) {
           console.warn("Profile picture lookup unavailable:", usersMapRes.reason);
         }
 
-        if (typeof window !== "undefined") {
+        if (membersCacheKey) {
           const payload: MembersCachePayload = {
             members: nextMembers,
             pending: nextPending,
             timestamp: Date.now(),
           };
-          window.sessionStorage.setItem(getMembersCacheKey(projectId), JSON.stringify(payload));
+          setSessionCache(membersCacheKey, payload, 120_000);
         }
       } finally {
         if (!cancelled) {
@@ -185,18 +141,18 @@ export function useMembersData(projectId: string) {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, membersCacheKey]);
 
   useEffect(() => {
-    if (!projectId || loading || typeof window === "undefined") return;
+    if (!projectId || loading || !membersCacheKey) return;
 
     const payload: MembersCachePayload = {
       members,
       pending,
       timestamp: Date.now(),
     };
-    window.sessionStorage.setItem(getMembersCacheKey(projectId), JSON.stringify(payload));
-  }, [projectId, members, pending, loading]);
+    setSessionCache(membersCacheKey, payload, 120_000);
+  }, [projectId, members, pending, loading, membersCacheKey]);
 
   // Real-time sync via STOMP
   const handleRoleChangedLive = useCallback((userId: number, newRole: string) => {
@@ -250,27 +206,10 @@ export function useMembersData(projectId: string) {
     onMemberJoined: handleMemberJoinedLive,
   });
 
-  const allMembers = useMemo<MemberCombined[]>(() => [
-    ...members,
-    ...pending.map((p: PendingInvite) => {
-      const role = (typeof p.role === "string" && p.role.length > 0) ? p.role.toUpperCase() : "MEMBER";
-      return {
-        id: p.id,
-        role,
-        user: {
-          userId: 0,
-          username: "",
-          fullName: "",
-          email: p.email,
-          profilePicUrl: undefined,
-        },
-        lastActive: undefined,
-        taskCount: 0,
-        status: "Pending",
-        invitedAt: p.invitedAt,
-      };
-    }),
-  ], [members, pending]);
+  const allMembers = useMemo<MemberCombined[]>(
+    () => buildCombinedMembers(members, pending),
+    [members, pending],
+  );
 
   const filteredMembers = useMemo(() => {
     return allMembers.filter((m) => {
@@ -301,25 +240,11 @@ export function useMembersData(projectId: string) {
   }, [members, currentUserEmail]);
 
   const canChangeRole = useCallback((targetMember: MemberCombined) => {
-    if (!currentUserRole) return false;
-    const currentRole = String(currentUserRole).toUpperCase().trim();
-    const targetRole = String(targetMember.role).toUpperCase().trim();
-    if (targetMember.status === "Pending") return false;
-    if (currentUserEmail && targetMember.user.email?.toLowerCase() === currentUserEmail) return false;
-    if (currentRole === "OWNER") return true;
-    if (currentRole === "ADMIN") return targetRole === "MEMBER" || targetRole === "VIEWER";
-    return false;
+    return canManageMember(currentUserRole, currentUserEmail, targetMember);
   }, [currentUserRole, currentUserEmail]);
 
   const canRemoveMember = useCallback((targetMember: MemberCombined) => {
-    if (!currentUserRole) return false;
-    const currentRole = String(currentUserRole).toUpperCase().trim();
-    const targetRole = String(targetMember.role).toUpperCase().trim();
-    if (targetMember.status === "Pending") return false;
-    if (currentUserEmail && targetMember.user.email?.toLowerCase() === currentUserEmail) return false;
-    if (currentRole === "OWNER") return true;
-    if (currentRole === "ADMIN") return targetRole === "MEMBER" || targetRole === "VIEWER";
-    return false;
+    return canManageMember(currentUserRole, currentUserEmail, targetMember);
   }, [currentUserRole, currentUserEmail]);
 
   const getAvailableOptions = useCallback(() => {
@@ -327,18 +252,10 @@ export function useMembersData(projectId: string) {
     return ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
   }, [currentUserRole]);
 
-  const resolveProfilePicUrl = useCallback((profilePicUrl?: string) => {
-    if (!profilePicUrl) return "";
-    if (
-      profilePicUrl.startsWith("http://") ||
-      profilePicUrl.startsWith("https://") ||
-      profilePicUrl.startsWith("data:") ||
-      profilePicUrl.startsWith("blob:")
-    ) {
-      return profilePicUrl;
-    }
-    return `${API_BASE_URL}${profilePicUrl.startsWith("/") ? "" : "/"}${profilePicUrl}`;
-  }, []);
+  const resolveProfilePicUrl = useCallback(
+    (profilePicUrl?: string) => resolveProfilePicUrlValue(profilePicUrl),
+    [],
+  );
 
   const getMemberProfilePicCandidates = useCallback((member: Member) => {
     const candidates: string[] = [];

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { UserIcon, MessageSquareIcon } from './SidebarIcons';
 import type { ChatInboxActivity } from '@/services/chat-service';
+import InboxBadge from '@/components/layout/sidebar/InboxBadge';
 
 function formatRelativeTime(timestamp?: string | null): string {
   if (!timestamp) return 'No timestamp';
@@ -55,11 +56,7 @@ function InboxDropdownItem({ item, onClick }: { item: ChatInboxActivity; onClick
         </div>
         <div className="flex items-center justify-between gap-1 mt-0.5">
           <span className="text-[12px] font-semibold text-cu-text-primary truncate">{label}</span>
-          {item.unread && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-cu-primary text-white">
-              {item.unseenCount > 99 ? '99+' : item.unseenCount}
-            </span>
-          )}
+          {item.unread && <InboxBadge count={item.unseenCount} size="inline" cap={99} />}
         </div>
         <div className="text-[10.5px] text-cu-text-secondary truncate leading-normal mt-0.5">
           {item.lastMessageSender && <span className="font-medium mr-1 text-cu-text-primary">{item.lastMessageSender}:</span>}
