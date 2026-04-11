@@ -7,7 +7,6 @@ import { AUTH_TOKEN_CHANGED_EVENT, getUserFromToken, getValidToken, User } from 
 import { useParams, usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useNavigation } from '@/lib/navigation-context';
 import { Menu, Plus } from 'lucide-react';
-import api from '@/lib/axios';
 import * as projectsApi from '@/services/projects-service';
 
 import { NotificationBell } from './topbar/NotificationBell';

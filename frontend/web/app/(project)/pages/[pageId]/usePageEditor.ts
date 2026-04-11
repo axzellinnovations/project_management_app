@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { usePageContent } from './hooks/usePageContent';
 import TurndownService from 'turndown';
@@ -37,22 +37,25 @@ export function usePageEditor() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const ydocRef = useRef<Y.Doc | null>(null);
   const providerRef = useRef<WebsocketProvider | null>(null);
+  const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
 
   // Yjs collaborative editing setup
   useEffect(() => {
     if (!pageId || pageId === 'new') return;
-    const ydoc = new Y.Doc();
-    ydocRef.current = ydoc;
+    const doc = new Y.Doc();
+    ydocRef.current = doc;
+    setYdoc(doc);
     const wsUrl = (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
       ? `wss://${window.location.host}/yjs`
       : 'ws://localhost:8080/yjs';
-    const provider = new WebsocketProvider(wsUrl, `page-${pageId}`, ydoc);
+    const provider = new WebsocketProvider(wsUrl, `page-${pageId}`, doc);
     providerRef.current = provider;
     return () => {
       provider.destroy();
-      ydoc.destroy();
+      doc.destroy();
       ydocRef.current = null;
       providerRef.current = null;
+      setYdoc(null);
     };
   }, [pageId]);
 
@@ -159,6 +162,15 @@ export function usePageEditor() {
     URL.revokeObjectURL(url);
   };
 
+  const collaborationUser = useMemo(() => {
+    const u = getUserFromToken();
+    if (!u) return undefined;
+    const colors = ['#f97316', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
+    const color = colors[(u.userId ?? 0) % colors.length];
+    return { name: u.fullName ?? u.username ?? u.email ?? 'Anonymous', color };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return {
     pageId,
     isDraft,
@@ -179,13 +191,7 @@ export function usePageEditor() {
     handleDeletePage,
     handleFileImport,
     handleExport,
-    ydoc: ydocRef.current,
-    collaborationUser: (() => {
-      const u = getUserFromToken();
-      if (!u) return undefined;
-      const colors = ['#f97316', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
-      const color = colors[(u.userId ?? 0) % colors.length];
-      return { name: u.fullName ?? u.username ?? u.email ?? 'Anonymous', color };
-    })(),
+    ydoc,
+    collaborationUser,
   };
 }
