@@ -102,10 +102,10 @@ button, a {
   border-radius: 6px;
 }
 
-/* ── Mobile bottom-nav spacing ── */
+/* ── Mobile bottom-nav spacing - REMOVED legacy navigation padding ── */
 @media (max-width: 767px) {
   .main-content-area {
-    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 0px;
   }
 }
 
@@ -128,7 +128,7 @@ button, a {
 /* ── FAB (Floating Action Button) — clears BottomNav on any page ── */
 .fab {
   position: fixed;
-  bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
   right: 1.5rem;
   z-index: 105;
   width: 3.5rem;
@@ -195,4 +195,27 @@ button, a {
 @keyframes sheetUp {
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
+}
+
+/* ── Additional mobile utilities ── */
+.mobile-touch-target {
+  @apply min-h-[44px] min-w-[44px] flex items-center justify-center;
+}
+
+.safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 4rem);
+}
+
+@media (max-width: 640px) {
+  .mobile-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+  }
+}
+
+/* Prevent iOS zoom on input focus — font-size must be >= 16px */
+@media (max-width: 640px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }

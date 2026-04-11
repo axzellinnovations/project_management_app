@@ -14,9 +14,9 @@ export default function MotionWrapper({
 }) {
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay, ease: "easeOut" }}
+            transition={{ duration: 0.2, delay, ease: "easeOut" }}
             className={className}
         >
             {children}
@@ -29,12 +29,12 @@ export const containerVariants = {
     show: {
         opacity: 1,
         transition: {
-            staggerChildren: 0.1
+            staggerChildren: 0.05
         }
     }
 };
 
 export const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
+    hidden: { opacity: 0, y: 10 },
     show: { opacity: 1, y: 0 }
 };

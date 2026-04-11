@@ -7,13 +7,15 @@ import api from '@/lib/axios';
 
 export default function KanbanProjectPage() {
     const [projectName, setProjectName] = useState('');
-    const [projectKey, setProjectKey] = useState('');
+    const [currentGenerated, setCurrentGenerated] = useState('');
+    const [isKeyManuallyEdited, setIsKeyManuallyEdited] = useState(false);
     const [description, setDescription] = useState('');
     const [teamOption, setTeamOption] = useState<'NEW' | 'EXISTING'>('NEW');
     const [teamName, setTeamName] = useState('');
 
     const [errors, setErrors] = useState<{ [key: string]: boolean }>({});
     const [serverError, setServerError] = useState<string | null>(null);
+    const [projectKeyInlineError, setProjectKeyInlineError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
     // Validation states
@@ -24,16 +26,23 @@ export default function KanbanProjectPage() {
 
     const router = useRouter();
 
+    const generateProjectKey = (name: string) =>
+        name
+            .toUpperCase()
+            .replace(/[^A-Z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 10);
+
     // Debounce Project Key Check
     useEffect(() => {
         const checkKey = async () => {
-            if (projectKey.trim().length < 3) {
+            if (currentGenerated.trim().length < 3) {
                 setIsKeyValid(null);
                 return;
             }
             setCheckingKey(true);
             try {
-                const res = await api.get(`/api/projects/check-key?key=${projectKey.trim()}`);
+                const res = await api.get(`/api/projects/check-key?key=${currentGenerated.trim()}`);
                 setIsKeyValid(res.data); // true if available
             } catch (err) {
                 console.error("Key check error:", err);
@@ -45,7 +54,7 @@ export default function KanbanProjectPage() {
 
         const timer = setTimeout(checkKey, 500);
         return () => clearTimeout(timer);
-    }, [projectKey]);
+    }, [currentGenerated]);
 
     // Debounce Team Name Check
     useEffect(() => {
@@ -78,10 +87,11 @@ export default function KanbanProjectPage() {
     const handleContinue = async (e: React.MouseEvent) => {
         e.preventDefault();
         setServerError(null);
+        setProjectKeyInlineError(null);
         const newErrors: { [key: string]: boolean } = {};
 
         if (!projectName.trim()) newErrors.projectName = true;
-        if (!projectKey.trim() || isKeyValid === false) newErrors.projectKey = true;
+        if (!currentGenerated.trim() || isKeyValid === false) newErrors.projectKey = true;
         if (!teamName.trim() || isTeamValid === false) newErrors.teamName = true;
 
         if (Object.keys(newErrors).length > 0) {
@@ -93,7 +103,7 @@ export default function KanbanProjectPage() {
             setLoading(true);
             const res = await api.post('/api/projects', {
                 name: projectName,
-                projectKey: projectKey,
+                projectKey: currentGenerated,
                 description: description,
                 teamOption: teamOption,
                 teamName: teamName,
@@ -103,16 +113,23 @@ export default function KanbanProjectPage() {
             if (typeof window !== 'undefined') {
                 localStorage.setItem('currentProjectName', projectName);
                 localStorage.setItem('currentProjectId', res.data.id.toString());
-                localStorage.setItem('currentProjectKey', projectKey);
+                localStorage.setItem('currentProjectKey', currentGenerated);
             }
 
             if (teamOption === 'EXISTING') {
                 router.push(`/summary/${res.data.id}`);
             } else {
-                router.push(`/createProject/inviteMembers?projectId=${res.data.id}&projectKey=${projectKey}`);
+                router.push(`/createProject/inviteMembers?projectId=${res.data.id}&projectKey=${currentGenerated}`);
             }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
+            if (err?.response?.status === 409) {
+                const base = currentGenerated || generateProjectKey(projectName) || 'PROJECT';
+                const suggestedAlternative = `${base.slice(0, 8)}-1`.slice(0, 10);
+                setProjectKeyInlineError(`This key is already taken, try: ${suggestedAlternative}`);
+                setErrors(prev => ({ ...prev, projectKey: true }));
+                return;
+            }
             const msg = err.response?.data?.message || err.response?.data || 'Failed to create project';
             setServerError(String(msg));
         } finally {
@@ -124,9 +141,10 @@ export default function KanbanProjectPage() {
         const name = e.target.value;
         setProjectName(name);
 
-        if (!projectKey || projectKey === name.slice(0, projectKey.length).toUpperCase().replace(/\s+/g, '_')) {
-            const generatedKey = name.replace(/\s+/g, '_').slice(0, 4).toUpperCase();
-            setProjectKey(generatedKey);
+        const generatedKey = generateProjectKey(name);
+        if (!isKeyManuallyEdited) {
+            setCurrentGenerated(generatedKey);
+            setProjectKeyInlineError(null);
         }
     };
 
@@ -180,13 +198,22 @@ export default function KanbanProjectPage() {
                                 <input
                                     type="text"
                                     placeholder="e.g., SUP"
-                                    value={projectKey}
+                                    value={currentGenerated}
                                     onChange={(e) => {
-                                        setProjectKey(e.target.value.toUpperCase().replace(/\s/g, '_'));
+                                        const sanitized = e.target.value
+                                            .toUpperCase()
+                                            .replace(/[^A-Z0-9-]+/g, '-')
+                                            .slice(0, 10);
+                                        setCurrentGenerated(sanitized);
+                                        setIsKeyManuallyEdited(sanitized.length > 0);
                                         if (errors.projectKey) setErrors({ ...errors, projectKey: false });
+                                        setProjectKeyInlineError(null);
                                     }}
                                     className={`w-full h-[44px] bg-white/50 border ${errors.projectKey || isKeyValid === false ? 'border-[#FF3B30]' : isKeyValid ? 'border-[#34C759]' : 'border-white/60 hover:border-[#D1D5DC]'} rounded-[14px] px-4 font-inter text-[15px] text-[#1D1D1F] placeholder:text-[#86868B] outline-none transition-all focus:bg-white focus:ring-4 focus:ring-[#1D56D5]/10 focus:border-[#1D56D5] uppercase`}
                                 />
+                                {projectKeyInlineError && (
+                                    <span className="text-[#FF3B30] text-[12px] font-inter mt-1">{projectKeyInlineError}</span>
+                                )}
                                 <div className="flex justify-between items-center px-1 mt-1">
                                     <p className="font-inter text-[12px] text-[#86868B]">
                                         A short identifier for your project

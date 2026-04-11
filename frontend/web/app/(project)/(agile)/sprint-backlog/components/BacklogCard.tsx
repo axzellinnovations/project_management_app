@@ -373,6 +373,41 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
     };
   }, []);
 
+  // Edit sprint name inline state
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempSprintName, setTempSprintName] = useState(sprint.name);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  const handleNameDoubleClick = () => {
+    setTempSprintName(sprint.name);
+    setIsEditingName(true);
+  };
+
+  useEffect(() => {
+    if (isEditingName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.setSelectionRange(tempSprintName.length, tempSprintName.length);
+    }
+  }, [isEditingName, tempSprintName.length]);
+
+  const handleNameSave = async () => {
+    const trimmed = tempSprintName.trim();
+    if (!trimmed || trimmed === sprint.name) {
+      setIsEditingName(false);
+      return;
+    }
+    setEditingSprintLoading(true);
+    try {
+      await api.put(`/api/sprints/${sprint.id}`, { name: trimmed });
+      sprint.name = trimmed; // Optimistic update
+      setIsEditingName(false);
+    } catch {
+      // Refresh or handle error
+    } finally {
+      setEditingSprintLoading(false);
+    }
+  };
+
   const totals = useMemo(() => {
     return localTasks.reduce(
       (acc, task) => {
@@ -682,9 +717,37 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
           </button>
 
           <div className="flex items-center gap-2">
-            <span className="text-[14px] font-bold text-[#101828]">
-              {sprint.name}
-            </span>
+            {isEditingName ? (
+              <input
+                ref={nameInputRef}
+                type="text"
+                value={tempSprintName}
+                onChange={(e) => setTempSprintName(e.target.value)}
+                onBlur={handleNameSave}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleNameSave();
+                  if (e.key === 'Escape') setIsEditingName(false);
+                }}
+                disabled={editingSprintLoading}
+                className="w-full min-w-[200px] border-b border-[#175CD3] bg-transparent text-[14px] font-bold text-[#101828] outline-none"
+              />
+            ) : (
+              <span
+                onDoubleClick={handleNameDoubleClick}
+                className="cursor-text text-[14px] font-bold text-[#101828]"
+              >
+                {sprint.name}
+              </span>
+            )}
+
+            <button
+              onClick={() => setIsEditingName(!isEditingName)}
+              className="p-1.5 text-[#98A2B3] hover:text-[#175CD3] hover:bg-[#F2F4F7] rounded-lg transition-colors"
+              title="Edit Sprint Name"
+            >
+              <Pencil size={14} />
+            </button>
+
             {(() => {
               if (!sprint.endDate || sprint.status === 'COMPLETED') return null;
               const daysLeft = Math.ceil(
@@ -706,7 +769,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
           </div>
         </div>
 
-        <div className="relative flex flex-wrap items-center gap-3" ref={sprintMenuRef}>
+        <div className="relative flex items-center justify-end gap-3 flex-1" ref={sprintMenuRef}>
           <div className="flex items-center gap-1.5 bg-white border border-[#EAECF0] px-2 py-1 rounded-full shadow-sm">
             <div className="rounded-full bg-[#F2F4F7] px-2 py-[2px] text-[12px] font-bold text-[#344054]" title="To Do">
               {totals.todo}
@@ -719,37 +782,31 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-1 sm:flex-none">
+          <div className="flex items-center gap-2">
             {sprint.status === 'NOT_STARTED' ? (
               <button
                 onClick={handleStartSprint}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg border border-[#175CD3] bg-[#175CD3] px-2.5 py-2 text-[12px] font-bold text-white hover:bg-[#1849A9] shadow-sm transform active:scale-95 transition-all duration-150"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#175CD3] bg-[#175CD3] px-3.5 py-2 text-[12px] font-bold text-white hover:bg-[#1849A9] shadow-sm transform active:scale-95 transition-all duration-150"
               >
                 <Rocket size={14} />
-                Start Sprint
+                <span>Start Sprint</span>
               </button>
             ) : sprint.status === 'ACTIVE' ? (
               <button
                 onClick={handleCompleteSprint}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg border border-[#027A48] bg-[#039855] px-2.5 py-2 text-[12px] font-bold text-white hover:bg-[#027A48] shadow-sm transform active:scale-95 transition-all duration-150"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#027A48] bg-[#039855] px-3.5 py-2 text-[12px] font-bold text-white hover:bg-[#027A48] shadow-sm transform active:scale-95 transition-all duration-150"
               >
                 <Check size={14} />
-                Complete Sprint
+                <span>Complete Sprint</span>
               </button>
-            ) : (
-              <span className="flex-1 sm:flex-none text-center rounded-lg border border-[#EAECF0] bg-[#F2F4F7] px-2.5 py-2 text-[13px] font-bold text-[#667085]">
-                Completed
-              </span>
-            )}
+            ) : null}
 
             <button
-              type="button"
               onClick={() => setShowReportModal(true)}
-              title="Sprint Report"
-              className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-2.5 py-2 text-[12px] font-bold text-[#344054] hover:bg-[#F2F4F7] shadow-sm transition-colors duration-150"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#D0D5DD] bg-white px-3 py-2 text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all"
             >
-              <BarChart3 size={14} className="text-[#667085]" />
-              Sprint Report
+              <BarChart3 size={14} />
+              <span className="hidden xs:inline">Sprint Report</span>
             </button>
 
             <button
@@ -969,7 +1026,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
     {selectedTaskId !== null && (
       <TaskCardModal
         taskId={selectedTaskId}
-        onClose={() => setSelectedTaskId(null)}
+        onClose={(_wasModified) => setSelectedTaskId(null)}
       />
     )}
 

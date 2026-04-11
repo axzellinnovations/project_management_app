@@ -2,17 +2,17 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { getUserFromToken, User } from '@/lib/auth';
 import Link from 'next/link';
 import api from '@/lib/axios';
 import { useRouter } from 'next/navigation';
 import RecentSpacesCarousel from './components/RecentSpacesCarousel';
 import DashboardTable from './components/DashboardTable';
+import MetricsGrid from './components/MetricsGrid';
 import WelcomeGreeting from '@/components/ui/WelcomeGreeting';
 import { NotificationBell } from '@/navBar/topbar/NotificationBell';
 import Image from 'next/image';
-import { Plus } from 'lucide-react';
 
 interface ProjectSummary {
     id: number;
@@ -29,6 +29,7 @@ export default function DashboardPage() {
     const [projects, setProjects] = useState<{ recent: ProjectSummary[], favorites: ProjectSummary[] }>({ recent: [], favorites: [] });
     const [loading, setLoading] = useState(true);
     const [dashboardSearch, setDashboardSearch] = useState('');
+    const [hoveredTab, setHoveredTab] = useState<string | null>(null);
     const [assignedCount, setAssignedCount] = useState(0);
     const [mobileSecondaryTab, setMobileSecondaryTab] = useState('worked-on');
     const [mobileTertiaryTab, setMobileTertiaryTab] = useState('favorites');
@@ -108,41 +109,33 @@ export default function DashboardPage() {
     );
 
     return (
-        <div className="flex flex-col gap-4 w-full max-w-[1200px] mx-auto pb-12 mt-0">
+        <div className="flex flex-col gap-4 w-full h-full max-w-[1200px] mx-auto pb-[calc(20px+env(safe-area-inset-bottom,0px))] md:pb-12 mt-0 px-4 sm:px-6">
             {/* Page Header: Greeting + Actions */}
             <div className="w-full flex items-center justify-between gap-3 py-2 px-1">
                 {/* Left: mobile menu toggle + greeting */}
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0">
                     <button
                         onClick={() => window.dispatchEvent(new CustomEvent('planora:sidebar:toggle'))}
-                        className="md:hidden p-1.5 -ml-1.5 text-[#4B5563] rounded-md hover:bg-gray-100 transition-colors shrink-0"
+                        className="md:hidden p-2 -ml-2 text-[#4B5563] rounded-xl hover:bg-gray-100 transition-colors shrink-0 active:bg-gray-200"
                         aria-label="Toggle Sidebar"
                     >
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="3" y1="12" x2="21" y2="12" />
                             <line x1="3" y1="6" x2="21" y2="6" />
                             <line x1="3" y1="18" x2="21" y2="18" />
                         </svg>
                     </button>
-                    <WelcomeGreeting username={user?.username || 'User'} />
+                    <div className="md:hidden font-outfit text-[22px] font-extrabold tracking-tight text-[#101828] ml-1.5 flex items-center gap-2">
+                        <span className="w-2.5 h-6 bg-blue-600 rounded-full"></span>
+                        PLANORA
+                    </div>
+                    <div className="hidden md:block truncate">
+                        <WelcomeGreeting username={user?.username || 'User'} />
+                    </div>
                 </div>
 
                 {/* Right: notification bell + profile avatar */}
-                <div className="flex items-center gap-2.5 shrink-0">
-                    <button
-                        onClick={() => {
-                            const pid = localStorage.getItem('currentProjectId');
-                            if (!pid) { router.push('/spaces'); return; }
-                            router.push(`/backlog?projectId=${pid}&action=add-task`);
-                        }}
-                        className="flex items-center justify-center px-4 h-[34px] bg-blue-600 text-white rounded-lg text-[13px] font-bold hover:bg-blue-700 transition-all font-outfit gap-1.5 shadow-sm shadow-blue-200 active:scale-95"
-                    >
-                        <Plus size={16} strokeWidth={2.5} />
-                        New Task
-                    </button>
-
-                    <div className="w-[1px] h-6 bg-slate-200 mx-0.5 hidden min-[450px]:block" />
-                    
+                <div className="flex items-center gap-3 shrink-0">
                     <NotificationBell />
                     {resolvedProfilePicUrl ? (
                         <div className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-white shadow-sm ring-1 ring-slate-200">
@@ -159,12 +152,12 @@ export default function DashboardPage() {
             {/* Recent Spaces Section */}
             <div className="flex flex-col gap-4 pb-[0.8px] bg-white relative mt-1">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 w-full mt-1">
-                    <div className="flex justify-between items-center w-full md:w-auto pl-1 h-5">
-                        <h2 className="font-arimo text-[15px] font-bold text-[#101828] m-0 flex items-center h-full">Recent spaces</h2>
-                        <Link href="/spaces" className="md:hidden font-arimo text-[13px] font-bold text-[#0052CC] hover:text-[#0042a3] m-0 flex items-center h-full leading-none">View all</Link>
+                    <div className="flex justify-between items-center w-full md:w-auto px-1 h-5">
+                        <h2 className="font-outfit text-[15px] font-bold text-[#101828] m-0 flex items-center h-full">Recent spaces</h2>
+                        <Link href="/spaces" className="md:hidden font-outfit text-[13px] font-bold text-[#0052CC] hover:text-[#0042a3] m-0 flex items-center h-full leading-none">View all</Link>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
                             <div className="relative w-full sm:w-[220px]">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -175,31 +168,31 @@ export default function DashboardPage() {
                                     placeholder="Search..."
                                     value={recentSpacesSearch}
                                     onChange={(e) => setRecentSpacesSearch(e.target.value)}
-                                    className="block w-full pl-9 pr-3 py-1.5 border border-[#E5E7EB] rounded-[4px] leading-5 bg-white placeholder-[#9CA3AF] focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-[13px] font-arimo"
+                                    className="block w-full pl-9 pr-3 py-1.5 border border-[#E5E7EB] rounded-[6px] leading-5 bg-white placeholder-[#9CA3AF] focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-[13px] font-outfit"
                                 />
                             </div>
-                            <div className="flex items-center bg-gray-100/80 p-1 rounded-md sm:bg-transparent sm:p-0 gap-1 w-full sm:w-auto mt-2 sm:mt-0">
+                            <div className="flex items-center bg-gray-100/50 p-1 rounded-lg sm:bg-transparent sm:p-0 gap-1 w-full sm:w-auto mt-1 sm:mt-0">
                                 <button
                                     onClick={() => setRecentFilter('recent')}
-                                    className={`flex-1 sm:flex-none px-3 py-1.5 rounded-[4px] font-arimo text-[13px] font-semibold transition-all ${recentFilter === 'recent'
-                                        ? 'bg-white sm:bg-[#EAF2FF] text-[#0052CC] shadow-sm sm:shadow-none border border-gray-200/60 sm:border-transparent'
-                                        : 'text-[#4B5563] hover:text-[#0052CC] border border-transparent'
+                                    className={`flex-1 sm:flex-none px-3 py-1.5 rounded-[6px] font-outfit text-[11px] font-bold uppercase tracking-wider transition-all ${recentFilter === 'recent'
+                                        ? 'bg-white text-[#0052CC] shadow-sm border border-gray-200/60'
+                                        : 'text-[#4B5563] hover:text-[#0052CC]'
                                         }`}
                                 >
                                     Recent
                                 </button>
                                 <button
                                     onClick={() => setRecentFilter('favorites')}
-                                    className={`flex-1 sm:flex-none px-3 py-1.5 h-[34px] rounded-[4px] font-arimo text-[13px] font-semibold transition-all ${recentFilter === 'favorites'
-                                        ? 'bg-white sm:bg-[#EAF2FF] text-[#0052CC] shadow-sm sm:shadow-none border border-gray-200/60 sm:border-transparent'
-                                        : 'text-[#4B5563] hover:text-[#0052CC] border border-transparent'
+                                    className={`flex-1 sm:flex-none px-3 py-1.5 rounded-[6px] font-outfit text-[11px] font-bold uppercase tracking-wider transition-all ${recentFilter === 'favorites'
+                                        ? 'bg-white text-[#0052CC] shadow-sm border border-gray-200/60'
+                                        : 'text-[#4B5563] hover:text-[#0052CC]'
                                         }`}
                                 >
                                     Favourites
                                 </button>
                             </div>
                         </div>
-                        <Link href="/spaces" className="hidden md:block font-arimo text-[14px] font-medium text-[#0052CC] hover:text-[#0042a3] ml-2 shrink-0">View all spaces</Link>
+                        <Link href="/spaces" className="hidden md:block font-outfit text-[13px] font-bold text-[#0052CC] hover:text-[#0042a3] ml-2 shrink-0">View all</Link>
                     </div>
                 </div>
 
@@ -211,6 +204,9 @@ export default function DashboardPage() {
                 />
             </div>
 
+            {/* Metrics Overview */}
+            <MetricsGrid />
+
             {/* Desktop View: Tabs */}
             <div className="hidden md:flex flex-col gap-4 md:gap-6 mt-2 md:mt-0">
                 <div className="flex flex-col md:flex-row md:justify-between items-start md:items-end border-b-[0.8px] border-[#E5E7EB] pb-0 gap-4 md:gap-0">
@@ -220,7 +216,7 @@ export default function DashboardPage() {
                     >
                         + Create new project
                     </Link>
-                    <div className="flex flex-nowrap items-center gap-6 w-auto overflow-x-auto no-scrollbar pb-0">
+                    <div className="flex flex-nowrap items-center gap-1 w-auto overflow-x-auto no-scrollbar pb-0 h-[44px]">
                         {['Worked on', 'Viewed', 'Assigned to me', 'Favorites', 'Boards'].map((tab) => {
                             const tabId = tab.toLowerCase().replaceAll(' ', '-');
                             const isActive = activeTab === tabId;
@@ -228,24 +224,52 @@ export default function DashboardPage() {
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tabId)}
-                                    className="pb-3 relative font-arimo text-[14px] transition-all duration-300 px-2 shrink-0 group"
+                                    onMouseEnter={() => setHoveredTab(tabId)}
+                                    onMouseLeave={() => setHoveredTab(null)}
+                                    className="relative h-full flex items-center px-5 shrink-0 group transition-all duration-300"
                                 >
                                     {/* Liquid Glass active background */}
                                     {isActive && (
                                         <motion.div
                                             layoutId="dashboardTabPill"
                                             className="absolute inset-x-1 inset-y-1.5 bg-gradient-to-b from-white/95 to-blue-50/90 backdrop-blur-lg rounded-xl border border-blue-400/30 shadow-[0_4px_20px_rgba(37,99,235,0.15)] z-0"
-                                            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                                            transition={{
+                                                type: "spring",
+                                                stiffness: 410,
+                                                damping: 24,
+                                                mass: 0.8
+                                            }}
                                         />
                                     )}
 
-                                    <span className={`whitespace-nowrap relative z-10 transition-colors duration-300 ${isActive ? 'text-[#101828] font-bold' : 'text-[#4A5565] font-medium group-hover:text-[#101828]'}`}>
+                                    {/* Hover effect background (subtler) */}
+                                    <AnimatePresence>
+                                        {hoveredTab === tabId && !isActive && (
+                                            <motion.div
+                                                layoutId="dashboardHoverBackground"
+                                                initial={{ opacity: 0, scale: 0.95 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                exit={{ opacity: 0, scale: 0.95 }}
+                                                className="absolute inset-x-1.5 inset-y-2.5 bg-slate-100/50 rounded-lg -z-10"
+                                                transition={{ type: 'spring', stiffness: 450, damping: 30 }}
+                                            />
+                                        )}
+                                    </AnimatePresence>
+
+                                    <span className={`whitespace-nowrap relative z-10 transition-all duration-300 font-outfit text-[14px] font-bold ${
+                                        isActive 
+                                            ? 'text-blue-600 scale-[1.02]' 
+                                            : 'text-slate-500 group-hover:text-slate-800'
+                                    }`}>
                                         {tab}
+                                        {tab === 'Assigned to me' && (
+                                            <span className={`ml-2 text-[12px] px-1.5 rounded font-medium inline-block align-middle transition-colors ${
+                                                isActive ? 'bg-blue-100 text-blue-700' : 'bg-[#E5E7EB] text-[#364153]'
+                                            }`}>
+                                                {assignedCount}
+                                            </span>
+                                        )}
                                     </span>
-                                    {tab === 'Assigned to me' && (
-                                        <span className="ml-2 bg-[#E5E7EB] text-[#364153] text-[12px] px-1.5 rounded font-medium inline-block align-middle relative z-10">{assignedCount}</span>
-                                    )}
-                                    
                                 </button>
                             );
                         })}
@@ -276,16 +300,16 @@ export default function DashboardPage() {
             <div className="md:hidden flex flex-col gap-6 mt-4">
                 <Link
                     href="/createProject"
-                    className="w-full bg-[#0052CC] text-white font-arimo text-[15px] font-bold flex items-center justify-center py-3 rounded-[10px] shadow-md transition-all active:scale-[0.98]"
+                    className="w-full bg-[#0052CC] text-white font-outfit text-[14px] font-bold flex items-center justify-center py-2.5 rounded-xl shadow-[0_4px_12px_rgba(0,82,204,0.2)] transition-all active:scale-[0.98]"
                 >
                     + Create new project
                 </Link>
 
                 {/* Section 1: Assigned to Me (Static) */}
                 <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between pb-1">
-                        <h2 className="font-arimo text-[16px] font-bold text-[#101828]">Assigned to me</h2>
-                        <span className="bg-[#EAF2FF] text-[#0052CC] text-[12px] px-2 py-0.5 rounded-full font-bold">{assignedCount} pending</span>
+                    <div className="flex items-center justify-between pb-1 px-1">
+                        <h2 className="font-outfit text-[16px] font-bold text-[#101828]">Assigned to me</h2>
+                        <span className="bg-blue-50 text-[#0052CC] text-[11px] px-2.5 py-0.5 rounded-full font-bold font-outfit uppercase tracking-wider">{assignedCount} pending</span>
                     </div>
                     <DashboardTable
                         activeTab="assigned-to-me"
@@ -295,28 +319,28 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Section 2: Recent Activity Toggle */}
-                <div className="flex flex-col gap-4 pt-4 border-t border-gray-100">
+                <div className="flex flex-col gap-4 pt-4 border-t border-slate-100">
                     <div className="flex items-center justify-between px-1">
-                        <h2 className="font-arimo text-[15px] font-bold text-[#101828]">Recent Activity</h2>
+                        <h2 className="font-outfit text-[15px] font-bold text-[#101828]">Recent Activity</h2>
                     </div>
-                    <div className="flex items-center justify-center bg-gray-100/60 p-1 rounded-xl gap-1">
+                    <div className="flex items-center justify-center bg-slate-100/50 p-1 rounded-xl gap-1">
                         <button
                             onClick={() => setMobileSecondaryTab('worked-on')}
-                            className={`flex-1 py-2.5 rounded-lg font-arimo text-[13px] font-bold transition-all ${mobileSecondaryTab === 'worked-on'
-                                ? 'bg-white text-[#101828] shadow-sm'
-                                : 'text-[#6B7280]'
+                            className={`flex-1 py-2 rounded-lg font-outfit text-[11px] font-bold uppercase tracking-wider transition-all ${mobileSecondaryTab === 'worked-on'
+                                ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200'
+                                : 'text-slate-500 hover:text-slate-800'
                                 }`}
                         >
                             Worked on
                         </button>
                         <button
                             onClick={() => setMobileSecondaryTab('viewed')}
-                            className={`flex-1 py-2.5 rounded-lg font-arimo text-[13px] font-bold transition-all ${mobileSecondaryTab === 'viewed'
-                                ? 'bg-white text-[#101828] shadow-sm'
-                                : 'text-[#6B7280]'
+                            className={`flex-1 py-2 rounded-lg font-outfit text-[11px] font-bold uppercase tracking-wider transition-all ${mobileSecondaryTab === 'viewed'
+                                ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200'
+                                : 'text-slate-500 hover:text-slate-800'
                                 }`}
                         >
-                            Recently Viewed
+                            Viewed
                         </button>
                     </div>
                     <DashboardTable
@@ -326,25 +350,25 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Section 3: Organization Toggle */}
-                <div className="flex flex-col gap-4 pt-6 border-t border-gray-100">
+                <div className="flex flex-col gap-4 pt-6 border-t border-slate-100">
                     <div className="flex items-center justify-between px-1">
-                        <h2 className="font-arimo text-[15px] font-bold text-[#101828]">Quick Access</h2>
+                        <h2 className="font-outfit text-[15px] font-bold text-[#101828]">Quick Access</h2>
                     </div>
-                    <div className="flex items-center justify-center bg-gray-100/60 p-1 rounded-xl gap-1">
+                    <div className="flex items-center justify-center bg-slate-100/50 p-1 rounded-xl gap-1">
                         <button
                             onClick={() => setMobileTertiaryTab('favorites')}
-                            className={`flex-1 py-2.5 rounded-lg font-arimo text-[13px] font-bold transition-all ${mobileTertiaryTab === 'favorites'
-                                ? 'bg-white text-[#101828] shadow-sm'
-                                : 'text-[#6B7280]'
+                            className={`flex-1 py-2 rounded-lg font-outfit text-[11px] font-bold uppercase tracking-wider transition-all ${mobileTertiaryTab === 'favorites'
+                                ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200'
+                                : 'text-slate-500 hover:text-slate-800'
                                 }`}
                         >
                             Favorites
                         </button>
                         <button
                             onClick={() => setMobileTertiaryTab('boards')}
-                            className={`flex-1 py-2.5 rounded-lg font-arimo text-[13px] font-bold transition-all ${mobileTertiaryTab === 'boards'
-                                ? 'bg-white text-[#101828] shadow-sm'
-                                : 'text-[#6B7280]'
+                            className={`flex-1 py-2 rounded-lg font-outfit text-[11px] font-bold uppercase tracking-wider transition-all ${mobileTertiaryTab === 'boards'
+                                ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200'
+                                : 'text-slate-500 hover:text-slate-800'
                                 }`}
                         >
                             Boards

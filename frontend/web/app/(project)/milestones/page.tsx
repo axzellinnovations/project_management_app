@@ -1,5 +1,4 @@
 'use client';
-export const dynamic = 'force-dynamic';
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -8,7 +7,7 @@ import { getMilestones, createMilestone, updateMilestone, deleteMilestone } from
 import type { MilestoneResponse } from '@/types';
 import { type MilestoneStatus } from './components/milestoneConfig';
 import MilestoneCard from './components/MilestoneCard';
-import MilestoneForm, { type MilestoneFormData } from './components/MilestoneForm';
+import MilestoneForm from './components/MilestoneForm';
 
 export default function MilestonesPage() {
   const searchParams = useSearchParams();
@@ -21,21 +20,36 @@ export default function MilestonesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<MilestoneResponse | null>(null);
 
+  const cacheKey = projectId ? `planora:milestones:${projectId}` : null;
+
   const loadMilestones = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId || !cacheKey) return;
+    // Serve from cache immediately
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        setMilestones(JSON.parse(cached) as MilestoneResponse[]);
+        setLoading(false);
+      } catch { /* ignore corrupt cache */ }
+    }
+    // Always revalidate in the background
     try {
-      setLoading(true);
       const data = await getMilestones(projectId);
       setMilestones(data);
+      localStorage.setItem(cacheKey, JSON.stringify(data));
       setError(null);
     } catch {
-      setError('Failed to load milestones');
+      if (!cached) setError('Failed to load milestones');
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, cacheKey]);
 
   useEffect(() => { void loadMilestones(); }, [loadMilestones]);
+
+  const invalidateCache = useCallback(() => {
+    if (cacheKey) localStorage.removeItem(cacheKey);
+  }, [cacheKey]);
 
   const handleCreate = async (data: { name: string; description: string; dueDate: string; status: MilestoneStatus }) => {
     if (!projectId) return;
@@ -46,7 +60,11 @@ export default function MilestonesPage() {
         dueDate: data.dueDate || undefined,
         status: data.status,
       });
-      setMilestones((prev) => [created, ...prev]);
+      setMilestones((prev) => {
+        const next = [created, ...prev];
+        if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
+        return next;
+      });
       setShowCreate(false);
     } catch {
       setError('Failed to create milestone');
@@ -62,7 +80,11 @@ export default function MilestonesPage() {
         dueDate: data.dueDate || undefined,
         status: data.status,
       });
-      setMilestones((prev) => prev.map((m) => m.id === updated.id ? updated : m));
+      setMilestones((prev) => {
+        const next = prev.map((m) => m.id === updated.id ? updated : m);
+        if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
+        return next;
+      });
       setEditing(null);
     } catch {
       setError('Failed to update milestone');
@@ -73,7 +95,11 @@ export default function MilestonesPage() {
     if (!confirm('Delete this milestone? Tasks will not be deleted.')) return;
     try {
       await deleteMilestone(id);
-      setMilestones((prev) => prev.filter((m) => m.id !== id));
+      setMilestones((prev) => {
+        const next = prev.filter((m) => m.id !== id);
+        if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
+        return next;
+      });
     } catch {
       setError('Failed to delete milestone');
     }
@@ -82,10 +108,15 @@ export default function MilestonesPage() {
   const handleStatusChange = async (id: number, status: MilestoneStatus) => {
     const m = milestones.find((x) => x.id === id);
     if (!m) return;
-    setMilestones((prev) => prev.map((x) => x.id === id ? { ...x, status } : x));
+    setMilestones((prev) => {
+      const next = prev.map((x) => x.id === id ? { ...x, status } : x);
+      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
+      return next;
+    });
     try {
       await updateMilestone(id, { name: m.name, status });
     } catch {
+      invalidateCache();
       void loadMilestones();
     }
   };
@@ -103,7 +134,7 @@ export default function MilestonesPage() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full bg-gray-50 overflow-y-auto">
-      <div className="max-w-3xl mx-auto w-full px-4 py-6">
+      <div className="max-w-5xl mx-auto w-full px-4 py-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -114,7 +145,7 @@ export default function MilestonesPage() {
           </div>
           <button
             onClick={() => { setShowCreate(true); setEditing(null); }}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm transition-colors"
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 min-h-[44px] rounded-lg shadow-sm transition-colors"
           >
             <Plus size={14} /> New Milestone
           </button>
@@ -145,7 +176,7 @@ export default function MilestonesPage() {
             <p className="text-sm text-gray-400 mt-1">Create one to track major goals</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {milestones.map((m) =>
               editing?.id === m.id ? (
                 <MilestoneForm

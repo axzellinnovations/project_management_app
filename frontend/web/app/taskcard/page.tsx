@@ -1,5 +1,4 @@
 "use client";
-export const dynamic = 'force-dynamic';
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TaskHeader from './TaskHeader';
@@ -43,15 +42,26 @@ function TaskPageContent() {
 
   const fetchTaskData = async () => {
     if (!taskId) return;
+    const cacheKey = `planora:task:${taskId}`;
+    // Serve from cache immediately
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        setTaskData(JSON.parse(cached) as TaskData);
+        setLoading(false);
+      } catch { /* ignore corrupt cache */ }
+    }
     try {
-      setLoading(true);
       const response = await api.get(`/api/tasks/${taskId}`);
       setTaskData(response.data);
+      localStorage.setItem(cacheKey, JSON.stringify(response.data));
       setError(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to fetch task data');
-      setTaskData(null);
+      if (!cached) {
+        setError(err.response?.data?.message || 'Failed to fetch task data');
+        setTaskData(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -82,7 +92,8 @@ function TaskPageContent() {
     
     try {
       await api.put(`/api/tasks/${taskId}`, updates);
-      // Refresh task data after update
+      // Invalidate cache and refresh
+      localStorage.removeItem(`planora:task:${taskId}`);
       await fetchTaskData();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {

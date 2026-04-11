@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import api from '@/lib/axios';
 import ResetPasswordForm from './components/ResetPasswordForm';
 import SuccessMessage from './components/SuccessMessage';
 
 export default function ResetPasswordPage() {
-  const [otp, setOtp] = useState('');
+  const searchParams = useSearchParams();
+  const token = searchParams.get('token') || '';
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -18,8 +20,8 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setError('');
 
-    if (!otp) {
-      setError('Please enter the OTP from your email.');
+    if (!token) {
+      setError('Invalid or missing reset token. Please use the reset link from your email.');
       return;
     }
 
@@ -37,12 +39,11 @@ export default function ResetPasswordPage() {
 
     try {
       await api.post('/api/auth/reset', {
-        token: otp,
+        token,
         newPassword: newPassword
       });
 
       setSubmitted(true);
-      setOtp('');
       setNewPassword('');
       setConfirmPassword('');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -82,21 +83,19 @@ export default function ResetPasswordPage() {
           </svg>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Reset Password</h1>
-        <p className="text-gray-500 text-sm mt-2">Enter the OTP sent to your email and choose a new password</p>
+        <p className="text-gray-500 text-sm mt-2">Choose a new password to complete your reset</p>
       </div>
 
       {/* Main Card Container */}
-      <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-8'>
+      <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-4 sm:p-8'>
         {submitted ? (
           <SuccessMessage />
         ) : (
           <ResetPasswordForm
-            otp={otp}
             newPassword={newPassword}
             confirmPassword={confirmPassword}
             error={error}
             isLoading={isLoading}
-            onOtpChange={setOtp}
             onPasswordChange={setNewPassword}
             onConfirmPasswordChange={setConfirmPassword}
             onSubmit={handleSubmit}

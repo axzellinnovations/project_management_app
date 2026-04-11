@@ -2,8 +2,10 @@ package com.planora.backend.controller;
 
 import com.planora.backend.dto.ProjectDTO;
 import com.planora.backend.dto.ProjectResponseDTO;
+import com.planora.backend.dto.ProjectMetricsDTO;
 import com.planora.backend.dto.UpdateProjectDTO;
 import com.planora.backend.service.ProjectService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +24,7 @@ public class ProjectController {
     // ---------------- CREATE PROJECT ----------------
     @PostMapping
     public ResponseEntity<ProjectResponseDTO> createProject(
-            @RequestBody ProjectDTO projectDto,
+            @Valid @RequestBody ProjectDTO projectDto,
             @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
         projectDto.setOwnerId(principal.getUserId());
         return new ResponseEntity<>(
@@ -38,12 +40,22 @@ public class ProjectController {
         return ResponseEntity.ok(!exists);
     }
 
+    // ---------------- GET PROJECT METRICS ----------------
+    @GetMapping("/{projectId}/metrics")
+    public ResponseEntity<ProjectMetricsDTO> getProjectMetrics(
+            @PathVariable Long projectId) {
+        return ResponseEntity.ok(projectService.getProjectMetrics(projectId));
+    }
+
     // ---------------- READ PROJECTS (FOR AUTH USER) ----------------
     @GetMapping
     public ResponseEntity<List<ProjectResponseDTO>> getProjectsForUser(
-            @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
+            @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String order) {
         return new ResponseEntity<>(
-                projectService.getProjectsForUser(principal.getUserId()),
+                projectService.getProjectsForUser(principal.getUserId(), type, sort, order),
                 HttpStatus.OK);
     }
 
@@ -75,7 +87,7 @@ public class ProjectController {
     @PutMapping("/{projectId}")
     public ResponseEntity<ProjectResponseDTO> updateProject(
             @PathVariable Long projectId,
-            @RequestBody UpdateProjectDTO dto) {
+            @Valid @RequestBody UpdateProjectDTO dto) {
         return new ResponseEntity<>(
                 projectService.updateProject(projectId, dto),
                 HttpStatus.OK);

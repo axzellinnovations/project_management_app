@@ -728,7 +728,7 @@ export const useChat = (projectId: string) => {
       if (inc.id) loadMsgReactions(inc.id);
     });
     return () => sub.unsubscribe();
-  }, [projectId, isSocketConnected, threads.activeThreadRootRef, threads.activeThreadRootRef.current, setThreadMessages, loadMsgReactions]);
+  }, [projectId, isSocketConnected, threads.activeThreadRootRef, setThreadMessages, loadMsgReactions]);
 
   // â”€â”€ Per-message reaction subscriptions â”€â”€
   useEffect(() => {

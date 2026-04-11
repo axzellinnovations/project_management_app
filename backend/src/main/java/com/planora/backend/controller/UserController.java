@@ -60,6 +60,11 @@ public class UserController {
         return new ResponseEntity<>(service.resendOtp(otpRequest.getEmail()), HttpStatus.OK);
     }
 
+    @PostMapping("/resend-otp")
+    public ResponseEntity<String> resendOtpAlias(@Valid @RequestBody OtpRequest otpRequest) {
+        return new ResponseEntity<>(service.resendOtp(otpRequest.getEmail()), HttpStatus.OK);
+    }
+
     @PostMapping("/forgot")
     public ResponseEntity<String> forgotPassword(@Valid @RequestBody OtpRequest otpRequest) {
         return new ResponseEntity<>(service.forgotPassword(otpRequest.getEmail()), HttpStatus.OK);

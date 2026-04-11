@@ -37,11 +37,13 @@ export function getRememberMe(): boolean {
     return localStorage.getItem('rememberMe') === 'true';
 }
 
-/** Pick the right storage based on the rememberMe flag.
- *  - rememberMe=true  -> localStorage  (survives browser restart)
- *  - rememberMe=false -> sessionStorage (cleared when the tab/window closes) */
+/** Always use localStorage so auth tokens are shared across browser tabs.
+ *  sessionStorage is tab-isolated, which causes new tabs to redirect to login.
+ *  Both localStorage and sessionStorage are JS-accessible, so there is no
+ *  meaningful security difference — HTTP-only cookies would be needed for that.
+ *  The rememberMe flag is kept for UX preference tracking only. */
 function tokenStorage(): Storage {
-    return getRememberMe() ? localStorage : sessionStorage;
+    return localStorage;
 }
 
 // Token helpers
@@ -143,6 +145,11 @@ export function clearTokens(): void {
         localStorage.removeItem('rememberMe');
         sessionStorage.removeItem('token');
         sessionStorage.removeItem('refreshToken');
+        // Wipe all planora: prefixed data caches so the next user session
+        // starts with a clean slate
+        Object.keys(localStorage)
+            .filter((k) => k.startsWith('planora:'))
+            .forEach((k) => localStorage.removeItem(k));
         emitAuthTokenChanged();
     }
 }
@@ -157,5 +164,37 @@ export function getValidToken(): string | null {
         return localStorage.getItem('token') || sessionStorage.getItem('token');
     }
     return null;
+}
+
+/**
+ * Uses native fetch (not axios) to avoid circular imports.
+ * POSTs the current refresh token to /api/auth/refresh, stores the new
+ * access token (and refresh token if rotated), and returns the new access token.
+ * On failure it clears all tokens and throws.
+ */
+export async function refreshAccessToken(): Promise<string> {
+    const rt = getRefreshToken();
+    if (!rt) {
+        clearTokens();
+        throw new Error('No refresh token available');
+    }
+    const res = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: rt }),
+    });
+    if (!res.ok) {
+        clearTokens();
+        throw new Error('Token refresh failed');
+    }
+    const data = await res.json();
+    saveToken(data.token);
+    if (data.refreshToken) saveRefreshToken(data.refreshToken);
+    return data.token;
+}
+
+/** Alias for clearTokens — clears all auth state and planora: caches. */
+export function logout(): void {
+    clearTokens();
 }
 

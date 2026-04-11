@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
       </div>
 
       {/* Main Card Container */}
-      <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-8'>
+      <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-4 sm:p-8'>
         {submitted ? (
           // Success Message
           <div className="text-center py-8">
@@ -90,7 +90,10 @@ export default function ForgotPasswordPage() {
                 id="forgot-email"
                 type="email"
                 autoComplete="email"
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
+                autoCapitalize="off"
+                autoCorrect="off"
+                inputMode="email"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-[16px] sm:text-sm"
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value.toLowerCase())}
@@ -103,7 +106,7 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className={`w-full font-bold py-2.5 rounded-lg transition-colors text-white ${
+              className={`w-full font-bold py-2.5 min-h-[44px] rounded-lg transition-colors text-white ${
                 isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
               }`}
             >
