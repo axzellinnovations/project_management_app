@@ -13,6 +13,7 @@ import java.util.List;
 @Repository
 public interface ProjectRepository extends JpaRepository<Project, Long> {
     boolean existsByProjectKey(String projectKey);
+    boolean existsByProjectKeyAndTeamId(String projectKey, Long teamId);
 
     List<Project> findByTeamIn(List<Team> teams);
 

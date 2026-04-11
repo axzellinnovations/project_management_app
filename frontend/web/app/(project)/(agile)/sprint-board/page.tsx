@@ -144,21 +144,21 @@ export default function SprintBoardPage() {
 
     try {
       await moveTaskToColumn(taskId, sprintboard.id, newStatus);
-    } catch (err) {
+    } catch (_err) {
       // Revert if failed
       fetchActiveSprintAndBoard();
     }
   };
 
-  const handleCreateTask = async (taskData: Record<string, unknown>) => {
+  const _handleCreateTask = async (taskData: Record<string, unknown>) => {
     if (!projectIdStr) return;
     try {
       await axios.post('/api/tasks', taskData);
       setSuccessMsg('Task created!');
       setTimeout(() => setSuccessMsg(''), 2000);
       fetchActiveSprintAndBoard();
-    } catch (err: unknown) {
-      const axiosErr = err as AxiosError<{ message?: string }>;
+    } catch (_err: unknown) {
+      const axiosErr = _err as AxiosError<{ message?: string }>;
       toast(axiosErr?.response?.data?.message || 'Failed to create task.', 'error');
     }
   };
@@ -213,7 +213,7 @@ export default function SprintBoardPage() {
       setShowCompleteConfirm(false);
       setSuccessMsg('Sprint completed successfully!');
       setTimeout(() => setSuccessMsg(''), 2000);
-    } catch (err) {
+    } catch (_err) {
       toast('Failed to complete sprint.', 'error');
     } finally {
       setIsUpdating(false);
@@ -472,7 +472,7 @@ export default function SprintBoardPage() {
             {selectedTaskId !== null && (
               <TaskCardModal
                 taskId={selectedTaskId}
-                onClose={() => setSelectedTaskId(null)}
+                onClose={(_wasModified) => setSelectedTaskId(null)}
               />
             )}
           </>

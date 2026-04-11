@@ -128,7 +128,7 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
       
       {/* Burndown Chart Element */}
-      <MotionWrapper delay={0.3} className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
+      <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Sprint Burndown</h3>
           {burndownData.length > 0 ? (
               <div className="h-[250px] w-full">
@@ -152,7 +152,7 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
       </MotionWrapper>
 
       {/* Task Distribution Element */}
-      <MotionWrapper delay={0.4} className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
+      <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Task Priority Distribution</h3>
           {taskDistribution.length > 0 ? (
               <div className="h-[250px] w-full">
@@ -184,7 +184,7 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
       </MotionWrapper>
 
       {/* Velocity Chart Element */}
-      <MotionWrapper delay={0.5} className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
+      <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Velocity (Completed Story Points)</h3>
           {velocityData.length > 0 ? (
               <div className="h-[250px] w-full">
@@ -206,7 +206,7 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
       </MotionWrapper>
 
       {/* Lead Time Chart Element */}
-      <MotionWrapper delay={0.6} className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
+      <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Lead Time (Average Days to Complete)</h3>
           {leadTimeData.length > 0 ? (
               <div className="h-[250px] w-full">

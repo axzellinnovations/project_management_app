@@ -81,7 +81,7 @@ describe('NotificationBell', () => {
     expect(screen.getByText('You have no notifications')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View all notifications' })).toHaveAttribute(
       'href',
-      '/notifications'
+      '/dashboard/notifications'
     );
   });
 

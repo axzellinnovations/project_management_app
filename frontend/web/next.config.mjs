@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  turbopack: {},
   async rewrites() {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8080';
     const proxy = (path) => ({
@@ -23,8 +24,11 @@ const nextConfig = {
       proxy('chat'),
       proxy('folders'),
       proxy('dms'),
+      proxy('search'),
       proxy('milestones'),
       proxy('user'),
+      proxy('documents'),
+      proxy('pages'),
     ];
   },
   images: {

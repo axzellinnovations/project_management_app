@@ -45,7 +45,7 @@ export default function DocumentSidebar({
         <div key={item.id} className="w-full flex flex-col">
           <Link
             href={projectId ? `/pages/${item.id}?projectId=${projectId}` : `/pages/${item.id}`}
-            className={`group flex items-center justify-between py-1.5 px-2 rounded-md text-sm transition-colors ${
+            className={`group flex items-center justify-between py-2.5 px-2 min-h-[44px] lg:min-h-0 lg:py-1.5 rounded-md text-sm transition-colors ${
               isSelected 
                 ? 'bg-blue-50 text-blue-700 font-medium' 
                 : 'text-gray-700 hover:bg-gray-100'
@@ -86,14 +86,14 @@ export default function DocumentSidebar({
   };
 
   return (
-    <div className="flex flex-col w-[280px] h-full bg-[#f8fafc] border-r border-gray-200 flex-shrink-0 font-sans">
+    <div className="flex flex-col w-full lg:w-[280px] h-full bg-[#f8fafc] border-r border-gray-200 flex-shrink-0 font-sans">
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-bold text-gray-600 uppercase tracking-wider">Project Pages</h2>
           <button
             onClick={onCreateClick}
-            className="p-1.5 bg-white border border-gray-200 rounded-md shadow-sm text-gray-600 hover:text-blue-600 hover:border-blue-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="p-2 min-h-[44px] min-w-[44px] lg:min-h-0 lg:min-w-0 lg:p-1.5 bg-white border border-gray-200 rounded-md shadow-sm text-gray-600 hover:text-blue-600 hover:border-blue-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-center"
             title="Create new page"
           >
             <Plus size={16} />

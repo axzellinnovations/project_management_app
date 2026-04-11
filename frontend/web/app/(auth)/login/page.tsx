@@ -41,7 +41,7 @@ export default function LoginPage() {
             </div>
 
             {/* 3. Main Card Container */}
-            <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-8'>
+            <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-4 sm:p-8'>
                 {/* The Tab Switcher */}
                 <div className='flex bg-gray-100 p-1.5 rounded-xl mb-8' role="tablist">
                     <button
@@ -84,7 +84,10 @@ export default function LoginPage() {
                             id="login-email"
                             type="email"
                             autoComplete="email"
-                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
+                            autoCapitalize="off"
+                            autoCorrect="off"
+                            inputMode="email"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-[16px] sm:text-sm"
                             placeholder="Enter your email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value.toLowerCase())}
@@ -100,7 +103,7 @@ export default function LoginPage() {
                                 id="login-password"
                                 type={showPassword ? 'text' : 'password'}
                                 autoComplete="current-password"
-                                className="w-full px-4 py-3 pr-11 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm"
+                                className="w-full px-4 py-3 pr-11 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-[16px] sm:text-sm"
                                 placeholder="Enter your password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
@@ -139,7 +142,7 @@ export default function LoginPage() {
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className={`w-full font-bold py-2 rounded-lg transition-colors text-white ${isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                        className={`w-full font-bold py-2 min-h-[44px] rounded-lg transition-colors text-white ${isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
                     >
                         {isLoading ? 'Signing in...' : 'Sign In'}
                     </button>

@@ -4,9 +4,11 @@ import com.planora.backend.dto.CommentRequestDTO;
 import com.planora.backend.dto.TaskActivityResponseDTO;
 import com.planora.backend.dto.TaskRequestDTO;
 import com.planora.backend.dto.TaskResponseDTO;
+import com.planora.backend.dto.TaskTemplateDTO;
 import com.planora.backend.model.UserPrincipal;
 import com.planora.backend.service.TaskActivityService;
 import com.planora.backend.service.TaskService;
+import com.planora.backend.service.TaskTemplateService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -29,6 +31,9 @@ public class TaskController {
 
     @Autowired
     TaskActivityService activityService;
+
+    @Autowired
+    TaskTemplateService templateService;
 
     @Autowired
     SimpMessagingTemplate messagingTemplate;
@@ -58,7 +63,7 @@ public class TaskController {
     @PutMapping("/{taskId}")
     public ResponseEntity<TaskResponseDTO> updateTask(
             @PathVariable Long taskId,
-            @RequestBody TaskRequestDTO request,
+            @Valid @RequestBody TaskRequestDTO request,
             @AuthenticationPrincipal UserPrincipal currentUser){
         Long currentUserId = currentUser.getUserId();
         TaskResponseDTO task = service.updateTask(taskId, request, currentUserId);
@@ -288,5 +293,32 @@ public class TaskController {
             @AuthenticationPrincipal UserPrincipal currentUser
     ){
         return new ResponseEntity<>(activityService.getActivities(taskId), HttpStatus.OK);
+    }
+
+    /** Save the task as a reusable template for the project. */
+    @PostMapping("/{taskId}/save-as-template")
+    public ResponseEntity<TaskTemplateDTO> saveAsTemplate(
+            @PathVariable Long taskId,
+            @RequestBody TaskTemplateDTO.SaveFromTaskRequest req,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        TaskTemplateDTO dto = templateService.saveTaskAsTemplate(taskId, req.getTemplateName(), currentUser.getUserId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(dto);
+    }
+
+    /** PATCH /api/tasks/{taskId}/assignees — replace the multi-assignee list without requiring a full task body. */
+    @PatchMapping("/{taskId}/assignees")
+    public ResponseEntity<TaskResponseDTO> updateAssignees(
+            @PathVariable Long taskId,
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ) {
+        @SuppressWarnings("unchecked")
+        List<Integer> rawIds = (List<Integer>) body.get("assigneeIds");
+        List<Long> assigneeIds = rawIds == null ? List.of() : rawIds.stream().map(Integer::longValue).toList();
+        TaskResponseDTO task = service.updateAssignees(taskId, assigneeIds, currentUser.getUserId());
+        messagingTemplate.convertAndSend(
+                "/topic/project/" + task.getProjectId() + "/tasks",
+                Map.of("type", "TASK_UPDATED", "task", task));
+        return ResponseEntity.ok(task);
     }
 }

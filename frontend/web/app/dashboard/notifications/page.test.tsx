@@ -90,8 +90,8 @@ describe('NotificationsPage', () => {
     expect(screen.getByRole('heading', { name: 'Notifications' })).toBeInTheDocument();
     expect(screen.getByText('Alice assigned a task to you')).toBeInTheDocument();
     expect(screen.getByText('Task')).toBeInTheDocument();
-    expect(screen.getAllByText('Unread').length).toBeGreaterThan(0);
-    expect(screen.getByRole('link', { name: 'Open context' })).toHaveAttribute('href', '/taskcard?taskId=12');
+    expect(screen.getAllByText('New').length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'Open details' })).toHaveAttribute('href', '/taskcard?taskId=12');
 
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Atlas' })).toHaveAttribute('href', '/summary/77');
@@ -165,7 +165,7 @@ describe('NotificationsPage', () => {
 
     render(<NotificationsPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
     await waitFor(() => {
       expect(deleteNotificationById).toHaveBeenCalledWith(9);
@@ -181,7 +181,7 @@ describe('NotificationsPage', () => {
   it('shows empty state when there are no notifications', () => {
     render(<NotificationsPage />);
 
-    expect(screen.getByText('No notifications here')).toBeInTheDocument();
-    expect(screen.getByText('You are all caught up.')).toBeInTheDocument();
+    expect(screen.getByText('Catching up...')).toBeInTheDocument();
+    expect(screen.getByText('You have no notifications yet.')).toBeInTheDocument();
   });
 });

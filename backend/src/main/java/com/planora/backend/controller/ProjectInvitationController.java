@@ -2,6 +2,7 @@ package com.planora.backend.controller;
 
 import com.planora.backend.dto.ProjectInviteRequest;
 import com.planora.backend.service.ProjectInvitationService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,7 +18,7 @@ public class ProjectInvitationController {
     @PostMapping("/{projectId}/invitations")
     public ResponseEntity<?> inviteToProject(
             @PathVariable Long projectId,
-            @RequestBody ProjectInviteRequest request,
+            @Valid @RequestBody ProjectInviteRequest request,
             @AuthenticationPrincipal(expression = "userId") Long userId) {
         projectInvitationService.inviteToProject(projectId, request, userId);
         return ResponseEntity.ok("Invitation email sent");

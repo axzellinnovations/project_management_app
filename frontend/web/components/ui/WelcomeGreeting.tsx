@@ -121,12 +121,12 @@ export default function WelcomeGreeting({ username }: WelcomeGreetingProps) {
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
-            className="flex items-center gap-1.5 sm:gap-2"
+            className="flex items-center gap-2 sm:gap-2.5 min-w-0"
         >
             <div className="flex-shrink-0 flex items-center justify-center">
                 {renderIcon()}
             </div>
-            <h1 className="font-arimo text-[17px] sm:text-[19px] xl:text-[21px] leading-tight text-[#101828] font-bold tracking-tight whitespace-nowrap">
+            <h1 className="font-outfit text-[16px] sm:text-[19px] xl:text-[21px] leading-tight text-[#101828] font-bold tracking-tight truncate">
                 {timeData.text}
             </h1>
         </motion.div>

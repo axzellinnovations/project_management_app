@@ -41,21 +41,13 @@ public class ProjectInvitationService {
 
     @Transactional
     public void inviteToProject(Long projectId, ProjectInviteRequest request, Long inviterUserId) {
-        if (request == null || request.getEmail() == null || request.getEmail().trim().isEmpty()) {
-            throw new RuntimeException("Email is required");
-        }
-        if (request.getRole() == null || request.getRole().trim().isEmpty()) {
-            throw new RuntimeException("Role is required");
+        if (request == null) {
+            throw new RuntimeException("Invite request is required");
         }
 
         String inviteeEmail = request.getEmail().trim().toLowerCase();
-        String roleStr = request.getRole().trim().toUpperCase();
-        // Validate role is a valid TeamRole
-        try {
-            TeamRole.valueOf(roleStr);
-        } catch (Exception e) {
-            throw new RuntimeException("Invalid role: " + roleStr);
-        }
+        TeamRole inviteRole = request.getRole();
+        String roleStr = inviteRole.name();
 
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
@@ -93,7 +85,7 @@ public class ProjectInvitationService {
         invitation.setInvitedAt(LocalDateTime.now());
         invitation.setExpiresAt(LocalDateTime.now().plusDays(7));
         invitation.setStatus("PENDING");
-        invitation.setRole(roleStr); // Save the invited role
+        invitation.setRole(roleStr);
 
         teamInvitationRepository.save(invitation);
 

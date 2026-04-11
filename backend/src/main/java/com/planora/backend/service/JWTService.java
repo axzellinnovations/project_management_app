@@ -3,6 +3,7 @@ package com.planora.backend.service;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 
 import javax.crypto.SecretKey;
@@ -23,6 +24,7 @@ public class JWTService {
     private static final long REFRESH_TOKEN_TTL_MS = 1000L * 60 * 60 * 24 * 7;   // 7 days
 
     private static final String CLAIM_TOKEN_TYPE = "tokenType";
+    private static final String CLAIM_JTI = "jti";
     private static final String TYPE_ACCESS  = "ACCESS";
     private static final String TYPE_REFRESH = "REFRESH";
 
@@ -49,7 +51,13 @@ public class JWTService {
     public String generateRefreshToken(String email) {
         Map<String, Object> claims = new HashMap<>();
         claims.put(CLAIM_TOKEN_TYPE, TYPE_REFRESH);
+        claims.put(CLAIM_JTI, UUID.randomUUID().toString());
         return buildToken(email, claims, REFRESH_TOKEN_TTL_MS);
+    }
+
+    /** Extracts the JTI (JWT Token ID) claim from a token. */
+    public String extractJti(String token) {
+        return extractAllClaims(token).get(CLAIM_JTI, String.class);
     }
 
     // ── Validation ─────────────────────────────────────────────────────────────

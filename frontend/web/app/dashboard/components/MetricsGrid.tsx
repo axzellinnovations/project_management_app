@@ -143,7 +143,19 @@ function SmallCircularProgress({ percentage }: { percentage: number }) {
     );
 }
 
-export default function MetricsGrid() {
+interface MetricsGridProps {
+    totalTasks?: number;
+    completedTasks?: number;
+    overdueTasks?: number;
+    completionPercentage?: number;
+}
+
+export default function MetricsGrid({
+    totalTasks = 0,
+    completedTasks = 0,
+    overdueTasks = 0,
+    completionPercentage = 0
+}: MetricsGridProps) {
     return (
         <motion.div
             variants={containerVariants}
@@ -160,11 +172,11 @@ export default function MetricsGrid() {
                 <div className="flex flex-col h-full justify-center min-w-0 pr-2">
                     <p className="font-arimo text-[14px] text-gray-500 font-medium group-hover:text-[#0052CC] transition-colors truncate mb-1">Overall Progress</p>
                     <div className="flex flex-col">
-                         <span className="font-arimo text-[24px] text-[#0052CC] leading-none font-bold truncate">On Track</span>
+                         <span className="font-arimo text-[24px] text-[#0052CC] leading-none font-bold truncate">{completionPercentage > 0 ? 'On Track' : 'No Data'}</span>
                     </div>
                 </div>
                 <div className="flex items-center shrink-0">
-                    <SmallCircularProgress percentage={68} />
+                    <SmallCircularProgress percentage={completionPercentage} />
                 </div>
             </motion.div>
 
@@ -178,7 +190,7 @@ export default function MetricsGrid() {
                         <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
                     </svg>
                 }
-                value="0"
+                value={totalTasks.toString()}
                 label="Total Tasks"
             />
 
@@ -192,7 +204,7 @@ export default function MetricsGrid() {
                         <path d="M22 4L12 14.01l-3-3" />
                     </svg>
                 }
-                value="0"
+                value={completedTasks.toString()}
                 label="Completed Tasks"
             />
 
@@ -207,7 +219,7 @@ export default function MetricsGrid() {
                         <line x1="12" y1="16" x2="12.01" y2="16" />
                     </svg>
                 }
-                value="0"
+                value={overdueTasks.toString()}
                 label="Due Issues"
             />
         </motion.div>

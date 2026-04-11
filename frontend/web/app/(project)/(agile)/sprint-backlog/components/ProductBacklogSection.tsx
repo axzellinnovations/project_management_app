@@ -344,7 +344,7 @@ export default function ProductBacklogSection({
     {selectedTaskId !== null && (
       <TaskCardModal
         taskId={selectedTaskId}
-        onClose={() => setSelectedTaskId(null)}
+        onClose={(_wasModified) => setSelectedTaskId(null)}
       />
     )}
     </div>

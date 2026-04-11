@@ -7,22 +7,31 @@ import { Suspense } from 'react';
 import { usePathname } from 'next/navigation';
 import CommandPalette from '@/components/ui/CommandPalette';
 
-export default function SidebarLayout({ children }: { children: React.ReactNode }) {
+interface SidebarLayoutProps {
+    children: React.ReactNode;
+    showTopBar?: boolean;
+}
+
+export default function SidebarLayout({ children, showTopBar = true }: SidebarLayoutProps) {
     const pathname = usePathname();
     const isChatRoute = pathname?.includes('/chat');
 
     return (
-        <div className="flex h-screen overflow-hidden bg-cu-bg">
+        <div className="flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-cu-bg relative overscroll-none">
             <Sidebar />
             <div
                 className="flex flex-col flex-1 min-w-0 overflow-hidden"
                 style={{ transition: 'all 300ms cubic-bezier(0.4,0,0.2,1)' }}
             >
                 <div className="flex flex-col flex-1 min-w-0 overflow-hidden main-content-area">
-                    <Suspense fallback={null}>
-                        <TopBar />
-                    </Suspense>
-                    <div className={`flex-1 w-full ${isChatRoute ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+                    {showTopBar && (
+                        <div className="transition-opacity duration-200 ease-out">
+                            <Suspense fallback={null}>
+                                <TopBar />
+                            </Suspense>
+                        </div>
+                    )}
+                    <div className={`flex-1 w-full flex flex-col ${isChatRoute ? 'overflow-hidden' : 'overflow-y-auto'}`}>
                         {children}
                     </div>
                 </div>

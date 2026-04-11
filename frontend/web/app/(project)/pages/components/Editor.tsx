@@ -22,12 +22,18 @@ import {
   Heading1, Heading2, Heading3, Quote, Table as TableIcon,
   Minus, Undo2, Redo2, Type,
 } from 'lucide-react';
+import { Collaboration } from '@tiptap/extension-collaboration';
+import * as Y from 'yjs';
 import SlashCommand, { slashSuggestion } from './slashCommand';
+
+interface CollaborationUser { name: string; color: string; }
 
 interface EditorProps {
   content: string;
   onUpdate: (html: string) => void;
   editable?: boolean;
+  ydoc?: Y.Doc;
+  collaborationUser?: CollaborationUser;
 }
 
 function ToolbarButton({
@@ -43,7 +49,7 @@ function ToolbarButton({
       onClick={onClick}
       title={tooltip}
       type="button"
-      className={`flex items-center justify-center w-8 h-8 rounded-md text-sm font-medium transition-all duration-150 ${
+      className={`flex items-center justify-center w-8 h-8 min-w-[36px] min-h-[36px] rounded-md text-sm font-medium transition-all duration-150 ${
         isActive
           ? 'bg-blue-600 text-white shadow-sm'
           : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
@@ -58,7 +64,7 @@ function Divider() {
   return <div className="w-px h-5 bg-gray-200 mx-1 flex-shrink-0" />;
 }
 
-export default function Editor({ content, onUpdate, editable = true }: EditorProps) {
+export default function Editor({ content, onUpdate, editable = true, ydoc, collaborationUser: _collaborationUser }: EditorProps) {
   const [isMounted, setIsMounted] = useState(false);
 
   const handleUpdate = useMemo(
@@ -66,20 +72,21 @@ export default function Editor({ content, onUpdate, editable = true }: EditorPro
     [onUpdate]
   );
 
-  useEffect(() => { 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsMounted(true); 
-  }, []);
+  useEffect(() => { setIsMounted(true); }, []); // eslint-disable-line react-hooks/set-state-in-effect
 
   const extensions = useMemo(() => [
-    SlashCommand.configure({ suggestion: slashSuggestion }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    SlashCommand.configure({ suggestion: slashSuggestion as any }),
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
       // Disable StarterKit's bundled versions so our explicit imports below
       // (with custom config) are the sole registered instances.
       link: false,
       underline: false,
-    }),
+      // Disable history when Yjs manages it
+      ...(ydoc ? { history: false } : {}),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any),
     Placeholder.configure({ placeholder: "Type '/' for commands, or start writing..." }),
     Highlight,
     Underline,
@@ -90,7 +97,10 @@ export default function Editor({ content, onUpdate, editable = true }: EditorPro
     TableRow,
     TableHeader,
     TableCell,
-  ], []);
+    ...(ydoc ? [
+      Collaboration.configure({ document: ydoc }),
+    ] : []),
+  ], [ydoc]);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -221,18 +231,22 @@ export default function Editor({ content, onUpdate, editable = true }: EditorPro
             onClick={() => editor.chain().focus().toggleBlockquote().run()}>
             <Quote size={15} />
           </ToolbarButton>
+          <span className="hidden sm:contents">
           <ToolbarButton tooltip="Code Block" isActive={editor.isActive('codeBlock')}
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}>
             <span className="text-xs font-mono font-bold">{`</>`}</span>
           </ToolbarButton>
+          </span>
           <ToolbarButton tooltip="Horizontal rule"
             onClick={() => editor.chain().focus().setHorizontalRule().run()}>
             <Minus size={15} />
           </ToolbarButton>
+          <span className="hidden sm:contents">
           <ToolbarButton tooltip="Insert table"
             onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
             <TableIcon size={15} />
           </ToolbarButton>
+          </span>
         </div>
       )}
 

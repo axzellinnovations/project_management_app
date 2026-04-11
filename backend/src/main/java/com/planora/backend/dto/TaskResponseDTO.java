@@ -28,6 +28,8 @@ public class TaskResponseDTO {
     private String assigneeName;
     private String assigneePhotoUrl;
 
+    private List<AssigneeDTO> assignees;   // multiple assignees (V4)
+
     private Long sprintId;
     private String sprintName;
 
@@ -41,6 +43,22 @@ public class TaskResponseDTO {
     private List<LabelDTO> labels;
     private List<DependencyDTO> dependencies;
     private List<AttachmentDTO> attachments;
+
+    // Recurring task fields (V7)
+    private String recurrenceRule;
+    private java.time.LocalDate recurrenceEnd;
+    private Long recurrenceParentId;
+    private java.time.LocalDate nextOccurrence;
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class AssigneeDTO {
+        private Long memberId;
+        private Long userId;
+        private String name;
+        private String photoUrl;
+    }
 
     @Data
     @AllArgsConstructor

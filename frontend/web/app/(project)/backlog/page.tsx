@@ -504,7 +504,7 @@ export default function BacklogPage() {
             {selectedTaskIdForModal !== null && (
                 <TaskCardModal
                     taskId={selectedTaskIdForModal}
-                    onClose={() => { setSelectedTaskIdForModal(null); void loadTasks(); }}
+                    onClose={(wasModified) => { setSelectedTaskIdForModal(null); if (wasModified) void loadTasks(); }}
                 />
             )}
         </div>

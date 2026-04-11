@@ -3,54 +3,68 @@
 import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef } from 'react';
 import { AUTH_TOKEN_CHANGED_EVENT, clearTokens, getUserFromToken, getValidToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
-import api from '@/lib/axios';
 import { fetchChatInbox, type ChatInboxResponse } from '@/services/chat-service';
 
-/* ── Hooks ── */
+/* -- Hooks -- */
 import { useSidebarProjects } from '@/hooks/useSidebarProjects';
+import useNotificationSocket from '@/hooks/useNotificationSocket';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
-/* ── Sub-components ── */
+/* -- Sub-components -- */
 import { SidebarHeader, CollapseButton } from './sidebar/SidebarHeader';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { NavRow } from './sidebar/NavRows';
 import { ProjectDropdown } from './sidebar/ProjectDropdown';
 import { InboxDropdown } from './sidebar/InboxDropdown';
+import ProjectList from '@/components/layout/sidebar/ProjectList';
+import InboxBadge from '@/components/layout/sidebar/InboxBadge';
+import { useGlobalNotifications } from '@/components/providers/GlobalNotificationProvider';
 import {
-  HomeIcon, StarIcon, ClockIcon, ProfileIcon,
+  HomeIcon,
+  ProfileIcon,
   InboxIcon,
+  BellIcon,
 } from './sidebar/SidebarIcons';
 
-/* ── Types ── */
-interface UserSummary { email: string; profilePicUrl?: string; }
+/* -- Types -- */
 interface Project { id: number; name: string; projectKey?: string; isFavorite?: boolean; }
 const INBOX_STALE_MS = 5 * 60_000;
 
-interface InboxNavRowProps {
+interface NavRowProps {
   collapsed: boolean;
   active: boolean;
-  unseenCount: number;
+  badge: number;
   onClick: () => void;
 }
 
-function InboxNavRow({ collapsed, active, unseenCount, onClick }: InboxNavRowProps) {
+function InboxNavRow({ collapsed, active, badge, onClick }: NavRowProps) {
   return (
     <NavRow
       icon={
         <div className="relative">
           <InboxIcon />
-          {unseenCount > 0 && (
-            <span className="absolute -top-1 -right-1.5 bg-cu-primary text-white text-[9px] font-bold px-1 rounded-full border border-white">
-              {unseenCount > 9 ? '9+' : unseenCount}
-            </span>
-          )}
+          <div className="absolute -top-1 -right-2">
+            <InboxBadge count={badge} />
+          </div>
         </div>
       }
       label="Inbox"
       collapsed={collapsed}
       active={active}
-      hasChevron
-      chevronOpen={active}
-      badge={unseenCount}
+      badge={badge}
+      onClick={onClick}
+    />
+  );
+}
+
+function NotificationsNavRow({ collapsed, active, badge, onClick }: NavRowProps) {
+  return (
+    <NavRow
+      icon={<BellIcon />}
+      label="Notifications"
+      collapsed={collapsed}
+      active={active}
+      badge={badge}
       onClick={onClick}
     />
   );
@@ -69,12 +83,13 @@ const subscribeToBrowserStorage = (onChange: () => void) => {
   };
 };
 
-/* ─────────────────────────────────────────────
+/* --------------------------------------------
    Main Sidebar
-───────────────────────────────────────────── */
+ -------------------------------------------- */
 export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
+  const { unreadCount: globalUnreadCount } = useGlobalNotifications();
 
   const token = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
@@ -86,15 +101,9 @@ export default function Sidebar() {
     return getUserFromToken();
   }, [token]);
 
-  const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
-  const resolvedProfilePicUrl = useMemo(() => {
-    if (!profilePicUrl) return '';
-    if (profilePicUrl.startsWith('http://') || profilePicUrl.startsWith('https://')) return profilePicUrl;
-    return `${API_BASE_URL}${profilePicUrl}`;
-  }, [profilePicUrl, API_BASE_URL]);
+  const { profilePicUrl: resolvedProfilePicUrl } = useCurrentUser();
 
-  /* ── Project & folder data (extracted hooks) ── */
+  /* -- Project & folder data (extracted hooks) -- */
   const {
     recentProjects,
     favoriteProjects,
@@ -102,17 +111,23 @@ export default function Sidebar() {
     togglingFavoriteId,
     handleProjectClick: rawProjectClick,
     handleToggleFavourite,
-  } = useSidebarProjects(pathname);
-
+  } = useSidebarProjects();
 
   const [chatInbox, setChatInbox] = useState<ChatInboxResponse | null>(null);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [loadingInbox, setLoadingInbox] = useState(false);
   const [inboxError, setInboxError] = useState<string | null>(null);
 
+  const [collapsed, setCollapsed] = useState(true);
+  const [favOpen, setFavOpen] = useState(false);
+  const [recentOpen, setRecentOpen] = useState(false);
+  const [favSearch, setFavSearch] = useState('');
+  const [recentSearch, setRecentSearch] = useState('');
+
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     let isCurrentlyMobile = window.innerWidth < 768;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMobile(isCurrentlyMobile);
     if (isCurrentlyMobile) setCollapsed(true);
 
@@ -129,19 +144,22 @@ export default function Sidebar() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const [collapsed, setCollapsed] = useState(true);
-  const [favOpen, setFavOpen] = useState(false);
-  const [recentOpen, setRecentOpen] = useState(false);
-  const [favSearch, setFavSearch] = useState('');
-  const [recentSearch, setRecentSearch] = useState('');
-
   const favRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
   const inboxRef = useRef<HTMLDivElement>(null);
   const lastInboxFetchedAtRef = useRef(0);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
-  /* ── fetch chats ── */
+  const getActiveProjectId = useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    return (
+      new URLSearchParams(window.location.search).get('projectId')
+      || localStorage.getItem('currentProjectId')
+      || (recentProjects.length > 0 ? recentProjects[0].id.toString() : null)
+    );
+  }, [recentProjects]);
+
+  /* -- fetch inbox activity -- */
   const fetchInboxActivity = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     if (!force && lastInboxFetchedAtRef.current > 0 && Date.now() - lastInboxFetchedAtRef.current < INBOX_STALE_MS) {
       return;
@@ -161,17 +179,22 @@ export default function Sidebar() {
     }
   }, []);
 
-  /* ── effects ── */
-  useEffect(() => {
-    if (!user?.email) return;
-    api.get('/api/auth/users').then(res => {
-      const found = res.data.find((u: UserSummary) => u.email.toLowerCase() === user.email.toLowerCase());
-      if (found?.profilePicUrl) setProfilePicUrl(found.profilePicUrl);
-    }).catch(() => {});
-  }, [user]);
+  const refreshInboxCounts = useCallback(() => {
+    const projectId = getActiveProjectId();
+    if (!projectId) return;
+    void fetchInboxActivity({ force: true });
+  }, [getActiveProjectId, fetchInboxActivity]);
 
+  useNotificationSocket({
+    token,
+    enabled: Boolean(token),
+    onNotification: refreshInboxCounts,
+  });
+
+  /* -- effects -- */
   useEffect(() => {
     if (window.innerWidth >= 768) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCollapsed(localStorage.getItem('planora:sidebar:collapsed') === 'true');
     }
   }, []);
@@ -220,6 +243,7 @@ export default function Sidebar() {
   /* measure anchor position before opening dropdown */
   const openFavDropdown = () => {
     setRecentOpen(false);
+    setInboxOpen(false);
     if (favRef.current) {
       const rect = favRef.current.getBoundingClientRect();
       setDropdownPos({ top: rect.top, left: rect.right + 8 });
@@ -257,6 +281,7 @@ export default function Sidebar() {
     await rawProjectClick(project);
     setFavOpen(false);
     setRecentOpen(false);
+    setInboxOpen(false);
   };
 
   const toggleCollapsed = () => {
@@ -277,7 +302,7 @@ export default function Sidebar() {
     p.name.toLowerCase().includes(recentSearch.toLowerCase()) ||
     (p.projectKey || '').toLowerCase().includes(recentSearch.toLowerCase())
   );
-  
+
   const inboxItems = useMemo(
     () => chatInbox?.recentActivities?.slice(0, 4) || [],
     [chatInbox],
@@ -288,105 +313,99 @@ export default function Sidebar() {
     return Number(chatInbox.totalUnread) || 0;
   }, [chatInbox]);
 
+  const closeDropdowns = () => {
+    setFavOpen(false);
+    setRecentOpen(false);
+    setInboxOpen(false);
+  };
 
-  const closeDropdowns = () => { setFavOpen(false); setRecentOpen(false); };
-
-  /* ── render ── */
+  /* -- render -- */
   return (
     <>
-      {/* Mobile Backdrop Overlay */}
       {isMobile && !collapsed && (
         <div
-          className="fixed inset-0 bg-black/40 z-[90] md:hidden transition-opacity"
+          className="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-[9998]"
           onClick={() => setCollapsed(true)}
         />
       )}
 
       <div
-        className={`h-screen flex-shrink-0 z-[500] bg-[#F9FAFB] transition-all duration-300 ease-in-out ${isMobile ? 'fixed left-0 top-0' : 'relative'} ${isMobile && collapsed ? 'pointer-events-none' : ''}`}
+        className={`h-screen flex-shrink-0 ${isMobile ? 'fixed left-0 top-0 z-[9999]' : 'relative'}`}
         style={{
-          width: isMobile ? (collapsed ? '0px' : '260px') : (collapsed ? '64px' : '240px'),
-          opacity: isMobile && collapsed ? 0 : 1
+          width: isMobile ? '260px' : (collapsed ? '64px' : '240px'),
         }}
       >
-        <div className="relative h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col w-[240px] md:w-[inherit]">
+        <div
+          className={`bg-[#F9FAFB] transition-all duration-300 ease-in-out ${isMobile ? 'relative h-full' : 'fixed left-0 top-0 h-screen z-[9999]'}`}
+          style={{
+            width: isMobile ? '260px' : (collapsed ? '64px' : '240px'),
+            transform: isMobile && collapsed ? 'translateX(-100%)' : 'translateX(0)',
+            opacity: isMobile && collapsed ? 0.5 : 1,
+          }}
+        >
+          <div className="relative h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col w-[240px] md:w-[inherit]">
+            <SidebarHeader collapsed={collapsed} />
+            <CollapseButton collapsed={collapsed} onToggle={toggleCollapsed} />
 
-          {/* Header */}
-          <SidebarHeader collapsed={collapsed} />
-
-          {/* Collapse button */}
-          <CollapseButton collapsed={collapsed} onToggle={toggleCollapsed} />
-
-          {/* Nav body */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 flex flex-col gap-0.5">
-            {/* For You */}
-            <NavRow
-              icon={<HomeIcon />}
-              label="For You"
-              collapsed={collapsed}
-              active={pathname === '/dashboard'}
-              onClick={() => { closeDropdowns(); router.push('/dashboard'); }}
-            />
-
-            {/* Favourites row + dropdown */}
-            <div ref={favRef} className="relative">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 flex flex-col gap-0.5">
               <NavRow
-                icon={<StarIcon className="text-amber-400" />}
-                label="Favourites"
+                icon={<HomeIcon />}
+                label="For You"
                 collapsed={collapsed}
-                active={favOpen}
-                hasChevron
-                chevronOpen={favOpen}
-                onClick={openFavDropdown}
+                active={pathname === '/dashboard'}
+                onClick={() => { closeDropdowns(); router.push('/dashboard'); }}
               />
-            </div>
 
-            {/* Recent Spaces row + dropdown */}
-            <div ref={recentRef} className="relative">
+              <ProjectList
+                collapsed={collapsed}
+                favOpen={favOpen}
+                recentOpen={recentOpen}
+                loading={loadingProjects}
+                favoriteCount={favoriteProjects.length}
+                recentCount={recentProjects.length}
+                favRef={favRef}
+                recentRef={recentRef}
+                onOpenFav={openFavDropdown}
+                onOpenRecent={openRecentDropdown}
+              />
+
+              <div ref={inboxRef} className="relative">
+                <InboxNavRow
+                  collapsed={collapsed}
+                  active={inboxOpen || pathname === '/inbox'}
+                  badge={inboxBadgeCount}
+                  onClick={openInboxDropdown}
+                />
+              </div>
+
+              <div className="relative">
+                <NotificationsNavRow
+                  collapsed={collapsed}
+                  active={pathname === '/dashboard/notifications' || pathname === '/notifications'}
+                  badge={globalUnreadCount}
+                  onClick={() => { closeDropdowns(); router.push('/dashboard/notifications'); }}
+                />
+              </div>
+
               <NavRow
-                icon={<ClockIcon />}
-                label="Recent Spaces"
+                icon={<ProfileIcon />}
+                label="Profile"
                 collapsed={collapsed}
-                active={recentOpen}
-                hasChevron
-                chevronOpen={recentOpen}
-                onClick={openRecentDropdown}
+                active={pathname === '/profile'}
+                onClick={() => { closeDropdowns(); router.push('/profile'); }}
               />
             </div>
 
-            {/* Inbox row + dropdown */}
-            <div ref={inboxRef} className="relative">
-              <InboxNavRow
-                collapsed={collapsed}
-                active={inboxOpen}
-                unseenCount={inboxBadgeCount}
-                onClick={openInboxDropdown}
-              />
-            </div>
-
-            {/* Profile */}
-            <NavRow
-              icon={<ProfileIcon />}
-              label="Profile"
+            <SidebarFooter
               collapsed={collapsed}
-              active={pathname === '/profile'}
-              onClick={() => { closeDropdowns(); router.push('/profile'); }}
+              user={user}
+              resolvedProfilePicUrl={resolvedProfilePicUrl}
+              onLogout={handleLogout}
+              onLinkClick={closeDropdowns}
             />
-
-
           </div>
-
-          {/* User section */}
-          <SidebarFooter
-            collapsed={collapsed}
-            user={user}
-            resolvedProfilePicUrl={resolvedProfilePicUrl}
-            onLogout={handleLogout}
-            onLinkClick={closeDropdowns}
-          />
         </div>
 
-        {/* Fixed dropdowns rendered OUTSIDE the sidebar body to escape overflow:hidden */}
         {favOpen && (
           <ProjectDropdown
             fixedTop={dropdownPos.top}
@@ -404,6 +423,7 @@ export default function Sidebar() {
             togglingId={togglingFavoriteId}
           />
         )}
+
         {recentOpen && (
           <ProjectDropdown
             fixedTop={dropdownPos.top}
@@ -419,6 +439,7 @@ export default function Sidebar() {
             onProjectClick={handleProjectClick}
           />
         )}
+
         {inboxOpen && (
           <InboxDropdown
             fixedTop={dropdownPos.top}
@@ -426,7 +447,7 @@ export default function Sidebar() {
             activities={inboxItems}
             loading={loadingInbox}
             error={inboxError}
-            onRetry={fetchInboxActivity}
+            onRetry={() => void fetchInboxActivity({ force: true })}
             onClose={() => setInboxOpen(false)}
           />
         )}

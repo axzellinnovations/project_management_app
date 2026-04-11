@@ -283,7 +283,7 @@ export function NotificationBell() {
 
       <AnimatePresence>
         {showDropdown && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -365,7 +365,7 @@ export function NotificationBell() {
             </div>
             <div className="border-t border-slate-100 bg-white px-4 py-2.5">
               <Link
-                href="/notifications"
+                href="/dashboard/notifications"
                 onClick={() => setShowDropdown(false)}
                 className="block text-center text-[12px] font-semibold text-blue-600 hover:text-blue-700 transition font-outfit"
               >
