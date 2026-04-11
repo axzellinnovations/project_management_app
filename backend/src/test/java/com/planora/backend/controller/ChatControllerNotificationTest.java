@@ -9,6 +9,7 @@ import com.planora.backend.model.TeamMember;
 import com.planora.backend.model.User;
 import com.planora.backend.repository.ChatRoomMemberRepository;
 import com.planora.backend.repository.ChatRoomRepository;
+import com.planora.backend.repository.ChatMessageRepository;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
@@ -32,8 +33,10 @@ import java.util.concurrent.Executor;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -58,6 +61,8 @@ class ChatControllerNotificationTest {
     private ChatRoomRepository chatRoomRepository;
     @Mock
     private ChatRoomMemberRepository chatRoomMemberRepository;
+    @Mock
+    private ChatMessageRepository chatMessageRepository;
     @Mock
     private ChatPresenceService chatPresenceService;
     @Mock
@@ -109,14 +114,15 @@ class ChatControllerNotificationTest {
 
         when(projectRepository.findById(10L)).thenReturn(Optional.of(project));
         when(teamMemberRepository.findByTeamIdAndUserUserId(99L, 1L)).thenReturn(Optional.of(aliceMember));
-        when(teamMemberRepository.findByTeamId(99L)).thenReturn(List.of(aliceMember, bobMember));
+        lenient().when(teamMemberRepository.findByTeamIdAndUserUserId(99L, 2L)).thenReturn(Optional.of(bobMember));
+        lenient().when(teamMemberRepository.findByTeamId(99L)).thenReturn(List.of(aliceMember, bobMember));
 
         when(userRepository.findByUsernameIgnoreCase("alice")).thenReturn(Optional.of(alice));
         when(userRepository.findByUsernameIgnoreCase("bob")).thenReturn(Optional.of(bob));
 
-        when(chatRoomMemberRepository.findByUserUserId(anyLong())).thenReturn(List.of());
-        when(chatRoomRepository.findByProjectId(10L)).thenReturn(List.of());
-        when(chatService.buildUnreadBadge(eq(10L), any(), any(), any())).thenReturn(
+        lenient().when(chatRoomMemberRepository.findByUserUserId(anyLong())).thenReturn(List.of());
+        lenient().when(chatRoomRepository.findByProjectId(10L)).thenReturn(List.of());
+        lenient().when(chatService.buildUnreadBadge(eq(10L), any(), any(), any())).thenReturn(
                 new ChatService.UnreadBadgeSummary(0, 0, 0, 0));
 
         doAnswer(invocation -> {
@@ -146,6 +152,56 @@ class ChatControllerNotificationTest {
 
         verify(notificationService, times(1)).createNotification(eq(bob), any(), eq("/project/10/chat"));
         verify(notificationService, never()).createNotification(eq(alice), any(), any());
+    }
+
+    @Test
+    void sendPrivateMessage_createsNotificationForRecipientWithScopedChatLink() {
+        ChatMessage incoming = new ChatMessage();
+        incoming.setContent("Hello Bob");
+        incoming.setRecipient("bob");
+
+        ChatMessage saved = new ChatMessage();
+        saved.setId(300L);
+        saved.setContent("Hello Bob");
+        saved.setSender("alice");
+        saved.setRecipient("bob");
+        saved.setProjectId(10L);
+
+        when(chatService.saveMessage(any(ChatMessage.class))).thenReturn(saved);
+
+        SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create();
+        headers.setUser((Principal) () -> "alice");
+
+        chatController.sendPrivateMessage(10L, incoming, headers);
+
+        verify(notificationService).createNotification(
+                eq(bob),
+                contains("sent you a message"),
+                eq("/project/10/chat?with=alice"));
+        verify(notificationService, never()).createNotificationIfNotDuplicate(any(), any(), any());
+    }
+
+    @Test
+    void toggleReaction_notifiesOriginalMessageSenderExceptActor() {
+        ChatMessage targetMessage = new ChatMessage();
+        targetMessage.setId(501L);
+        targetMessage.setProjectId(10L);
+        targetMessage.setSender("bob");
+        targetMessage.setContent("Need review");
+
+        when(chatService.toggleReaction(10L, 501L, "alice", "👍"))
+                .thenReturn(List.of(new ChatService.ChatReactionSummary("👍", 1L, true)));
+        when(chatMessageRepository.findByIdAndProjectId(501L, 10L)).thenReturn(Optional.of(targetMessage));
+
+        SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create();
+        headers.setUser((Principal) () -> "alice");
+
+        chatController.toggleReaction(10L, 501L, new ChatController.ReactionTogglePayload("👍"), headers);
+
+        verify(notificationService).createNotification(
+                eq(bob),
+                contains("reacted"),
+                eq("/project/10/chat?view=team"));
     }
 
     @Test

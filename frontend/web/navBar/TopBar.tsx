@@ -100,6 +100,7 @@ function TopBarContent() {
 
     base.push(
       { id: 'chats', label: 'Chats' },
+      { id: 'inbox', label: 'Inbox' },
       { id: 'notifications', label: 'Notifications' },
       { id: 'milestones', label: 'Milestones' },
       { id: 'members', label: 'Members' },
@@ -118,8 +119,10 @@ function TopBarContent() {
     if (pathname.startsWith('/list')) return 'list';
     if (pathname.startsWith('/calendar')) return 'calendar';
     if (pathname.startsWith('/burndown')) return 'burndown';
+    if (pathname.startsWith('/dashboard/notifications') || pathname.startsWith('/notifications')) return 'notifications';
     if (pathname.startsWith('/milestones')) return 'milestones';
     if (pathname.startsWith('/workload')) return 'workload';
+    if (pathname.startsWith('/inbox')) return 'inbox';
     if (pathname.startsWith('/project/') && pathname.includes('/chat')) return 'chats';
     if (pathname.startsWith('/members')) return 'members';
     if (pathname.startsWith('/pages')) return 'pages';
@@ -208,6 +211,7 @@ function TopBarContent() {
       case 'calendar': return withProjectId('/calendar');
       case 'burndown': return withProjectId('/burndown');
       case 'chats': return projectId ? `/project/${projectId}/chat` : '/dashboard';
+      case 'inbox': return '/inbox';
       case 'notifications': return projectId ? `/notifications?projectId=${projectId}` : '/notifications';
       case 'milestones': return withProjectId('/milestones');
       case 'workload': return withProjectId('/workload');
@@ -218,7 +222,14 @@ function TopBarContent() {
   };
 
   const isProjectPage = useMemo(() => {
+    if (pathname.startsWith('/dashboard/notifications')) {
+      return true;
+    }
+
     const hasProjectContext = Boolean(projectId);
+    if (pathname.startsWith('/inbox')) {
+      return true;
+    }
     if (pathname.startsWith('/project/') && pathname.includes('/chat')) {
       return true;
     }
@@ -419,7 +430,7 @@ function TopBarContent() {
 
           <div className="flex items-center gap-4 max-sm:gap-3 shrink-0">
             <NotificationBell />
-            <div className="flex">
+            <div className="flex items-center">
               {profileAvatar}
             </div>
           </div>

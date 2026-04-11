@@ -3,41 +3,31 @@
 import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef } from 'react';
 import { AUTH_TOKEN_CHANGED_EVENT, clearTokens, getUserFromToken, getValidToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
-import api from '@/lib/axios';
+import { fetchChatInbox, type ChatInboxResponse } from '@/services/chat-service';
 
-/* ── Hooks ── */
+/* -- Hooks -- */
 import { useSidebarProjects } from '@/hooks/useSidebarProjects';
-import useNotificationSocket from '@/hooks/useNotificationSocket';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 
-/* ── Sub-components ── */
+/* -- Sub-components -- */
 import { SidebarHeader, CollapseButton } from './sidebar/SidebarHeader';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { NavRow } from './sidebar/NavRows';
 import { ProjectDropdown } from './sidebar/ProjectDropdown';
+import { InboxDropdown } from './sidebar/InboxDropdown';
 import ProjectList from '@/components/layout/sidebar/ProjectList';
 import InboxBadge from '@/components/layout/sidebar/InboxBadge';
 import { useGlobalNotifications } from '@/components/providers/GlobalNotificationProvider';
 import {
-  HomeIcon, ProfileIcon,
+  HomeIcon,
+  ProfileIcon,
   InboxIcon,
   BellIcon,
 } from './sidebar/SidebarIcons';
 
-/* ── Types ── */
+/* -- Types -- */
 interface Project { id: number; name: string; projectKey?: string; isFavorite?: boolean; }
-interface ChatRoomSummary {
-  roomId: number; roomName?: string; lastMessage?: string;
-  lastMessageSender?: string; unseenCount?: number;
-}
-interface DirectMessageSummary {
-  username: string; lastMessage?: string;
-  lastMessageSender?: string; unseenCount?: number;
-}
-interface ChatSummaries {
-  rooms: ChatRoomSummary[];
-  directMessages: DirectMessageSummary[];
-}
+const INBOX_STALE_MS = 5 * 60_000;
 
 interface NavRowProps {
   collapsed: boolean;
@@ -53,14 +43,14 @@ function InboxNavRow({ collapsed, active, badge, onClick }: NavRowProps) {
         <div className="relative">
           <InboxIcon />
           <div className="absolute -top-1 -right-2">
-            <InboxBadge count={badge} />
+            <InboxBadge count={badge} size="overlay" cap={99} />
           </div>
         </div>
       }
       label="Inbox"
       collapsed={collapsed}
       active={active}
-      badge={badge}
+      badge={0}
       onClick={onClick}
     />
   );
@@ -92,13 +82,13 @@ const subscribeToBrowserStorage = (onChange: () => void) => {
   };
 };
 
-/* ─────────────────────────────────────────────
+/* --------------------------------------------
    Main Sidebar
- ───────────────────────────────────────────── */
+ -------------------------------------------- */
 export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { unreadCount: globalUnreadCount } = useGlobalNotifications();
+  const { unreadCount: globalUnreadCount, notifications } = useGlobalNotifications();
 
   const token = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
@@ -110,15 +100,9 @@ export default function Sidebar() {
     return getUserFromToken();
   }, [token]);
 
-  const _currentProjectId = useSyncExternalStore<string | null>(
-    subscribeToBrowserStorage,
-    () => localStorage.getItem('currentProjectId'),
-    () => null,
-  );
-
   const { profilePicUrl: resolvedProfilePicUrl } = useCurrentUser();
 
-  /* ── Project & folder data (extracted hooks) ── */
+  /* -- Project & folder data (extracted hooks) -- */
   const {
     recentProjects,
     favoriteProjects,
@@ -128,8 +112,11 @@ export default function Sidebar() {
     handleToggleFavourite,
   } = useSidebarProjects();
 
+  const [chatInbox, setChatInbox] = useState<ChatInboxResponse | null>(null);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [loadingInbox, setLoadingInbox] = useState(false);
+  const [inboxError, setInboxError] = useState<string | null>(null);
 
-  const [chatSummaries, setChatSummaries] = useState<ChatSummaries | null>(null);
   const [collapsed, setCollapsed] = useState(true);
   const [favOpen, setFavOpen] = useState(false);
   const [recentOpen, setRecentOpen] = useState(false);
@@ -139,7 +126,6 @@ export default function Sidebar() {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     let isCurrentlyMobile = window.innerWidth < 768;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMobile(isCurrentlyMobile);
     if (isCurrentlyMobile) setCollapsed(true);
 
@@ -159,58 +145,67 @@ export default function Sidebar() {
   const favRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
   const inboxRef = useRef<HTMLDivElement>(null);
-  const notifRef = useRef<HTMLDivElement>(null);
+  const lastInboxFetchedAtRef = useRef(0);
+  const latestSyncedNotificationRef = useRef<number | null>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
-  const getActiveProjectId = useCallback(() => {
-    return (
-      (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('projectId'))
-      || localStorage.getItem('currentProjectId')
-      || (recentProjects.length > 0 ? recentProjects[0].id.toString() : null)
-    );
-  }, [recentProjects]);
+  /* -- fetch inbox activity -- */
+  const fetchInboxActivity = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    if (!force && lastInboxFetchedAtRef.current > 0 && Date.now() - lastInboxFetchedAtRef.current < INBOX_STALE_MS) {
+      return;
+    }
 
-  /* ── fetch chats ── */
-  const fetchChatSummaries = useCallback(async (projId: number) => {
+    setLoadingInbox(true);
+    setInboxError(null);
     try {
-      const res = await api.get(`/api/projects/${projId}/chat/summaries`);
-      setChatSummaries(res.data);
+      const data = await fetchChatInbox({ projectLimit: 10, activityLimit: 4, status: 'all' });
+      setChatInbox(data);
+      lastInboxFetchedAtRef.current = Date.now();
     } catch (error) {
-      console.error('Sidebar: failed to fetch chat summaries', error);
+      console.error('Sidebar: failed to fetch inbox activity', error);
+      setInboxError('Failed to load inbox');
+    } finally {
+      setLoadingInbox(false);
     }
   }, []);
 
   const refreshInboxCounts = useCallback(() => {
-    const projectId = getActiveProjectId();
-    if (!projectId) return;
-    void fetchChatSummaries(parseInt(projectId));
-  }, [getActiveProjectId, fetchChatSummaries]);
+    void fetchInboxActivity({ force: true });
+  }, [fetchInboxActivity]);
 
-  useNotificationSocket({
-    token,
-    enabled: Boolean(token),
-    onNotification: refreshInboxCounts,
-  });
-
-  /* ── effects ── */
+  /* -- effects -- */
   useEffect(() => {
     if (window.innerWidth >= 768) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCollapsed(localStorage.getItem('planora:sidebar:collapsed') === 'true');
     }
   }, []);
 
   useEffect(() => {
-    const projectId = getActiveProjectId();
+    void fetchInboxActivity();
+  }, [pathname, fetchInboxActivity, recentProjects.length]);
 
-    if (!projectId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setChatSummaries(null);
+  useEffect(() => {
+    const handleInboxUpdated = () => {
+      void fetchInboxActivity({ force: true });
+    };
+
+    window.addEventListener('planora:chat-inbox-updated', handleInboxUpdated);
+    return () => {
+      window.removeEventListener('planora:chat-inbox-updated', handleInboxUpdated);
+    };
+  }, [fetchInboxActivity]);
+
+  useEffect(() => {
+    const latest = notifications[0];
+    if (!latest || latest.id === latestSyncedNotificationRef.current) {
       return;
     }
 
-    void fetchChatSummaries(parseInt(projectId));
-  }, [pathname, fetchChatSummaries, getActiveProjectId, recentProjects]);
+    latestSyncedNotificationRef.current = latest.id;
+    if (typeof latest.link === 'string' && latest.link.includes('/chat')) {
+      refreshInboxCounts();
+    }
+  }, [notifications, refreshInboxCounts]);
 
   /* click-outside to close dropdowns */
   useEffect(() => {
@@ -218,9 +213,11 @@ export default function Sidebar() {
       const target = e.target as Node;
       const inFav = favRef.current?.contains(target);
       const inRecent = recentRef.current?.contains(target);
+      const inInbox = inboxRef.current?.contains(target);
       const inDropdown = (target as Element)?.closest?.('[data-sidebar-dropdown]');
       if (!inFav && !inDropdown) setFavOpen(false);
       if (!inRecent && !inDropdown) setRecentOpen(false);
+      if (!inInbox && !inDropdown) setInboxOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
 
@@ -239,6 +236,7 @@ export default function Sidebar() {
   /* measure anchor position before opening dropdown */
   const openFavDropdown = () => {
     setRecentOpen(false);
+    setInboxOpen(false);
     if (favRef.current) {
       const rect = favRef.current.getBoundingClientRect();
       setDropdownPos({ top: rect.top, left: rect.right + 8 });
@@ -249,12 +247,24 @@ export default function Sidebar() {
 
   const openRecentDropdown = () => {
     setFavOpen(false);
+    setInboxOpen(false);
     if (recentRef.current) {
       const rect = recentRef.current.getBoundingClientRect();
       setDropdownPos({ top: rect.top, left: rect.right + 8 });
     }
     setRecentOpen(p => !p);
     setRecentSearch('');
+  };
+
+  const openInboxDropdown = () => {
+    setFavOpen(false);
+    setRecentOpen(false);
+    if (inboxRef.current) {
+      const rect = inboxRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.top, left: rect.right + 8 });
+    }
+    void fetchInboxActivity();
+    setInboxOpen(p => !p);
   };
 
   /* handlers */
@@ -264,6 +274,7 @@ export default function Sidebar() {
     await rawProjectClick(project);
     setFavOpen(false);
     setRecentOpen(false);
+    setInboxOpen(false);
   };
 
   const toggleCollapsed = () => {
@@ -284,23 +295,26 @@ export default function Sidebar() {
     p.name.toLowerCase().includes(recentSearch.toLowerCase()) ||
     (p.projectKey || '').toLowerCase().includes(recentSearch.toLowerCase())
   );
-  
-  const inboxCount = useMemo(() => {
-    if (!chatSummaries) return 0;
-    const items = [
-      ...(chatSummaries.rooms || []),
-      ...(chatSummaries.directMessages || []),
-    ].filter(item => (item.unseenCount || 0) > 0);
-    return items.length;
-  }, [chatSummaries]);
 
+  const inboxItems = useMemo(
+    () => chatInbox?.recentActivities?.slice(0, 4) || [],
+    [chatInbox],
+  );
 
-  const closeDropdowns = () => { setFavOpen(false); setRecentOpen(false); };
+  const inboxBadgeCount = useMemo(() => {
+    if (!chatInbox) return 0;
+    return Number(chatInbox.totalUnread) || 0;
+  }, [chatInbox]);
 
-  /* ── render ── */
+  const closeDropdowns = () => {
+    setFavOpen(false);
+    setRecentOpen(false);
+    setInboxOpen(false);
+  };
+
+  /* -- render -- */
   return (
     <>
-      {/* Backdrop for mobile */}
       {isMobile && !collapsed && (
         <div
           className="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-[9998]"
@@ -323,81 +337,68 @@ export default function Sidebar() {
           }}
         >
           <div className="relative h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col w-[240px] md:w-[inherit]">
+            <SidebarHeader collapsed={collapsed} />
+            <CollapseButton collapsed={collapsed} onToggle={toggleCollapsed} />
 
-          {/* Header */}
-          <SidebarHeader collapsed={collapsed} />
-
-          {/* Collapse button */}
-          <CollapseButton collapsed={collapsed} onToggle={toggleCollapsed} />
-
-          {/* Nav body */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 flex flex-col gap-0.5">
-            {/* For You */}
-            <NavRow
-              icon={<HomeIcon />}
-              label="For You"
-              collapsed={collapsed}
-              active={pathname === '/dashboard'}
-              onClick={() => { closeDropdowns(); router.push('/dashboard'); }}
-            />
-
-            <ProjectList
-              collapsed={collapsed}
-              favOpen={favOpen}
-              recentOpen={recentOpen}
-              loading={loadingProjects}
-              favoriteCount={favoriteProjects.length}
-              recentCount={recentProjects.length}
-              favRef={favRef}
-              recentRef={recentRef}
-              onOpenFav={openFavDropdown}
-              onOpenRecent={openRecentDropdown}
-            />
-
-            {/* Inbox row */}
-            <div ref={inboxRef} className="relative">
-              <InboxNavRow
+            <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 flex flex-col gap-0.5">
+              <NavRow
+                icon={<HomeIcon />}
+                label="For You"
                 collapsed={collapsed}
-                active={pathname === '/dashboard/notifications'}
-                badge={inboxCount}
-                onClick={() => { closeDropdowns(); router.push('/dashboard/notifications'); }}
+                active={pathname === '/dashboard'}
+                onClick={() => { closeDropdowns(); router.push('/dashboard'); }}
+              />
+
+              <ProjectList
+                collapsed={collapsed}
+                favOpen={favOpen}
+                recentOpen={recentOpen}
+                loading={loadingProjects}
+                favoriteCount={favoriteProjects.length}
+                recentCount={recentProjects.length}
+                favRef={favRef}
+                recentRef={recentRef}
+                onOpenFav={openFavDropdown}
+                onOpenRecent={openRecentDropdown}
+              />
+
+              <div ref={inboxRef} className="relative">
+                <InboxNavRow
+                  collapsed={collapsed}
+                  active={inboxOpen || pathname === '/inbox'}
+                  badge={inboxBadgeCount}
+                  onClick={openInboxDropdown}
+                />
+              </div>
+
+              <div className="relative">
+                <NotificationsNavRow
+                  collapsed={collapsed}
+                  active={pathname === '/dashboard/notifications' || pathname === '/notifications'}
+                  badge={globalUnreadCount}
+                  onClick={() => { closeDropdowns(); router.push('/dashboard/notifications'); }}
+                />
+              </div>
+
+              <NavRow
+                icon={<ProfileIcon />}
+                label="Profile"
+                collapsed={collapsed}
+                active={pathname === '/profile'}
+                onClick={() => { closeDropdowns(); router.push('/profile'); }}
               />
             </div>
 
-            {/* Notifications row */}
-            <div ref={notifRef} className="relative">
-              <NotificationsNavRow
-                collapsed={collapsed}
-                active={pathname === '/dashboard/notifications'}
-                badge={globalUnreadCount}
-                onClick={() => { closeDropdowns(); router.push('/dashboard/notifications'); }}
-              />
-            </div>
-
-            {/* Profile */}
-            <NavRow
-              icon={<ProfileIcon />}
-              label="Profile"
+            <SidebarFooter
               collapsed={collapsed}
-              active={pathname === '/profile'}
-              onClick={() => { closeDropdowns(); router.push('/profile'); }}
+              user={user}
+              resolvedProfilePicUrl={resolvedProfilePicUrl}
+              onLogout={handleLogout}
+              onLinkClick={closeDropdowns}
             />
-
-
-          </div>
-
-          {/* User section */}
-          <SidebarFooter
-            collapsed={collapsed}
-            user={user}
-            resolvedProfilePicUrl={resolvedProfilePicUrl}
-            onLogout={handleLogout}
-            onLinkClick={closeDropdowns}
-          />
           </div>
         </div>
 
-        {/* Fixed dropdowns rendered OUTSIDE the sidebar body to escape overflow:hidden */}
         {favOpen && (
           <ProjectDropdown
             fixedTop={dropdownPos.top}
@@ -415,6 +416,7 @@ export default function Sidebar() {
             togglingId={togglingFavoriteId}
           />
         )}
+
         {recentOpen && (
           <ProjectDropdown
             fixedTop={dropdownPos.top}
@@ -428,6 +430,18 @@ export default function Sidebar() {
             viewAllHref="/spaces?filter=recent"
             viewAllLabel="View all recent spaces"
             onProjectClick={handleProjectClick}
+          />
+        )}
+
+        {inboxOpen && (
+          <InboxDropdown
+            fixedTop={dropdownPos.top}
+            fixedLeft={dropdownPos.left}
+            activities={inboxItems}
+            loading={loadingInbox}
+            error={inboxError}
+            onRetry={() => void fetchInboxActivity({ force: true })}
+            onClose={() => setInboxOpen(false)}
           />
         )}
       </div>

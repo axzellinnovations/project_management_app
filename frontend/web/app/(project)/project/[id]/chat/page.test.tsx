@@ -3,9 +3,11 @@ import ChatInterface from './page';
 import { useChat } from './components/useChat';
 
 const mockUseParams = jest.fn();
+const mockUseSearchParams = jest.fn();
 
 jest.mock('next/navigation', () => ({
   useParams: () => mockUseParams(),
+  useSearchParams: () => mockUseSearchParams(),
 }));
 
 jest.mock('framer-motion', () => ({
@@ -107,6 +109,9 @@ describe('chat page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseParams.mockReturnValue({ id: '42' });
+    mockUseSearchParams.mockReturnValue({
+      get: jest.fn().mockReturnValue(null),
+    });
   });
 
   it('renders chat UI with sidebar, messages, and input components', () => {
@@ -148,11 +153,25 @@ describe('chat page', () => {
     render(<ChatInterface />);
 
     expect(screen.getByText('Connection failed. Is the backend running?')).toBeInTheDocument();
-    expect(screen.getByText('Ensure backend is running at')).toBeInTheDocument();
+    expect(screen.getByText('Retry the connection to continue chatting.')).toBeInTheDocument();
     expect(screen.getByTestId('chat-input')).toHaveAttribute('data-disabled', 'true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(retryConnection).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not show red error banner for reconnecting states', () => {
+    mockedUseChat.mockReturnValue(
+      createChatState({
+        isSocketConnected: false,
+        error: 'Realtime chat is reconnecting. Please wait a moment and try again.',
+      })
+    );
+
+    render(<ChatInterface />);
+
+    expect(screen.getByText('Disconnected — messages may not be delivered')).toBeInTheDocument();
+    expect(screen.queryByText('Retry the connection to continue chatting.')).not.toBeInTheDocument();
   });
 
   it('supports message search interaction when phase D feature is enabled', () => {

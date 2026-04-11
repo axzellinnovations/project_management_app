@@ -123,8 +123,7 @@ export function useMembersSync(
     }
 
     const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
-    const socket = new SockJS(`${backendUrl}/ws`);
-    const client = Stomp.over(socket);
+    const client = Stomp.over(() => new SockJS(`${backendUrl}/ws`));
 
     // Silence the STOMP library's own console noise in production.
     client.debug = process.env.NODE_ENV === 'development'

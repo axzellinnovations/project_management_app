@@ -54,7 +54,6 @@ export function useChatRooms(projectId: string) {
 
   const deleteRoom = useCallback(
     async (roomId: number) => {
-      if (!window.confirm('Delete this group chat?')) return;
       try {
         await chatApi.deleteRoomRest(projectId, roomId);
         await loadRooms();
