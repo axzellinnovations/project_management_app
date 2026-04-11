@@ -17,7 +17,7 @@ export default function SidebarLayout({ children, showTopBar = true }: SidebarLa
     const isChatRoute = pathname?.includes('/chat');
 
     return (
-        <div className="flex h-[100dvh] overflow-hidden bg-cu-bg relative">
+        <div className="flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-cu-bg relative overscroll-none">
             <Sidebar />
             <div
                 className="flex flex-col flex-1 min-w-0 overflow-hidden"
