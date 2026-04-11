@@ -55,6 +55,13 @@ jest.mock('@/components/ui/Toast', () => ({
 const mockedApi = notificationsApi as jest.Mocked<typeof notificationsApi>;
 const mockedToast = toast as jest.MockedFunction<typeof toast>;
 
+function setRoute(pathname: string, query = '') {
+  currentPathname = pathname;
+  currentQueryString = query;
+  const suffix = query ? `?${query}` : '';
+  window.history.replaceState({}, '', `${pathname}${suffix}`);
+}
+
 const buildMockJwt = (overrides: Record<string, unknown> = {}) => {
   const header = window.btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const payload = window.btoa(
@@ -113,8 +120,7 @@ describe('GlobalNotificationProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     notificationHandler = null;
-    currentPathname = '/dashboard';
-    currentQueryString = '';
+    setRoute('/dashboard', '');
     window.localStorage.clear();
     window.localStorage.setItem('token', buildMockJwt());
 
@@ -205,8 +211,7 @@ describe('GlobalNotificationProvider', () => {
   });
 
   it('marks notification as read immediately when user is already on the linked page', async () => {
-    currentPathname = '/project/8/chat';
-    currentQueryString = '';
+    setRoute('/project/8/chat', '');
 
     render(
       <GlobalNotificationProvider>
@@ -232,8 +237,7 @@ describe('GlobalNotificationProvider', () => {
   });
 
   it('does not auto-read generic chat notification when user is on a scoped chat query', async () => {
-    currentPathname = '/project/8/chat';
-    currentQueryString = 'with=bob';
+    setRoute('/project/8/chat', 'with=bob');
 
     render(
       <GlobalNotificationProvider>
@@ -259,8 +263,7 @@ describe('GlobalNotificationProvider', () => {
   });
 
   it('auto-reads chat notification when query-scoped link matches active conversation', async () => {
-    currentPathname = '/project/8/chat';
-    currentQueryString = 'with=bob';
+    setRoute('/project/8/chat', 'with=bob');
 
     render(
       <GlobalNotificationProvider>

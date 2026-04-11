@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import SockJS from 'sockjs-client';
 import { CompatClient, IMessage, Stomp } from '@stomp/stompjs';
 import * as notificationsApi from '@/services/notifications-service';
@@ -83,10 +83,9 @@ export function GlobalNotificationProvider({ children }: { children: React.React
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   // We use refs to avoid re-triggering stomp effects on route path transitions
   const pathnameRef = useRef(pathname);
-  const searchRef = useRef(searchParams?.toString() || '');
+  const searchRef = useRef('');
   const seenNotificationIdsRef = useRef<Set<number>>(new Set());
   const notificationsCacheKeyRef = useRef<string | null>(null);
   const stompClientRef = useRef<CompatClient | null>(null);
@@ -96,11 +95,10 @@ export function GlobalNotificationProvider({ children }: { children: React.React
 
   useEffect(() => {
     pathnameRef.current = pathname;
+    if (typeof window !== 'undefined') {
+      searchRef.current = window.location.search.replace(/^\?/, '');
+    }
   }, [pathname]);
-
-  useEffect(() => {
-    searchRef.current = searchParams?.toString() || '';
-  }, [searchParams]);
 
   const loadInitialData = useCallback(async () => {
     try {
