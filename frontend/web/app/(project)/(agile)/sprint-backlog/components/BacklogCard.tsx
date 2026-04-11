@@ -373,14 +373,52 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
     };
   }, []);
 
-  // Edit sprint name inline state
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempSprintName, setTempSprintName] = useState(sprint.name);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  const handleNameDoubleClick = () => {
+  useEffect(() => {
     setTempSprintName(sprint.name);
+  }, [sprint.name]);
+
+  const handleNameDoubleClick = () => {
     setIsEditingName(true);
+  };
+
+  const lastTapRef = useRef<number>(0);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // Double tap detection logic
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      e.preventDefault();
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+      handleNameDoubleClick();
+    }
+    lastTapRef.current = now;
+
+    // Long press detection logic
+    longPressTimerRef.current = setTimeout(() => {
+      if (canDeleteSprint) {
+        handleDeleteSprint();
+      }
+    }, 600); // 600ms for long press
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleTouchMove = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
   };
 
   useEffect(() => {
@@ -733,8 +771,24 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
               />
             ) : (
               <span
-                onDoubleClick={handleNameDoubleClick}
-                className="cursor-text text-[14px] font-bold text-[#101828]"
+                onClick={(e) => {
+                  const now = Date.now();
+                  const DOUBLE_TAP_DELAY = 300;
+                  if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleNameDoubleClick();
+                  }
+                  lastTapRef.current = now;
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  handleNameDoubleClick();
+                }}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+                onTouchMove={handleTouchMove}
+                className="cursor-text text-[14px] font-bold text-[#101828] select-none"
               >
                 {sprint.name}
               </span>
