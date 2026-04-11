@@ -1,5 +1,5 @@
 import axios from "axios";
-import { clearTokens, getRefreshToken, getValidToken, saveRefreshToken, saveToken } from "@/lib/auth";
+import { clearTokens, getRefreshToken, getValidToken, refreshAccessToken, saveRefreshToken, saveToken } from "@/lib/auth";
 
 const api = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080',
@@ -27,6 +27,26 @@ api.interceptors.request.use(
         return Promise.reject(error);
     }
 );
+
+// Proactively refresh the access token if it expires within 60 seconds
+api.interceptors.request.use(async (config) => {
+    const authEndpoints = ['/api/auth/login', '/api/auth/register', '/api/auth/forgot', '/api/auth/reset', '/api/auth/reg/verify', '/api/auth/resend', '/api/auth/refresh'];
+    const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint));
+    if (!isAuthEndpoint && typeof window !== 'undefined') {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (token) {
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                if (payload.exp - Date.now() / 1000 < 60) {
+                    const newToken = await refreshAccessToken();
+                    config.headers['Authorization'] = `Bearer ${newToken}`;
+                    return config;
+                }
+            } catch { /* malformed token — let the 401 handler deal with it */ }
+        }
+    }
+    return config;
+});
 
 // Track whether a token refresh is in progress to avoid infinite loop
 let isRefreshing = false;

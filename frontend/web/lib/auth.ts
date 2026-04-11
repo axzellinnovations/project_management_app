@@ -166,3 +166,35 @@ export function getValidToken(): string | null {
     return null;
 }
 
+/**
+ * Uses native fetch (not axios) to avoid circular imports.
+ * POSTs the current refresh token to /api/auth/refresh, stores the new
+ * access token (and refresh token if rotated), and returns the new access token.
+ * On failure it clears all tokens and throws.
+ */
+export async function refreshAccessToken(): Promise<string> {
+    const rt = getRefreshToken();
+    if (!rt) {
+        clearTokens();
+        throw new Error('No refresh token available');
+    }
+    const res = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: rt }),
+    });
+    if (!res.ok) {
+        clearTokens();
+        throw new Error('Token refresh failed');
+    }
+    const data = await res.json();
+    saveToken(data.token);
+    if (data.refreshToken) saveRefreshToken(data.refreshToken);
+    return data.token;
+}
+
+/** Alias for clearTokens — clears all auth state and planora: caches. */
+export function logout(): void {
+    clearTokens();
+}
+

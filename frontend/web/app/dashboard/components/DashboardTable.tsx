@@ -384,7 +384,7 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
                 {selectedTaskId && (
                     <TaskCardModal 
                         taskId={selectedTaskId} 
-                        onClose={() => setSelectedTaskId(null)} 
+                        onClose={(_wasModified) => setSelectedTaskId(null)} 
                     />
                 )}
             </AnimatePresence>

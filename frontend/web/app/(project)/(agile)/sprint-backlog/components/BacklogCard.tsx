@@ -1026,7 +1026,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
     {selectedTaskId !== null && (
       <TaskCardModal
         taskId={selectedTaskId}
-        onClose={() => setSelectedTaskId(null)}
+        onClose={(_wasModified) => setSelectedTaskId(null)}
       />
     )}
 

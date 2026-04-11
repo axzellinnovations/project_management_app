@@ -7,10 +7,10 @@ import { AUTH_TOKEN_CHANGED_EVENT, getUserFromToken, getValidToken, User } from 
 import { useParams, usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useNavigation } from '@/lib/navigation-context';
 import { Menu, Plus } from 'lucide-react';
-import api from '@/lib/axios';
 import * as projectsApi from '@/services/projects-service';
 
 import { NotificationBell } from './topbar/NotificationBell';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { TabBar } from './topbar/TabBar';
 import { ProjectDropdown } from './sidebar/ProjectDropdown';
 import GlobalSearch from './topbar/GlobalSearch';
@@ -55,7 +55,7 @@ function TopBarContent() {
   }, [token]);
 
   useNavigation();
-  const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+  const { profilePicUrl: resolvedProfilePicUrl } = useCurrentUser();
   const [isFavorite, setIsFavorite] = useState(false);
   const [projectType, setProjectType] = useState<string | null>(storedProjectType);
   const [projectsOpen, setProjectsOpen] = useState(false);
@@ -68,14 +68,6 @@ function TopBarContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
-
-  const resolvedProfilePicUrl = useMemo(() => {
-    if (!profilePicUrl) return '';
-    if (profilePicUrl.startsWith('http://') || profilePicUrl.startsWith('https://')) return profilePicUrl;
-    return `${API_BASE_URL}${profilePicUrl}`;
-  }, [profilePicUrl, API_BASE_URL]);
 
   const projectId = useMemo(() => {
     const queryProjectId = searchParams.get('projectId');
@@ -160,20 +152,6 @@ function TopBarContent() {
     };
     void fetchProjectStatus();
   }, [projectId, storedProjectType]);
-
-  useEffect(() => {
-    if (!user?.email) return;
-    // Use cached URL instantly, then revalidate
-    const cached = localStorage.getItem('planora:profilePicUrl');
-    if (cached) setProfilePicUrl(cached);
-    api.get('/api/user/profile').then(res => {
-      const url: string | undefined = res.data?.profilePicUrl;
-      if (url) {
-        setProfilePicUrl(url);
-        localStorage.setItem('planora:profilePicUrl', url);
-      }
-    }).catch(() => {});
-  }, [user?.email]);
 
   // Close project dropdown on outside click
   useEffect(() => {

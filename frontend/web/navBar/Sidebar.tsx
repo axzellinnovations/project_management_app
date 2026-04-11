@@ -8,6 +8,7 @@ import api from '@/lib/axios';
 /* ── Hooks ── */
 import { useSidebarProjects } from '@/hooks/useSidebarProjects';
 import useNotificationSocket from '@/hooks/useNotificationSocket';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 /* ── Sub-components ── */
 import { SidebarHeader, CollapseButton } from './sidebar/SidebarHeader';
@@ -115,16 +116,7 @@ export default function Sidebar() {
     () => null,
   );
 
-  const [profilePicUrl, setProfilePicUrl] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('planora:profilePicUrl');
-  });
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
-  const resolvedProfilePicUrl = useMemo(() => {
-    if (!profilePicUrl) return '';
-    if (profilePicUrl.startsWith('http://') || profilePicUrl.startsWith('https://')) return profilePicUrl;
-    return `${API_BASE_URL}${profilePicUrl}`;
-  }, [profilePicUrl, API_BASE_URL]);
+  const { profilePicUrl: resolvedProfilePicUrl } = useCurrentUser();
 
   /* ── Project & folder data (extracted hooks) ── */
   const {
@@ -201,17 +193,6 @@ export default function Sidebar() {
   });
 
   /* ── effects ── */
-  useEffect(() => {
-    if (!user?.email) return;
-    api.get('/api/user/profile').then(res => {
-      const url: string | undefined = res.data?.profilePicUrl;
-      if (url) {
-        setProfilePicUrl(url);
-        localStorage.setItem('planora:profilePicUrl', url);
-      }
-    }).catch(() => {});
-  }, [user?.email]);
-
   useEffect(() => {
     if (window.innerWidth >= 768) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -328,14 +309,20 @@ export default function Sidebar() {
       )}
 
       <div
-        className={`h-screen flex-shrink-0 z-[9999] bg-[#F9FAFB] transition-all duration-300 ease-in-out ${isMobile ? 'fixed left-0 top-0 translate-x-0' : 'relative'}`}
+        className={`h-screen flex-shrink-0 ${isMobile ? 'fixed left-0 top-0 z-[9999]' : 'relative'}`}
         style={{
           width: isMobile ? '260px' : (collapsed ? '64px' : '240px'),
-          transform: isMobile && collapsed ? 'translateX(-100%)' : 'translateX(0)',
-          opacity: isMobile && collapsed ? 0.5 : 1
         }}
       >
-        <div className="relative h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col w-[240px] md:w-[inherit]">
+        <div
+          className={`bg-[#F9FAFB] transition-all duration-300 ease-in-out ${isMobile ? 'relative h-full' : 'fixed left-0 top-0 h-screen z-[9999]'}`}
+          style={{
+            width: isMobile ? '260px' : (collapsed ? '64px' : '240px'),
+            transform: isMobile && collapsed ? 'translateX(-100%)' : 'translateX(0)',
+            opacity: isMobile && collapsed ? 0.5 : 1,
+          }}
+        >
+          <div className="relative h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col w-[240px] md:w-[inherit]">
 
           {/* Header */}
           <SidebarHeader collapsed={collapsed} />
@@ -407,6 +394,7 @@ export default function Sidebar() {
             onLogout={handleLogout}
             onLinkClick={closeDropdowns}
           />
+          </div>
         </div>
 
         {/* Fixed dropdowns rendered OUTSIDE the sidebar body to escape overflow:hidden */}

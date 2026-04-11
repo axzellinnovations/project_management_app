@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AlertCircle, Plus, Search } from 'lucide-react';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
@@ -11,6 +11,8 @@ import { useListTasks } from './hooks/useListTasks';
 
 // ── Main Page ─────────────────────────────────────────────────────────────
 
+const TASKS_PER_PAGE = 12;
+
 export default function ListPage() {
   const searchParams = useSearchParams();
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
@@ -18,6 +20,7 @@ export default function ListPage() {
   const [showCreateModal, setShowCreateModal] = useState(
     () => searchParams.get('action') === 'add-task',
   );
+  const [currentPage, setCurrentPage] = useState(1);
 
   const {
     projectId,
@@ -29,7 +32,14 @@ export default function ListPage() {
     handleStatusChange,
     handleDelete,
     handleAddTask,
+    loadTasks,
   } = useListTasks();
+
+  const totalPages = Math.max(1, Math.ceil(sortedTasks.length / TASKS_PER_PAGE));
+  const paginatedTasks = useMemo(() => {
+    const startIndex = (currentPage - 1) * TASKS_PER_PAGE;
+    return sortedTasks.slice(startIndex, startIndex + TASKS_PER_PAGE);
+  }, [currentPage, sortedTasks]);
 
   // Clean ?action= query param from URL on mount — no setState here
   useEffect(() => {
@@ -39,6 +49,16 @@ export default function ListPage() {
       window.history.replaceState({}, '', url.toString());
     }
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [search, projectId]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages); // eslint-disable-line react-hooks/set-state-in-effect
+    }
+  }, [currentPage, totalPages]);
 
   // ── No project selected ──
   if (!projectId) {
@@ -118,7 +138,7 @@ export default function ListPage() {
                 </p>
               </div>
             ) : (
-              sortedTasks.map((task) => (
+              paginatedTasks.map((task) => (
                 <TaskRow
                   key={task.id}
                   task={task}
@@ -130,13 +150,52 @@ export default function ListPage() {
             )}
           </div>
         )}
+
+        {!loading && sortedTasks.length > TASKS_PER_PAGE && (
+          <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
+            <button
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 rounded-lg border border-[#E5E7EB] bg-white text-[13px] text-[#344054] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#F9FAFB]"
+            >
+              Prev
+            </button>
+
+            {Array.from({ length: totalPages }, (_, index) => {
+              const pageNumber = index + 1;
+              const isActive = pageNumber === currentPage;
+
+              return (
+                <button
+                  key={pageNumber}
+                  onClick={() => setCurrentPage(pageNumber)}
+                  className={`min-w-9 h-9 px-3 rounded-lg text-[13px] font-medium border transition-colors ${
+                    isActive
+                      ? 'bg-[#155DFC] text-white border-[#155DFC]'
+                      : 'bg-white text-[#344054] border-[#E5E7EB] hover:bg-[#F9FAFB]'
+                  }`}
+                >
+                  {pageNumber}
+                </button>
+              );
+            })}
+
+            <button
+              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1.5 rounded-lg border border-[#E5E7EB] bg-white text-[13px] text-[#344054] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#F9FAFB]"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Modals */}
       {selectedTaskId !== null && (
         <TaskCardModal
           taskId={selectedTaskId}
-          onClose={() => setSelectedTaskId(null)}
+          onClose={(wasModified) => { setSelectedTaskId(null); if (wasModified) void loadTasks(); }}
         />
       )}
 

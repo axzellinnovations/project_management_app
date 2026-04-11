@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import TaskHeader from './TaskHeader';
 import TaskMainContent from './TaskMainContent';
@@ -43,7 +43,7 @@ interface TaskData {
 
 interface TaskCardModalProps {
   taskId: number;
-  onClose: () => void;
+  onClose: (wasModified: boolean) => void;
 }
 
 export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
@@ -51,6 +51,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'properties'>('details');
+  const wasModified = useRef<boolean>(false);
 
   const fetchTaskData = async () => {
     try {
@@ -80,8 +81,10 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
 
+  useEffect(() => { wasModified.current = false; }, [taskId]);
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(wasModified.current); };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
@@ -102,6 +105,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
     setTaskData((prev) => prev ? { ...prev, ...updates } : prev);
     try {
       await api.put(`/api/tasks/${taskId}`, updates);
+      wasModified.current = true;
       // Bust the taskcard page cache so standalone page shows fresh data
       localStorage.removeItem(`planora:task:${taskId}`);
     } catch (err: unknown) {
@@ -113,7 +117,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-[9999]" onClick={onClose}>
+    <div className="fixed inset-0 z-[9999]" onClick={() => onClose(wasModified.current)}>
       {/* Backdrop */}
       <motion.div 
         initial={{ opacity: 0 }} 
@@ -127,7 +131,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
         animate={{ x: 0, boxShadow: '-10px 0 30px rgba(0,0,0,0.1)' }}
         exit={{ x: '100%', boxShadow: '-10px 0 30px rgba(0,0,0,0)' }}
         transition={{ type: 'spring', damping: 26, stiffness: 220 }}
-        className="absolute inset-0 md:inset-y-0 md:left-auto md:right-0 md:w-[900px] bg-white flex flex-col font-sans overflow-hidden md:shadow-2xl"
+        className="absolute inset-0 md:inset-y-0 md:left-auto md:right-0 md:w-[900px] max-h-[100dvh] bg-white flex flex-col font-sans overflow-hidden md:shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Mobile drag handle */}
@@ -137,7 +141,8 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
 
         {/* Close button (visible on mobile, replaces TaskHeader close) */}
         <button
-          onClick={onClose}
+          onClick={() => onClose(wasModified.current)}
+          style={{ touchAction: 'manipulation' }}
           className="absolute top-3 right-3 w-11 h-11 flex items-center justify-center rounded-full hover:bg-gray-100 z-10 md:hidden"
           aria-label="Close task"
         >
@@ -158,7 +163,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
               <h2 className="text-red-600 font-semibold mb-2">Error Loading Task</h2>
               <p className="text-gray-600 mb-4">{error || 'Task not found'}</p>
               <button
-                onClick={onClose}
+                onClick={() => onClose(wasModified.current)}
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
               >
                 Close
@@ -173,18 +178,18 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
               project={taskData.projectName}
               taskId={`TASK-${taskData.id}`}
               numericTaskId={taskData.id}
-              onClose={onClose}
+              onClose={() => onClose(wasModified.current)}
             />
             {/* Mobile tab bar */}
             <div className="flex border-b border-gray-200 md:hidden flex-shrink-0">
               <button
-                className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'details' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}
+                className={`flex-1 py-3 min-h-[44px] text-sm font-medium transition-colors ${activeTab === 'details' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}
                 onClick={() => setActiveTab('details')}
               >
                 Details
               </button>
               <button
-                className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'properties' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}
+                className={`flex-1 py-3 min-h-[44px] text-sm font-medium transition-colors ${activeTab === 'properties' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}
                 onClick={() => setActiveTab('properties')}
               >
                 Properties

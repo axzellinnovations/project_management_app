@@ -304,4 +304,21 @@ public class TaskController {
         TaskTemplateDTO dto = templateService.saveTaskAsTemplate(taskId, req.getTemplateName(), currentUser.getUserId());
         return ResponseEntity.status(HttpStatus.CREATED).body(dto);
     }
+
+    /** PATCH /api/tasks/{taskId}/assignees — replace the multi-assignee list without requiring a full task body. */
+    @PatchMapping("/{taskId}/assignees")
+    public ResponseEntity<TaskResponseDTO> updateAssignees(
+            @PathVariable Long taskId,
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ) {
+        @SuppressWarnings("unchecked")
+        List<Integer> rawIds = (List<Integer>) body.get("assigneeIds");
+        List<Long> assigneeIds = rawIds == null ? List.of() : rawIds.stream().map(Integer::longValue).toList();
+        TaskResponseDTO task = service.updateAssignees(taskId, assigneeIds, currentUser.getUserId());
+        messagingTemplate.convertAndSend(
+                "/topic/project/" + task.getProjectId() + "/tasks",
+                Map.of("type", "TASK_UPDATED", "task", task));
+        return ResponseEntity.ok(task);
+    }
 }
