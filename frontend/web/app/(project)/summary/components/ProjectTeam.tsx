@@ -3,6 +3,7 @@ import Image from 'next/image';
 import MotionWrapper from './MotionWrapper';
 import { Task, TeamMemberInfo } from '@/types';
 import Link from 'next/link';
+import api from '@/lib/axios';
 
 const GRADIENTS = [
     'linear-gradient(135deg, #FF6B6B 0%, #C0392B 100%)',
@@ -30,11 +31,13 @@ function formatRole(role?: string) {
 function TeamMemberRow({
     member,
     tasks,
-    index
+    index,
+    userProfiles
 }: {
     member: TeamMemberInfo,
     tasks: Task[],
-    index: number
+    index: number,
+    userProfiles: Record<string, string>
 }) {
     // CRITICAL FIX: The backend TaskResponseDTO.assigneeId corresponds to the TeamMember ID (member.id),
     // not the User ID (member.user.userId). 
@@ -65,10 +68,22 @@ function TeamMemberRow({
     const [imgError, setImgError] = React.useState(false);
 
     const resolvedProfilePicUrl = React.useMemo(() => {
-        if (!member.user.profilePicUrl || imgError) return null;
-        if (member.user.profilePicUrl.startsWith('http')) return member.user.profilePicUrl;
-        return `${API_BASE_URL}${member.user.profilePicUrl.startsWith('/') ? '' : '/'}${member.user.profilePicUrl}`;
-    }, [member.user.profilePicUrl, API_BASE_URL, imgError]);
+        if (imgError) return null;
+        
+        let pathName = member.user.profilePicUrl;
+        
+        // Fallback to global user registry if DTO is missing pic
+        if (!pathName) {
+            pathName = userProfiles[`id:${member.user.userId}`] ||
+                       userProfiles[`email:${member.user.username}`] || // Username in DB might act as email
+                       userProfiles[`username:${member.user.username}`] ||
+                       null;
+        }
+
+        if (!pathName) return null;
+        if (pathName.startsWith('http')) return pathName;
+        return `${API_BASE_URL}${pathName.startsWith('/') ? '' : '/'}${pathName}`;
+    }, [member.user, userProfiles, API_BASE_URL, imgError]);
 
     return (
         <div className="mb-6 last:mb-0 border-b border-gray-50 last:border-0 pb-5 last:pb-0 hover:bg-gray-50/50 -mx-2 px-2 rounded-xl transition-all duration-200 group">
@@ -161,8 +176,32 @@ function TeamMemberRow({
 }
 
 export default function ProjectTeam({ projectId, tasks = [], members = [] }: { projectId?: number, tasks?: Task[], members?: TeamMemberInfo[] }) {
+    const [userProfiles, setUserProfiles] = React.useState<Record<string, string>>({});
+
+    React.useEffect(() => {
+        if (!members.length) return;
+        const fetchProfiles = async () => {
+            try {
+                const response = await api.get('/api/auth/users');
+                const profilesMap: Record<string, string> = {};
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                response.data.forEach((u: any) => {
+                    if (u.profilePicUrl) {
+                        profilesMap[`id:${u.userId}`] = u.profilePicUrl;
+                        profilesMap[`email:${u.email}`] = u.profilePicUrl;
+                        profilesMap[`username:${u.username}`] = u.profilePicUrl;
+                    }
+                });
+                setUserProfiles(profilesMap);
+            } catch (err) {
+                console.error('Failed to fetch user profiles:', err);
+            }
+        };
+        fetchProfiles();
+    }, [members.length]);
+
     return (
-        <MotionWrapper delay={0.5} className="bg-white rounded-2xl border border-[#EAECF0] p-6 shadow-sm hover:shadow-xl transition-all duration-500">
+        <MotionWrapper className="bg-white rounded-2xl border border-[#EAECF0] p-6 shadow-sm hover:shadow-xl transition-all duration-500">
             <h2 className="font-arimo text-[16px] font-bold text-[#101828] mb-6 flex items-center justify-between">
                 <span className="flex items-center gap-2">
                     <svg className="w-4 h-4 text-[#0052CC]" fill="currentColor" viewBox="0 0 20 20">
@@ -185,7 +224,7 @@ export default function ProjectTeam({ projectId, tasks = [], members = [] }: { p
             ) : (
                 <div className="flex flex-col gap-2">
                     {members.map((member, index) => (
-                        <TeamMemberRow key={member.id} member={member} tasks={tasks} index={index} />
+                        <TeamMemberRow key={member.id} member={member} tasks={tasks} index={index} userProfiles={userProfiles} />
                     ))}
                 </div>
             )}

@@ -63,8 +63,8 @@ function safeParseDate(value?: string) {
   return startOfDay(parsed);
 }
 
-function statusLabel(status: string) {
-  return status.replace(/_/g, ' ');
+function statusLabel(status: string | null | undefined) {
+  return (status ?? '').replace(/_/g, ' ');
 }
 
 export default function TimelineView({ tasks }: TimelineViewProps) {

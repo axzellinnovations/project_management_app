@@ -271,19 +271,19 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
             >
                 <table className="min-w-full border-separate border-spacing-0">
                     <thead>
-                        <tr className="border-b border-[#E5E7EB]">
+                        <tr className="border-b border-slate-100">
                             {activeTab === 'assigned-to-me' ? (
                                 <>
-                                    <th className="sticky left-0 z-20 bg-white py-3 px-4 text-left font-arimo text-[11px] font-bold text-[#6B7280] uppercase tracking-[0.1em] border-b border-[#E5E7EB]">Task Name</th>
-                                    <th className="py-3 px-4 text-left font-arimo text-[11px] font-bold text-[#6B7280] uppercase tracking-[0.1em] border-b border-[#E5E7EB]">Status</th>
+                                    <th className="sticky left-0 z-20 bg-white py-3.5 px-4 text-left font-outfit text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Task Name</th>
+                                    <th className="py-3.5 px-4 text-left font-outfit text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Status</th>
                                 </>
                             ) : (
                                 <>
-                                    <th className="py-3 w-[48px] text-left border-b border-[#E5E7EB]"></th>
-                                    <th className="sticky left-0 z-20 bg-white py-3 pr-4 text-left font-arimo text-[11px] font-bold text-[#6B7280] uppercase tracking-[0.1em] border-b border-[#E5E7EB]">
+                                    <th className="py-3.5 w-[48px] text-left border-b border-slate-100"></th>
+                                    <th className="sticky left-0 z-20 bg-white py-3.5 pr-4 text-left font-outfit text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
                                         {activeTab === 'boards' ? 'Board Name' : activeTab === 'favorites' ? 'Project Name' : 'Name'}
                                     </th>
-                                    <th className="py-3 text-left font-arimo text-[11px] font-bold text-[#6B7280] uppercase tracking-[0.1em] border-b border-[#E5E7EB]">
+                                    <th className="py-3.5 text-left font-outfit text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
                                         {activeTab === 'boards' ? 'Project' : activeTab === 'favorites' ? 'Project Key' : 'Location'}
                                     </th>
                                 </>
@@ -312,25 +312,25 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
                             >
                                 {activeTab === 'assigned-to-me' ? (
                                     <>
-                                        <td className="sticky left-0 z-10 bg-white py-2.5 px-4 max-w-[150px] sm:max-w-[200px] xl:max-w-[280px] shadow-[4px_0_8px_-4px_rgba(0,0,0,0.05)]">
-                                            <div className="font-arimo text-[14px] text-gray-900 font-bold truncate group-hover:text-blue-600 transition-colors" title={item.name}>
+                                        <td className="sticky left-0 z-10 bg-white py-3.5 px-4 max-w-[150px] sm:max-w-[200px] xl:max-w-[280px] shadow-[6px_0_10px_-6px_rgba(0,0,0,0.08)] bg-white/95 backdrop-blur-sm">
+                                            <div className="font-outfit text-[13.5px] text-slate-900 font-bold truncate group-hover:text-blue-600 transition-colors" title={item.name}>
                                                 {item.name}
                                             </div>
-                                            <div className="font-arimo text-[10px] font-bold text-gray-400 mt-0.5 truncate tracking-wide uppercase">
+                                            <div className="font-outfit text-[10px] font-bold text-slate-400 mt-1 truncate tracking-wider uppercase">
                                                 {item.location}
                                             </div>
                                         </td>
-                                        <td className="py-2.5 px-4 whitespace-nowrap">
+                                        <td className="py-3.5 px-4 whitespace-nowrap">
                                             {renderStatusBadge(item)}
                                         </td>
                                     </>
                                 ) : (
                                     <>
-                                        <td className="py-2.5">{getIcon(item)}</td>
-                                        <td className="sticky left-0 z-10 bg-white py-2.5 pr-4 text-[#101828] font-arimo text-[14px] font-bold whitespace-nowrap shadow-[4px_0_8px_-4px_rgba(0,0,0,0.05)]">
+                                        <td className="py-3.5 whitespace-nowrap">{getIcon(item)}</td>
+                                        <td className="sticky left-0 z-10 bg-white py-3.5 pr-4 text-[#101828] font-outfit text-[13.5px] font-bold whitespace-nowrap shadow-[6px_0_10px_-6px_rgba(0,0,0,0.08)] bg-white/95 backdrop-blur-sm">
                                             {item.name}
                                         </td>
-                                        <td className="py-2.5 text-[#6A7282] font-arimo text-[13px]">
+                                        <td className="py-3.5 text-slate-500 font-outfit text-[12.5px] font-medium">
                                             {item.location}
                                         </td>
                                     </>
@@ -384,7 +384,7 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
                 {selectedTaskId && (
                     <TaskCardModal 
                         taskId={selectedTaskId} 
-                        onClose={() => setSelectedTaskId(null)} 
+                        onClose={(_wasModified) => setSelectedTaskId(null)} 
                     />
                 )}
             </AnimatePresence>

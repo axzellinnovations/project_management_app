@@ -9,8 +9,13 @@ import MetricsGrid from "../components/MetricsGrid";
 import { CurrentSprint } from "../components/ProjectTimeline";
 import RecentActivity from "../components/RecentActivity";
 import ProjectTeam from "../components/ProjectTeam";
-import DashboardCharts from "../components/DashboardCharts";
-import { Loader2 } from "lucide-react";
+import SummaryPageSkeleton from "../components/SummarySkeleton";
+import dynamic from 'next/dynamic';
+
+const DashboardCharts = dynamic(() => import('../components/DashboardCharts'), {
+    ssr: false,
+    loading: () => <div className="h-[250px] bg-gray-50 animate-pulse rounded-xl" />
+});
 
 export default function SummaryPage() {
     const params = useParams();
@@ -57,11 +62,7 @@ export default function SummaryPage() {
     }, [projectId]);
 
     if (isLoading) {
-        return (
-            <div className="h-[50vh] flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-[#0052CC]" />
-            </div>
-        );
+        return <SummaryPageSkeleton />;
     }
 
     return (

@@ -23,7 +23,7 @@ const AssigneeSection: React.FC<AssigneeSectionProps> = ({ assignee, onUnassign 
 
   return (
     <SidebarField label="Assignee">
-      <div className="flex items-center gap-2 hover:bg-gray-50 p-1 -ml-1 rounded group">
+      <div className="flex items-center gap-2 hover:bg-gray-50 p-1 min-h-[44px] sm:min-h-0 -ml-1 rounded group">
         <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold overflow-hidden">
           {picUrl ? (
             <Image src={picUrl} alt={assignee} width={24} height={24} className="w-full h-full object-cover" unoptimized />

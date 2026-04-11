@@ -1,27 +1,22 @@
 'use client';
 
-import OtpInput from './OtpInput';
 import PasswordInput from './PasswordInput';
 
 interface ResetPasswordFormProps {
-  otp: string;
   newPassword: string;
   confirmPassword: string;
   error: string;
   isLoading: boolean;
-  onOtpChange: (otp: string) => void;
   onPasswordChange: (password: string) => void;
   onConfirmPasswordChange: (password: string) => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 }
 
 export default function ResetPasswordForm({
-  otp,
   newPassword,
   confirmPassword,
   error,
   isLoading,
-  onOtpChange,
   onPasswordChange,
   onConfirmPasswordChange,
   onSubmit
@@ -34,9 +29,6 @@ export default function ResetPasswordForm({
           {error}
         </div>
       )}
-
-      {/* OTP Input */}
-      <OtpInput value={otp} onChange={onOtpChange} disabled={isLoading} />
 
       {/* Password Requirements */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">

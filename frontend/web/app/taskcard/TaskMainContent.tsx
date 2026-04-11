@@ -7,16 +7,13 @@ import DescriptionEditor from './main/DescriptionEditor';
 import AttachmentsPanel from './main/AttachmentsPanel';
 import { useTaskAttachments } from '@/hooks/useTaskAttachments';
 import api from '@/lib/axios';
+import TaskActionButton from './components/TaskActionButton';
+import DependencyPicker from './components/DependencyPicker';
 
 interface Dependency {
   id: number;
   title: string;
   relation: string;
-}
-
-interface ProjectTask {
-  id: number;
-  title: string;
 }
 
 interface TaskMainContentProps {
@@ -65,7 +62,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-5 md:p-8 border-r border-gray-100 scrollbar-thin scrollbar-thumb-gray-200 min-h-0">
+    <div className="flex-1 overflow-y-auto p-5 md:p-6 border-r border-[#EAECF0] scrollbar-thin scrollbar-thumb-[#E5E7EB] min-h-0">
       
       {/* Title */}
       <div className="group mb-6">
@@ -83,12 +80,12 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
               }
             }}
             autoFocus
-            className="w-full text-2xl font-semibold text-gray-900 bg-white border-2 border-blue-500 rounded px-2 py-1 focus:outline-none"
+            className="w-full text-[22px] font-bold text-[#101828] bg-white border-2 border-[#155DFC] rounded-lg px-2 py-1 focus:outline-none font-outfit tracking-tight"
           />
         ) : (
           <h1 
             onClick={() => setIsEditingTitle(true)}
-            className="text-2xl font-semibold text-gray-900 hover:bg-gray-50 p-1 rounded -ml-1 cursor-text transition-colors"
+            className="text-[22px] font-bold text-[#101828] tracking-tight hover:bg-[#F8FAFF] px-2 py-1 rounded-lg -ml-2 cursor-text transition-colors font-outfit"
           >
             {title}
           </h1>
@@ -97,7 +94,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
 
       {/* Action Bar */}
       <div className="flex flex-wrap gap-2 mb-6">
-        <ActionButton
+        <TaskActionButton
           icon={isUploading ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />}
           label={isUploading ? 'Uploading...' : 'Attach'}
           onClick={() => !isUploading && attachInputRef.current?.click()}
@@ -114,12 +111,12 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
             }
           }}
         />
-        <ActionButton
+        <TaskActionButton
           icon={<CheckSquare size={14} />}
           label="Add subtask"
           onClick={() => setSubtaskAddTrigger(n => n + 1)}
         />
-        <ActionButton icon={<Link size={14} />} label="Link issue" onClick={() => setShowDependencyPicker(true)} />
+        <TaskActionButton icon={<Link size={14} />} label="Link issue" onClick={() => setShowDependencyPicker(true)} />
       </div>
       {attachError && (
         <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded mb-4">{attachError}</p>
@@ -208,89 +205,6 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
   );
 };
 
-// Small helper component for the top buttons
-const ActionButton = ({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick?: () => void }) => (
-  <button
-    onClick={onClick}
-    className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm font-medium text-gray-700 transition-colors"
-  >
-    {icon} {label}
-  </button>
-);
 
-// Inline dependency picker: fetches project tasks and lets user link one
-const DependencyPicker = ({
-  taskId, projectId, existingDependencyIds, onLinked, onCancel,
-}: {
-  taskId: number;
-  projectId: number;
-  existingDependencyIds: number[];
-  onLinked: () => void;
-  onCancel: () => void;
-}) => {
-  const [tasks, setTasks] = useState<ProjectTask[]>([]);
-  const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [linking, setLinking] = useState(false);
-
-  useEffect(() => {
-    setLoading(true);
-    api.get<ProjectTask[]>(`/api/tasks/project/${projectId}`)
-      .then((r) => setTasks(r.data))
-      .catch(() => setTasks([]))
-      .finally(() => setLoading(false));
-  }, [projectId]);
-
-  const filtered = tasks.filter(
-    (t) => t.id !== taskId && !existingDependencyIds.includes(t.id) &&
-      t.title.toLowerCase().includes(query.toLowerCase())
-  );
-
-  const handleSelect = async (blocker: ProjectTask) => {
-    setLinking(true);
-    try {
-      await api.post(`/api/tasks/${taskId}/dependencies/${blocker.id}`);
-      onLinked();
-    } catch {
-      // ignore — API may return 409 if already linked
-    } finally {
-      setLinking(false);
-    }
-  };
-
-  return (
-    <div className="border border-blue-200 rounded-lg p-3 bg-blue-50">
-      <input
-        autoFocus
-        type="text"
-        placeholder="Search tasks to link..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500 bg-white mb-2"
-      />
-      {loading && <p className="text-xs text-gray-400 px-1">Loading...</p>}
-      {!loading && filtered.length === 0 && <p className="text-xs text-gray-400 px-1">No matching tasks found</p>}
-      <div className="max-h-40 overflow-y-auto space-y-1">
-        {filtered.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => !linking && handleSelect(t)}
-            disabled={linking}
-            className="w-full text-left px-3 py-2 rounded hover:bg-white text-sm text-gray-700 transition-colors flex items-center gap-2"
-          >
-            <span className="text-xs text-gray-400 shrink-0">TASK-{t.id}</span>
-            <span className="truncate">{t.title}</span>
-          </button>
-        ))}
-      </div>
-      <button
-        onClick={onCancel}
-        className="mt-2 text-xs text-gray-500 hover:text-gray-700 underline"
-      >
-        Cancel
-      </button>
-    </div>
-  );
-};
 
 export default TaskMainContent;

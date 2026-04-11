@@ -1,5 +1,6 @@
 package com.planora.backend.repository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.data.domain.Pageable;
@@ -43,4 +44,8 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     @Query("SELECT t FROM Task t WHERE LOWER(t.title) LIKE LOWER(CONCAT('%', :query, '%')) AND t.project.team.id IN (SELECT tm.team.id FROM TeamMember tm WHERE tm.user.userId = :userId)")
     List<Task> searchTasksByTitle(@Param("query") String query, @Param("userId") Long userId, Pageable pageable);
+
+    /** Recurring tasks whose next spawn date is today or earlier and still active. */
+    @Query("SELECT t FROM Task t WHERE t.nextOccurrence IS NOT NULL AND t.nextOccurrence <= :today AND t.recurrenceRule IS NOT NULL")
+    List<Task> findByNextOccurrenceBeforeOrEqual(@Param("today") LocalDate today);
 }

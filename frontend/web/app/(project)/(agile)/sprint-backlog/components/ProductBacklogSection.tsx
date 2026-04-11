@@ -233,16 +233,17 @@ export default function ProductBacklogSection({
         <div className="flex items-center gap-2">
           <button
             onClick={() => { setIsOpen(true); setShowCreateTaskBox(true); }}
-            className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-2.5 py-1.5 text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] shadow-sm transition-all active:scale-95"
+            className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-3 py-1.5 text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] shadow-sm transition-all active:scale-95"
           >
-            + Task
+            <span className="text-[14px] leading-none">+</span>
+            <span>Task</span>
           </button>
           <button
             onClick={() => onCreateSprint()}
-            className="flex items-center gap-1.5 rounded-lg border border-[#175CD3] bg-[#175CD3] px-2.5 py-1.5 text-[12px] font-bold text-white hover:bg-[#1849A9] shadow-sm transition-all active:scale-95"
+            className="flex items-center gap-1.5 rounded-lg border border-[#175CD3] bg-[#175CD3] px-3 py-1.5 text-[12px] font-bold text-white hover:bg-[#1849A9] shadow-sm transition-all active:scale-95"
           >
-            <Rocket size={12} />
-            <span className="hidden sm:inline">Sprint</span>
+            <Rocket size={14} />
+            <span>Create Sprint</span>
           </button>
         </div>
       </div>
@@ -343,7 +344,7 @@ export default function ProductBacklogSection({
     {selectedTaskId !== null && (
       <TaskCardModal
         taskId={selectedTaskId}
-        onClose={() => setSelectedTaskId(null)}
+        onClose={(_wasModified) => setSelectedTaskId(null)}
       />
     )}
     </div>

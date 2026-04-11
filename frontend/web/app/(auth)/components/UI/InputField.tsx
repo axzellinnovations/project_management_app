@@ -11,6 +11,10 @@ interface InputFieldProps {
   id?: string;
   'aria-describedby'?: string;
   showToggle?: boolean;
+  autoComplete?: string;
+  autoCapitalize?: string;
+  autoCorrect?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
 }
 
 export default function InputField({ 
@@ -23,6 +27,10 @@ export default function InputField({
   id,
   'aria-describedby': ariaDescribedby,
   showToggle = false,
+  autoComplete,
+  autoCapitalize,
+  autoCorrect,
+  inputMode,
 }: InputFieldProps) {
   const [visible, setVisible] = useState(false);
   const resolvedType = showToggle && type === 'password' ? (visible ? 'text' : 'password') : type;
@@ -41,7 +49,11 @@ export default function InputField({
           placeholder={placeholder}
           required={required}
           aria-describedby={ariaDescribedby}
-          className={`w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm${showToggle ? ' pr-11' : ''}`}
+          autoComplete={autoComplete}
+          autoCapitalize={autoCapitalize}
+          autoCorrect={autoCorrect}
+          inputMode={inputMode}
+          className={`w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-[16px] sm:text-sm${showToggle ? ' pr-11' : ''}`}
         />
         {showToggle && type === 'password' && (
           <button

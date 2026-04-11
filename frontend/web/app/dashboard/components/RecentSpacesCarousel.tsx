@@ -2,8 +2,8 @@
 
 import { useRef, useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
-import RecentProjectCard from './RecentProjectCard';
 import Link from 'next/link';
+import RecentProjectCard from './RecentProjectCard';
 
 interface ProjectSummary {
     id: number;
@@ -11,6 +11,7 @@ interface ProjectSummary {
     projectKey?: string;
     isFavorite?: boolean;
     type: 'AGILE' | 'KANBAN' | string;
+    lastAccessedAt?: string;
 }
 
 interface RecentSpacesCarouselProps {
@@ -63,7 +64,7 @@ export default function RecentSpacesCarousel({ projects, loading, searchQuery }:
                 {Array.from({ length: 4 }).map((_, i) => (
                     <div 
                         key={i} 
-                        className="flex flex-col p-5 h-[160px] min-w-[280px] rounded-[8px] border border-[#E5E7EB] bg-white shadow-sm shrink-0"
+                        className="flex flex-col p-5 h-[160px] min-w-[240px] rounded-2xl border border-[#E5E7EB] bg-white shadow-sm shrink-0"
                     >
                         {/* Skeleton Header: Icon + Type + Star */}
                         <div className="flex justify-between items-start mb-3">
@@ -104,7 +105,7 @@ export default function RecentSpacesCarousel({ projects, loading, searchQuery }:
             {showLeftArrow && (
                 <button
                     onClick={() => scroll('left')}
-                    className="absolute left-[-12px] top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-white border border-gray-200 rounded-full shadow-lg flex items-center justify-center text-[#101828] hover:bg-[#F3F4F6] transition-all duration-200 hover:scale-110 active:scale-95"
+                    className="md:flex hidden absolute left-[-12px] top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-white border border-gray-200 rounded-full shadow-lg items-center justify-center text-[#101828] hover:bg-[#F3F4F6] transition-all duration-200 hover:scale-110 active:scale-95"
                     aria-label="Scroll left"
                 >
                     <ChevronLeft size={20} strokeWidth={2.5} />
@@ -115,7 +116,7 @@ export default function RecentSpacesCarousel({ projects, loading, searchQuery }:
             <div
                 ref={scrollRef}
                 onScroll={handleScroll}
-                className="flex gap-4 overflow-x-auto pb-6 pt-2 hide-scrollbar scroll-smooth"
+                className="flex gap-4 overflow-x-auto pb-4 pt-2 px-1 md:px-0 hide-scrollbar scroll-smooth"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', contentVisibility: 'auto', containIntrinsicSize: '0 160px' } as React.CSSProperties}
             >
                 {/* Custom CSS for hiding scrollbar inline as fallback */}
@@ -131,23 +132,19 @@ export default function RecentSpacesCarousel({ projects, loading, searchQuery }:
                         id={project.id.toString()}
                         name={project.name}
                         projectKey={project.projectKey}
+                        type={project.type}
                         isFavorite={project.isFavorite}
-                        onFavoriteToggle={() => {
-                            window.dispatchEvent(new CustomEvent('planora:favorite-toggled'));
-                        }}
-                        type={project.type === 'AGILE' ? 'Agile Scrum' : 'Kanban'}
-                        boardCount={1}
-                        width="min-w-[280px] max-w-[280px]"
+                        width="min-w-[240px] max-w-[240px]"
                     />
                 ))}
 
                 {/* Always show "View all" card if we have projects, as per user request */}
                 <Link
                     href="/spaces"
-                    className="group flex flex-col justify-center items-center min-w-[200px] h-[160px] bg-gray-50/50 hover:bg-white rounded-[8px] border border-dashed border-gray-300 hover:border-[#0052CC]/30 hover:shadow-[0_4px_16px_rgba(0,82,204,0.06)] cursor-pointer transition-all duration-200 hover:-translate-y-[2px] shrink-0"
+                    className="group flex flex-col justify-center items-center min-w-[200px] h-[160px] bg-gray-50/50 hover:bg-white rounded-2xl border border-dashed border-gray-300 hover:border-[#0052CC]/30 hover:shadow-[0_8px_24px_rgba(0,82,204,0.08)] cursor-pointer transition-all duration-300 hover:-translate-y-[2px] shrink-0"
                 >
-                    <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-gray-100 mb-3 group-hover:bg-[#EAF2FF] group-hover:border-transparent transition-all duration-200">
-                        <ArrowRight size={20} strokeWidth={2.5} className="text-[#0052CC]" />
+                    <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-gray-100 mb-3 group-hover:bg-blue-600 group-hover:border-transparent transition-all duration-300 group-hover:scale-110">
+                        <ArrowRight size={20} strokeWidth={2.5} className="text-[#0052CC] group-hover:text-white" />
                     </div>
                     <span className="font-arimo text-[15px] font-semibold text-[#4B5563] group-hover:text-[#0052CC] transition-colors">View all spaces</span>
                     {projects.length > 5 && (
@@ -160,7 +157,7 @@ export default function RecentSpacesCarousel({ projects, loading, searchQuery }:
             {showRightArrow && (
                 <button
                     onClick={() => scroll('right')}
-                    className="absolute right-[-12px] top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-white border border-gray-200 rounded-full shadow-lg flex items-center justify-center text-[#101828] hover:bg-[#F3F4F6] transition-all duration-200 hover:scale-110 active:scale-95"
+                    className="md:flex hidden absolute right-[-12px] top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-white border border-gray-200 rounded-full shadow-lg items-center justify-center text-[#101828] hover:bg-[#F3F4F6] transition-all duration-200 hover:scale-110 active:scale-95"
                     aria-label="Scroll right"
                 >
                     <ChevronRight size={20} strokeWidth={2.5} />

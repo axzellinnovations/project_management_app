@@ -7,7 +7,7 @@ export function CurrentSprint({ projectId, sprints = [], tasks = [] }: { project
 
     if (!activeSprint) {
         return (
-            <MotionWrapper delay={0.3} className="bg-white rounded-xl border border-[#E3E8EF] p-6 shadow-sm hover:shadow-md transition-all duration-200">
+            <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-6 shadow-sm hover:shadow-md transition-all duration-200">
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <h2 className="font-arimo text-[18px] font-semibold text-[#101828]">Current Sprint</h2>
@@ -52,7 +52,7 @@ export function CurrentSprint({ projectId, sprints = [], tasks = [] }: { project
     }
 
     return (
-        <MotionWrapper delay={0.3} className="bg-white rounded-xl border border-[#E3E8EF] p-6 shadow-sm hover:shadow-md transition-all duration-200">
+        <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-6 shadow-sm hover:shadow-md transition-all duration-200">
             <div className="flex justify-between items-start mb-6">
                 <div>
                     <h2 className="font-arimo text-[18px] font-semibold text-[#101828]">Current Sprint</h2>

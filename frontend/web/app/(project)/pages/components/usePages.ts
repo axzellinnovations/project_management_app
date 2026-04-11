@@ -48,7 +48,16 @@ export function usePages(projectId: string | number | null): UsePagesReturn {
       return;
     }
 
-    setLoading(true);
+    const cacheKey = `planora:pages:${projectId}`;
+    // Serve stale data instantly
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        setPages(JSON.parse(cached) as PageItem[]);
+        setLoading(false);
+      } catch { /* ignore corrupt cache */ }
+    }
+
     setError(null);
     try {
       const response = await axiosInstance.get<PageSummaryDto[]>(`/api/projects/${projectId}/pages`);
@@ -58,10 +67,11 @@ export function usePages(projectId: string | number | null): UsePagesReturn {
         isStarred: false, // TODO: sync with backend when implemented
       }));
       setPages(pagesData);
+      localStorage.setItem(cacheKey, JSON.stringify(pagesData));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const message = err.response?.data?.message || 'Failed to fetch pages';
-      setError(message);
+      if (!cached) setError(message);
       console.error('Error fetching pages:', err);
     } finally {
       setLoading(false);

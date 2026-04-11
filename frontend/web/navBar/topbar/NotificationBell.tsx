@@ -249,9 +249,9 @@ export function NotificationBell() {
         onClick={() => setShowDropdown(!showDropdown)}
         className="relative p-2 rounded-full hover:bg-black/5 transition-colors"
       >
-        <Bell size={20} className="text-cu-text-secondary" />
+        <Bell size={22} className="text-slate-500 max-sm:text-slate-600 max-sm:w-6 max-sm:h-6" strokeWidth={1.5} />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 w-4 h-4 bg-cu-danger text-white text-[10px] font-bold flex items-center justify-center rounded-full border border-white">
+          <span className="absolute bottom-0 right-0 translate-x-[10%] translate-y-[10%] w-4 h-4 bg-[#FF4B4B] text-white text-[10px] font-bold flex items-center justify-center rounded-full border border-white max-sm:w-[18px] max-sm:h-[18px]">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -259,7 +259,7 @@ export function NotificationBell() {
 
       <AnimatePresence>
         {showDropdown && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -268,8 +268,8 @@ export function NotificationBell() {
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-white/50">
               <span className="font-bold text-slate-900 text-[14px] font-outfit">Notifications</span>
-              <button 
-                onClick={markAllAsRead} 
+              <button
+                onClick={markAllAsRead}
                 className="text-[11px] font-bold text-blue-600 hover:text-blue-700 transition font-outfit uppercase tracking-wider"
               >
                 Mark all as read
@@ -298,8 +298,8 @@ export function NotificationBell() {
                     <Link
                       href={item.link}
                       onClick={() => {
-                          markRowAsRead(item.unreadIds);
-                          setShowDropdown(false);
+                        markRowAsRead(item.unreadIds);
+                        setShowDropdown(false);
                       }}
                       className="block p-4 pr-11 hover:bg-slate-50 transition-colors"
                     >
@@ -330,7 +330,7 @@ export function NotificationBell() {
             </div>
             <div className="border-t border-slate-100 bg-white px-4 py-2.5">
               <Link
-                href="/notifications"
+                href="/dashboard/notifications"
                 onClick={() => setShowDropdown(false)}
                 className="block text-center text-[12px] font-semibold text-blue-600 hover:text-blue-700 transition font-outfit"
               >

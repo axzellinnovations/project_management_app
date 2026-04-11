@@ -2,25 +2,29 @@
 
 import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef } from 'react';
 import { AUTH_TOKEN_CHANGED_EVENT, clearTokens, getUserFromToken, getValidToken, User } from '@/lib/auth';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import api from '@/lib/axios';
 
 /* ── Hooks ── */
 import { useSidebarProjects } from '@/hooks/useSidebarProjects';
+import useNotificationSocket from '@/hooks/useNotificationSocket';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 /* ── Sub-components ── */
 import { SidebarHeader, CollapseButton } from './sidebar/SidebarHeader';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { NavRow } from './sidebar/NavRows';
 import { ProjectDropdown } from './sidebar/ProjectDropdown';
-import { InboxDropdown } from './sidebar/InboxDropdown';
+import ProjectList from '@/components/layout/sidebar/ProjectList';
+import InboxBadge from '@/components/layout/sidebar/InboxBadge';
+import { useGlobalNotifications } from '@/components/providers/GlobalNotificationProvider';
 import {
-  HomeIcon, StarIcon, ClockIcon, ProfileIcon,
+  HomeIcon, ProfileIcon,
   InboxIcon,
+  BellIcon,
 } from './sidebar/SidebarIcons';
 
 /* ── Types ── */
-interface UserSummary { email: string; profilePicUrl?: string; }
 interface Project { id: number; name: string; projectKey?: string; isFavorite?: boolean; }
 interface ChatRoomSummary {
   roomId: number; roomName?: string; lastMessage?: string;
@@ -35,32 +39,41 @@ interface ChatSummaries {
   directMessages: DirectMessageSummary[];
 }
 
-interface InboxNavRowProps {
+interface NavRowProps {
   collapsed: boolean;
   active: boolean;
-  unseenCount: number;
+  badge: number;
   onClick: () => void;
 }
 
-function InboxNavRow({ collapsed, active, unseenCount, onClick }: InboxNavRowProps) {
+function InboxNavRow({ collapsed, active, badge, onClick }: NavRowProps) {
   return (
     <NavRow
       icon={
         <div className="relative">
           <InboxIcon />
-          {unseenCount > 0 && (
-            <span className="absolute -top-1 -right-1.5 bg-cu-primary text-white text-[9px] font-bold px-1 rounded-full border border-white">
-              {unseenCount > 9 ? '9+' : unseenCount}
-            </span>
-          )}
+          <div className="absolute -top-1 -right-2">
+            <InboxBadge count={badge} />
+          </div>
         </div>
       }
       label="Inbox"
       collapsed={collapsed}
       active={active}
-      hasChevron
-      chevronOpen={active}
-      badge={unseenCount}
+      badge={badge}
+      onClick={onClick}
+    />
+  );
+}
+
+function NotificationsNavRow({ collapsed, active, badge, onClick }: NavRowProps) {
+  return (
+    <NavRow
+      icon={<BellIcon />}
+      label="Notifications"
+      collapsed={collapsed}
+      active={active}
+      badge={badge}
       onClick={onClick}
     />
   );
@@ -81,11 +94,11 @@ const subscribeToBrowserStorage = (onChange: () => void) => {
 
 /* ─────────────────────────────────────────────
    Main Sidebar
-───────────────────────────────────────────── */
+ ───────────────────────────────────────────── */
 export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const { unreadCount: globalUnreadCount } = useGlobalNotifications();
 
   const token = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
@@ -97,19 +110,13 @@ export default function Sidebar() {
     return getUserFromToken();
   }, [token]);
 
-  const currentProjectId = useSyncExternalStore<string | null>(
+  const _currentProjectId = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
     () => localStorage.getItem('currentProjectId'),
     () => null,
   );
 
-  const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
-  const resolvedProfilePicUrl = useMemo(() => {
-    if (!profilePicUrl) return '';
-    if (profilePicUrl.startsWith('http://') || profilePicUrl.startsWith('https://')) return profilePicUrl;
-    return `${API_BASE_URL}${profilePicUrl}`;
-  }, [profilePicUrl, API_BASE_URL]);
+  const { profilePicUrl: resolvedProfilePicUrl } = useCurrentUser();
 
   /* ── Project & folder data (extracted hooks) ── */
   const {
@@ -119,17 +126,20 @@ export default function Sidebar() {
     togglingFavoriteId,
     handleProjectClick: rawProjectClick,
     handleToggleFavourite,
-  } = useSidebarProjects(pathname);
+  } = useSidebarProjects();
 
 
   const [chatSummaries, setChatSummaries] = useState<ChatSummaries | null>(null);
-  const [inboxOpen, setInboxOpen] = useState(false);
-  const [inboxSearch, setInboxSearch] = useState('');
-  const [loadingInbox, setLoadingInbox] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+  const [favOpen, setFavOpen] = useState(false);
+  const [recentOpen, setRecentOpen] = useState(false);
+  const [favSearch, setFavSearch] = useState('');
+  const [recentSearch, setRecentSearch] = useState('');
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     let isCurrentlyMobile = window.innerWidth < 768;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMobile(isCurrentlyMobile);
     if (isCurrentlyMobile) setCollapsed(true);
 
@@ -146,58 +156,61 @@ export default function Sidebar() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const [collapsed, setCollapsed] = useState(true);
-  const [favOpen, setFavOpen] = useState(false);
-  const [recentOpen, setRecentOpen] = useState(false);
-  const [favSearch, setFavSearch] = useState('');
-  const [recentSearch, setRecentSearch] = useState('');
-
   const favRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
   const inboxRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  const getActiveProjectId = useCallback(() => {
+    return (
+      (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('projectId'))
+      || localStorage.getItem('currentProjectId')
+      || (recentProjects.length > 0 ? recentProjects[0].id.toString() : null)
+    );
+  }, [recentProjects]);
 
   /* ── fetch chats ── */
   const fetchChatSummaries = useCallback(async (projId: number) => {
-    setLoadingInbox(true);
     try {
       const res = await api.get(`/api/projects/${projId}/chat/summaries`);
       setChatSummaries(res.data);
     } catch (error) {
       console.error('Sidebar: failed to fetch chat summaries', error);
-    } finally {
-      setLoadingInbox(false);
     }
   }, []);
 
+  const refreshInboxCounts = useCallback(() => {
+    const projectId = getActiveProjectId();
+    if (!projectId) return;
+    void fetchChatSummaries(parseInt(projectId));
+  }, [getActiveProjectId, fetchChatSummaries]);
+
+  useNotificationSocket({
+    token,
+    enabled: Boolean(token),
+    onNotification: refreshInboxCounts,
+  });
+
   /* ── effects ── */
   useEffect(() => {
-    if (!user?.email) return;
-    api.get('/api/auth/users').then(res => {
-      const found = res.data.find((u: UserSummary) => u.email.toLowerCase() === user.email.toLowerCase());
-      if (found?.profilePicUrl) setProfilePicUrl(found.profilePicUrl);
-    }).catch(() => {});
-  }, [user]);
-
-  useEffect(() => {
     if (window.innerWidth >= 768) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCollapsed(localStorage.getItem('planora:sidebar:collapsed') === 'true');
     }
   }, []);
 
   useEffect(() => {
-    const projectId =
-      (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('projectId'))
-      || localStorage.getItem('currentProjectId')
-      || (recentProjects.length > 0 ? recentProjects[0].id.toString() : null);
+    const projectId = getActiveProjectId();
 
     if (!projectId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setChatSummaries(null);
       return;
     }
 
     void fetchChatSummaries(parseInt(projectId));
-  }, [pathname, fetchChatSummaries, recentProjects]);
+  }, [pathname, fetchChatSummaries, getActiveProjectId, recentProjects]);
 
   /* click-outside to close dropdowns */
   useEffect(() => {
@@ -205,11 +218,9 @@ export default function Sidebar() {
       const target = e.target as Node;
       const inFav = favRef.current?.contains(target);
       const inRecent = recentRef.current?.contains(target);
-      const inInbox = inboxRef.current?.contains(target);
       const inDropdown = (target as Element)?.closest?.('[data-sidebar-dropdown]');
       if (!inFav && !inDropdown) setFavOpen(false);
       if (!inRecent && !inDropdown) setRecentOpen(false);
-      if (!inInbox && !inDropdown) setInboxOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
 
@@ -238,24 +249,12 @@ export default function Sidebar() {
 
   const openRecentDropdown = () => {
     setFavOpen(false);
-    setInboxOpen(false);
     if (recentRef.current) {
       const rect = recentRef.current.getBoundingClientRect();
       setDropdownPos({ top: rect.top, left: rect.right + 8 });
     }
     setRecentOpen(p => !p);
     setRecentSearch('');
-  };
-
-  const openInboxDropdown = () => {
-    setFavOpen(false);
-    setRecentOpen(false);
-    if (inboxRef.current) {
-      const rect = inboxRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.top, left: rect.right + 8 });
-    }
-    setInboxOpen(p => !p);
-    setInboxSearch('');
   };
 
   /* handlers */
@@ -286,12 +285,13 @@ export default function Sidebar() {
     (p.projectKey || '').toLowerCase().includes(recentSearch.toLowerCase())
   );
   
-  const inboxItems = useMemo(() => {
-    if (!chatSummaries) return [];
-    return [
+  const inboxCount = useMemo(() => {
+    if (!chatSummaries) return 0;
+    const items = [
       ...(chatSummaries.rooms || []),
       ...(chatSummaries.directMessages || []),
     ].filter(item => (item.unseenCount || 0) > 0);
+    return items.length;
   }, [chatSummaries]);
 
 
@@ -300,22 +300,29 @@ export default function Sidebar() {
   /* ── render ── */
   return (
     <>
-      {/* Mobile Backdrop Overlay */}
+      {/* Backdrop for mobile */}
       {isMobile && !collapsed && (
         <div
-          className="fixed inset-0 bg-black/40 z-[90] md:hidden transition-opacity"
+          className="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-[9998]"
           onClick={() => setCollapsed(true)}
         />
       )}
 
       <div
-        className={`h-screen flex-shrink-0 z-[500] bg-[#F9FAFB] transition-all duration-300 ease-in-out ${isMobile ? 'fixed left-0 top-0' : 'relative'} ${isMobile && collapsed ? 'pointer-events-none' : ''}`}
+        className={`h-screen flex-shrink-0 ${isMobile ? 'fixed left-0 top-0 z-[9999]' : 'relative'}`}
         style={{
-          width: isMobile ? (collapsed ? '0px' : '260px') : (collapsed ? '64px' : '240px'),
-          opacity: isMobile && collapsed ? 0 : 1
+          width: isMobile ? '260px' : (collapsed ? '64px' : '240px'),
         }}
       >
-        <div className="relative h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col w-[240px] md:w-[inherit]">
+        <div
+          className={`bg-[#F9FAFB] transition-all duration-300 ease-in-out ${isMobile ? 'relative h-full' : 'fixed left-0 top-0 h-screen z-[9999]'}`}
+          style={{
+            width: isMobile ? '260px' : (collapsed ? '64px' : '240px'),
+            transform: isMobile && collapsed ? 'translateX(-100%)' : 'translateX(0)',
+            opacity: isMobile && collapsed ? 0.5 : 1,
+          }}
+        >
+          <div className="relative h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col w-[240px] md:w-[inherit]">
 
           {/* Header */}
           <SidebarHeader collapsed={collapsed} />
@@ -334,39 +341,36 @@ export default function Sidebar() {
               onClick={() => { closeDropdowns(); router.push('/dashboard'); }}
             />
 
-            {/* Favourites row + dropdown */}
-            <div ref={favRef} className="relative">
-              <NavRow
-                icon={<StarIcon className="text-amber-400" />}
-                label="Favourites"
-                collapsed={collapsed}
-                active={favOpen}
-                hasChevron
-                chevronOpen={favOpen}
-                onClick={openFavDropdown}
-              />
-            </div>
+            <ProjectList
+              collapsed={collapsed}
+              favOpen={favOpen}
+              recentOpen={recentOpen}
+              loading={loadingProjects}
+              favoriteCount={favoriteProjects.length}
+              recentCount={recentProjects.length}
+              favRef={favRef}
+              recentRef={recentRef}
+              onOpenFav={openFavDropdown}
+              onOpenRecent={openRecentDropdown}
+            />
 
-            {/* Recent Spaces row + dropdown */}
-            <div ref={recentRef} className="relative">
-              <NavRow
-                icon={<ClockIcon />}
-                label="Recent Spaces"
-                collapsed={collapsed}
-                active={recentOpen}
-                hasChevron
-                chevronOpen={recentOpen}
-                onClick={openRecentDropdown}
-              />
-            </div>
-
-            {/* Inbox row + dropdown */}
+            {/* Inbox row */}
             <div ref={inboxRef} className="relative">
               <InboxNavRow
                 collapsed={collapsed}
-                active={inboxOpen}
-                unseenCount={inboxItems.length}
-                onClick={openInboxDropdown}
+                active={pathname === '/dashboard/notifications'}
+                badge={inboxCount}
+                onClick={() => { closeDropdowns(); router.push('/dashboard/notifications'); }}
+              />
+            </div>
+
+            {/* Notifications row */}
+            <div ref={notifRef} className="relative">
+              <NotificationsNavRow
+                collapsed={collapsed}
+                active={pathname === '/dashboard/notifications'}
+                badge={globalUnreadCount}
+                onClick={() => { closeDropdowns(); router.push('/dashboard/notifications'); }}
               />
             </div>
 
@@ -390,6 +394,7 @@ export default function Sidebar() {
             onLogout={handleLogout}
             onLinkClick={closeDropdowns}
           />
+          </div>
         </div>
 
         {/* Fixed dropdowns rendered OUTSIDE the sidebar body to escape overflow:hidden */}
@@ -423,17 +428,6 @@ export default function Sidebar() {
             viewAllHref="/spaces?filter=recent"
             viewAllLabel="View all recent spaces"
             onProjectClick={handleProjectClick}
-          />
-        )}
-        {inboxOpen && (
-          <InboxDropdown
-            fixedTop={dropdownPos.top}
-            fixedLeft={dropdownPos.left}
-            summaries={chatSummaries}
-            loading={loadingInbox}
-            search={inboxSearch}
-            onSearch={setInboxSearch}
-            onClose={() => setInboxOpen(false)}
           />
         )}
       </div>

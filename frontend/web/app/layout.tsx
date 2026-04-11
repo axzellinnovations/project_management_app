@@ -9,10 +9,11 @@ import { NavigationProvider } from "@/lib/navigation-context";
 import { ToastProvider } from "@/components/ui/Toast";
 import { GlobalNotificationProvider } from "@/components/providers/GlobalNotificationProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import KeyboardShortcutsProvider from "@/components/providers/KeyboardShortcutsProvider";
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
-const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' })
-const arimo = Arimo({ subsets: ['latin'], variable: '--font-arimo' })
+const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit', preload: false })
+const arimo = Arimo({ subsets: ['latin'], variable: '--font-arimo', preload: false })
 
 
 export const metadata: Metadata = {
@@ -38,6 +39,7 @@ export default function RootLayout({
           <ThemeProvider>
             <ToastProvider>
               <GlobalNotificationProvider>
+                <KeyboardShortcutsProvider />
                 <Suspense fallback={null}>
                   {children}
                 </Suspense>

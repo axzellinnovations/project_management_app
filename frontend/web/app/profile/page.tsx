@@ -79,11 +79,12 @@ export default function ProfilePage() {
                                     </span>
                                 )}
                             </div>
-                            <label className="inline-flex items-center justify-center rounded-lg bg-[#175CD3] hover:bg-[#1849A9] text-white text-sm font-medium px-4 py-2 cursor-pointer transition-colors w-full text-center">
+                            <label className="inline-flex items-center justify-center rounded-lg bg-[#175CD3] hover:bg-[#1849A9] text-white text-sm font-medium px-4 py-2 min-h-[44px] cursor-pointer transition-colors w-full text-center">
                                 {isUploadingPhoto ? 'Uploading...' : 'Upload photo'}
                                 <input
                                     type="file"
-                                    accept="image/jpeg,image/png,image/gif,image/webp"
+                                    accept="image/*"
+                                    capture="user"
                                     className="hidden"
                                     onChange={onUploadPhoto}
                                     disabled={isUploadingPhoto}

@@ -1,10 +1,10 @@
 'use client';
-export const dynamic = 'force-dynamic';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Task } from '../kanban/types';
 import { fetchTasksByProject } from '../kanban/api';
+import { useTaskStore } from '@/stores/task-store';
 import api from '@/lib/axios';
 import {
     AlertCircle, Plus, ChevronDown, ChevronUp,
@@ -187,9 +187,13 @@ function BacklogTaskRow({
 export default function BacklogPage() {
     const searchParams = useSearchParams();
     const projectId    = searchParams.get('projectId');
+    const projectIdNum = projectId ? parseInt(projectId, 10) : null;
 
-    const [tasks,    setTasks]   = useState<Task[]>([]);
-    const [loading,  setLoading] = useState(false);
+    const cachedTasks      = useTaskStore((s) => (projectIdNum ? s.tasksByProject[projectIdNum] : undefined));
+    const setTasksForProject = useTaskStore((s) => s.setTasksForProject);
+
+    const [tasks,    setTasks]   = useState<Task[]>(() => cachedTasks ?? []);
+    const [loading,  setLoading] = useState(!cachedTasks);
     const [error,    setError]   = useState<string | null>(null);
     const [collapsed, setCollapsed] = useState(false);
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -197,20 +201,20 @@ export default function BacklogPage() {
     const [showCreateModal, setShowCreateModal] = useState(false);
 
     const loadTasks = useCallback(async () => {
-        if (!projectId) return;
-        setLoading(true);
+        if (!projectIdNum || isNaN(projectIdNum)) return;
+        // Only show spinner if there's nothing cached to display
+        if (!cachedTasks) setLoading(true);
         setError(null);
         try {
-            const n = parseInt(projectId, 10);
-            if (isNaN(n)) throw new Error('Invalid project ID');
-            const fetched = await fetchTasksByProject(n);
+            const fetched = await fetchTasksByProject(projectIdNum);
             setTasks(fetched);
+            setTasksForProject(projectIdNum, fetched);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load tasks');
         } finally {
             setLoading(false);
         }
-    }, [projectId]);
+    }, [projectIdNum]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => { void loadTasks(); }, [loadTasks]);
 
@@ -504,7 +508,7 @@ export default function BacklogPage() {
             {selectedTaskIdForModal !== null && (
                 <TaskCardModal
                     taskId={selectedTaskIdForModal}
-                    onClose={() => { setSelectedTaskIdForModal(null); void loadTasks(); }}
+                    onClose={(wasModified) => { setSelectedTaskIdForModal(null); if (wasModified) void loadTasks(); }}
                 />
             )}
         </div>
