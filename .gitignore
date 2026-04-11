@@ -3,3 +3,5 @@ node_modules/
 frontend/web/node_modules
 .idea/
 .vscode/
+.DS_Store
+**/.DS_Store
