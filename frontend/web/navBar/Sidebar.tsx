@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { AUTH_TOKEN_CHANGED_EVENT, clearTokens, getUserFromToken, getValidToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { fetchChatInbox, type ChatInboxResponse } from '@/services/chat-service';
@@ -14,9 +13,9 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { SidebarHeader, CollapseButton } from './sidebar/SidebarHeader';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { NavRow } from './sidebar/NavRows';
-import { InboxDropdown } from './sidebar/InboxDropdown';
-import { NotificationsDropdown } from './sidebar/NotificationsDropdown';
 import { ProjectDropdown } from './sidebar/ProjectDropdown';
+import { SidebarPanel } from './sidebar/SidebarPanel';
+import { NotificationsPanelContent } from './sidebar/NotificationsPanel';
 import ProjectList from '@/components/layout/sidebar/ProjectList';
 import InboxBadge from '@/components/layout/sidebar/InboxBadge';
 import { useGlobalNotifications } from '@/components/providers/GlobalNotificationProvider';
@@ -42,14 +41,19 @@ function InboxNavRow({ collapsed, active, badge, onClick }: NavRowProps) {
   return (
     <div data-sidebar-panel-trigger>
       <NavRow
-        icon={<InboxIcon />}
+        icon={
+          <div className="relative">
+            <InboxIcon />
+            <div className="absolute -top-1 -right-2">
+              <InboxBadge count={badge} size="overlay" cap={99} />
+            </div>
+          </div>
+        }
         label="Inbox"
         collapsed={collapsed}
         active={active}
-        badge={badge}
+        badge={0}
         onClick={onClick}
-        hasChevron
-        chevronOpen={active}
       />
     </div>
   );
@@ -65,8 +69,6 @@ function NotificationsNavRow({ collapsed, active, badge, onClick }: NavRowProps)
         active={active}
         badge={badge}
         onClick={onClick}
-        hasChevron
-        chevronOpen={active}
       />
     </div>
   );
@@ -84,6 +86,41 @@ const subscribeToBrowserStorage = (onChange: () => void) => {
     window.removeEventListener(AUTH_TOKEN_CHANGED_EVENT, onChange);
   };
 };
+
+/* Inbox Panel Items */
+import type { ChatInboxActivity } from '@/services/chat-service';
+
+function InboxPanelItem({ item, onClick }: { item: ChatInboxActivity; onClick: () => void }) {
+  const label = item.chatType === 'ROOM'
+    ? (item.roomName || 'Channel')
+    : item.chatType === 'DIRECT'
+      ? (item.username || 'Direct Message')
+      : 'Team Chat';
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left flex items-start gap-2.5 px-3 py-2.5 hover:bg-cu-hover transition-colors"
+    >
+      <div className="w-7 h-7 rounded-full bg-cu-primary/10 flex items-center justify-center text-cu-primary flex-shrink-0 mt-0.5">
+        <InboxIcon size={13} />
+      </div>
+      <div className="flex flex-col flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-semibold text-cu-text-muted uppercase tracking-wide truncate">
+            {item.projectName}
+          </span>
+          {item.unread && <InboxBadge count={item.unseenCount} size="inline" cap={99} />}
+        </div>
+        <span className="text-[12px] font-semibold text-cu-text-primary truncate">{label}</span>
+        <span className="text-[10.5px] text-cu-text-secondary truncate leading-normal mt-0.5">
+          {item.lastMessageSender && <span className="font-medium mr-1">{item.lastMessageSender}:</span>}
+          {item.lastMessage || 'No messages yet'}
+        </span>
+      </div>
+    </button>
+  );
+}
 
 /* --------------------------------------------
    Main Sidebar
@@ -118,8 +155,6 @@ export default function Sidebar() {
   const [chatInbox, setChatInbox] = useState<ChatInboxResponse | null>(null);
   const [inboxPanelOpen, setInboxPanelOpen] = useState(false);
   const [notifPanelOpen, setNotifPanelOpen] = useState(false);
-  const [inboxSearch, setInboxSearch] = useState('');
-  const [notifSearch, setNotifSearch] = useState('');
   const [loadingInbox, setLoadingInbox] = useState(false);
 
   const [collapsed, setCollapsed] = useState(true);
@@ -150,8 +185,6 @@ export default function Sidebar() {
 
   const favRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
-  const inboxRef = useRef<HTMLDivElement>(null);
-  const notifRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const lastInboxFetchedAtRef = useRef(0);
   const latestSyncedNotificationRef = useRef<number | null>(null);
@@ -280,24 +313,14 @@ export default function Sidebar() {
     setRecentOpen(false);
     setNotifPanelOpen(false);
     void fetchInboxActivity();
-    if (inboxRef.current) {
-      const rect = inboxRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.top, left: rect.right + 8 });
-    }
     setInboxPanelOpen(p => !p);
-    setInboxSearch('');
   };
 
   const openNotifPanel = () => {
     setFavOpen(false);
     setRecentOpen(false);
     setInboxPanelOpen(false);
-    if (notifRef.current) {
-      const rect = notifRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.top, left: rect.right + 8 });
-    }
     setNotifPanelOpen(p => !p);
-    setNotifSearch('');
   };
 
   /* handlers */
@@ -330,6 +353,11 @@ export default function Sidebar() {
     (p.projectKey || '').toLowerCase().includes(recentSearch.toLowerCase())
   );
 
+  const inboxItems = useMemo(
+    () => chatInbox?.recentActivities?.slice(0, 5) || [],
+    [chatInbox],
+  );
+
   const inboxBadgeCount = useMemo(() => {
     if (!chatInbox) return 0;
     return Number(chatInbox.totalUnread) || 0;
@@ -347,23 +375,18 @@ export default function Sidebar() {
   /* -- render -- */
   return (
     <>
-      {isMobile && !collapsed && typeof document !== 'undefined' && createPortal(
+      {isMobile && !collapsed && (
         <div
-          role="button"
-          tabIndex={0}
-          className="fixed inset-0 w-[100vw] h-[100vh] bg-black/50 backdrop-blur-sm z-[9990] cursor-pointer touch-none"
+          className="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-[9998]"
           onClick={() => setCollapsed(true)}
-          onKeyDown={(e) => e.key === 'Escape' && setCollapsed(true)}
-          aria-label="Close Sidebar"
-        />,
-        document.body
+        />
       )}
 
       <div
         ref={sidebarRef}
-        className={`h-screen flex-shrink-0 ${isMobile ? 'fixed left-0 top-0 z-[9999]' : 'relative'} ${isMobile && collapsed ? 'pointer-events-none' : ''}`}
+        className={`h-screen flex-shrink-0 ${isMobile ? 'fixed left-0 top-0 z-[9999]' : 'relative'}`}
         style={{
-          width: isMobile ? (collapsed ? '0px' : '260px') : (collapsed ? '64px' : '240px'),
+          width: isMobile ? '260px' : (collapsed ? '64px' : '240px'),
         }}
       >
         <div
@@ -400,23 +423,19 @@ export default function Sidebar() {
                 onOpenRecent={openRecentDropdown}
               />
 
-              <div ref={inboxRef}>
-                <InboxNavRow
-                  collapsed={collapsed}
-                  active={inboxPanelOpen}
-                  badge={inboxBadgeCount}
-                  onClick={openInboxPanel}
-                />
-              </div>
+              <InboxNavRow
+                collapsed={collapsed}
+                active={inboxPanelOpen}
+                badge={inboxBadgeCount}
+                onClick={openInboxPanel}
+              />
 
-              <div ref={notifRef}>
-                <NotificationsNavRow
-                  collapsed={collapsed}
-                  active={notifPanelOpen}
-                  badge={globalUnreadCount}
-                  onClick={openNotifPanel}
-                />
-              </div>
+              <NotificationsNavRow
+                collapsed={collapsed}
+                active={notifPanelOpen}
+                badge={globalUnreadCount}
+                onClick={openNotifPanel}
+              />
 
               <NavRow
                 icon={<ProfileIcon />}
@@ -473,32 +492,97 @@ export default function Sidebar() {
           />
         )}
 
-        {/* Inbox dropdown */}
-        {inboxPanelOpen && chatInbox && (
-          <InboxDropdown
-            fixedTop={dropdownPos.top}
-            fixedLeft={dropdownPos.left}
-            activities={chatInbox.recentActivities || []}
-            loading={loadingInbox}
-            error={null}
-            search={inboxSearch}
-            onSearch={setInboxSearch}
-            onRetry={() => void fetchInboxActivity({ force: true })}
-            onClose={() => setInboxPanelOpen(false)}
-          />
-        )}
+        {/* Inbox right panel */}
+        <SidebarPanel
+          open={inboxPanelOpen}
+          onClose={() => setInboxPanelOpen(false)}
+          title="Inbox"
+          badge={inboxBadgeCount}
+          anchorLeft={panelAnchorLeft}
+          footer={
+            <button
+              onClick={() => { setInboxPanelOpen(false); router.push('/inbox'); }}
+              className="flex items-center gap-1.5 text-[12px] font-semibold text-cu-primary hover:text-cu-primary-dark transition-colors w-full"
+            >
+              <span>View All Messages</span>
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M3 6h6M7 4l2 2-2 2" />
+              </svg>
+            </button>
+          }
+        >
+          {loadingInbox ? (
+            <div className="px-3 py-4 flex flex-col gap-3 animate-pulse">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="flex gap-2.5">
+                  <div className="w-7 h-7 rounded-full bg-gray-100 flex-shrink-0" />
+                  <div className="flex-1 flex flex-col gap-1.5">
+                    <div className="h-2 w-20 bg-gray-100 rounded" />
+                    <div className="h-2 w-32 bg-gray-100 rounded" />
+                    <div className="h-2 w-24 bg-gray-100 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : inboxItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                <InboxIcon size={18} />
+              </div>
+              <span className="text-[12px] font-medium text-cu-text-muted">No recent messages</span>
+              <span className="text-[10px] text-cu-text-muted mt-0.5">Start a conversation in your project chat</span>
+            </div>
+          ) : (
+            <div className="py-1">
+              {inboxItems.map((item) => {
+                const handleOpenActivity = () => {
+                  setInboxPanelOpen(false);
+                  if (typeof window !== 'undefined') {
+                    localStorage.setItem('currentProjectId', String(item.projectId));
+                    localStorage.setItem('currentProjectName', item.projectName || `Project ${item.projectId}`);
+                    window.dispatchEvent(new CustomEvent('planora:project-accessed'));
+                  }
+                  const basePath = `/project/${item.projectId}/chat`;
+                  if (item.chatType === 'ROOM' && item.roomId) {
+                    router.push(`${basePath}?roomId=${item.roomId}`);
+                  } else if (item.chatType === 'DIRECT' && item.username) {
+                    router.push(`${basePath}?with=${encodeURIComponent(item.username)}`);
+                  } else {
+                    router.push(`${basePath}?view=team`);
+                  }
+                };
+                return (
+                  <InboxPanelItem key={`${item.chatType}-${item.projectId}-${item.roomId || item.username || 'team'}`} item={item} onClick={handleOpenActivity} />
+                );
+              })}
+            </div>
+          )}
+        </SidebarPanel>
 
-        {/* Notifications dropdown */}
-        {notifPanelOpen && (
-          <NotificationsDropdown
-            fixedTop={dropdownPos.top}
-            fixedLeft={dropdownPos.left}
+        {/* Notifications right panel */}
+        <SidebarPanel
+          open={notifPanelOpen}
+          onClose={() => setNotifPanelOpen(false)}
+          title="Notifications"
+          badge={globalUnreadCount}
+          anchorLeft={panelAnchorLeft}
+          footer={
+            <button
+              onClick={() => { setNotifPanelOpen(false); router.push('/dashboard/notifications'); }}
+              className="flex items-center gap-1.5 text-[12px] font-semibold text-cu-primary hover:text-cu-primary-dark transition-colors w-full"
+            >
+              <span>View All Notifications</span>
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M3 6h6M7 4l2 2-2 2" />
+              </svg>
+            </button>
+          }
+        >
+          <NotificationsPanelContent
             notifications={notifications}
-            search={notifSearch}
-            onSearch={setNotifSearch}
             onClose={() => setNotifPanelOpen(false)}
           />
-        )}
+        </SidebarPanel>
       </div>
     </>
   );

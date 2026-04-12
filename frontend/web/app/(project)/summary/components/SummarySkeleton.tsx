@@ -122,7 +122,7 @@ export function ChartsSkeleton() {
                            <div
                                key={j}
                                className="w-full rounded-t-sm rounded-cu-md bg-gradient-to-r from-cu-bg-tertiary via-cu-bg-secondary to-cu-bg-tertiary bg-[length:200%_100%] animate-shimmer"
-                               style={{ height: `${((i * 7 + j * 13) % 60) + 20}%` }}
+                               style={{ height: `${Math.random() * 60 + 20}%` }}
                            />
                        ))}
                     </div>
