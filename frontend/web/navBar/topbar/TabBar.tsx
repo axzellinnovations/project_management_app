@@ -50,6 +50,7 @@ export function TabBar({
             <Link
               key={tab.id}
               href={getTabHref(tab.id)}
+              prefetch={false}
               onMouseEnter={() => setHoveredTab(tab.id)}
               onMouseLeave={() => setHoveredTab(null)}
               className="relative h-full flex items-center px-5 shrink-0 group transition-all duration-300"
@@ -128,6 +129,7 @@ export function TabBar({
                   <Link
                     key={tab.id}
                     href={getTabHref(tab.id)}
+                    prefetch={false}
                     onClick={() => setMoreOpen(false)}
                     className={`block px-4 py-2.5 text-[13px] transition-all duration-200 font-outfit font-bold ${activeTab === tab.id
                         ? 'text-blue-600 bg-blue-50'

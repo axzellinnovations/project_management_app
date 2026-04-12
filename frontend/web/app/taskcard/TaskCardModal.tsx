@@ -33,7 +33,7 @@ interface TaskData {
   labels: Array<{ id: number; name: string }>;
   createdAt: string;
   updatedAt: string;
-  dueDate: string;
+  dueDate: string | null;
   subtasks: Array<{ id: number; title: string; status: string }>;
   dependencies: Array<{ id: number; title: string; relation: string }>;
   assignees?: MultiAssignee[];
@@ -50,7 +50,6 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
   const [taskData, setTaskData] = useState<TaskData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'details' | 'properties'>('details');
   const wasModified = useRef<boolean>(false);
 
   const fetchTaskData = async () => {
@@ -95,7 +94,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
     status: string;
     priority: string;
     storyPoint: number;
-    dueDate: string;
+    dueDate: string | null;
     milestoneId: number | null;
     recurrenceRule: string | null;
     recurrenceEnd: string | null;
@@ -180,23 +179,8 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
               numericTaskId={taskData.id}
               onClose={() => onClose(wasModified.current)}
             />
-            {/* Mobile tab bar */}
-            <div className="flex border-b border-gray-200 md:hidden flex-shrink-0">
-              <button
-                className={`flex-1 py-3 min-h-[44px] text-sm font-medium transition-colors ${activeTab === 'details' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}
-                onClick={() => setActiveTab('details')}
-              >
-                Details
-              </button>
-              <button
-                className={`flex-1 py-3 min-h-[44px] text-sm font-medium transition-colors ${activeTab === 'properties' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}
-                onClick={() => setActiveTab('properties')}
-              >
-                Properties
-              </button>
-            </div>
-            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-              <div className={`${activeTab === 'details' ? 'flex' : 'hidden'} md:flex flex-1 overflow-hidden`}>
+            <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
+              <div className="flex flex-1 flex-col md:overflow-y-auto">
                 <TaskMainContent
                   title={taskData.title}
                   description={taskData.description}
@@ -206,11 +190,11 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                   projectId={taskData.projectId}
                   onUpdateTitle={(title) => updateTask({ title })}
                   onUpdateDescription={(description) => updateTask({ description })}
-                  onSubtaskAdded={fetchTaskData}
+                  onSubtaskAdded={(newSubtask) => setTaskData(prev => prev ? { ...prev, subtasks: [...prev.subtasks, newSubtask] } : prev)}
                   onDependencyChanged={fetchTaskData}
                 />
               </div>
-              <div className={`${activeTab === 'properties' ? 'flex' : 'hidden'} md:flex overflow-y-auto`}>
+              <div className="flex flex-col md:overflow-y-auto flex-shrink-0">
                 <TaskSidebar
                   taskId={taskData.id}
                   projectId={taskData.projectId}

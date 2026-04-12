@@ -22,6 +22,7 @@
     "@stomp/stompjs": "^7.2.0",
     "@szhsin/react-menu": "^4.5.1",
     "@tailwindcss/typography": "^0.5.19",
+    "@tanstack/react-virtual": "^3.13.23",
     "@tiptap/extension-bubble-menu": "^3.21.0",
     "@tiptap/extension-collaboration": "^3.22.3",
     "@tiptap/extension-collaboration-cursor": "^3.0.0",

@@ -14,6 +14,7 @@ import KeyboardShortcutsProvider from "@/components/providers/KeyboardShortcutsP
 const inter = Inter({ 
   subsets: ['latin'], 
   variable: '--font-inter',
+  preload: false,
   display: 'swap',
 })
 const outfit = Outfit({ 

@@ -26,7 +26,8 @@ interface TaskMainContentProps {
   projectId?: number;
   onUpdateTitle?: (title: string) => void;
   onUpdateDescription?: (description: string) => void;
-  onSubtaskAdded?: () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onSubtaskAdded?: (subtask: any) => void;
   onDependencyChanged?: () => void;
 }
 
