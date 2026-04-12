@@ -8,6 +8,11 @@ import {
 } from 'lucide-react';
 import { hexToLabelStyle } from '@/components/shared/LabelPicker';
 import AssigneeAvatar from '../../(agile)/sprint-backlog/components/AssigneeAvatar';
+import * as Popover from '@radix-ui/react-popover';
+import { DayPicker } from 'react-day-picker';
+import { format, parseISO } from 'date-fns';
+import api from '@/lib/axios';
+import 'react-day-picker/dist/style.css';
 
 const PRIORITY_CONFIG: Record<string, { color: string; icon: React.ElementType; label: string }> = {
     URGENT: { color: '#EF4444', icon: ArrowUp,    label: 'Urgent' },
@@ -33,11 +38,12 @@ interface BacklogTaskRowProps {
     onOpenModal: (id: number) => void;
     selected?: boolean;
     onToggleSelect?: (id: number) => void;
+    onDateChange?: (id: number, dueDate: string | null) => void;
 }
 
 export default function BacklogTaskRow({
     task, onDelete, onClick, onStatusChange, onOpenModal,
-    selected, onToggleSelect,
+    selected, onToggleSelect, onDateChange,
 }: BacklogTaskRowProps) {
     const PriorityIcon = task.priority ? (PRIORITY_CONFIG[task.priority]?.icon ?? Minus) : Minus;
     const priorityColor = task.priority ? (PRIORITY_CONFIG[task.priority]?.color ?? '#9CA3AF') : '#9CA3AF';
@@ -60,9 +66,21 @@ export default function BacklogTaskRow({
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
+    const handleDateChange = async (date: Date | undefined) => {
+        const formattedDate = date ? date.toISOString().split('T')[0] : null;
+        // Optimistic update
+        onDateChange?.(task.id, formattedDate);
+        try {
+            await api.patch(`/api/tasks/${task.id}/dates`, { dueDate: formattedDate || "" });
+        } catch (err) {
+            console.error('Failed to update date:', err);
+            // Revert state hook could be added if needed
+        }
+    };
+
     return (
         <div
-            className={`grid grid-cols-[auto_1fr_120px_100px_120px_100px_32px] sm:grid-cols-[auto_1fr_120px_100px_120px_100px_32px] items-center gap-x-2 px-3 sm:px-4 min-h-[52px] rounded-lg border border-[#EAECF0] cursor-pointer select-none transition-colors ${
+            className={`grid grid-cols-[auto_1fr_120px_100px_120px_100px_100px_32px] sm:grid-cols-[auto_1fr_120px_100px_120px_100px_100px_32px] items-center gap-x-2 px-3 sm:px-4 min-h-[52px] rounded-lg border border-[#EAECF0] cursor-pointer select-none transition-colors ${
                 selected ? 'bg-[#EFF6FF] border-[#BFDBFE]' : isOverdue ? 'bg-[#FEE2E2] hover:bg-[#FEE2E2]' : 'bg-white hover:bg-[#F8FAFF]'
             }`}
             onClick={() => {
@@ -134,6 +152,27 @@ export default function BacklogTaskRow({
                 ) : (
                     <span className="text-[11px] text-[#D1D5DB]">—</span>
                 )}
+            </div>
+
+            {/* Due Date */}
+            <div className="min-w-0 flex items-center" onClick={(e) => e.stopPropagation()}>
+                <Popover.Root>
+                    <Popover.Trigger asChild>
+                        <button className="text-[11px] text-[#6A7282] hover:text-[#155DFC] bg-transparent border border-transparent hover:border-[#155DFC]/20 hover:bg-[#155DFC]/5 px-2 py-1 rounded transition-colors truncate">
+                            {task.dueDate ? format(parseISO(task.dueDate), 'MMM d, yyyy') : 'No date'}
+                        </button>
+                    </Popover.Trigger>
+                    <Popover.Portal>
+                        <Popover.Content className="z-[10000] p-3 bg-white rounded-xl shadow-xl border border-gray-200" sideOffset={5}>
+                            <DayPicker
+                                mode="single"
+                                selected={task.dueDate ? parseISO(task.dueDate) : undefined}
+                                onSelect={handleDateChange}
+                                showOutsideDays
+                            />
+                        </Popover.Content>
+                    </Popover.Portal>
+                </Popover.Root>
             </div>
 
             {/* Menu */}

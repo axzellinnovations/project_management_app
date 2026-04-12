@@ -365,7 +365,7 @@ function TaskRow({
                 onTouchStart={onTouchStartInternal}
                 onTouchEnd={onTouchEndInternal}
                 onTouchMove={onTouchMoveInternal}
-                className={`text-[15px] font-bold text-[#101828] leading-tight truncate cursor-text select-none ${validStatus === 'DONE' ? 'line-through opacity-60' : ''}`}
+                className="text-[15px] font-bold text-[#101828] leading-tight truncate cursor-text select-none"
               >
                 {task.title}
               </h3>
@@ -452,46 +452,22 @@ function TaskRow({
             </div>
 
             {onDueDateChange && (
-              <div className="flex-shrink-0 flex items-center" onClick={(e) => e.stopPropagation()}>
+              <div className="flex-shrink-0 flex items-center relative" onClick={(e) => e.stopPropagation()}>
                 <button
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const input = dateRef.current;
-                    if (input) {
-                      const isMobileView = window.innerWidth < 768;
-                      input.style.display = 'block';
-                      input.style.position = 'fixed';
-                      input.style.zIndex = '100000';
-
-                      if (isMobileView) {
-                        // On small screens, pin to center-bottom
-                        input.style.bottom = '20px';
-                        input.style.left = '50%';
-                        input.style.transform = 'translateX(-50%)';
-                        input.style.top = 'auto';
-                      } else {
-                        // On desktop, position directly below
-                        input.style.top = `${rect.bottom + 4}px`;
-                        input.style.left = `${rect.left}px`;
-                        input.style.transform = 'none';
-                      }
-
-                      input.showPicker();
-                      const cleanup = () => {
-                        input.style.display = 'none';
-                        input.removeEventListener('change', cleanup);
-                        input.removeEventListener('blur', cleanup);
-                      };
-                      input.addEventListener('change', cleanup);
-                      input.addEventListener('blur', cleanup);
-                    }
-                  }}
+                  type="button"
+                  onClick={() => dateRef.current?.showPicker()}
                   title={`Due Date: ${formatDate(task.dueDate)}`}
                   className={`text-[11px] font-bold leading-none whitespace-nowrap bg-[#F2F4F7] px-2 py-1.5 rounded-lg ${dueClass === 'overdue' ? 'text-red-600 bg-red-50' : 'text-[#475467]'}`}
                 >
                   {formatDate(task.dueDate)}
                 </button>
-                <input ref={dateRef} type="date" value={task.dueDate || ''} onChange={(e) => onDueDateChange(task.id, e.target.value)} className="hidden" />
+                <input
+                  ref={dateRef}
+                  type="date"
+                  value={task.dueDate || ''}
+                  onChange={(e) => onDueDateChange(task.id, e.target.value)}
+                  className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                />
               </div>
             )}
           </div>
@@ -629,7 +605,7 @@ function TaskRow({
         ) : (
           <>
             <span
-              className={`text-[12px] font-semibold text-[#101828] truncate min-w-0 select-none ${validStatus === 'DONE' ? 'line-through opacity-60' : ''}`}
+              className="text-[12px] font-semibold text-[#101828] truncate min-w-0 select-none"
               onClick={(e) => {
                 e.stopPropagation();
                 // If double-click isn't used (mobile behavior emulation), 
@@ -779,40 +755,14 @@ function TaskRow({
         >
           <button
             type="button"
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const input = dateRef.current;
-              if (input) {
-                const isMobileView = window.innerWidth < 768;
-                input.style.display = 'block';
-                input.style.position = 'fixed';
-                input.style.zIndex = '100000';
-
-                if (isMobileView) {
-                  input.style.bottom = '20px';
-                  input.style.left = '50%';
-                  input.style.transform = 'translateX(-50%)';
-                  input.style.top = 'auto';
-                } else {
-                  input.style.top = `${rect.bottom + 4}px`;
-                  input.style.left = `${rect.left}px`;
-                  input.style.transform = 'none';
-                }
-
-                input.showPicker();
-                // Hide it back after interaction or on blur
-                const cleanup = () => {
-                  input.style.display = 'none';
-                  input.removeEventListener('change', cleanup);
-                  input.removeEventListener('blur', cleanup);
-                };
-                input.addEventListener('change', cleanup);
-                input.addEventListener('blur', cleanup);
-              }
-            }}
-            className={`inline-flex h-6 w-full items-center justify-center gap-1 rounded-md border px-1.5 text-[12px] font-bold ${DUE_CHIP_STYLES[dueClass]}`}
+            onClick={() => dateRef.current?.showPicker()}
+            className={`flex h-6 w-full items-center justify-center gap-1 rounded-md px-2 text-[10px] font-bold transition-all border ${
+              dueClass === 'none'
+                ? 'bg-white border-[#EAECF0] text-[#667085] hover:bg-gray-50'
+                : DUE_CHIP_STYLES[dueClass]
+            }`}
           >
-            <CalendarDays size={9} className="flex-shrink-0" />
+            <CalendarDays size={10} className="flex-shrink-0 opacity-60" />
             <span className="truncate">{formatDate(task.dueDate)}</span>
           </button>
           <input
@@ -820,7 +770,7 @@ function TaskRow({
             type="date"
             value={task.dueDate || ''}
             onChange={(e) => onDueDateChange(task.id, e.target.value)}
-            className="hidden"
+            className="absolute inset-0 opacity-0 cursor-pointer z-10"
           />
         </div>
       )}
