@@ -11,6 +11,7 @@ import {
   useSensor,
   useSensors,
   DragOverlay,
+  closestCorners,
 } from '@dnd-kit/core';
 import { Task } from '../types';
 import KanbanCard from './KanbanCard';
@@ -68,14 +69,15 @@ export default function DragDropProvider({
   return (
     <DndContext
       sensors={sensors}
+      collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragOver={handleDragOver}
     >
       {children}
-      <DragOverlay>
+      <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
         {draggedTask ? (
-          <div className="opacity-80">
+          <div className="rotate-[2deg] scale-105 opacity-90" style={{ maxWidth: '300px' }}>
             <KanbanCard task={draggedTask} onDelete={undefined} />
           </div>
         ) : null}
