@@ -24,7 +24,7 @@ export default function SidebarLayout({ children, showTopBar = true }: SidebarLa
             >
                 <div className="flex flex-col flex-1 min-w-0 overflow-hidden main-content-area">
                     {showTopBar && (
-                        <div className="shrink-0 relative z-10 transition-opacity duration-200 ease-out">
+                        <div className="shrink-0 transition-opacity duration-200 ease-out">
                             <Suspense fallback={null}>
                                 <TopBar />
                             </Suspense>

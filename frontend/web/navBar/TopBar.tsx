@@ -30,15 +30,21 @@ const subscribeToBrowserStorage = (onStoreChange: () => void) => {
 };
 
 function TopBarContent() {
-  const [localProjectName, setLocalProjectName] = useState('Project Name');
-  const [localProjectType, setLocalProjectType] = useState<string | null>(null);
-
+  const projectName = useSyncExternalStore(
+    subscribeToBrowserStorage,
+    () => localStorage.getItem('currentProjectName') || 'Project Name',
+    () => 'Project Name'
+  );
   const storedProjectId = useSyncExternalStore(
     subscribeToBrowserStorage,
     () => localStorage.getItem('currentProjectId'),
     () => null
   );
-
+  const storedProjectType = useSyncExternalStore(
+    subscribeToBrowserStorage,
+    () => localStorage.getItem('currentProjectType'),
+    () => null
+  );
   const token = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
     () => getValidToken(),
@@ -52,6 +58,7 @@ function TopBarContent() {
   useNavigation();
   const { profilePicUrl: resolvedProfilePicUrl } = useCurrentUser();
   const [isFavorite, setIsFavorite] = useState(false);
+  const [projectType, setProjectType] = useState<string | null>(storedProjectType);
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [projectsSearch, setProjectsSearch] = useState('');
   const [isRecentProjectsLoading, setIsRecentProjectsLoading] = useState(false);
@@ -73,9 +80,11 @@ function TopBarContent() {
     return queryProjectId || routeProjectId || storedProjectId;
   }, [params, searchParams, storedProjectId]);
 
+  const effectiveProjectType = projectType || storedProjectType;
+
   const isAgile = useMemo(() => {
-    return localProjectType === 'AGILE' || localProjectType === 'Agile Scrum' || localProjectType === 'SCRUM';
-  }, [localProjectType]);
+    return effectiveProjectType === 'AGILE' || effectiveProjectType === 'Agile Scrum' || effectiveProjectType === 'SCRUM';
+  }, [effectiveProjectType]);
 
   const tabs = useMemo(() => {
     const base = [
@@ -122,6 +131,10 @@ function TopBarContent() {
       localStorage.setItem('currentProjectId', projectId);
     }
 
+    if (storedProjectType) {
+      setProjectType(storedProjectType);
+    }
+
     const fetchProjectStatus = async () => {
       if (!projectId) { setIsFavorite(false); return; }
 
@@ -131,8 +144,7 @@ function TopBarContent() {
         const cached = getSessionCache<{ isFavorite: boolean; type: string; name: string }>(cacheKey);
         if (cached.data) {
           setIsFavorite(cached.data.isFavorite);
-          setLocalProjectType(cached.data.type);
-          if (cached.data.name) setLocalProjectName(cached.data.name);
+          setProjectType(cached.data.type);
           return;
         }
       }
@@ -142,15 +154,12 @@ function TopBarContent() {
         const resolvedProjectType = projectData?.type || 'KANBAN';
         const isFav = Boolean(projectData?.isFavorite);
         setIsFavorite(isFav);
-        setLocalProjectType(resolvedProjectType);
+        setProjectType(resolvedProjectType);
         localStorage.setItem('currentProjectType', resolvedProjectType);
 
-        if (projectData?.name) {
-          setLocalProjectName(projectData.name);
-          if (localStorage.getItem('currentProjectName') !== projectData.name) {
-            localStorage.setItem('currentProjectName', projectData.name);
-            window.dispatchEvent(new Event('storage'));
-          }
+        if (projectData?.name && localStorage.getItem('currentProjectName') !== projectData.name) {
+          localStorage.setItem('currentProjectName', projectData.name);
+          window.dispatchEvent(new Event('storage'));
         }
 
         if (cacheKey && projectData?.name) {
@@ -159,7 +168,7 @@ function TopBarContent() {
       } catch { setIsFavorite(false); }
     };
     void fetchProjectStatus();
-  }, [projectId]);
+  }, [projectId, storedProjectType]);
 
   // Close project dropdown on outside click
   useEffect(() => {
@@ -225,7 +234,8 @@ function TopBarContent() {
   };
 
   const isProjectPage = useMemo(() => {
-    if (!pathname) return false;
+    if (pathname.startsWith('/dashboard/notifications')) return true;
+    if (pathname.startsWith('/inbox')) return true;
     if (pathname.startsWith('/project/') && pathname.includes('/chat')) return true;
 
     const hasProjectContext = Boolean(projectId);
@@ -317,7 +327,7 @@ function TopBarContent() {
 
             <div className="flex items-center gap-2 max-sm:gap-1.5">
               <h1 className="text-[18px] font-bold text-slate-900 whitespace-nowrap leading-tight font-outfit tracking-tight max-sm:text-[19px] max-sm:font-black max-sm:text-blue-700 max-sm:-tracking-[0.01em]">
-                {localProjectName}
+                {projectName}
               </h1>
 
               {/* Status Badge */}
