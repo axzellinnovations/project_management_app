@@ -605,7 +605,7 @@ function TaskRow({
         ) : (
           <>
             <span
-              className="text-[12px] font-semibold text-[#101828] truncate min-w-0 select-none"
+              className={`text-[12px] font-semibold text-[#101828] truncate min-w-0 select-none ${task.status.toUpperCase() === 'DONE' ? 'line-through text-[#98A2B3]' : ''}`}
               onClick={(e) => {
                 e.stopPropagation();
                 // If double-click isn't used (mobile behavior emulation), 

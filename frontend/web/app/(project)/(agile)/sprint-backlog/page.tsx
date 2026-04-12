@@ -19,6 +19,7 @@ import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
 import CreateTaskModal, { type CreateTaskData } from '@/components/shared/CreateTaskModal';
 import { useTaskStore } from '@/stores/task-store';
 import { buildSessionCacheKey, getSessionCache, setSessionCache, removeSessionCache } from '@/lib/session-cache';
+
 const LABEL_PALETTE = ["#EF4444","#F97316","#F59E0B","#84CC16","#22C55E","#14B8A6","#06B6D4","#3B82F6","#6366F1","#8B5CF6","#EC4899","#6B7280"];
 
 type CacheShape = {
@@ -113,7 +114,6 @@ export default function SprintBacklogPage() {
     labels: raw.labels ?? [],
   });
 
-  // ── Static Data Fetching (Members, Project Info, Labels) ──
   const fetchStaticData = useCallback(async () => {
     if (!projectId) return;
     try {
@@ -139,7 +139,6 @@ export default function SprintBacklogPage() {
     }
   }, [projectId]);
 
-  // ── Dynamic Data Fetching (Tasks, Sprints) ──
   const fetchData = useCallback(async (options: { showSpinner?: boolean; forceNetwork?: boolean } = {}) => {
     const { showSpinner = true, forceNetwork = false } = options;
     
@@ -162,13 +161,11 @@ export default function SprintBacklogPage() {
         api.get(`/api/tasks/project/${projectId}`),
       ]);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawSprints = sprintsRes.data as any[];
       const rawTasks = tasksRes.data as RawTask[];
       const mappedTasks = rawTasks.map((t, i) => mapRawTask(t, i));
 
       if (projectIdNum) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setTasksForProject(projectIdNum, rawTasks as any);
       }
 
@@ -196,9 +193,7 @@ export default function SprintBacklogPage() {
           .then((res) => {
             const defaultStatuses = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
             const extra = (res.data.columns ?? [])
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               .filter((c: any) => !defaultStatuses.includes(c.columnStatus))
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               .map((c: any) => ({ value: c.columnStatus, label: c.columnName }));
             setActiveBoardStatuses(extra);
           }).catch(() => {});
@@ -207,13 +202,349 @@ export default function SprintBacklogPage() {
       if (cKey) {
         setSessionCache(cKey, { productTasks: backlogTasks, sprints: newSprints, projectKey }, 60 * 60_000);
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (showSpinner) setError(err.response?.data?.message || 'Access denied or project not found.');
     } finally {
       setLoading(false);
     }
   }, [projectId, projectIdNum, projectKey, setTasksForProject]);
+
+  const createSprint = useCallback(async (name: string, startDate?: string, endDate?: string, goal?: string) => {
+    const trimmed = name.trim();
+    if (!trimmed || !projectId) return;
+
+    try {
+      const response = await api.post('/api/sprints', {
+        proId: Number(projectId),
+        name: trimmed,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        goal: goal || null,
+      });
+      const created = response.data as { id: number; name: string; status: string; startDate?: string; endDate?: string; goal?: string };
+
+      const selectedTasks = productTasks.filter((task) => task.selected);
+      const remainingTasks = productTasks.filter((task) => !task.selected);
+
+      await Promise.all(
+        selectedTasks.map((task) => api.put(`/api/tasks/${task.id}`, { sprintId: created.id }))
+      );
+
+      const cleanedTasks = selectedTasks.map((task) => ({ ...task, selected: false, sprintId: created.id }));
+      setSprints((prev) => [...prev, {
+        id: created.id,
+        name: created.name,
+        status: created.status,
+        startDate: created.startDate,
+        endDate: created.endDate,
+        goal: created.goal ?? '',
+        tasks: cleanedTasks
+      }]);
+      if (selectedTasks.length > 0) setProductTasks(remainingTasks);
+      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
+      if (cKey) removeSessionCache(cKey);
+      void fetchData({ showSpinner: false, forceNetwork: true });
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      toast(axiosErr?.response?.data?.message || 'Failed to create sprint.', 'error');
+    }
+  }, [projectId, productTasks, fetchData]);
+
+  const toggleTaskSelection = useCallback((id: number) => {
+    setProductTasks((prev) =>
+      prev.map((task) => (task.id === id ? { ...task, selected: !task.selected } : task))
+    );
+    setSprints((prev) =>
+      prev.map((sprint) => ({
+        ...sprint,
+        tasks: sprint.tasks.map((task) =>
+          task.id === id ? { ...task, selected: !task.selected } : task
+        ),
+      }))
+    );
+  }, []);
+
+  const updateTaskStoryPoints = useCallback(async (id: number, points: number) => {
+    const value = Number.isNaN(points) ? 0 : points;
+    setProductTasks((prev) =>
+      prev.map((task) =>
+        task.id === id ? { ...task, storyPoints: value } : task
+      )
+    );
+    try {
+      await api.put(`/api/tasks/${id}`, { storyPoint: value });
+      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
+      if (cKey) removeSessionCache(cKey);
+      void fetchData({ showSpinner: false, forceNetwork: true });
+    } catch {
+      toast('Failed to update story points', 'error');
+    }
+  }, [projectId, fetchData]);
+
+  const createTask = useCallback(async (data: CreateTaskData) => {
+    const trimmed = data.title.trim();
+    if (!trimmed || !projectId) return;
+
+    try {
+      const response = await api.post('/api/tasks', {
+        projectId: Number(projectId),
+        title: trimmed,
+        storyPoint: data.storyPoint ?? 0,
+        priority: data.priority ?? 'MEDIUM',
+        assigneeId: data.assigneeId,
+        labelIds: data.labelIds,
+      });
+      const raw = response.data as RawTask;
+      const newTask: TaskItem = {
+        id: raw.id,
+        taskNo: productTasks.length + 1,
+        title: raw.title,
+        storyPoints: raw.storyPoint,
+        selected: false,
+        assigneeName: 'Unassigned',
+        sprintId: null,
+      };
+      setProductTasks((prev) => [...prev.filter((x) => x.id !== raw.id), newTask]);
+      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
+      if (cKey) removeSessionCache(cKey);
+      void fetchData({ showSpinner: false, forceNetwork: true });
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      toast(axiosErr?.response?.data?.message || 'Failed to create task.', 'error');
+    }
+  }, [projectId, productTasks.length, fetchData]);
+
+  const createSprintTask = useCallback(async (title: string, sprintId: number) => {
+    const trimmed = title.trim();
+    if (!trimmed || !projectId) return;
+
+    try {
+      const response = await api.post('/api/tasks', {
+        projectId: Number(projectId),
+        title: trimmed,
+        storyPoint: 0,
+        sprintId,
+      });
+      const raw = response.data as RawTask;
+      const newTask: TaskItem = {
+        id: raw.id,
+        taskNo: 0,
+        title: raw.title,
+        storyPoints: raw.storyPoint,
+        selected: false,
+        assigneeName: 'Unassigned',
+        sprintId,
+      };
+      setSprints((prev) =>
+        prev.map((s) =>
+          s.id === sprintId
+            ? { ...s, tasks: [...s.tasks.filter((x) => x.id !== newTask.id), { ...newTask, taskNo: s.tasks.length + 1 }] }
+            : s
+        )
+      );
+      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
+      if (cKey) removeSessionCache(cKey);
+      void fetchData({ showSpinner: false, forceNetwork: true });
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      toast(axiosErr?.response?.data?.message || 'Failed to create task.', 'error');
+    }
+  }, [projectId, fetchData]);
+
+  const moveTaskToSprint = useCallback(async (taskId: number, sprintId: number) => {
+    let draggedTask = productTasks.find((task) => task.id === taskId);
+    let fromSprintId: number | null = null;
+    if (!draggedTask) {
+      for (const sprint of sprints) {
+        draggedTask = sprint.tasks.find((task) => task.id === taskId);
+        if (draggedTask) {
+          fromSprintId = sprint.id;
+          break;
+        }
+      }
+    }
+    if (!draggedTask) return;
+    if (fromSprintId === sprintId) return;
+
+    try {
+      await api.put(`/api/tasks/${taskId}`, { sprintId });
+      if (fromSprintId === null) {
+        setProductTasks((prev) => prev.filter((t) => t.id !== taskId));
+      } else {
+        setSprints((prev) =>
+          prev.map((s) =>
+            s.id === fromSprintId
+              ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }
+              : s
+          )
+        );
+      }
+      setSprints((prev) =>
+        prev.map((sprint) =>
+          sprint.id === sprintId
+            ? { ...sprint, tasks: [...sprint.tasks, { ...draggedTask!, sprintId }] }
+            : sprint
+        )
+      );
+      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
+      if (cKey) removeSessionCache(cKey);
+      void fetchData({ showSpinner: false, forceNetwork: true });
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      toast(axiosErr?.response?.data?.message || 'Failed to move task.', 'error');
+    }
+  }, [projectId, productTasks, sprints, fetchData]);
+
+  const moveTaskToBacklog = useCallback(async (taskId: number) => {
+    let draggedTask: TaskItem | undefined;
+    let fromSprintId: number | undefined;
+    for (const sprint of sprints) {
+      draggedTask = sprint.tasks.find((task) => task.id === taskId);
+      if (draggedTask) {
+        fromSprintId = sprint.id;
+        break;
+      }
+    }
+    if (!draggedTask || !fromSprintId) return;
+
+    try {
+      await api.put(`/api/tasks/${taskId}`, { sprintId: null });
+      setSprints((prev) =>
+        prev.map((s) =>
+          s.id === fromSprintId
+            ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }
+            : s
+        )
+      );
+      setProductTasks((prev) => [...prev, { ...draggedTask!, sprintId: null }]);
+      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
+      if (cKey) removeSessionCache(cKey);
+      void fetchData({ showSpinner: false, forceNetwork: true });
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      toast(axiosErr?.response?.data?.message || 'Failed to move task back to backlog.', 'error');
+    }
+  }, [projectId, sprints, fetchData]);
+
+  const handleTaskStatusChange = useCallback(async (taskId: number, newStatus: string) => {
+    try {
+      await api.put(`/api/tasks/${taskId}`, { status: newStatus });
+      setProductTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+      setSprints(prev => prev.map(s => ({
+        ...s,
+        tasks: s.tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t)
+      })));
+      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
+      if (cKey) removeSessionCache(cKey);
+      void fetchData({ showSpinner: false, forceNetwork: true });
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      toast(axiosErr?.response?.data?.message || 'Failed to update status.', 'error');
+    }
+  }, [projectId, fetchData]);
+
+  const handleSprintDeleted = useCallback((sprintId: number, tasks: SprintItem['tasks']) => {
+    setSprints(prev => prev.filter(s => s.id !== sprintId));
+    setProductTasks(prev => [
+      ...prev,
+      ...tasks.map(t => ({ ...t, sprintId: null })),
+    ]);
+    const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
+    if (cKey) removeSessionCache(cKey);
+    void fetchData({ showSpinner: false, forceNetwork: true });
+  }, [projectId, fetchData]);
+
+  const handleCreateLabel = useCallback(async (name: string) => {
+    const color = LABEL_PALETTE[Math.floor(Math.random() * LABEL_PALETTE.length)];
+    const newLabel = await createLabel(Number(projectId), name, color);
+    setProjectLabels((prev) => [...prev, newLabel]);
+    return newLabel;
+  }, [projectId]);
+
+  const getSelectedTaskIds = useCallback((): number[] => {
+    const ids: number[] = [];
+    productTasks.forEach(t => { if (t.selected) ids.push(t.id); });
+    sprints.forEach(s => s.tasks.forEach(t => { if (t.selected) ids.push(t.id); }));
+    return ids;
+  }, [productTasks, sprints]);
+
+  const handleClearSelection = useCallback(() => {
+    setProductTasks(prev => prev.map(t => ({ ...t, selected: false })));
+    setSprints(prev => prev.map(s => ({
+      ...s, tasks: s.tasks.map(t => ({ ...t, selected: false }))
+    })));
+  }, []);
+
+  const handleBulkMoveToSprint = useCallback(async (targetSprintId: number) => {
+    const ids = getSelectedTaskIds();
+    try {
+      await Promise.all(ids.map(id => api.put(`/api/tasks/${id}`, { sprintId: targetSprintId })));
+      const movedFromBacklog = productTasks.filter(t => t.selected);
+      const movedFromSprints: TaskItem[] = [];
+      sprints.forEach(s => {
+        if (s.id !== targetSprintId) {
+          s.tasks.filter(t => t.selected).forEach(t => movedFromSprints.push(t));
+        }
+      });
+      const allMoved = [...movedFromBacklog, ...movedFromSprints].map(t => ({ ...t, selected: false, sprintId: targetSprintId }));
+      setProductTasks(prev => prev.filter(t => !t.selected));
+      setSprints(prev => prev.map(s => {
+        if (s.id === targetSprintId) {
+          const kept = s.tasks.filter(t => !t.selected).map(t => ({ ...t, selected: false }));
+          return { ...s, tasks: [...kept, ...allMoved] };
+        }
+        return { ...s, tasks: s.tasks.filter(t => !t.selected) };
+      }));
+      toast(`Moved ${ids.length} task(s) to sprint`, 'success');
+    } catch {
+      toast('Failed to move tasks', 'error');
+    }
+  }, [getSelectedTaskIds, productTasks, sprints]);
+
+  const handleBulkMoveToBacklog = useCallback(async () => {
+    const ids: number[] = [];
+    const movedTasks: TaskItem[] = [];
+    sprints.forEach(s => s.tasks.forEach(t => {
+      if (t.selected) { ids.push(t.id); movedTasks.push({ ...t, selected: false, sprintId: null }); }
+    }));
+    if (ids.length === 0) return;
+    try {
+      await Promise.all(ids.map(id => api.put(`/api/tasks/${id}`, { sprintId: null })));
+      setSprints(prev => prev.map(s => ({ ...s, tasks: s.tasks.filter(t => !t.selected) })));
+      setProductTasks(prev => [...prev.map(t => ({ ...t, selected: false })), ...movedTasks]);
+      toast(`Moved ${ids.length} task(s) to backlog`, 'success');
+    } catch {
+      toast('Failed to move tasks to backlog', 'error');
+    }
+  }, [sprints]);
+
+  const handleBulkStatusChange = useCallback(async (status: string) => {
+    const ids = getSelectedTaskIds();
+    if (ids.length === 0) return;
+    try {
+      await api.patch('/api/tasks/bulk/status', { taskIds: ids, status });
+      setProductTasks(prev => prev.map(t => t.selected ? { ...t, status, selected: false } : t));
+      setSprints(prev => prev.map(s => ({
+        ...s, tasks: s.tasks.map(t => t.selected ? { ...t, status, selected: false } : t)
+      })));
+      toast(`Updated ${ids.length} task(s) to ${status.replace('_', ' ')}`, 'success');
+    } catch {
+      toast('Failed to update task statuses', 'error');
+    }
+  }, [getSelectedTaskIds]);
+
+  const handleBulkDelete = useCallback(async () => {
+    const ids = getSelectedTaskIds();
+    if (ids.length === 0) return;
+    try {
+      await api.delete('/api/tasks/bulk', { data: { taskIds: ids } });
+      setProductTasks(prev => prev.filter(t => !t.selected));
+      setSprints(prev => prev.map(s => ({ ...s, tasks: s.tasks.filter(t => !t.selected) })));
+      toast(`Deleted ${ids.length} task(s)`, 'success');
+    } catch {
+      toast('Failed to delete tasks', 'error');
+    }
+  }, [getSelectedTaskIds]);
 
   useEffect(() => {
     if (!projectId) {
@@ -263,12 +594,9 @@ export default function SprintBacklogPage() {
         sprintId: t.sprintId ?? null,
       };
 
-      // Helper to find task and update it while moving if necessary
       const updateList = (prev: TaskItem[], targetSprintId: number | null | undefined) => {
         const existing = prev.find(x => x.id === t.id);
         const filtered = prev.filter(x => x.id !== t.id);
-        
-        // If it should be in this list (backlog if targetSprintId is null)
         if (!t.sprintId && targetSprintId === null) {
           const taskToUse = existing || { id: t.id } as TaskItem;
           return [...filtered, { ...taskToUse, ...updated }];
@@ -280,7 +608,6 @@ export default function SprintBacklogPage() {
       setSprints(prev => prev.map(s => {
         const existing = s.tasks.find(x => x.id === t.id);
         const filtered = s.tasks.filter(x => x.id !== t.id);
-        
         if (s.id === t.sprintId) {
           const taskToUse = existing || { id: t.id } as TaskItem;
           return { ...s, tasks: [...filtered, { ...taskToUse, ...updated }] };
@@ -327,349 +654,11 @@ export default function SprintBacklogPage() {
       .catch(() => setVelocityData([]));
   }, [showVelocity, projectId]);
 
-  const toggleTaskSelection = (id: number) => {
-    setProductTasks((prev) =>
-      prev.map((task) => (task.id === id ? { ...task, selected: !task.selected } : task))
-    );
-    setSprints((prev) =>
-      prev.map((sprint) => ({
-        ...sprint,
-        tasks: sprint.tasks.map((task) =>
-          task.id === id ? { ...task, selected: !task.selected } : task
-        ),
-      }))
-    );
-  };
-
-  const updateTaskStoryPoints = async (id: number, points: number) => {
-    const value = Number.isNaN(points) ? 0 : points;
-    setProductTasks((prev) =>
-      prev.map((task) =>
-        task.id === id ? { ...task, storyPoints: value } : task
-      )
-    );
-    try {
-      await api.put(`/api/tasks/${id}`, { storyPoint: value });
-      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
-      if (cKey) removeSessionCache(cKey);
-      void fetchData({ showSpinner: false, forceNetwork: true });
-    } catch {
-      toast('Failed to update story points', 'error');
-    }
-  };
-
-  const createTask = async (data: CreateTaskData) => {
-    const trimmed = data.title.trim();
-    if (!trimmed || !projectId) return;
-
-    try {
-      const response = await api.post('/api/tasks', {
-        projectId: Number(projectId),
-        title: trimmed,
-        storyPoint: data.storyPoint ?? 0,
-        priority: data.priority ?? 'MEDIUM',
-        assigneeId: data.assigneeId,
-        labelIds: data.labelIds,
-      });
-      const raw = response.data as RawTask;
-      const newTask: TaskItem = {
-        id: raw.id,
-        taskNo: productTasks.length + 1,
-        title: raw.title,
-        storyPoints: raw.storyPoint,
-        selected: false,
-        assigneeName: 'Unassigned',
-        sprintId: null,
-      };
-      setProductTasks((prev) => [...prev.filter((x) => x.id !== raw.id), newTask]);
-      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
-      if (cKey) removeSessionCache(cKey);
-      void fetchData({ showSpinner: false, forceNetwork: true });
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      toast(axiosErr?.response?.data?.message || 'Failed to create task.', 'error');
-    }
-  };
-
-  const createSprintTask = async (title: string, sprintId: number) => {
-    const trimmed = title.trim();
-    if (!trimmed || !projectId) return;
-
-    try {
-      const response = await api.post('/api/tasks', {
-        projectId: Number(projectId),
-        title: trimmed,
-        storyPoint: 0,
-        sprintId,
-      });
-      const raw = response.data as RawTask;
-      const newTask: TaskItem = {
-        id: raw.id,
-        taskNo: 0,
-        title: raw.title,
-        storyPoints: raw.storyPoint,
-        selected: false,
-        assigneeName: 'Unassigned',
-        sprintId,
-      };
-      setSprints((prev) =>
-        prev.map((s) =>
-          s.id === sprintId
-            ? { ...s, tasks: [...s.tasks.filter((x) => x.id !== newTask.id), { ...newTask, taskNo: s.tasks.length + 1 }] }
-            : s
-        )
-      );
-      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
-      if (cKey) removeSessionCache(cKey);
-      void fetchData({ showSpinner: false, forceNetwork: true });
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      toast(axiosErr?.response?.data?.message || 'Failed to create task.', 'error');
-    }
-  };
-
-  const createSprint = async (name: string, startDate?: string, endDate?: string, goal?: string) => {
-    const trimmed = name.trim();
-    if (!trimmed || !projectId) return;
-
-    try {
-      const response = await api.post('/api/sprints', {
-        proId: Number(projectId),
-        name: trimmed,
-        startDate: startDate || null,
-        endDate: endDate || null,
-        goal: goal || null,
-      });
-      const created = response.data as { id: number; name: string; status: string; startDate?: string; endDate?: string; goal?: string };
-
-      const selectedTasks = productTasks.filter((task) => task.selected);
-      const remainingTasks = productTasks.filter((task) => !task.selected);
-
-      await Promise.all(
-        selectedTasks.map((task) => api.put(`/api/tasks/${task.id}`, { sprintId: created.id }))
-      );
-
-      const cleanedTasks = selectedTasks.map((task) => ({ ...task, selected: false, sprintId: created.id }));
-      setSprints((prev) => [...prev, {
-        id: created.id,
-        name: created.name,
-        status: created.status,
-        startDate: created.startDate,
-        endDate: created.endDate,
-        goal: created.goal ?? '',
-        tasks: cleanedTasks
-      }]);
-      if (selectedTasks.length > 0) setProductTasks(remainingTasks);
-      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
-      if (cKey) removeSessionCache(cKey);
-      void fetchData({ showSpinner: false, forceNetwork: true });
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      toast(axiosErr?.response?.data?.message || 'Failed to create sprint.', 'error');
-    }
-  };
-
-  const moveTaskToSprint = async (taskId: number, sprintId: number) => {
-    let draggedTask = productTasks.find((task) => task.id === taskId);
-    let fromSprintId: number | null = null;
-    if (!draggedTask) {
-      for (const sprint of sprints) {
-        draggedTask = sprint.tasks.find((task) => task.id === taskId);
-        if (draggedTask) {
-          fromSprintId = sprint.id;
-          break;
-        }
-      }
-    }
-    if (!draggedTask) return;
-    if (fromSprintId === sprintId) return;
-
-    try {
-      await api.put(`/api/tasks/${taskId}`, { sprintId });
-      if (fromSprintId === null) {
-        setProductTasks((prev) => prev.filter((t) => t.id !== taskId));
-      } else {
-        setSprints((prev) =>
-          prev.map((s) =>
-            s.id === fromSprintId
-              ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }
-              : s
-          )
-        );
-      }
-      setSprints((prev) =>
-        prev.map((sprint) =>
-          sprint.id === sprintId
-            ? { ...sprint, tasks: [...sprint.tasks, { ...draggedTask!, sprintId }] }
-            : sprint
-        )
-      );
-      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
-      if (cKey) removeSessionCache(cKey);
-      void fetchData({ showSpinner: false, forceNetwork: true });
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      toast(axiosErr?.response?.data?.message || 'Failed to move task.', 'error');
-    }
-  };
-
-  const moveTaskToBacklog = async (taskId: number) => {
-    let draggedTask: TaskItem | undefined;
-    let fromSprintId: number | undefined;
-    for (const sprint of sprints) {
-      draggedTask = sprint.tasks.find((task) => task.id === taskId);
-      if (draggedTask) {
-        fromSprintId = sprint.id;
-        break;
-      }
-    }
-    if (!draggedTask || !fromSprintId) return;
-
-    try {
-      await api.put(`/api/tasks/${taskId}`, { sprintId: null });
-      setSprints((prev) =>
-        prev.map((s) =>
-          s.id === fromSprintId
-            ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }
-            : s
-        )
-      );
-      setProductTasks((prev) => [...prev, { ...draggedTask!, sprintId: null }]);
-      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
-      if (cKey) removeSessionCache(cKey);
-      void fetchData({ showSpinner: false, forceNetwork: true });
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      toast(axiosErr?.response?.data?.message || 'Failed to move task back to backlog.', 'error');
-    }
-  };
-
-  const handleTaskStatusChange = async (taskId: number, newStatus: string) => {
-    try {
-      await api.put(`/api/tasks/${taskId}`, { status: newStatus });
-      setProductTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-      setSprints(prev => prev.map(s => ({
-        ...s,
-        tasks: s.tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t)
-      })));
-      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
-      if (cKey) removeSessionCache(cKey);
-      void fetchData({ showSpinner: false, forceNetwork: true });
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      toast(axiosErr?.response?.data?.message || 'Failed to update status.', 'error');
-    }
-  };
-
-  const handleSprintDeleted = (sprintId: number, tasks: SprintItem['tasks']) => {
-    setSprints(prev => prev.filter(s => s.id !== sprintId));
-    setProductTasks(prev => [
-      ...prev,
-      ...tasks.map(t => ({ ...t, sprintId: null })),
-    ]);
-    const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
-    if (cKey) removeSessionCache(cKey);
-    void fetchData({ showSpinner: false, forceNetwork: true });
-  };
-
-
-  const handleCreateLabel = useCallback(async (name: string) => {
-    const color = LABEL_PALETTE[Math.floor(Math.random() * LABEL_PALETTE.length)];
-    const newLabel = await createLabel(Number(projectId), name, color);
-    setProjectLabels((prev) => [...prev, newLabel]);
-    return newLabel;
-  }, [projectId]);
-
   const selectedCount = useMemo(() => {
     const backlogSelected = productTasks.filter(t => t.selected).length;
     const sprintSelected = sprints.reduce((acc, s) => acc + s.tasks.filter(t => t.selected).length, 0);
     return backlogSelected + sprintSelected;
   }, [productTasks, sprints]);
-
-  const getSelectedTaskIds = useCallback((): number[] => {
-    const ids: number[] = [];
-    productTasks.forEach(t => { if (t.selected) ids.push(t.id); });
-    sprints.forEach(s => s.tasks.forEach(t => { if (t.selected) ids.push(t.id); }));
-    return ids;
-  }, [productTasks, sprints]);
-
-  const handleClearSelection = () => {
-    setProductTasks(prev => prev.map(t => ({ ...t, selected: false })));
-    setSprints(prev => prev.map(s => ({
-      ...s, tasks: s.tasks.map(t => ({ ...t, selected: false }))
-    })));
-  };
-
-  const handleBulkMoveToSprint = async (targetSprintId: number) => {
-    const ids = getSelectedTaskIds();
-    try {
-      await Promise.all(ids.map(id => api.put(`/api/tasks/${id}`, { sprintId: targetSprintId })));
-      const movedFromBacklog = productTasks.filter(t => t.selected);
-      const movedFromSprints: TaskItem[] = [];
-      sprints.forEach(s => {
-        if (s.id !== targetSprintId) {
-          s.tasks.filter(t => t.selected).forEach(t => movedFromSprints.push(t));
-        }
-      });
-      const allMoved = [...movedFromBacklog, ...movedFromSprints].map(t => ({ ...t, selected: false, sprintId: targetSprintId }));
-      setProductTasks(prev => prev.filter(t => !t.selected));
-      setSprints(prev => prev.map(s => {
-        if (s.id === targetSprintId) {
-          const kept = s.tasks.filter(t => !t.selected).map(t => ({ ...t, selected: false }));
-          return { ...s, tasks: [...kept, ...allMoved] };
-        }
-        return { ...s, tasks: s.tasks.filter(t => !t.selected) };
-      }));
-      toast(`Moved ${ids.length} task(s) to sprint`, 'success');
-    } catch {
-      toast('Failed to move tasks', 'error');
-    }
-  };
-
-  const handleBulkMoveToBacklog = async () => {
-    const ids: number[] = [];
-    const movedTasks: TaskItem[] = [];
-    sprints.forEach(s => s.tasks.forEach(t => {
-      if (t.selected) { ids.push(t.id); movedTasks.push({ ...t, selected: false, sprintId: null }); }
-    }));
-    if (ids.length === 0) return;
-    try {
-      await Promise.all(ids.map(id => api.put(`/api/tasks/${id}`, { sprintId: null })));
-      setSprints(prev => prev.map(s => ({ ...s, tasks: s.tasks.filter(t => !t.selected) })));
-      setProductTasks(prev => [...prev.map(t => ({ ...t, selected: false })), ...movedTasks]);
-      toast(`Moved ${ids.length} task(s) to backlog`, 'success');
-    } catch {
-      toast('Failed to move tasks to backlog', 'error');
-    }
-  };
-
-  const handleBulkStatusChange = async (status: string) => {
-    const ids = getSelectedTaskIds();
-    if (ids.length === 0) return;
-    try {
-      await api.patch('/api/tasks/bulk/status', { taskIds: ids, status });
-      setProductTasks(prev => prev.map(t => t.selected ? { ...t, status, selected: false } : t));
-      setSprints(prev => prev.map(s => ({
-        ...s, tasks: s.tasks.map(t => t.selected ? { ...t, status, selected: false } : t)
-      })));
-      toast(`Updated ${ids.length} task(s) to ${status.replace('_', ' ')}`, 'success');
-    } catch {
-      toast('Failed to update task statuses', 'error');
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    const ids = getSelectedTaskIds();
-    if (ids.length === 0) return;
-    try {
-      await api.delete('/api/tasks/bulk', { data: { taskIds: ids } });
-      setProductTasks(prev => prev.filter(t => !t.selected));
-      setSprints(prev => prev.map(s => ({ ...s, tasks: s.tasks.filter(t => !t.selected) })));
-      toast(`Deleted ${ids.length} task(s)`, 'success');
-    } catch {
-      toast('Failed to delete tasks', 'error');
-    }
-  };
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
@@ -799,20 +788,17 @@ export default function SprintBacklogPage() {
         </div>
       </div>
 
-      <button onClick={() => setShowCreateTaskModal(true)} className="fixed bottom-6 right-6 z-50 flex h-14 w-14 sm:hidden items-center justify-center rounded-2xl bg-gradient-to-br from-[#155DFC] to-[#004EEB] text-white shadow-xl shadow-blue-500/40 transform active:scale-95 transition-all duration-200">
-        <span className="text-2xl font-bold">+</span>
-      </button>
-
-      {selectedCount > 0 && <BulkActionBar selectedCount={selectedCount} onClear={handleClearSelection} onMoveToSprint={handleBulkMoveToSprint} onMoveToBacklog={handleBulkMoveToBacklog} onStatusChange={handleBulkStatusChange} onDelete={handleBulkDelete} sprints={sprints.filter(s => s.status !== 'COMPLETED')} />}
-      {showCreateTaskModal && <CreateTaskModal isOpen={showCreateTaskModal} onClose={() => setShowCreateTaskModal(false)} onCreateTask={createTask} projectId={Number(projectId!)} />}
-
-      <style jsx global>{`
-        .glass-panel {
-          background: rgba(255, 255, 255, 0.8);
-          backdrop-filter: blur(12px) saturate(180%);
-          -webkit-backdrop-filter: blur(12px) saturate(180%);
-        }
-      `}</style>
+      {selectedCount > 0 && (
+        <BulkActionBar
+          selectedCount={selectedCount}
+          onMoveToSprint={handleBulkMoveToSprint}
+          onMoveToBacklog={handleBulkMoveToBacklog}
+          onStatusChange={handleBulkStatusChange}
+          onDelete={handleBulkDelete}
+          onClear={handleClearSelection}
+          sprints={sprints}
+        />
+      )}
     </div>
   );
 }
