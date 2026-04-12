@@ -37,7 +37,7 @@ interface BacklogCardProps {
   onDeleteTask: (taskId: number, sprintId: number) => void;
   onToggleTask: (taskId: number) => void;
   onSprintDeleted: (sprintId: number, tasks: TaskItem[]) => void;
-  onStatusChange?: (taskId: number, status: any) => void;
+  onStatusChange?: (taskId: number, status: string) => void;
   onStoryPointsChange?: (taskId: number, points: number) => void;
   onAssignTask?: (taskId: number, name: string, photo: string | null) => void;
   onRenameTask?: (taskId: number, title: string) => void;

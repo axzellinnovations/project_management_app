@@ -19,6 +19,7 @@ import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
 import CreateTaskModal, { type CreateTaskData } from '@/components/shared/CreateTaskModal';
 import { useTaskStore } from '@/stores/task-store';
 import { buildSessionCacheKey, getSessionCache, setSessionCache, removeSessionCache } from '@/lib/session-cache';
+const LABEL_PALETTE = ["#EF4444","#F97316","#F59E0B","#84CC16","#22C55E","#14B8A6","#06B6D4","#3B82F6","#6366F1","#8B5CF6","#EC4899","#6B7280"];
 
 type CacheShape = {
   productTasks: TaskItem[];
@@ -80,7 +81,7 @@ export default function SprintBacklogPage() {
     return Array.from(names).sort();
   }, [productTasks, sprints]);
 
-  const applyFilters = (tasks: TaskItem[]): TaskItem[] => {
+  const applyFilters = useCallback((tasks: TaskItem[]): TaskItem[] => {
     return tasks.filter((t) => {
       if (filters.search && !t.title.toLowerCase().includes(filters.search.toLowerCase())) return false;
       if (filters.statuses.length > 0 && !filters.statuses.includes(t.status ?? 'TODO')) return false;
@@ -88,14 +89,14 @@ export default function SprintBacklogPage() {
       if (filters.assignee && t.assigneeName !== filters.assignee) return false;
       return true;
     });
-  };
+  }, [filters]);
 
-  const filteredProductTasks = useMemo(() => applyFilters(productTasks), [productTasks, filters]);
+  const filteredProductTasks = useMemo(() => applyFilters(productTasks), [productTasks, applyFilters]);
   const filteredSprints = useMemo(() => {
     return sprints
       .filter((s) => s.status !== 'COMPLETED')
       .map((s) => ({ ...s, tasks: applyFilters(s.tasks) }));
-  }, [sprints, filters]);
+  }, [sprints, applyFilters]);
 
   const mapRawTask = (raw: RawTask, index: number): TaskItem => ({
     id: raw.id,
@@ -306,7 +307,7 @@ export default function SprintBacklogPage() {
     const url = new URL(window.location.href);
     url.searchParams.delete('action');
     window.history.replaceState({}, '', url.toString());
-  }, [searchParams, projectKey, sprints.length]);
+  }, [searchParams, projectKey, sprints.length, createSprint]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -571,7 +572,6 @@ export default function SprintBacklogPage() {
     void fetchData({ showSpinner: false, forceNetwork: true });
   };
 
-  const LABEL_PALETTE = ['#EF4444','#F97316','#F59E0B','#84CC16','#22C55E','#14B8A6','#06B6D4','#3B82F6','#6366F1','#8B5CF6','#EC4899','#6B7280'];
 
   const handleCreateLabel = useCallback(async (name: string) => {
     const color = LABEL_PALETTE[Math.floor(Math.random() * LABEL_PALETTE.length)];

@@ -33,7 +33,7 @@ export default function SortableColumn({ column, children, width = '320px' }: So
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{ ...style, width }}
       className={`flex-shrink-0 self-start relative group/col snap-center md:snap-none w-[88vw] sm:w-[320px] max-w-[320px]`}
       suppressHydrationWarning={true}
     >

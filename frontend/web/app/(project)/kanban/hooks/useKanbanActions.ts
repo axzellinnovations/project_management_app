@@ -72,7 +72,7 @@ export function useKanbanActions(
     } finally {
       setUpdatingTaskId(null);
     }
-  }, [tasks, columnConfigs, setTasks]);
+  }, [tasks, columnConfigs, setTasks, projectId, forceRefresh]);
 
   // Column reorder
   const handleColumnDragEnd = useCallback(async (event: DragEndEvent) => {
@@ -119,7 +119,7 @@ export function useKanbanActions(
     } catch (err) {
       console.error('Error creating task:', err);
     }
-  }, [projectId, selectedColumnStatus, setTasks]);
+  }, [projectId, selectedColumnStatus, setTasks, forceRefresh]);
 
   // Task CRUD
   const handleAddTask = useCallback(async (title: string, status: string) => {
@@ -138,7 +138,7 @@ export function useKanbanActions(
     } catch (err) {
       console.error('Error creating task:', err);
     }
-  }, [projectId, setTasks]);
+  }, [projectId, setTasks, forceRefresh]);
 
   const handleEditTask = useCallback((task: Task) => {
     setEditingTask(task);
@@ -160,7 +160,7 @@ export function useKanbanActions(
     } finally {
       setIsUpdatingTask(false);
     }
-  }, [setTasks]);
+  }, [setTasks, projectId, forceRefresh]);
 
   // Inline update — used by KanbanCard's inline edit mode (no modal)
   const handleInlineUpdate = useCallback(async (taskId: number, updates: Partial<Task>) => {
@@ -175,7 +175,7 @@ export function useKanbanActions(
       console.error('Error inline updating task:', err);
       // revert on error — reload from server would be better but this is faster
     }
-  }, [setTasks]);
+  }, [setTasks, projectId, forceRefresh]);
 
   const handleDeleteTask = useCallback(async (taskId: number) => {
     // Optimistic removal
@@ -198,7 +198,7 @@ export function useKanbanActions(
       }
       setTimeout(() => setToastMessage(null), 4000);
     }
-  }, [tasks, setTasks]);
+  }, [tasks, setTasks, projectId, forceRefresh]);
 
   // Archive board
   const handleCompleteBoard = useCallback(async () => {
@@ -227,7 +227,7 @@ export function useKanbanActions(
       setToastMessage('Failed to archive board. Please try again.');
       setTimeout(() => setToastMessage(null), 3000);
     }
-  }, [tasks, setTasks]);
+  }, [tasks, setTasks, projectId, forceRefresh]);
 
   // Column management
   const handleColumnRenamed = useCallback((columnId: number, newName: string) => {
