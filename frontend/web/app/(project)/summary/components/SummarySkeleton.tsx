@@ -122,7 +122,7 @@ export function ChartsSkeleton() {
                            <div
                                key={j}
                                className="w-full rounded-t-sm rounded-cu-md bg-gradient-to-r from-cu-bg-tertiary via-cu-bg-secondary to-cu-bg-tertiary bg-[length:200%_100%] animate-shimmer"
-                               style={{ height: `${Math.random() * 60 + 20}%` }}
+                               style={{ height: `${((i * 7 + j * 13) % 60) + 20}%` }}
                            />
                        ))}
                     </div>
@@ -182,7 +182,7 @@ export function TeamSkeleton() {
 // Main assembled skeleton for the full page
 export default function SummaryPageSkeleton() {
     return (
-        <div className="mobile-page-padding max-w-[1200px] mx-auto pb-28 sm:pb-8">
+        <div className="mobile-page-padding max-w-[1200px] mx-auto pb-6">
             {/* Metrics Section */}
             <div className="mb-6">
                 <MetricsSkeleton />

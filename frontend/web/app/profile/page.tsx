@@ -37,7 +37,7 @@ export default function ProfilePage() {
     }
 
     return (
-        <div className="mobile-page-padding max-w-5xl mx-auto pb-28 sm:pb-8">
+        <div className="mobile-page-padding max-w-5xl mx-auto pb-6">
             <h1 className="text-[28px] font-semibold text-[#101828]">User Profile</h1>
             <p className="text-sm text-[#6A7282] mt-1 mb-8">Manage your personal details and preferences.</p>
 

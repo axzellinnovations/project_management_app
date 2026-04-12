@@ -8,6 +8,7 @@ import { useParams, usePathname, useSearchParams, useRouter } from 'next/navigat
 import { useNavigation } from '@/lib/navigation-context';
 import { Menu, Plus } from 'lucide-react';
 import * as projectsApi from '@/services/projects-service';
+import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
 
 import { NotificationBell } from './topbar/NotificationBell';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -29,21 +30,15 @@ const subscribeToBrowserStorage = (onStoreChange: () => void) => {
 };
 
 function TopBarContent() {
-  const projectName = useSyncExternalStore(
-    subscribeToBrowserStorage,
-    () => localStorage.getItem('currentProjectName') || 'Project Name',
-    () => 'Project Name'
-  );
+  const [localProjectName, setLocalProjectName] = useState('Project Name');
+  const [localProjectType, setLocalProjectType] = useState<string | null>(null);
+
   const storedProjectId = useSyncExternalStore(
     subscribeToBrowserStorage,
     () => localStorage.getItem('currentProjectId'),
     () => null
   );
-  const storedProjectType = useSyncExternalStore(
-    subscribeToBrowserStorage,
-    () => localStorage.getItem('currentProjectType'),
-    () => null
-  );
+
   const token = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
     () => getValidToken(),
@@ -57,7 +52,6 @@ function TopBarContent() {
   useNavigation();
   const { profilePicUrl: resolvedProfilePicUrl } = useCurrentUser();
   const [isFavorite, setIsFavorite] = useState(false);
-  const [projectType, setProjectType] = useState<string | null>(storedProjectType);
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [projectsSearch, setProjectsSearch] = useState('');
   const [isRecentProjectsLoading, setIsRecentProjectsLoading] = useState(false);
@@ -79,11 +73,9 @@ function TopBarContent() {
     return queryProjectId || routeProjectId || storedProjectId;
   }, [params, searchParams, storedProjectId]);
 
-  const effectiveProjectType = projectType || storedProjectType;
-
   const isAgile = useMemo(() => {
-    return effectiveProjectType === 'AGILE' || effectiveProjectType === 'Agile Scrum' || effectiveProjectType === 'SCRUM';
-  }, [effectiveProjectType]);
+    return localProjectType === 'AGILE' || localProjectType === 'Agile Scrum' || localProjectType === 'SCRUM';
+  }, [localProjectType]);
 
   const tabs = useMemo(() => {
     const base = [
@@ -100,11 +92,9 @@ function TopBarContent() {
 
     base.push(
       { id: 'chats', label: 'Chats' },
-      { id: 'inbox', label: 'Inbox' },
-      { id: 'notifications', label: 'Notifications' },
       { id: 'milestones', label: 'Milestones' },
       { id: 'members', label: 'Members' },
-      { id: 'pages', label: 'Pages' },
+      { id: 'dms', label: 'DMS' },
       { id: 'list', label: 'List' }
     );
 
@@ -119,13 +109,11 @@ function TopBarContent() {
     if (pathname.startsWith('/list')) return 'list';
     if (pathname.startsWith('/calendar')) return 'calendar';
     if (pathname.startsWith('/burndown')) return 'burndown';
-    if (pathname.startsWith('/dashboard/notifications') || pathname.startsWith('/notifications')) return 'notifications';
     if (pathname.startsWith('/milestones')) return 'milestones';
     if (pathname.startsWith('/workload')) return 'workload';
-    if (pathname.startsWith('/inbox')) return 'inbox';
     if (pathname.startsWith('/project/') && pathname.includes('/chat')) return 'chats';
     if (pathname.startsWith('/members')) return 'members';
-    if (pathname.startsWith('/pages')) return 'pages';
+    if (pathname.startsWith('/pages')) return 'dms';
     return 'summary';
   }, [pathname]);
 
@@ -134,27 +122,44 @@ function TopBarContent() {
       localStorage.setItem('currentProjectId', projectId);
     }
 
-    if (storedProjectType) {
-      setProjectType(storedProjectType);
-    }
-
     const fetchProjectStatus = async () => {
       if (!projectId) { setIsFavorite(false); return; }
+
+      // Check localStorage cache first (TTL: 2 min) to avoid re-fetches on tab switches
+      const cacheKey = buildSessionCacheKey('topbar-project', [projectId]);
+      if (cacheKey) {
+        const cached = getSessionCache<{ isFavorite: boolean; type: string; name: string }>(cacheKey);
+        if (cached.data) {
+          setIsFavorite(cached.data.isFavorite);
+          setLocalProjectType(cached.data.type);
+          if (cached.data.name) setLocalProjectName(cached.data.name);
+          return;
+        }
+      }
+
       try {
         const projectData = await projectsApi.fetchProjectDetails(projectId);
         const resolvedProjectType = projectData?.type || 'KANBAN';
-        setIsFavorite(Boolean(projectData?.isFavorite));
-        setProjectType(resolvedProjectType);
+        const isFav = Boolean(projectData?.isFavorite);
+        setIsFavorite(isFav);
+        setLocalProjectType(resolvedProjectType);
         localStorage.setItem('currentProjectType', resolvedProjectType);
 
-        if (projectData?.name && localStorage.getItem('currentProjectName') !== projectData.name) {
-          localStorage.setItem('currentProjectName', projectData.name);
-          window.dispatchEvent(new Event('storage'));
+        if (projectData?.name) {
+          setLocalProjectName(projectData.name);
+          if (localStorage.getItem('currentProjectName') !== projectData.name) {
+            localStorage.setItem('currentProjectName', projectData.name);
+            window.dispatchEvent(new Event('storage'));
+          }
+        }
+
+        if (cacheKey && projectData?.name) {
+          setSessionCache(cacheKey, { isFavorite: isFav, type: resolvedProjectType, name: projectData.name }, 2 * 60_000);
         }
       } catch { setIsFavorite(false); }
     };
     void fetchProjectStatus();
-  }, [projectId, storedProjectType]);
+  }, [projectId]);
 
   // Close project dropdown on outside click
   useEffect(() => {
@@ -211,28 +216,19 @@ function TopBarContent() {
       case 'calendar': return withProjectId('/calendar');
       case 'burndown': return withProjectId('/burndown');
       case 'chats': return projectId ? `/project/${projectId}/chat` : '/dashboard';
-      case 'inbox': return '/inbox';
-      case 'notifications': return projectId ? `/notifications?projectId=${projectId}` : '/notifications';
       case 'milestones': return withProjectId('/milestones');
       case 'workload': return withProjectId('/workload');
       case 'members': return projectId ? `/members/${projectId}` : '/members';
-      case 'pages': return withProjectId('/pages');
+      case 'dms': return withProjectId('/pages');
       default: return projectId ? `/summary/${projectId}` : '/dashboard';
     }
   };
 
   const isProjectPage = useMemo(() => {
-    if (pathname.startsWith('/dashboard/notifications')) {
-      return true;
-    }
+    if (!pathname) return false;
+    if (pathname.startsWith('/project/') && pathname.includes('/chat')) return true;
 
     const hasProjectContext = Boolean(projectId);
-    if (pathname.startsWith('/inbox')) {
-      return true;
-    }
-    if (pathname.startsWith('/project/') && pathname.includes('/chat')) {
-      return true;
-    }
     const projectScopedPaths = [
       '/summary',
       '/timeline',
@@ -275,7 +271,7 @@ function TopBarContent() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('planora:sidebar:toggle'))}
-            className="lg:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors"
+            className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors"
             aria-label="Toggle Sidebar"
           >
             <Menu size={20} />
@@ -321,7 +317,7 @@ function TopBarContent() {
 
             <div className="flex items-center gap-2 max-sm:gap-1.5">
               <h1 className="text-[18px] font-bold text-slate-900 whitespace-nowrap leading-tight font-outfit tracking-tight max-sm:text-[19px] max-sm:font-black max-sm:text-blue-700 max-sm:-tracking-[0.01em]">
-                {projectName}
+                {localProjectName}
               </h1>
 
               {/* Status Badge */}

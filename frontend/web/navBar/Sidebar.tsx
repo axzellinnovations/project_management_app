@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { AUTH_TOKEN_CHANGED_EVENT, clearTokens, getUserFromToken, getValidToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { fetchChatInbox, type ChatInboxResponse } from '@/services/chat-service';
@@ -13,8 +14,9 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { SidebarHeader, CollapseButton } from './sidebar/SidebarHeader';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { NavRow } from './sidebar/NavRows';
-import { ProjectDropdown } from './sidebar/ProjectDropdown';
 import { InboxDropdown } from './sidebar/InboxDropdown';
+import { NotificationsDropdown } from './sidebar/NotificationsDropdown';
+import { ProjectDropdown } from './sidebar/ProjectDropdown';
 import ProjectList from '@/components/layout/sidebar/ProjectList';
 import InboxBadge from '@/components/layout/sidebar/InboxBadge';
 import { useGlobalNotifications } from '@/components/providers/GlobalNotificationProvider';
@@ -38,34 +40,35 @@ interface NavRowProps {
 
 function InboxNavRow({ collapsed, active, badge, onClick }: NavRowProps) {
   return (
-    <NavRow
-      icon={
-        <div className="relative">
-          <InboxIcon />
-          <div className="absolute -top-1 -right-2">
-            <InboxBadge count={badge} size="overlay" cap={99} />
-          </div>
-        </div>
-      }
-      label="Inbox"
-      collapsed={collapsed}
-      active={active}
-      badge={0}
-      onClick={onClick}
-    />
+    <div data-sidebar-panel-trigger>
+      <NavRow
+        icon={<InboxIcon />}
+        label="Inbox"
+        collapsed={collapsed}
+        active={active}
+        badge={badge}
+        onClick={onClick}
+        hasChevron
+        chevronOpen={active}
+      />
+    </div>
   );
 }
 
 function NotificationsNavRow({ collapsed, active, badge, onClick }: NavRowProps) {
   return (
-    <NavRow
-      icon={<BellIcon />}
-      label="Notifications"
-      collapsed={collapsed}
-      active={active}
-      badge={badge}
-      onClick={onClick}
-    />
+    <div data-sidebar-panel-trigger>
+      <NavRow
+        icon={<BellIcon />}
+        label="Notifications"
+        collapsed={collapsed}
+        active={active}
+        badge={badge}
+        onClick={onClick}
+        hasChevron
+        chevronOpen={active}
+      />
+    </div>
   );
 }
 
@@ -113,15 +116,18 @@ export default function Sidebar() {
   } = useSidebarProjects();
 
   const [chatInbox, setChatInbox] = useState<ChatInboxResponse | null>(null);
-  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inboxPanelOpen, setInboxPanelOpen] = useState(false);
+  const [notifPanelOpen, setNotifPanelOpen] = useState(false);
+  const [inboxSearch, setInboxSearch] = useState('');
+  const [notifSearch, setNotifSearch] = useState('');
   const [loadingInbox, setLoadingInbox] = useState(false);
-  const [inboxError, setInboxError] = useState<string | null>(null);
 
   const [collapsed, setCollapsed] = useState(true);
   const [favOpen, setFavOpen] = useState(false);
   const [recentOpen, setRecentOpen] = useState(false);
   const [favSearch, setFavSearch] = useState('');
   const [recentSearch, setRecentSearch] = useState('');
+  const [sidebarWidth, setSidebarWidth] = useState(64);
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -145,9 +151,24 @@ export default function Sidebar() {
   const favRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
   const inboxRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
   const lastInboxFetchedAtRef = useRef(0);
   const latestSyncedNotificationRef = useRef<number | null>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  /* Track sidebar right edge for panel positioning */
+  useEffect(() => {
+    const updateWidth = () => {
+      if (sidebarRef.current) {
+        const rect = sidebarRef.current.getBoundingClientRect();
+        setSidebarWidth(rect.right);
+      }
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, [collapsed]);
 
   /* -- fetch inbox activity -- */
   const fetchInboxActivity = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
@@ -156,14 +177,12 @@ export default function Sidebar() {
     }
 
     setLoadingInbox(true);
-    setInboxError(null);
     try {
       const data = await fetchChatInbox({ projectLimit: 10, activityLimit: 4, status: 'all' });
       setChatInbox(data);
       lastInboxFetchedAtRef.current = Date.now();
-    } catch (error) {
-      console.error('Sidebar: failed to fetch inbox activity', error);
-      setInboxError('Failed to load inbox');
+    } catch {
+      // silently fail — badge count is non-critical
     } finally {
       setLoadingInbox(false);
     }
@@ -213,11 +232,9 @@ export default function Sidebar() {
       const target = e.target as Node;
       const inFav = favRef.current?.contains(target);
       const inRecent = recentRef.current?.contains(target);
-      const inInbox = inboxRef.current?.contains(target);
       const inDropdown = (target as Element)?.closest?.('[data-sidebar-dropdown]');
       if (!inFav && !inDropdown) setFavOpen(false);
       if (!inRecent && !inDropdown) setRecentOpen(false);
-      if (!inInbox && !inDropdown) setInboxOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
 
@@ -236,7 +253,8 @@ export default function Sidebar() {
   /* measure anchor position before opening dropdown */
   const openFavDropdown = () => {
     setRecentOpen(false);
-    setInboxOpen(false);
+    setInboxPanelOpen(false);
+    setNotifPanelOpen(false);
     if (favRef.current) {
       const rect = favRef.current.getBoundingClientRect();
       setDropdownPos({ top: rect.top, left: rect.right + 8 });
@@ -247,7 +265,8 @@ export default function Sidebar() {
 
   const openRecentDropdown = () => {
     setFavOpen(false);
-    setInboxOpen(false);
+    setInboxPanelOpen(false);
+    setNotifPanelOpen(false);
     if (recentRef.current) {
       const rect = recentRef.current.getBoundingClientRect();
       setDropdownPos({ top: rect.top, left: rect.right + 8 });
@@ -256,15 +275,29 @@ export default function Sidebar() {
     setRecentSearch('');
   };
 
-  const openInboxDropdown = () => {
+  const openInboxPanel = () => {
     setFavOpen(false);
     setRecentOpen(false);
+    setNotifPanelOpen(false);
+    void fetchInboxActivity();
     if (inboxRef.current) {
       const rect = inboxRef.current.getBoundingClientRect();
       setDropdownPos({ top: rect.top, left: rect.right + 8 });
     }
-    void fetchInboxActivity();
-    setInboxOpen(p => !p);
+    setInboxPanelOpen(p => !p);
+    setInboxSearch('');
+  };
+
+  const openNotifPanel = () => {
+    setFavOpen(false);
+    setRecentOpen(false);
+    setInboxPanelOpen(false);
+    if (notifRef.current) {
+      const rect = notifRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.top, left: rect.right + 8 });
+    }
+    setNotifPanelOpen(p => !p);
+    setNotifSearch('');
   };
 
   /* handlers */
@@ -274,7 +307,8 @@ export default function Sidebar() {
     await rawProjectClick(project);
     setFavOpen(false);
     setRecentOpen(false);
-    setInboxOpen(false);
+    setInboxPanelOpen(false);
+    setNotifPanelOpen(false);
   };
 
   const toggleCollapsed = () => {
@@ -296,36 +330,40 @@ export default function Sidebar() {
     (p.projectKey || '').toLowerCase().includes(recentSearch.toLowerCase())
   );
 
-  const inboxItems = useMemo(
-    () => chatInbox?.recentActivities?.slice(0, 4) || [],
-    [chatInbox],
-  );
-
   const inboxBadgeCount = useMemo(() => {
     if (!chatInbox) return 0;
     return Number(chatInbox.totalUnread) || 0;
   }, [chatInbox]);
 
-  const closeDropdowns = () => {
+  const closeAll = () => {
     setFavOpen(false);
     setRecentOpen(false);
-    setInboxOpen(false);
+    setInboxPanelOpen(false);
+    setNotifPanelOpen(false);
   };
+
+  const panelAnchorLeft = isMobile ? 260 : (collapsed ? 64 : 240);
 
   /* -- render -- */
   return (
     <>
-      {isMobile && !collapsed && (
+      {isMobile && !collapsed && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-[9998]"
+          role="button"
+          tabIndex={0}
+          className="fixed inset-0 w-[100vw] h-[100vh] bg-black/50 backdrop-blur-sm z-[9990] cursor-pointer touch-none"
           onClick={() => setCollapsed(true)}
-        />
+          onKeyDown={(e) => e.key === 'Escape' && setCollapsed(true)}
+          aria-label="Close Sidebar"
+        />,
+        document.body
       )}
 
       <div
-        className={`h-screen flex-shrink-0 ${isMobile ? 'fixed left-0 top-0 z-[9999]' : 'relative'}`}
+        ref={sidebarRef}
+        className={`h-screen flex-shrink-0 ${isMobile ? 'fixed left-0 top-0 z-[9999]' : 'relative'} ${isMobile && collapsed ? 'pointer-events-none' : ''}`}
         style={{
-          width: isMobile ? '260px' : (collapsed ? '64px' : '240px'),
+          width: isMobile ? (collapsed ? '0px' : '260px') : (collapsed ? '64px' : '240px'),
         }}
       >
         <div
@@ -336,7 +374,7 @@ export default function Sidebar() {
             opacity: isMobile && collapsed ? 0.5 : 1,
           }}
         >
-          <div className="relative h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col w-[240px] md:w-[inherit]">
+          <div className="relative h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col w-[260px] md:w-[inherit]">
             <SidebarHeader collapsed={collapsed} />
             <CollapseButton collapsed={collapsed} onToggle={toggleCollapsed} />
 
@@ -346,7 +384,7 @@ export default function Sidebar() {
                 label="For You"
                 collapsed={collapsed}
                 active={pathname === '/dashboard'}
-                onClick={() => { closeDropdowns(); router.push('/dashboard'); }}
+                onClick={() => { closeAll(); router.push('/dashboard'); }}
               />
 
               <ProjectList
@@ -362,21 +400,21 @@ export default function Sidebar() {
                 onOpenRecent={openRecentDropdown}
               />
 
-              <div ref={inboxRef} className="relative">
+              <div ref={inboxRef}>
                 <InboxNavRow
                   collapsed={collapsed}
-                  active={inboxOpen || pathname === '/inbox'}
+                  active={inboxPanelOpen}
                   badge={inboxBadgeCount}
-                  onClick={openInboxDropdown}
+                  onClick={openInboxPanel}
                 />
               </div>
 
-              <div className="relative">
+              <div ref={notifRef}>
                 <NotificationsNavRow
                   collapsed={collapsed}
-                  active={pathname === '/dashboard/notifications' || pathname === '/notifications'}
+                  active={notifPanelOpen}
                   badge={globalUnreadCount}
-                  onClick={() => { closeDropdowns(); router.push('/dashboard/notifications'); }}
+                  onClick={openNotifPanel}
                 />
               </div>
 
@@ -385,7 +423,7 @@ export default function Sidebar() {
                 label="Profile"
                 collapsed={collapsed}
                 active={pathname === '/profile'}
-                onClick={() => { closeDropdowns(); router.push('/profile'); }}
+                onClick={() => { closeAll(); router.push('/profile'); }}
               />
             </div>
 
@@ -394,11 +432,12 @@ export default function Sidebar() {
               user={user}
               resolvedProfilePicUrl={resolvedProfilePicUrl}
               onLogout={handleLogout}
-              onLinkClick={closeDropdowns}
+              onLinkClick={closeAll}
             />
           </div>
         </div>
 
+        {/* Favorites dropdown */}
         {favOpen && (
           <ProjectDropdown
             fixedTop={dropdownPos.top}
@@ -417,6 +456,7 @@ export default function Sidebar() {
           />
         )}
 
+        {/* Recent dropdown */}
         {recentOpen && (
           <ProjectDropdown
             fixedTop={dropdownPos.top}
@@ -433,15 +473,30 @@ export default function Sidebar() {
           />
         )}
 
-        {inboxOpen && (
+        {/* Inbox dropdown */}
+        {inboxPanelOpen && chatInbox && (
           <InboxDropdown
             fixedTop={dropdownPos.top}
             fixedLeft={dropdownPos.left}
-            activities={inboxItems}
+            activities={chatInbox.recentActivities || []}
             loading={loadingInbox}
-            error={inboxError}
+            error={null}
+            search={inboxSearch}
+            onSearch={setInboxSearch}
             onRetry={() => void fetchInboxActivity({ force: true })}
-            onClose={() => setInboxOpen(false)}
+            onClose={() => setInboxPanelOpen(false)}
+          />
+        )}
+
+        {/* Notifications dropdown */}
+        {notifPanelOpen && (
+          <NotificationsDropdown
+            fixedTop={dropdownPos.top}
+            fixedLeft={dropdownPos.left}
+            notifications={notifications}
+            search={notifSearch}
+            onSearch={setNotifSearch}
+            onClose={() => setNotifPanelOpen(false)}
           />
         )}
       </div>

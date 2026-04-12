@@ -317,7 +317,7 @@ export default function BacklogPage() {
     }
 
     return (
-        <div className="mobile-page-padding max-w-[900px] mx-auto pb-28 sm:pb-8">
+        <div className="mobile-page-padding max-w-[900px] mx-auto pb-6">
             {/* ── Header ── */}
             <div className="sticky-section-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-4 flex items-center gap-3 flex-wrap">
                 <div>

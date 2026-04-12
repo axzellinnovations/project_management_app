@@ -65,7 +65,7 @@ export default function TimelinePage() {
   }
 
   return (
-    <div className="mobile-page-padding pb-28 sm:pb-8">
+    <div className="mobile-page-padding pb-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
