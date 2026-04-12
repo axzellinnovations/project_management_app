@@ -159,6 +159,53 @@ function TaskRow({
   const assignPortalRef = useRef<HTMLDivElement>(null);
   const labelPortalRef = useRef<HTMLDivElement>(null);
 
+  // Touch logic for double-tap and long-press
+  const lastTapRef = useRef<number>(0);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onTouchStartInternal = useCallback((e: React.TouchEvent) => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+    const LONG_PRESS_DELAY = 600;
+
+    // Double Tap Check (Rename)
+    const isDoubleTap = now - lastTapRef.current < DOUBLE_TAP_DELAY;
+    if (isDoubleTap) {
+      e.preventDefault();
+      setRenameValue(task.title);
+      setRenaming(true);
+      lastTapRef.current = 0;
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+      return;
+    }
+    lastTapRef.current = now;
+
+    // Long Press Start (Delete)
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      if (canDelete) {
+        onDeleteTask(task.id);
+      }
+    }, LONG_PRESS_DELAY);
+  }, [task.id, task.title, canDelete, onDeleteTask]);
+
+  const onTouchEndInternal = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const onTouchMoveInternal = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
   const startRename = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setRenameValue(task.title);
@@ -261,7 +308,6 @@ function TaskRow({
 
   // Responsive logic: check if screen is mobile size (< 768px)
   const [isMobile, setIsMobile] = useState(false);
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -270,28 +316,11 @@ function TaskRow({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const handleTouchStart = () => {
-    if (!isMobile) return;
-    longPressTimer.current = setTimeout(() => {
-      if (window.confirm('Are you sure you want to delete this task?')) {
-        onDeleteTask(task.id);
-      }
-    }, 600); // 600ms for long press
-  };
-
-  const handleTouchEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-    }
-  };
-
   if (isMobile) {
     return (
       <div
         className="group relative flex flex-col rounded-2xl border-l-[6px] border border-[#EAECF0] bg-white shadow-sm hover:shadow-md transition-all duration-200 mb-3 select-none overflow-hidden"
         style={{ borderLeftColor: statusBorderColor }}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
         onContextMenu={(e) => e.preventDefault()}
       >
         {/* Main Content Area: Horizontal Scroll for Metadata */}
@@ -320,8 +349,23 @@ function TaskRow({
               />
             ) : (
               <h3 
-                onClick={(e) => { e.stopPropagation(); startRename(e); }}
-                className={`text-[15px] font-bold text-[#101828] leading-tight truncate cursor-text ${validStatus === 'DONE' ? 'line-through opacity-60' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const now = Date.now();
+                  const DOUBLE_TAP_DELAY = 300;
+                  if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+                    startRename(e);
+                  }
+                  lastTapRef.current = now;
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  startRename(e);
+                }}
+                onTouchStart={onTouchStartInternal}
+                onTouchEnd={onTouchEndInternal}
+                onTouchMove={onTouchMoveInternal}
+                className={`text-[15px] font-bold text-[#101828] leading-tight truncate cursor-text select-none ${validStatus === 'DONE' ? 'line-through opacity-60' : ''}`}
               >
                 {task.title}
               </h3>
@@ -407,11 +451,41 @@ function TaskRow({
               />
             </div>
 
-            {/* Date */}
             {onDueDateChange && (
               <div className="flex-shrink-0 flex items-center" onClick={(e) => e.stopPropagation()}>
                 <button
-                  onClick={() => dateRef.current?.showPicker()}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const input = dateRef.current;
+                    if (input) {
+                      const isMobileView = window.innerWidth < 768;
+                      input.style.display = 'block';
+                      input.style.position = 'fixed';
+                      input.style.zIndex = '100000';
+
+                      if (isMobileView) {
+                        // On small screens, pin to center-bottom
+                        input.style.bottom = '20px';
+                        input.style.left = '50%';
+                        input.style.transform = 'translateX(-50%)';
+                        input.style.top = 'auto';
+                      } else {
+                        // On desktop, position directly below
+                        input.style.top = `${rect.bottom + 4}px`;
+                        input.style.left = `${rect.left}px`;
+                        input.style.transform = 'none';
+                      }
+
+                      input.showPicker();
+                      const cleanup = () => {
+                        input.style.display = 'none';
+                        input.removeEventListener('change', cleanup);
+                        input.removeEventListener('blur', cleanup);
+                      };
+                      input.addEventListener('change', cleanup);
+                      input.addEventListener('blur', cleanup);
+                    }
+                  }}
                   title={`Due Date: ${formatDate(task.dueDate)}`}
                   className={`text-[11px] font-bold leading-none whitespace-nowrap bg-[#F2F4F7] px-2 py-1.5 rounded-lg ${dueClass === 'overdue' ? 'text-red-600 bg-red-50' : 'text-[#475467]'}`}
                 >
@@ -500,7 +574,14 @@ function TaskRow({
     <div
       className={`group relative flex items-center min-h-[36px] rounded-lg ${rowBg} hover:bg-[#F9FAFB] cursor-pointer transition-colors duration-150`}
       style={{ borderLeft: `3px solid ${statusBorderColor}` }}
-      onClick={() => !renaming && onOpenTask?.(task.id)}
+      onClick={() => {
+        if (!renaming) {
+          onOpenTask?.(task.id);
+        }
+      }}
+      onTouchStart={onTouchStartInternal}
+      onTouchEnd={onTouchEndInternal}
+      onTouchMove={onTouchMoveInternal}
     >
       {/* Checkbox */}
       {showCheckbox && (
@@ -548,8 +629,26 @@ function TaskRow({
         ) : (
           <>
             <span
-              className={`text-[12px] font-semibold text-[#101828] truncate min-w-0 ${validStatus === 'DONE' ? 'line-through opacity-60' : ''}`}
-              onClick={(e) => { e.stopPropagation(); onOpenTask?.(task.id); }}
+              className={`text-[12px] font-semibold text-[#101828] truncate min-w-0 select-none ${validStatus === 'DONE' ? 'line-through opacity-60' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                // If double-click isn't used (mobile behavior emulation), 
+                // we'll use a timer. But for desktop/standard tests, 
+                // we must allow a single click to trigger onOpenTask.
+                const now = Date.now();
+                const DOUBLE_TAP_DELAY = 300;
+                if (lastTapRef.current > 0 && now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+                  startRename(e);
+                  lastTapRef.current = 0;
+                } else {
+                  lastTapRef.current = now;
+                  onOpenTask?.(task.id);
+                }
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                startRename(e);
+              }}
             >
               {task.title}
             </span>
@@ -680,7 +779,37 @@ function TaskRow({
         >
           <button
             type="button"
-            onClick={() => dateRef.current?.showPicker()}
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const input = dateRef.current;
+              if (input) {
+                const isMobileView = window.innerWidth < 768;
+                input.style.display = 'block';
+                input.style.position = 'fixed';
+                input.style.zIndex = '100000';
+
+                if (isMobileView) {
+                  input.style.bottom = '20px';
+                  input.style.left = '50%';
+                  input.style.transform = 'translateX(-50%)';
+                  input.style.top = 'auto';
+                } else {
+                  input.style.top = `${rect.bottom + 4}px`;
+                  input.style.left = `${rect.left}px`;
+                  input.style.transform = 'none';
+                }
+
+                input.showPicker();
+                // Hide it back after interaction or on blur
+                const cleanup = () => {
+                  input.style.display = 'none';
+                  input.removeEventListener('change', cleanup);
+                  input.removeEventListener('blur', cleanup);
+                };
+                input.addEventListener('change', cleanup);
+                input.addEventListener('blur', cleanup);
+              }
+            }}
             className={`inline-flex h-6 w-full items-center justify-center gap-1 rounded-md border px-1.5 text-[12px] font-bold ${DUE_CHIP_STYLES[dueClass]}`}
           >
             <CalendarDays size={9} className="flex-shrink-0" />
@@ -691,7 +820,7 @@ function TaskRow({
             type="date"
             value={task.dueDate || ''}
             onChange={(e) => onDueDateChange(task.id, e.target.value)}
-            className="absolute w-0 h-0 opacity-0 pointer-events-none"
+            className="hidden"
           />
         </div>
       )}

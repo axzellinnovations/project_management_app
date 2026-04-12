@@ -215,7 +215,8 @@ export const ChatMessages = ({
   return (
     <div
       ref={scrollRef}
-      className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-3 sm:py-4 space-y-0.5 scroll-smooth overscroll-y-contain"
+      className="flex-1 min-h-0 overflow-y-auto px-2 sm:px-4 py-2.5 sm:py-4 space-y-0.5 scroll-smooth overscroll-y-contain touch-pan-y"
+      style={{ WebkitOverflowScrolling: 'touch' }}
     >
       <AnimatePresence initial={false}>
         {visibleMessages.map((msg, idx) => {
@@ -264,7 +265,7 @@ export const ChatMessages = ({
                 )}
 
                 {/* Bubble column */}
-                <div className={`flex flex-col max-w-[90%] sm:max-w-[74%] ${isMe ? 'items-end' : 'items-start'}`}>
+                <div className={`flex flex-col max-w-[82%] sm:max-w-[74%] ${isMe ? 'items-end' : 'items-start'}`}>
                   {/* Sender name (others, no group) */}
                   {!isMe && !grouped && !isPrivateChat && (
                     <span className="text-[11.5px] font-semibold text-gray-500 mb-1 ml-1">{msg.sender}</span>
@@ -281,13 +282,13 @@ export const ChatMessages = ({
                   <div className="relative">
                     {/* Hover action bar */}
                     {!!msg.id && (
-                      <div className={`absolute bottom-full mb-1 ${isMe ? 'right-0' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center gap-1 bg-white border border-gray-100 shadow-lg rounded-xl px-2 py-1.5`}>
+                      <div className={`absolute bottom-full mb-1 ${isMe ? 'right-0' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center gap-1 bg-white border border-gray-100 shadow-lg rounded-xl px-2 py-2`}>
                         {/* Quick reactions */}
                         {QUICK_REACTIONS.map((emoji) => (
                           <button
                             key={emoji}
                             onClick={() => onToggleReaction(msg.id as number, emoji)}
-                            className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-sm transition-all hover:scale-110 active:scale-95"
+                            className="w-9 h-9 rounded-lg hover:bg-gray-100 flex items-center justify-center text-sm transition-all hover:scale-110 active:scale-95"
                             title={`React ${emoji}`}
                           >
                             {emoji}
@@ -299,7 +300,7 @@ export const ChatMessages = ({
                         {/* Thread */}
                         <button
                           onClick={() => onOpenThread(msg)}
-                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-medium transition-colors"
+                          className="flex items-center gap-1 px-2 py-1.5 min-h-[36px] rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-medium transition-colors"
                           title="Reply in thread"
                         >
                           <MessageSquare size={12} strokeWidth={2} />
@@ -309,7 +310,7 @@ export const ChatMessages = ({
                         {!!activeRoomId && onPinRoomMessage && (
                           <button
                             onClick={() => onPinRoomMessage(isPinned ? null : (msg.id as number))}
-                            className="p-1 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                            className="w-9 h-9 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors flex items-center justify-center"
                             title={isPinned ? 'Unpin' : 'Pin message'}
                           >
                             {isPinned ? <PinOff size={12} strokeWidth={2} /> : <Pin size={12} strokeWidth={2} />}
@@ -322,7 +323,7 @@ export const ChatMessages = ({
                             {!fileDoc && (
                               <button
                                 onClick={() => setEditingMessage(msg)}
-                                className="p-1 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                                className="w-9 h-9 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-colors flex items-center justify-center"
                                 title="Edit"
                               >
                                 <Pencil size={12} strokeWidth={2} />
@@ -330,7 +331,7 @@ export const ChatMessages = ({
                             )}
                             <button
                               onClick={() => setMessageToDelete(msg.id as number)}
-                              className="w-7 h-7 rounded-lg hover:bg-red-50 hover:text-red-500 flex items-center justify-center text-gray-500 transition-colors"
+                              className="w-9 h-9 rounded-lg hover:bg-red-50 hover:text-red-500 flex items-center justify-center text-gray-500 transition-colors"
                               title="Delete message"
                             >
                               <Trash2 size={12} strokeWidth={2} />

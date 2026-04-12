@@ -1,3 +1,5 @@
+import { initializeSessionCacheForCurrentAuth } from '@/lib/session-cache';
+
 export interface User {
     email: string;
     username?: string;
@@ -120,6 +122,7 @@ export function saveToken(token: string): void {
         localStorage.removeItem('token');
         sessionStorage.removeItem('token');
         tokenStorage().setItem('token', token);
+        initializeSessionCacheForCurrentAuth(token);
         emitAuthTokenChanged();
     }
 }
@@ -150,6 +153,9 @@ export function clearTokens(): void {
         Object.keys(localStorage)
             .filter((k) => k.startsWith('planora:'))
             .forEach((k) => localStorage.removeItem(k));
+        Object.keys(sessionStorage)
+            .filter((k) => k.startsWith('planora:'))
+            .forEach((k) => sessionStorage.removeItem(k));
         emitAuthTokenChanged();
     }
 }

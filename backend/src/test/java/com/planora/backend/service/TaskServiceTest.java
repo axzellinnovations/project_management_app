@@ -287,13 +287,14 @@ class TaskServiceTest {
     }
 
     @Test
-    void addComment_notifiesAssigneeWhenCommenterIsDifferentUser() {
+    void addComment_notifiesAssigneeAndReporterWhenCommenterIsDifferentUser() {
         Task task = buildTask(80L);
         CommentRequestDTO request = new CommentRequestDTO();
         request.setContent("Looks good, please review.");
 
         when(taskRepository.findById(80L)).thenReturn(Optional.of(task));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
+        when(userRepository.findAllById(any())).thenReturn(List.of(assigneeUser, creatorUser));
         when(commentRepository.save(any(Comment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         taskService.addComment(80L, request, 500L);
@@ -305,10 +306,15 @@ class TaskServiceTest {
                 eq("actor commented on task: Build tests"),
                 eq("/taskcard?taskId=80")
         );
+        verify(notificationService).createNotification(
+                eq(creatorUser),
+                eq("actor commented on task: Build tests"),
+                eq("/taskcard?taskId=80")
+        );
     }
 
     @Test
-    void addComment_doesNotNotifyWhenAssigneeIsCommentAuthor() {
+    void addComment_notifiesReporterWhenAssigneeIsCommentAuthor() {
         Task task = buildTask(81L);
         task.setAssignee(actorMember);
 
@@ -317,12 +323,40 @@ class TaskServiceTest {
 
         when(taskRepository.findById(81L)).thenReturn(Optional.of(task));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
+        when(userRepository.findAllById(any())).thenReturn(List.of(creatorUser));
         when(commentRepository.save(any(Comment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         taskService.addComment(81L, request, 500L);
 
         verify(commentRepository).save(any(Comment.class));
-        verify(notificationService, never()).createNotification(any(User.class), any(String.class), any(String.class));
+        verify(notificationService).createNotification(
+                eq(creatorUser),
+                eq("actor commented on task: Build tests"),
+                eq("/taskcard?taskId=81")
+        );
+    }
+
+    @Test
+    void addComment_deduplicatesWhenAssigneeAndReporterAreSameUser() {
+        Task task = buildTask(82L);
+        task.setReporter(assignee);
+
+        CommentRequestDTO request = new CommentRequestDTO();
+        request.setContent("Ping");
+
+        when(taskRepository.findById(82L)).thenReturn(Optional.of(task));
+        when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
+        when(userRepository.findAllById(any())).thenReturn(List.of(assigneeUser));
+        when(commentRepository.save(any(Comment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        taskService.addComment(82L, request, 500L);
+
+        verify(commentRepository).save(any(Comment.class));
+        verify(notificationService, times(1)).createNotification(
+                eq(assigneeUser),
+                eq("actor commented on task: Build tests"),
+                eq("/taskcard?taskId=82")
+        );
     }
 
     @Test

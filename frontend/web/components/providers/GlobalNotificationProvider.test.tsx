@@ -9,9 +9,11 @@ import { toast } from '@/components/ui/Toast';
 import { AUTH_TOKEN_CHANGED_EVENT } from '@/lib/auth';
 
 let currentPathname = '/dashboard';
+let currentQueryString = '';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => currentPathname,
+  useSearchParams: () => new URLSearchParams(currentQueryString),
 }));
 
 jest.mock('sockjs-client', () => jest.fn(() => ({})));
@@ -52,6 +54,13 @@ jest.mock('@/components/ui/Toast', () => ({
 
 const mockedApi = notificationsApi as jest.Mocked<typeof notificationsApi>;
 const mockedToast = toast as jest.MockedFunction<typeof toast>;
+
+function setRoute(pathname: string, query = '') {
+  currentPathname = pathname;
+  currentQueryString = query;
+  const suffix = query ? `?${query}` : '';
+  window.history.replaceState({}, '', `${pathname}${suffix}`);
+}
 
 const buildMockJwt = (overrides: Record<string, unknown> = {}) => {
   const header = window.btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
@@ -111,7 +120,7 @@ describe('GlobalNotificationProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     notificationHandler = null;
-    currentPathname = '/dashboard';
+    setRoute('/dashboard', '');
     window.localStorage.clear();
     window.localStorage.setItem('token', buildMockJwt());
 
@@ -202,7 +211,7 @@ describe('GlobalNotificationProvider', () => {
   });
 
   it('marks notification as read immediately when user is already on the linked page', async () => {
-    currentPathname = '/project/8/chat';
+    setRoute('/project/8/chat', '');
 
     render(
       <GlobalNotificationProvider>
@@ -224,6 +233,57 @@ describe('GlobalNotificationProvider', () => {
     });
 
     expect(mockedApi.markNotificationRead).toHaveBeenCalledWith(11);
+    expect(mockedToast).not.toHaveBeenCalled();
+  });
+
+  it('does not auto-read generic chat notification when user is on a scoped chat query', async () => {
+    setRoute('/project/8/chat', 'with=bob');
+
+    render(
+      <GlobalNotificationProvider>
+        <TestConsumer />
+      </GlobalNotificationProvider>
+    );
+
+    await waitFor(() => {
+      expect(notificationHandler).not.toBeNull();
+    });
+
+    act(() => {
+      notificationHandler?.({ body: JSON.stringify(buildNotification(12, false, '/project/8/chat', 'Generic chat event')) });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('12:unread')).toBeInTheDocument();
+      expect(screen.getByTestId('unread-count')).toHaveTextContent('1');
+    });
+
+    expect(mockedApi.markNotificationRead).not.toHaveBeenCalledWith(12);
+    expect(mockedToast).toHaveBeenCalledWith('Generic chat event', 'info', 5000);
+  });
+
+  it('auto-reads chat notification when query-scoped link matches active conversation', async () => {
+    setRoute('/project/8/chat', 'with=bob');
+
+    render(
+      <GlobalNotificationProvider>
+        <TestConsumer />
+      </GlobalNotificationProvider>
+    );
+
+    await waitFor(() => {
+      expect(notificationHandler).not.toBeNull();
+    });
+
+    act(() => {
+      notificationHandler?.({ body: JSON.stringify(buildNotification(13, false, '/project/8/chat?with=bob', 'Matched private chat event')) });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('13:read')).toBeInTheDocument();
+    });
+
+    expect(mockedApi.markNotificationRead).toHaveBeenCalledWith(13);
     expect(mockedToast).not.toHaveBeenCalled();
   });
 

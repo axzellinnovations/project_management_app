@@ -3,6 +3,8 @@ package com.planora.backend.controller;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Objects;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -34,6 +36,7 @@ import com.planora.backend.repository.UserRepository;
 import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
 import com.planora.backend.service.ChatWebhookService;
+import com.planora.backend.service.NotificationService;
 
 import com.planora.backend.service.ChatDocumentService;
 
@@ -114,6 +117,8 @@ public class ChatRestController {
     private final ChatWebhookService chatWebhookService;
 
     private final ChatDocumentService chatDocumentService;
+
+    private final NotificationService notificationService;
     /**
      * Upload a document to chat (S3-backed, like WhatsApp)
      */
@@ -506,6 +511,28 @@ public class ChatRestController {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
+    @PostMapping("/rooms/{roomId}/read")
+    public ResponseEntity<Void> markRoomChatAsRead(@PathVariable Long projectId,
+                                                   @PathVariable Long roomId,
+                                                   Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        validateRoomMembership(roomId, username);
+        chatService.markRoomAsRead(projectId, roomId, username);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @PostMapping("/direct/read")
+    public ResponseEntity<Void> markDirectChatAsRead(@PathVariable Long projectId,
+                                                     @RequestParam("with") String withUser,
+                                                     Authentication authentication) {
+        String username = authentication.getName();
+        validateProjectMembership(projectId, username);
+        validateProjectMembership(projectId, withUser);
+        chatService.markPrivateConversationAsRead(projectId, username, withUser);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
     public static record ChatRoomRequest(String name, List<String> members) {}
 
     @PostMapping("/rooms")
@@ -578,6 +605,8 @@ public class ChatRestController {
             }
         });
 
+        publishRoomCreatedNotifications(projectId, savedRoom, username, usersToAdd);
+
         simpMessagingTemplate.convertAndSend(
                 "/topic/project/" + projectId + "/rooms",
             new RoomEvent("CREATED", savedRoom.getId(), toRoomResponse(savedRoom)));
@@ -605,6 +634,7 @@ public class ChatRestController {
         room.setDescription(request.description() != null ? request.description().trim() : null);
 
         var saved = chatRoomRepository.save(room);
+        publishRoomUpdatedNotifications(projectId, saved, username);
         simpMessagingTemplate.convertAndSend(
             "/topic/project/" + projectId + "/rooms",
             new RoomEvent("UPDATED", saved.getId(), toRoomResponse(saved)));
@@ -689,6 +719,10 @@ public class ChatRestController {
 
         var room = roomOptional.get();
         requireRoomAdminOrOwner(projectId, room, username);
+
+        // Snapshot recipients before members are deleted.
+        publishRoomDeletedNotifications(projectId, room, username);
+
         chatRoomMemberRepository.deleteByChatRoomId(roomId);
         chatRoomRepository.delete(room);
         simpMessagingTemplate.convertAndSend(
@@ -709,6 +743,109 @@ public class ChatRestController {
                 room.getPinnedMessageId(),
                 room.getCreatedAt() != null ? room.getCreatedAt().toString() : null,
                 room.getUpdatedAt() != null ? room.getUpdatedAt().toString() : null);
+    }
+
+    private void publishRoomCreatedNotifications(Long projectId,
+                                                 ChatRoom room,
+                                                 String actorAlias,
+                                                 Set<com.planora.backend.model.User> addedUsers) {
+        if (room == null || addedUsers == null || addedUsers.isEmpty()) {
+            return;
+        }
+
+        var actor = resolveUserByEmailOrUsername(actorAlias);
+        if (actor == null || actor.getUserId() == null) {
+            return;
+        }
+
+        String actorDisplay = actor.getFullName() != null && !actor.getFullName().isBlank()
+                ? actor.getFullName()
+                : actor.getUsername();
+        String roomName = room.getName() != null && !room.getName().isBlank() ? room.getName() : "channel";
+        String projectName = projectRepository.findById(projectId).map(p -> p.getName()).orElse("the project");
+        String link = "/project/" + projectId + "/chat?roomId=" + room.getId();
+        String message = actorDisplay + " added you to #" + roomName + " in \"" + projectName + "\" chat";
+
+        addedUsers.stream()
+                .filter(Objects::nonNull)
+                .filter(user -> user.getUserId() != null && !user.getUserId().equals(actor.getUserId()))
+                .forEach(user -> notificationService.createNotification(user, message, link));
+    }
+
+    private void publishRoomUpdatedNotifications(Long projectId, ChatRoom room, String actorAlias) {
+        publishRoomLifecycleNotifications(
+                projectId,
+                room,
+                actorAlias,
+                "updated",
+                "/project/" + projectId + "/chat?roomId=" + room.getId());
+    }
+
+    private void publishRoomDeletedNotifications(Long projectId, ChatRoom room, String actorAlias) {
+        publishRoomLifecycleNotifications(
+                projectId,
+                room,
+                actorAlias,
+                "deleted",
+                "/project/" + projectId + "/chat?view=team");
+    }
+
+    private void publishRoomLifecycleNotifications(Long projectId,
+                                                   ChatRoom room,
+                                                   String actorAlias,
+                                                   String action,
+                                                   String link) {
+        if (room == null) {
+            return;
+        }
+
+        var actor = resolveUserByEmailOrUsername(actorAlias);
+        if (actor == null || actor.getUserId() == null) {
+            return;
+        }
+
+        var recipients = resolveRoomRecipients(room, actor.getUserId());
+        if (recipients.isEmpty()) {
+            return;
+        }
+
+        String actorDisplay = actor.getFullName() != null && !actor.getFullName().isBlank()
+                ? actor.getFullName()
+                : actor.getUsername();
+        String roomName = room.getName() != null && !room.getName().isBlank() ? room.getName() : "channel";
+        String projectName = projectRepository.findById(projectId).map(p -> p.getName()).orElse("the project");
+        String message = actorDisplay + " " + action + " #" + roomName + " in \"" + projectName + "\" chat";
+
+        recipients.forEach(recipient -> notificationService.createNotification(recipient, message, link));
+    }
+
+    private List<com.planora.backend.model.User> resolveRoomRecipients(ChatRoom room, Long excludedUserId) {
+        if (room == null || room.getId() == null) {
+            return List.of();
+        }
+
+        Set<Long> recipientIds = new LinkedHashSet<>();
+        chatRoomMemberRepository.findByChatRoomId(room.getId()).stream()
+                .map(ChatRoomMember::getUser)
+                .filter(Objects::nonNull)
+                .map(com.planora.backend.model.User::getUserId)
+                .filter(Objects::nonNull)
+                .forEach(recipientIds::add);
+
+        var creator = resolveUserByEmailOrUsername(room.getCreatedBy());
+        if (creator != null && creator.getUserId() != null) {
+            recipientIds.add(creator.getUserId());
+        }
+
+        if (excludedUserId != null) {
+            recipientIds.remove(excludedUserId);
+        }
+
+        if (recipientIds.isEmpty()) {
+            return List.of();
+        }
+
+        return userRepository.findAllById(recipientIds);
     }
 
     private List<ChatRoom> getVisibleRooms(Long projectId, String username, boolean includeArchived) {
