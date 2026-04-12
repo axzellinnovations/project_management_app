@@ -11,6 +11,7 @@ import {
   TeamMemberOption,
 } from '../api';
 import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
+import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
 
 export const DEFAULT_COLUMN_CONFIGS: KanbanColumnConfig[] = [
   { id: 0, status: 'TODO', title: 'To Do', color: '', wipLimit: 0 },
@@ -30,123 +31,93 @@ export function useKanbanData(projectId: string | null) {
   const [kanbanId, setKanbanId] = useState<number | null>(null);
   const [activeMobileColumn, setActiveMobileColumn] = useState<string>(DEFAULT_COLUMN_CONFIGS[0].status);
 
-  // Load board columns + tasks
-  useEffect(() => {
+  // ── Static Data (Run once per project) ──
+  const fetchStaticData = useCallback(async () => {
     if (!projectId) return;
     const pid = Number(projectId);
+    try {
+      const [project, labelsData] = await Promise.all([
+        fetchProject(pid),
+        fetchProjectLabels(pid),
+      ]);
+      setLabels(labelsData);
+      if (project?.teamId) {
+        const members = await fetchTeamMembers(project.teamId as number);
+        setTeamMembers(members);
+        const map: Record<string, string | null> = {};
+        members.forEach(m => { map[m.name] = null; });
+        setUsersMap(map);
+      }
+    } catch (err) {
+      console.error('Error loading static kanban data:', err);
+    }
+  }, [projectId]);
 
-    const loadBoard = async () => {
-      const cacheKey = `planora:kanban:${projectId}`;
-      // Stale-while-revalidate: show cached data immediately
-      try {
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          const { columns: cc, tasks: ct, timestamp } = JSON.parse(cached) as { columns: KanbanColumnConfig[]; tasks: Task[]; timestamp?: number };
-          
-          // Only use cache if it's less than 1 hour old to keep it "fresh" per session
-          const isFresh = timestamp && (Date.now() - timestamp < 3600000); // 1 hour
-          
-          if (isFresh || !navigator.onLine) {
-            if (cc?.length) { setColumnConfigs(cc); setActiveMobileColumn(cc[0].status); }
-            if (ct) setTasks(ct);
-            // If it's truly fresh, we can skip the initial loading spinner
-            if (isFresh) setLoading(false);
-          }
-        }
-      } catch { /* ignore corrupt cache */ }
+  // ── Dynamic Data (Periodic Sync) ──
+  const fetchData = useCallback(async (options: { showSpinner?: boolean, forceNetwork?: boolean } = {}) => {
+    if (!projectId) return;
+    const { showSpinner = true, forceNetwork = false } = options;
+    const pid = Number(projectId);
 
-      setLoading(prev => prev === false ? false : true);
-      setError(null);
-      try {
-        const [boardData, taskData] = await Promise.all([
-          fetchKanbanBoard(pid),
-          fetchTasksByProject(pid),
-        ]);
-        if (boardData?.columns?.length) {
-          setColumnConfigs(boardData.columns);
-          setActiveMobileColumn(boardData.columns[0].status);
+    const cKey = buildSessionCacheKey('kanban-board', [projectId]);
+    if (cKey && !forceNetwork) {
+      const cached = getSessionCache<{ columns: KanbanColumnConfig[]; tasks: Task[]; kanbanId: number | null }>(cKey, { allowStale: true });
+      if (cached.data) {
+        if (cached.data.columns?.length) {
+          setColumnConfigs(cached.data.columns);
+          setActiveMobileColumn(cached.data.columns[0].status);
         }
-        if (boardData?.kanbanId) {
-          setKanbanId(boardData.kanbanId);
-        }
-        setTasks(taskData);
-        // Update cache with timestamp
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify({
-            columns: boardData?.columns?.length ? boardData.columns : undefined,
-            tasks: taskData,
-            timestamp: Date.now(),
-          }));
-        } catch { /* storage full / SSR */ }
-      } catch (err) {
-        console.error('Error loading kanban board:', err);
-        setError('Failed to load board. Please refresh.');
-      } finally {
+        if (cached.data.tasks) setTasks(cached.data.tasks);
+        if (cached.data.kanbanId) setKanbanId(cached.data.kanbanId);
         setLoading(false);
+        if (!cached.isStale) return; // Fresh cache
       }
-    };
+    }
 
-    loadBoard();
+    if (showSpinner) setLoading(true);
+    setError(null);
+    try {
+      const [boardData, taskData] = await Promise.all([
+        fetchKanbanBoard(pid),
+        fetchTasksByProject(pid),
+      ]);
+      if (boardData?.columns?.length) {
+        setColumnConfigs(boardData.columns);
+        setActiveMobileColumn(boardData.columns[0].status);
+      }
+      if (boardData?.kanbanId) setKanbanId(boardData.kanbanId);
+      setTasks(taskData);
+
+      if (cKey) {
+        setSessionCache(cKey, { columns: boardData?.columns ?? [], tasks: taskData, kanbanId: boardData?.kanbanId ?? null }, 30 * 60_000);
+      }
+    } catch (err) {
+      console.error('Error loading kanban board:', err);
+      if (showSpinner) setError('Failed to load board. Please refresh.');
+    } finally {
+      if (showSpinner) setLoading(false);
+    }
   }, [projectId]);
 
-  // Load team members
   useEffect(() => {
     if (!projectId) return;
-    const pid = Number(projectId);
-
-    const loadTeam = async () => {
-      try {
-        const project = await fetchProject(pid);
-        if (project?.teamId) {
-          const members = await fetchTeamMembers(project.teamId as number);
-          setTeamMembers(members);
-          const map: Record<string, string | null> = {};
-          members.forEach(m => { map[m.name] = null; });
-          setUsersMap(map);
-        }
-      } catch (err) {
-        console.error('Error loading team members:', err);
-      }
-    };
-
-    loadTeam();
-  }, [projectId]);
-
-  // Load project labels
-  useEffect(() => {
-    if (!projectId) return;
-    fetchProjectLabels(Number(projectId)).then(setLabels).catch(() => {});
-  }, [projectId]);
+    void fetchStaticData();
+    void fetchData({ showSpinner: true });
+    const id = setInterval(() => void fetchData({ showSpinner: false }), 30_000);
+    return () => clearInterval(id);
+  }, [projectId, fetchStaticData, fetchData]);
 
   // WebSocket real-time task updates
   useTaskWebSocket(projectId, useCallback((event) => {
     if (event.type === 'TASK_CREATED' && event.task) {
-      const t = event.task;
+      const t = event.task as Task;
       setTasks(prev => {
         if (prev.some(x => x.id === t.id)) return prev;
-        return [...prev, {
-          id: t.id,
-          title: t.title,
-          status: t.status,
-          priority: t.priority,
-          assigneeName: t.assigneeName ?? undefined,
-          assigneePhotoUrl: t.assigneePhotoUrl,
-          startDate: t.startDate ?? undefined,
-          dueDate: t.dueDate ?? undefined,
-        } as Task];
+        return [...prev, t];
       });
     } else if (event.type === 'TASK_UPDATED' && event.task) {
-      const t = event.task;
-      setTasks(prev => prev.map(x => x.id === t.id ? {
-        ...x,
-        title: t.title,
-        status: t.status,
-        priority: t.priority,
-        assigneeName: t.assigneeName ?? undefined,
-        assigneePhotoUrl: t.assigneePhotoUrl,
-        startDate: t.startDate ?? undefined,
-        dueDate: t.dueDate ?? undefined,
-      } : x));
+      const t = event.task as Task;
+      setTasks(prev => prev.map(x => x.id === t.id ? { ...x, ...t } : x));
     } else if (event.type === 'TASK_DELETED' && event.taskId) {
       setTasks(prev => prev.filter(x => x.id !== event.taskId));
     }
@@ -166,5 +137,6 @@ export function useKanbanData(projectId: string | null) {
     kanbanId,
     activeMobileColumn,
     setActiveMobileColumn,
+    forceRefresh: () => void fetchData({ showSpinner: false, forceNetwork: true }),
   };
 }

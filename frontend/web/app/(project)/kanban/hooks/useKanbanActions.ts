@@ -12,13 +12,15 @@ import {
   reorderKanbanColumns,
 } from '../api';
 import { type CreateTaskData } from '@/components/shared/CreateTaskModal';
+import { buildSessionCacheKey, removeSessionCache } from '@/lib/session-cache';
 
 export function useKanbanActions(
   projectId: string | null,
   tasks: Task[],
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>,
   columnConfigs: KanbanColumnConfig[],
-  setColumnConfigs: React.Dispatch<React.SetStateAction<KanbanColumnConfig[]>>
+  setColumnConfigs: React.Dispatch<React.SetStateAction<KanbanColumnConfig[]>>,
+  forceRefresh: () => void
 ) {
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -61,6 +63,9 @@ export function useKanbanActions(
 
     try {
       await updateTaskStatus(taskId, newStatus, task.title);
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
+      forceRefresh();
     } catch (err) {
       console.error('Error updating task status:', err);
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: task.status } : t));
@@ -107,7 +112,10 @@ export function useKanbanActions(
       } as Partial<Task> & { projectId: number; title: string; status: string });
       // Deduplicate: WebSocket may have already added this task
       setTasks(prev => prev.some(t => t.id === newTask.id) ? prev : [...prev, newTask]);
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
       setIsCreateModalOpen(false);
+      forceRefresh();
     } catch (err) {
       console.error('Error creating task:', err);
     }
@@ -124,6 +132,9 @@ export function useKanbanActions(
       } as Partial<Task> & { projectId: number; title: string; status: string });
       // Deduplicate: WebSocket may have already added this task
       setTasks(prev => prev.some(t => t.id === newTask.id) ? prev : [...prev, newTask]);
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
+      forceRefresh();
     } catch (err) {
       console.error('Error creating task:', err);
     }
@@ -139,8 +150,11 @@ export function useKanbanActions(
     try {
       const updated = await updateTask(taskId, updates);
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updated } : t));
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
       setIsEditModalOpen(false);
       setEditingTask(null);
+      forceRefresh();
     } catch (err) {
       console.error('Error updating task:', err);
     } finally {
@@ -154,6 +168,9 @@ export function useKanbanActions(
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
     try {
       await updateTask(taskId, updates);
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
+      forceRefresh();
     } catch (err) {
       console.error('Error inline updating task:', err);
       // revert on error — reload from server would be better but this is faster
@@ -166,6 +183,9 @@ export function useKanbanActions(
     setTasks(prev => prev.filter(t => t.id !== taskId));
     try {
       await deleteTask(taskId);
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
+      forceRefresh();
     } catch (err: unknown) {
       console.error('Error deleting task:', err);
       // Revert on failure
@@ -193,6 +213,9 @@ export function useKanbanActions(
     try {
       await Promise.all(nonDone.map(t => updateTaskStatus(t.id, 'DONE', t.title)));
       setTasks(prev => prev.map(t => ({ ...t, status: 'DONE' })));
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
+      forceRefresh();
       setCompleteSuccess(true);
       setToastMessage(`Archived ${nonDone.length} task${nonDone.length !== 1 ? 's' : ''} to Done.`);
       setTimeout(() => {

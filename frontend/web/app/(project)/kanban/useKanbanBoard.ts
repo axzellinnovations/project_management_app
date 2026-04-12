@@ -16,7 +16,8 @@ export function useKanbanBoard(projectId: string | null) {
     data.tasks,
     data.setTasks,
     data.columnConfigs,
-    data.setColumnConfigs
+    data.setColumnConfigs,
+    data.forceRefresh
   );
 
   // Add a new column (= new status) to the kanban board
@@ -102,5 +103,6 @@ export function useKanbanBoard(projectId: string | null) {
     handleDeleteColumn: actions.handleDeleteColumn,
     handleAddColumn,
     handleCreateLabel,
+    forceRefresh: data.forceRefresh,
   };
 }

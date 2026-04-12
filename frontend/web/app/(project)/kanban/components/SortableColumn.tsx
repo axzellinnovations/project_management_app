@@ -26,7 +26,7 @@ export default function SortableColumn({ column, children, width = '320px' }: So
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    width,
+    minHeight: '100%',
     opacity: isDragging ? 0.5 : 1,
   };
 
@@ -34,7 +34,7 @@ export default function SortableColumn({ column, children, width = '320px' }: So
     <div
       ref={setNodeRef}
       style={style}
-      className="flex-shrink-0 self-start relative group/col"
+      className={`flex-shrink-0 self-start relative group/col snap-center md:snap-none w-[88vw] sm:w-[320px] max-w-[320px]`}
       suppressHydrationWarning={true}
     >
       {/* Column reorder drag handle — only this element has the drag listeners */}

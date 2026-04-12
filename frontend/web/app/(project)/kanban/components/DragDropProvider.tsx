@@ -12,6 +12,8 @@ import {
   useSensors,
   DragOverlay,
   closestCorners,
+  PointerSensor,
+  KeyboardSensor,
 } from '@dnd-kit/core';
 import { Task } from '../types';
 import KanbanCard from './KanbanCard';
@@ -32,17 +34,18 @@ export default function DragDropProvider({
   onDragOver,
 }: DragDropProviderProps) {
   const sensors = useSensors(
-    useSensor(MouseSensor, {
+    useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 200,
+        delay: 150,
         tolerance: 5,
       },
-    })
+    }),
+    useSensor(KeyboardSensor)
   );
 
   const [draggedTask, setDraggedTask] = React.useState<Task | null>(null);
