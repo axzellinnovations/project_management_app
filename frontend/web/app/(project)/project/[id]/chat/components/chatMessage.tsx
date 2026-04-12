@@ -191,7 +191,10 @@ export const ChatMessages = ({
 
   useEffect(() => {
     if (visibleMessages.length > 0) {
-      rowVirtualizer.scrollToIndex(visibleMessages.length - 1, { align: 'end' });
+      // Wrap in setTimeout to avoid flushSync error during lifecycle methods
+      setTimeout(() => {
+        rowVirtualizer.scrollToIndex(visibleMessages.length - 1, { align: 'end' });
+      }, 0);
     }
   }, [visibleMessages.length, rowVirtualizer, typingUser, activeRoomId, isPrivateChat]);
 

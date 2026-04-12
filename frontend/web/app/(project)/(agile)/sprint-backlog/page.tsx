@@ -261,10 +261,31 @@ export default function SprintBacklogPage() {
         assigneePhotoUrl: t.assigneePhotoUrl ?? null,
         sprintId: t.sprintId ?? null,
       };
-      setProductTasks(prev => prev.map(x => x.id === t.id ? { ...x, ...updated } : x));
-      setSprints(prev => prev.map(s => ({
-        ...s, tasks: s.tasks.map(x => x.id === t.id ? { ...x, ...updated } : x)
-      })));
+
+      // Helper to find task and update it while moving if necessary
+      const updateList = (prev: TaskItem[], targetSprintId: number | null | undefined) => {
+        const existing = prev.find(x => x.id === t.id);
+        const filtered = prev.filter(x => x.id !== t.id);
+        
+        // If it should be in this list (backlog if targetSprintId is null)
+        if (!t.sprintId && targetSprintId === null) {
+          const taskToUse = existing || { id: t.id } as TaskItem;
+          return [...filtered, { ...taskToUse, ...updated }];
+        }
+        return filtered;
+      };
+
+      setProductTasks(prev => updateList(prev, null));
+      setSprints(prev => prev.map(s => {
+        const existing = s.tasks.find(x => x.id === t.id);
+        const filtered = s.tasks.filter(x => x.id !== t.id);
+        
+        if (s.id === t.sprintId) {
+          const taskToUse = existing || { id: t.id } as TaskItem;
+          return { ...s, tasks: [...filtered, { ...taskToUse, ...updated }] };
+        }
+        return { ...s, tasks: filtered };
+      }));
     } else if (event.type === 'TASK_DELETED' && event.taskId) {
       const deletedId = event.taskId;
       setProductTasks(prev => prev.filter(x => x.id !== deletedId));
@@ -714,6 +735,23 @@ export default function SprintBacklogPage() {
                         setSprints((prev) => prev.map((s) => s.id === sprintId ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) } : s));
                       }}
                       onSprintDeleted={handleSprintDeleted}
+                      onStatusChange={handleTaskStatusChange}
+                      onStoryPointsChange={updateTaskStoryPoints}
+                      onAssignTask={(taskId, name, photo) => {
+                        setSprints(prev => prev.map(s => ({
+                          ...s,
+                          tasks: s.tasks.map(t => t.id === taskId ? { ...t, assigneeName: name, assigneePhotoUrl: photo } : t)
+                        })));
+                      }}
+                      onRenameTask={async (taskId, title) => {
+                        try {
+                          await api.put(`/api/tasks/${taskId}`, { title });
+                          setSprints(prev => prev.map(s => ({
+                            ...s,
+                            tasks: s.tasks.map(t => t.id === taskId ? { ...t, title } : t)
+                          })));
+                        } catch { toast('Failed to rename task', 'error'); }
+                      }}
                       projectLabels={projectLabels}
                       onCreateLabel={handleCreateLabel}
                       extraStatuses={sprint.status === 'ACTIVE' ? activeBoardStatuses : []}
@@ -743,6 +781,12 @@ export default function SprintBacklogPage() {
                 onStatusChange={handleTaskStatusChange}
                 onAssignTask={(taskId, assigneeName, assigneePhotoUrl) => {
                   setProductTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, assigneeName, assigneePhotoUrl } : t)));
+                }}
+                onRenameTask={async (taskId, title) => {
+                  try {
+                    await api.put(`/api/tasks/${taskId}`, { title });
+                    setProductTasks(prev => prev.map(t => t.id === taskId ? { ...t, title } : t));
+                  } catch { toast('Failed to rename task', 'error'); }
                 }}
                 externalShowCreateModal={showCreateTaskModal}
                 onCloseCreateModal={() => setShowCreateTaskModal(false)}

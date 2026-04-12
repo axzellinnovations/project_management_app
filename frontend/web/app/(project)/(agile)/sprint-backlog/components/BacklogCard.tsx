@@ -37,6 +37,10 @@ interface BacklogCardProps {
   onDeleteTask: (taskId: number, sprintId: number) => void;
   onToggleTask: (taskId: number) => void;
   onSprintDeleted: (sprintId: number, tasks: TaskItem[]) => void;
+  onStatusChange?: (taskId: number, status: any) => void;
+  onStoryPointsChange?: (taskId: number, points: number) => void;
+  onAssignTask?: (taskId: number, name: string, photo: string | null) => void;
+  onRenameTask?: (taskId: number, title: string) => void;
   projectLabels?: Array<{ id: number; name: string; color?: string }>;
   onCreateLabel?: (name: string) => Promise<{ id: number; name: string; color?: string }>;
   extraStatuses?: Array<{ value: string; label: string }>;
@@ -263,7 +267,7 @@ function EditSprintModal({ open, sprintName, loading, onConfirm, onCancel }: Edi
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateTask, onDeleteTask, onToggleTask, onSprintDeleted, projectLabels = [], onCreateLabel, extraStatuses = [] }: BacklogCardProps) {
+function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateTask, onDeleteTask, onToggleTask, onSprintDeleted, onStatusChange, onStoryPointsChange, onAssignTask, onRenameTask, projectLabels = [], onCreateLabel, extraStatuses = [] }: BacklogCardProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [showSprintMenu, setShowSprintMenu] = useState(false);
@@ -484,13 +488,15 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
 
   const handleStatusChange = (taskId: number, status: SprintStatus) => {
     updateTask(taskId, { status });
-    updateTaskOnServer(taskId, { status });
+    if (onStatusChange) onStatusChange(taskId, status);
+    else updateTaskOnServer(taskId, { status });
   };
 
   const handleStoryPointChange = (taskId: number, points: number) => {
     const value = Number.isNaN(points) ? 0 : points;
     updateTask(taskId, { storyPoints: value });
-    updateTaskOnServer(taskId, { storyPoint: value });
+    if (onStoryPointsChange) onStoryPointsChange(taskId, value);
+    else updateTaskOnServer(taskId, { storyPoint: value });
   };
 
   const handleDueDateChange = async (taskId: number, date: string) => {
@@ -524,7 +530,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
     try {
       await api.put(`/api/sprints/${sprint.id}`, { name: newName });
       setShowEditSprintModal(false);
-      window.location.reload();
+      sprint.name = newName; // Optimistic update
     } catch {
       // silently fail
     } finally {
@@ -554,7 +560,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
     try {
       await api.put(`/api/sprints/${sprint.id}`, { status: 'COMPLETED' });
       setConfirmCompleteSprint(false);
-      window.location.reload();
+      sprint.status = 'COMPLETED'; // Optimistic update
     } catch {
       setConfirmCompleteSprint(false);
     } finally {
@@ -608,7 +614,9 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
         endDate: endDate.toISOString().split('T')[0],
       });
       setShowStartSprintModal(false);
-      window.location.reload();
+      sprint.status = 'ACTIVE'; // Optimistic update
+      sprint.startDate = startDate.toISOString().split('T')[0];
+      sprint.endDate = endDate.toISOString().split('T')[0];
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
       setStartSprintError(error.response?.data?.message || 'Failed to start sprint. Please try again.');
@@ -625,10 +633,6 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
   const doDeleteSprint = async () => {
     setDeletingSprintLoading(true);
     try {
-      // Move all sprint tasks to backlog before deleting
-      await Promise.all(
-        localTasks.map((task) => api.put(`/api/tasks/${task.id}`, { sprintId: null }))
-      );
       await api.delete(`/api/sprints/${sprint.id}`);
       setConfirmDeleteSprint(false);
       onSprintDeleted(sprint.id, sprint.tasks);
@@ -642,13 +646,14 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
   const handleRenameTask = async (taskId: number, title: string) => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    try {
-      await api.put(`/api/tasks/${taskId}`, { title: trimmed });
-      setLocalTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, title: trimmed } : t))
-      );
-    } catch {
-      // silent
+    updateTask(taskId, { title: trimmed });
+    if (onRenameTask) onRenameTask(taskId, trimmed);
+    else {
+      try {
+        await api.put(`/api/tasks/${taskId}`, { title: trimmed });
+      } catch {
+        // silent
+      }
     }
   };
 
@@ -688,17 +693,13 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
       await api.patch(`/api/tasks/${taskId}/assign/${userId}`);
       const member = teamMembers.find((m) => m.user.userId === userId);
       if (member) {
-        setLocalTasks((prev) =>
-          prev.map((t) =>
-            t.id === taskId
-              ? {
-                  ...t,
-                  assigneeName: getMemberDisplayName(member),
-                  assigneePhotoUrl: member.user.profilePicUrl,
-                }
-              : t
-          )
-        );
+        const name = getMemberDisplayName(member);
+        const photo = member.user.profilePicUrl || null;
+        updateTask(taskId, {
+          assigneeName: name,
+          assigneePhotoUrl: photo,
+        });
+        if (onAssignTask) onAssignTask(taskId, name, photo);
       }
     } catch {
       // silent
