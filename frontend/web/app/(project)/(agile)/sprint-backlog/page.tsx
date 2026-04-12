@@ -16,7 +16,7 @@ import { toast } from '@/components/ui';
 import { getProjectLabels, createLabel } from '@/services/labels-service';
 import type { TaskItem, SprintItem, Label } from '@/types';
 import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
-import CreateTaskModal, { type CreateTaskData } from '@/components/shared/CreateTaskModal';
+import { type CreateTaskData } from '@/components/shared/CreateTaskModal';
 import { useTaskStore } from '@/stores/task-store';
 import { buildSessionCacheKey, getSessionCache, setSessionCache, removeSessionCache } from '@/lib/session-cache';
 
@@ -161,11 +161,13 @@ export default function SprintBacklogPage() {
         api.get(`/api/tasks/project/${projectId}`),
       ]);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawSprints = sprintsRes.data as any[];
       const rawTasks = tasksRes.data as RawTask[];
       const mappedTasks = rawTasks.map((t, i) => mapRawTask(t, i));
 
       if (projectIdNum) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setTasksForProject(projectIdNum, rawTasks as any);
       }
 
@@ -193,7 +195,9 @@ export default function SprintBacklogPage() {
           .then((res) => {
             const defaultStatuses = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
             const extra = (res.data.columns ?? [])
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               .filter((c: any) => !defaultStatuses.includes(c.columnStatus))
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               .map((c: any) => ({ value: c.columnStatus, label: c.columnName }));
             setActiveBoardStatuses(extra);
           }).catch(() => {});
@@ -202,6 +206,7 @@ export default function SprintBacklogPage() {
       if (cKey) {
         setSessionCache(cKey, { productTasks: backlogTasks, sprints: newSprints, projectKey }, 60 * 60_000);
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (showSpinner) setError(err.response?.data?.message || 'Access denied or project not found.');
     } finally {
