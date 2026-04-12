@@ -124,7 +124,7 @@ export default function WorkloadPage() {
     const totalTasks = workload.reduce((s, w) => s + w.tasks.length, 0) + unassigned.length;
 
     return (
-        <div className="mobile-page-padding max-w-5xl mx-auto pb-6">
+        <div className="mobile-page-padding max-w-5xl mx-auto pb-28 sm:pb-8">
             <div className="mb-6">
                 <h1 className="text-[26px] font-semibold text-[#101828]">Workload</h1>
                 <p className="text-sm text-[#6A7282] mt-1">{totalTasks} task{totalTasks !== 1 ? 's' : ''} across {workload.length} member{workload.length !== 1 ? 's' : ''}</p>

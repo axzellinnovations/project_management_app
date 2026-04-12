@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -6,32 +7,14 @@ import TimelineView from '../kanban/components/TimelineView';
 import { Task } from '../kanban/types';
 import { fetchTasksByProject } from '../kanban/api';
 import { AlertCircle } from 'lucide-react';
-import TaskCardModal from '@/app/taskcard/TaskCardModal';
-import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
-import { getMilestones } from '@/services/milestone-service';
-import type { MilestoneResponse } from '@/types';
 
 export default function TimelinePage() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get('projectId');
 
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [milestones, setMilestones] = useState<MilestoneResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
-
-  useTaskWebSocket(projectId, (event) => {
-    if (event.type === 'TASK_UPDATED' && event.task) {
-      setTasks((prev) =>
-        prev.map((t) => (t.id === event.task!.id ? { ...t, ...(event.task! as Partial<Task>) } : t))
-      );
-    } else if (event.type === 'TASK_CREATED' && event.task) {
-      setTasks((prev) => [...prev, event.task! as unknown as Task]);
-    } else if (event.type === 'TASK_DELETED' && event.taskId != null) {
-      setTasks((prev) => prev.filter((t) => t.id !== event.taskId));
-    }
-  });
 
   // Fetch tasks from backend
   const loadTasks = useCallback(async () => {
@@ -65,14 +48,6 @@ export default function TimelinePage() {
     loadTasks();
   }, [loadTasks]);
 
-  // Load milestones (graceful degradation)
-  useEffect(() => {
-    if (!projectId) return;
-    const pid = parseInt(projectId, 10);
-    if (isNaN(pid)) return;
-    getMilestones(pid).then(setMilestones).catch(() => {});
-  }, [projectId]);
-
   if (!projectId) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -90,7 +65,7 @@ export default function TimelinePage() {
   }
 
   return (
-    <div className="mobile-page-padding pb-6">
+    <div className="mobile-page-padding pb-28 sm:pb-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
@@ -121,20 +96,6 @@ export default function TimelinePage() {
       ) : (
         <TimelineView
           tasks={tasks}
-          onOpenTask={setSelectedTaskId}
-          onTaskUpdated={(taskId, updates) => {
-            setTasks((prev) =>
-              prev.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
-            );
-          }}
-          milestones={milestones.map(ms => ({ id: ms.id, name: ms.name, dueDate: ms.dueDate, status: ms.status }))}
-        />
-      )}
-
-      {selectedTaskId !== null && (
-        <TaskCardModal
-          taskId={selectedTaskId}
-          onClose={() => setSelectedTaskId(null)}
         />
       )}
     </div>

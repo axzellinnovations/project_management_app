@@ -11,23 +11,9 @@ import { GlobalNotificationProvider } from "@/components/providers/GlobalNotific
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import KeyboardShortcutsProvider from "@/components/providers/KeyboardShortcutsProvider";
 
-const inter = Inter({ 
-  subsets: ['latin'], 
-  variable: '--font-inter',
-  display: 'swap',
-})
-const outfit = Outfit({ 
-  subsets: ['latin'], 
-  variable: '--font-outfit', 
-  preload: false,
-  display: 'swap',
-})
-const arimo = Arimo({ 
-  subsets: ['latin'], 
-  variable: '--font-arimo', 
-  preload: false,
-  display: 'swap',
-})
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit', preload: false })
+const arimo = Arimo({ subsets: ['latin'], variable: '--font-arimo', preload: false })
 
 
 export const metadata: Metadata = {

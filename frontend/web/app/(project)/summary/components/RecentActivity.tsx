@@ -2,8 +2,6 @@ import React from 'react';
 import MotionWrapper from './MotionWrapper';
 import { Task, PageItem } from '@/types';
 import Link from 'next/link';
-import api from '@/lib/axios';
-import useSWR from 'swr';
 
 function formatTimeAgo(dateString?: string) {
     if (!dateString) return '';
@@ -16,12 +14,8 @@ function formatTimeAgo(dateString?: string) {
     return `${days}d ago`;
 }
 
-export default function RecentActivity({ projectId, tasks = [] }: { projectId: number, tasks?: Task[] }) {
-    const fetcher = (url: string) => api.get(url).then(res => res.data);
-    const { data: pages = [], isLoading: pagesLoading } = useSWR<PageItem[]>(
-        projectId ? `/api/projects/${projectId}/pages` : null,
-        fetcher
-    );
+export default function RecentActivity({ tasks = [], pages = [] }: { tasks?: Task[], pages?: PageItem[] }) {
+    
     // Recent Activity Feed: Most recently updated tasks
     const recentUpdates = [...tasks]
         .filter(t => t.updatedAt)
@@ -112,18 +106,12 @@ export default function RecentActivity({ projectId, tasks = [] }: { projectId: n
                     Project Docs
                 </h2>
                 
-                {pagesLoading ? (
-                    <div className="space-y-3">
-                        {[1, 2, 3].map(i => (
-                            <div key={i} className="h-10 bg-gray-100/60 rounded-lg animate-pulse" />
-                        ))}
-                    </div>
-                ) : recentPages.length === 0 ? (
+                {recentPages.length === 0 ? (
                     <p className="font-arimo text-[13px] text-[#98A2B3] bg-gray-50 p-4 rounded-lg text-center border border-dashed border-gray-200">No documents found.</p>
                 ) : (
                     <div className="space-y-3">
                         {recentPages.map(page => (
-                            <Link key={page.id} href={`/project/${projectId}/pages/${page.id}`} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-lg border border-transparent hover:border-gray-200 transition-colors group">
+                            <Link key={page.id} href={`/project/${tasks[0]?.projectId}/pages/${page.id}`} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-lg border border-transparent hover:border-gray-200 transition-colors group">
                                 <span className="bg-blue-100 text-blue-600 p-1.5 rounded-md group-hover:bg-blue-600 group-hover:text-white transition-colors">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
                                 </span>

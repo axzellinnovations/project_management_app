@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { X, Calendar, User, Plus, Tag, ChevronDown } from 'lucide-react';
-import { Task, Label } from '../types';
-import { fetchProject, fetchTeamMembers, fetchProjectLabels } from '../api';
+import { X, Calendar, User, Plus } from 'lucide-react';
+import { Task } from '../types';
+import { fetchProject, fetchTeamMembers } from '../api';
 
 interface CreateTaskModalProps {
   isOpen: boolean;
@@ -25,33 +25,15 @@ export default function CreateTaskModal({
   loading = false,
 }: CreateTaskModalProps) {
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [startDate, setStartDate] = useState<Date | null>(null);
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [assignee, setAssignee] = useState<number | ''>('');
   const [priority, setPriority] = useState<string>('MEDIUM');
-  const [selectedLabelId, setSelectedLabelId] = useState<number | null>(null);
   const [teamMembers, setTeamMembers] = useState<{ id: number; name: string }[]>([]);
-  const [labels, setLabels] = useState<Label[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
-  const [labelDropdownOpen, setLabelDropdownOpen] = useState(false);
-  const assigneeRef = useRef<HTMLDivElement>(null);
-  const labelRef = useRef<HTMLDivElement>(null);
   const safeTeamMembers = Array.isArray(teamMembers) ? teamMembers : [];
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (assigneeRef.current && !assigneeRef.current.contains(e.target as Node)) setAssigneeDropdownOpen(false);
-      if (labelRef.current && !labelRef.current.contains(e.target as Node)) setLabelDropdownOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,29 +45,25 @@ export default function CreateTaskModal({
       return;
     }
 
+    const todayIso = new Date().toISOString().split('T')[0];
+
     const taskData: Partial<Task> = {
       title: title.trim(),
-      description: description.trim() || undefined,
       status: columnStatus,
       projectId,
-      startDate: startDate ? startDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      dueDate: dueDate ? dueDate.toISOString().split('T')[0] : undefined,
+      startDate: todayIso,
+      dueDate: dueDate ? dueDate.toISOString().split('T')[0] : todayIso,
       assigneeId: assignee || undefined,
       priority,
-      labelId: selectedLabelId ?? undefined,
     };
 
         try {
           await onCreateTask(taskData);
           setTitle('');
-          setDescription('');
-          setStartDate(null);
           setDueDate(null);
           setAssignee('');
           setPriority('MEDIUM');
-          setSelectedLabelId(null);
           setShowDatePicker(false);
-          setShowStartDatePicker(false);
           onClose();
         } catch (err) {
           setSubmitError(
@@ -119,12 +97,6 @@ export default function CreateTaskModal({
     };
 
     loadMembers();
-  }, [isOpen, projectId]);
-
-  // Load project labels
-  useEffect(() => {
-    if (!isOpen || !projectId) return;
-    fetchProjectLabels(projectId).then(setLabels).catch(() => setLabels([]));
   }, [isOpen, projectId]);
 
   if (!isOpen) return null;
@@ -179,52 +151,7 @@ export default function CreateTaskModal({
             )}
           </div>
 
-          {/* Description Field */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Description</label>
-            <textarea
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Add a description... (optional)"
-              maxLength={2000}
-              rows={3}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-sm resize-none transition-all duration-200"
-              disabled={loading}
-            />
-            <p className="text-xs text-gray-400 text-right">{description.length}/2000</p>
-          </div>
-
-          {/* Start Date */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-              <Calendar size={16} className="text-gray-500" />
-              Start Date
-              <span className="text-xs text-gray-400 font-normal">(Optional)</span>
-            </label>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setShowStartDatePicker(!showStartDatePicker)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 transition-all duration-200 ${
-                  startDate ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
-                }`}
-                disabled={loading}
-              >
-                <Calendar size={16} />
-                <span className="text-sm">
-                  {startDate ? startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Set start date'}
-                </span>
-              </button>
-              {startDate && (
-                <button type="button" onClick={() => setStartDate(null)} className="text-xs text-gray-400 hover:text-gray-600" disabled={loading}>Clear</button>
-              )}
-            </div>
-            {showStartDatePicker && (
-              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                <DatePicker selected={startDate} onChange={(d: Date | null) => { setStartDate(d); setShowStartDatePicker(false); }} dateFormat="MMM d, yyyy" inline disabled={loading} />
-              </div>
-            )}
-          </div>
+          {/* Due Date Section */}
           <div className="space-y-3">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
               <Calendar size={16} className="text-gray-500" />
@@ -296,39 +223,25 @@ export default function CreateTaskModal({
               <span className="text-xs text-gray-400 font-normal">(Optional)</span>
             </label>
 
-            <div ref={assigneeRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setAssigneeDropdownOpen(o => !o)}
-                className="w-full flex items-center justify-between px-4 py-3 border border-gray-200 rounded-xl text-sm bg-white hover:bg-gray-50 transition-all duration-200"
+            <div className="relative">
+              <select
+                value={assignee}
+                onChange={(e) => setAssignee(e.target.value ? parseInt(e.target.value, 10) : '')}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-sm bg-white transition-all duration-200 appearance-none"
                 disabled={loading || loadingMembers}
               >
-                <span className="text-gray-700">
-                  {assignee ? `👤 ${safeTeamMembers.find(m => m.id === assignee)?.name || 'Selected'}` : '👤 Unassigned'}
-                </span>
-                <ChevronDown size={14} className="text-gray-400" />
-              </button>
-              {assigneeDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#D0D5DD] rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
-                  <button
-                    type="button"
-                    onClick={() => { setAssignee(''); setAssigneeDropdownOpen(false); }}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 hover:text-blue-700 transition-colors ${!assignee ? 'font-semibold text-blue-600 bg-blue-50/50' : 'text-gray-700'}`}
-                  >
-                    👤 Unassigned
-                  </button>
-                  {safeTeamMembers.map((member) => (
-                    <button
-                      key={member.id}
-                      type="button"
-                      onClick={() => { setAssignee(member.id); setAssigneeDropdownOpen(false); }}
-                      className={`w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 hover:text-blue-700 transition-colors ${assignee === member.id ? 'font-semibold text-blue-600 bg-blue-50/50' : 'text-gray-700'}`}
-                    >
-                      👤 {member.name}
-                    </button>
-                  ))}
-                </div>
-              )}
+                <option value="">👤 Unassigned</option>
+                {safeTeamMembers.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    👤 {member.name}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
             </div>
 
             {loadingMembers && (
@@ -338,59 +251,6 @@ export default function CreateTaskModal({
               </div>
             )}
           </div>
-
-          {/* Label picker */}
-          {labels.length > 0 && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <Tag size={16} className="text-gray-500" />
-                Label
-                <span className="text-xs text-gray-400 font-normal">(Optional)</span>
-              </label>
-              <div ref={labelRef} className="relative">
-                <button
-                  type="button"
-                  onClick={() => setLabelDropdownOpen(o => !o)}
-                  className="w-full flex items-center justify-between px-4 py-3 border border-gray-200 rounded-xl text-sm bg-white hover:bg-gray-50 transition-all duration-200"
-                  disabled={loading}
-                >
-                  <span className="flex items-center gap-2">
-                    {selectedLabelId ? (
-                      <>
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: labels.find(l => l.id === selectedLabelId)?.color ?? '#6366F1' }} />
-                        <span className="text-gray-700">{labels.find(l => l.id === selectedLabelId)?.name}</span>
-                      </>
-                    ) : (
-                      <span className="text-gray-500">No label</span>
-                    )}
-                  </span>
-                  <ChevronDown size={14} className="text-gray-400" />
-                </button>
-                {labelDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#D0D5DD] rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedLabelId(null); setLabelDropdownOpen(false); }}
-                      className={`w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 hover:text-blue-700 transition-colors ${!selectedLabelId ? 'font-semibold text-blue-600' : 'text-gray-700'}`}
-                    >
-                      No label
-                    </button>
-                    {labels.map(l => (
-                      <button
-                        key={l.id}
-                        type="button"
-                        onClick={() => { setSelectedLabelId(l.id); setLabelDropdownOpen(false); }}
-                        className={`w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2 ${selectedLabelId === l.id ? 'font-semibold text-blue-600 bg-blue-50/50' : 'text-gray-700'}`}
-                      >
-                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color ?? '#6366F1' }} />
-                        {l.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Priority Section */}
           <div className="space-y-2">

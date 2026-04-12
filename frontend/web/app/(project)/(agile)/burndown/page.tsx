@@ -205,7 +205,7 @@ function BurndownContent() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-full bg-[#F4F5F7] p-4 sm:p-5 pb-6 font-[var(--font-inter)]">
+    <div className="min-h-full bg-[#F4F5F7] p-4 sm:p-5 pb-28 sm:pb-8 font-[var(--font-inter)]">
       {/* Page header */}
       <div className="mb-6 flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#175CD3] shadow">

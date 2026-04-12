@@ -59,7 +59,7 @@ export default function PageDetailPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full bg-white relative overflow-hidden">
+      <div className="flex-1 flex flex-col h-full bg-white relative overflow-hidden pb-28 lg:pb-0">
         {loadingPage ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="animate-spin text-blue-500" size={32} />

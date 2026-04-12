@@ -195,7 +195,7 @@ export default function SprintBacklogPage() {
     };
 
     fetchData();
-  }, [projectId, projectIdNum, setTasksForProject]);
+  }, [projectId]);
 
   // WebSocket: live task updates from other users
   useTaskWebSocket(projectId, useCallback((event) => {

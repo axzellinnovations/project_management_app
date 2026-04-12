@@ -132,7 +132,7 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Sprint Burndown</h3>
           {burndownData.length > 0 ? (
               <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={burndownData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="date" tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
@@ -156,7 +156,7 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Task Priority Distribution</h3>
           {taskDistribution.length > 0 ? (
               <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie
                             data={taskDistribution}
@@ -188,7 +188,7 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Velocity (Completed Story Points)</h3>
           {velocityData.length > 0 ? (
               <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={velocityData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="name" tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
@@ -210,7 +210,7 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Lead Time (Average Days to Complete)</h3>
           {leadTimeData.length > 0 ? (
               <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={leadTimeData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="date" tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />

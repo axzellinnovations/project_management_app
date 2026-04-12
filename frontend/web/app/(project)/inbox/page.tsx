@@ -4,7 +4,6 @@ import { RefreshCw } from 'lucide-react';
 import { PROJECT_BATCH_SIZE } from './constants';
 import { ProjectSection } from './components/ProjectSection';
 import { useInboxData } from './hooks/useInboxData';
-import Link from 'next/link';
 
 export default function InboxPage() {
   const {
@@ -24,37 +23,14 @@ export default function InboxPage() {
   } = useInboxData();
 
   return (
-    <div className="mobile-page-padding max-w-[1200px] mx-auto pb-6 flex flex-col gap-4 sm:gap-5">
-      {/* Mobile Top Header */}
-      <div className="flex items-center gap-3 py-4 md:hidden">
-          <button
-              onClick={() => window.dispatchEvent(new CustomEvent('planora:sidebar:toggle'))}
-              className="p-2 -ml-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors border border-slate-100"
-              aria-label="Toggle Sidebar"
-          >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-          </button>
-          <div className="font-outfit text-xl font-extrabold tracking-tight text-[#101828] flex items-center gap-2">
-              <span className="w-2 h-5 bg-blue-600 rounded-full"></span>
-              PLANORA
-          </div>
-      </div>
-
-      {/* Header */}
-      <div className="flex flex-col gap-1 sm:mb-2">
-          <div className="flex items-center gap-2 text-[13px] text-[#4A5565]">
-              <Link href="/dashboard" className="hover:text-[#0052CC]">Dashboard</Link>
-              <span>/</span>
-              <span className="font-medium text-[#101828]">Inbox</span>
-          </div>
-          <h1 className="font-outfit text-2xl sm:text-[32px] font-bold text-[#101828]">Chat Inbox</h1>
-          <p className="text-[13px] text-slate-500 sm:mt-1">
+    <div className="mobile-page-padding max-w-[900px] mx-auto pb-28 sm:pb-8 flex flex-col gap-4 sm:gap-5">
+      <div className="flex items-start gap-3">
+        <div>
+          <h1 className="text-[18px] sm:text-[22px] md:text-[26px] font-bold text-slate-900 tracking-tight">Chat Inbox</h1>
+          <p className="text-[12px] sm:text-[13px] text-slate-600 mt-1">
             All chat activity grouped by project. Open any conversation directly from here.
           </p>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">

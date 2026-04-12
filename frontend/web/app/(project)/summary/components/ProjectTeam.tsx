@@ -4,7 +4,6 @@ import MotionWrapper from './MotionWrapper';
 import { Task, TeamMemberInfo } from '@/types';
 import Link from 'next/link';
 import api from '@/lib/axios';
-import useSWR from 'swr';
 
 const GRADIENTS = [
     'linear-gradient(135deg, #FF6B6B 0%, #C0392B 100%)',
@@ -176,53 +175,30 @@ function TeamMemberRow({
     );
 }
 
-export default function ProjectTeam({ projectId, tasks = [] }: { projectId: number, tasks?: Task[] }) {
-    const fetcher = (url: string) => api.get(url).then(res => res.data);
+export default function ProjectTeam({ projectId, tasks = [], members = [] }: { projectId?: number, tasks?: Task[], members?: TeamMemberInfo[] }) {
+    const [userProfiles, setUserProfiles] = React.useState<Record<string, string>>({});
 
-    // Fetch members using SWR
-    const { data: members = [], isLoading: membersLoading } = useSWR<TeamMemberInfo[]>(
-        projectId ? `/api/projects/${projectId}/members` : null,
-        fetcher
-    );
-
-    // Fetch user profiles for avatars if members exist
-    const { data: usersData } = useSWR(
-        members.length > 0 ? '/api/auth/users' : null,
-        fetcher
-    );
-
-    const userProfiles = React.useMemo(() => {
-        if (!usersData) return {};
-        const profilesMap: Record<string, string> = {};
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        usersData.forEach((u: any) => {
-            if (u.profilePicUrl) {
-                profilesMap[`id:${u.userId}`] = u.profilePicUrl;
-                profilesMap[`email:${u.email}`] = u.profilePicUrl;
-                profilesMap[`username:${u.username}`] = u.profilePicUrl;
+    React.useEffect(() => {
+        if (!members.length) return;
+        const fetchProfiles = async () => {
+            try {
+                const response = await api.get('/api/auth/users');
+                const profilesMap: Record<string, string> = {};
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                response.data.forEach((u: any) => {
+                    if (u.profilePicUrl) {
+                        profilesMap[`id:${u.userId}`] = u.profilePicUrl;
+                        profilesMap[`email:${u.email}`] = u.profilePicUrl;
+                        profilesMap[`username:${u.username}`] = u.profilePicUrl;
+                    }
+                });
+                setUserProfiles(profilesMap);
+            } catch (err) {
+                console.error('Failed to fetch user profiles:', err);
             }
-        });
-        return profilesMap;
-    }, [usersData]);
-
-    if (membersLoading) {
-        return (
-            <MotionWrapper className="bg-white rounded-2xl border border-[#EAECF0] p-6 shadow-sm">
-                 <div className="h-6 w-1/3 bg-gray-100 rounded animate-pulse mb-6" />
-                 <div className="space-y-4">
-                     {[1,2,3].map(i => (
-                         <div key={i} className="flex gap-3">
-                             <div className="w-11 h-11 bg-gray-100 rounded-full animate-pulse" />
-                             <div className="flex-1 space-y-2">
-                                 <div className="h-4 w-1/2 bg-gray-100 rounded animate-pulse" />
-                                 <div className="h-3 w-1/4 bg-gray-100 rounded animate-pulse" />
-                             </div>
-                         </div>
-                     ))}
-                 </div>
-            </MotionWrapper>
-        );
-    }
+        };
+        fetchProfiles();
+    }, [members.length]);
 
     return (
         <MotionWrapper className="bg-white rounded-2xl border border-[#EAECF0] p-6 shadow-sm hover:shadow-xl transition-all duration-500">
