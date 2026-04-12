@@ -25,10 +25,10 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
     handleRoleChange, handleRemoveMemberConfirm, handleInvite,
   } = useMembersData(projectId);
 
-  if (loading) return <div className="mobile-page-padding max-w-[900px] mx-auto pb-28 sm:pb-8 text-sm text-gray-500">Loading...</div>;
+  if (loading) return <div className="mobile-page-padding max-w-[900px] mx-auto pb-6 text-sm text-gray-500">Loading...</div>;
 
   return (
-    <div className="mobile-page-padding max-w-[900px] mx-auto pb-28 sm:pb-8">
+    <div className="mobile-page-padding max-w-[900px] mx-auto pb-6">
       <div className="space-y-5 sm:space-y-6">
         <MembersHeader onInviteClick={() => setShowModal(true)} />
 
