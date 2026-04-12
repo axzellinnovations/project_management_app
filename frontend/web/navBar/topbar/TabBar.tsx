@@ -26,13 +26,11 @@ export function TabBar({
   const dmsRef = useRef<HTMLDivElement>(null);
   const dmsDropdownRef = useRef<HTMLDivElement>(null);
   const [dmsDropdownPos, setDmsDropdownPos] = useState({ top: 0, left: 0 });
-  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams.get('projectId');
 
   useEffect(() => {
-    setMounted(true);
     const check = () => setIsSm(window.innerWidth < 768);
     check();
     window.addEventListener('resize', check);
@@ -67,6 +65,7 @@ export function TabBar({
   const visibleTabs = isSm ? tabs.slice(0, VISIBLE_TABS_SM) : tabs;
   const overflowTabs = isSm ? tabs.slice(VISIBLE_TABS_SM) : [];
   const activeInOverflow = overflowTabs.some(t => t.id === activeTab);
+  const canUsePortal = typeof window !== 'undefined';
 
   const buildHref = (base: string) => {
     if (!projectId) return base;
@@ -166,7 +165,7 @@ export function TabBar({
             </span>
           </button>
 
-          {mounted && createPortal(
+          {canUsePortal && createPortal(
             <AnimatePresence>
               {dmsOpen && (
                 <motion.div

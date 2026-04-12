@@ -162,7 +162,6 @@ export default function Sidebar() {
   const [recentOpen, setRecentOpen] = useState(false);
   const [favSearch, setFavSearch] = useState('');
   const [recentSearch, setRecentSearch] = useState('');
-  const [sidebarWidth, setSidebarWidth] = useState(64);
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -189,19 +188,6 @@ export default function Sidebar() {
   const lastInboxFetchedAtRef = useRef(0);
   const latestSyncedNotificationRef = useRef<number | null>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-
-  /* Track sidebar right edge for panel positioning */
-  useEffect(() => {
-    const updateWidth = () => {
-      if (sidebarRef.current) {
-        const rect = sidebarRef.current.getBoundingClientRect();
-        setSidebarWidth(rect.right);
-      }
-    };
-    updateWidth();
-    window.addEventListener('resize', updateWidth);
-    return () => window.removeEventListener('resize', updateWidth);
-  }, [collapsed]);
 
   /* -- fetch inbox activity -- */
   const fetchInboxActivity = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
