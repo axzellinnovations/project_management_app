@@ -612,6 +612,41 @@ public class TaskService {
         return mapToDTO(saved);
     }
 
+    //17b. UPDATE STATUS (lightweight — used by kanban drag-and-drop)
+    @Transactional
+    public TaskResponseDTO updateStatus(Long taskId, String status, Long currentUserId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
+
+        String oldStatus = task.getStatus();
+        task.setStatus(status);
+
+        // Set or clear completedAt when status transitions to/from DONE
+        if ("DONE".equalsIgnoreCase(status) && !"DONE".equalsIgnoreCase(oldStatus)) {
+            task.setCompletedAt(LocalDateTime.now());
+        } else if (!"DONE".equalsIgnoreCase(status)) {
+            task.setCompletedAt(null);
+        }
+
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+        Task saved = taskRepository.save(task);
+
+        User actor = userRepository.findById(currentUserId).orElse(null);
+        String actorName = actor != null ? actor.getUsername() : "Unknown";
+
+        if (!status.equals(oldStatus)) {
+            taskActivityService.logActivity(saved.getId(), TaskActivityType.STATUS_CHANGED,
+                    actorName, "Status changed from " + oldStatus + " to " + status);
+            String fromStatus = oldStatus != null ? oldStatus : "NONE";
+            String message = actorName + " changed task status for \"" + saved.getTitle()
+                    + "\" from " + fromStatus + " to " + status;
+            notifyTaskStakeholders(saved, currentUserId, message, "/taskcard?taskId=" + saved.getId());
+        }
+
+        return mapToDTO(saved);
+    }
+
     //18. UNASSIGN TASK
     @Transactional
     public void unassignTask(Long taskId, Long currentUserId) {
