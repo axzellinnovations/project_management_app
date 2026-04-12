@@ -127,14 +127,18 @@ function TopBarContent() {
   }, [pathname]);
 
   useEffect(() => {
-    if (projectId && localStorage.getItem('currentProjectId') !== projectId) {
+    const storedId = localStorage.getItem('currentProjectId');
+    if (projectId && storedId !== projectId) {
+      // Project changed — clear stale type immediately so tabs don't route wrong
       localStorage.setItem('currentProjectId', projectId);
-    }
-
-    if (storedProjectType) {
+      localStorage.removeItem('currentProjectType');
+      setProjectType(null);
+    } else if (storedProjectType) {
+      // Same project — safe to use the cached type
       setProjectType(storedProjectType);
     }
 
+    let cancelled = false;
     const fetchProjectStatus = async () => {
       if (!projectId) { setIsFavorite(false); return; }
 
@@ -151,6 +155,7 @@ function TopBarContent() {
 
       try {
         const projectData = await projectsApi.fetchProjectDetails(projectId);
+        if (cancelled) return;
         const resolvedProjectType = projectData?.type || 'KANBAN';
         const isFav = Boolean(projectData?.isFavorite);
         setIsFavorite(isFav);
@@ -168,6 +173,7 @@ function TopBarContent() {
       } catch { setIsFavorite(false); }
     };
     void fetchProjectStatus();
+    return () => { cancelled = true; };
   }, [projectId, storedProjectType]);
 
   // Close project dropdown on outside click
@@ -205,6 +211,8 @@ function TopBarContent() {
   const handleSwitchProject = (proj: { id: number; name: string }) => {
     localStorage.setItem('currentProjectName', proj.name);
     localStorage.setItem('currentProjectId', proj.id.toString());
+    localStorage.removeItem('currentProjectType');
+    setProjectType(null);
     window.dispatchEvent(new CustomEvent('planora:project-accessed'));
     window.dispatchEvent(new Event('storage'));
     setProjectsOpen(false);

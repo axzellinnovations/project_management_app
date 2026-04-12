@@ -269,6 +269,26 @@ public class TaskController {
     }
 
     /**
+     * PATCH /api/tasks/{taskId}/status
+     * Lightweight endpoint for Kanban drag-and-drop status changes.
+     * Accepts { "status": "IN_PROGRESS" }.
+     */
+    @PatchMapping("/{taskId}/status")
+    public ResponseEntity<TaskResponseDTO> updateStatus(
+            @PathVariable Long taskId,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ){
+        Long currentUserId = currentUser.getUserId();
+        String status = body.get("status");
+        TaskResponseDTO task = service.updateStatus(taskId, status, currentUserId);
+        messagingTemplate.convertAndSend(
+                "/topic/project/" + task.getProjectId() + "/tasks",
+                Map.of("type", "TASK_UPDATED", "task", task));
+        return new ResponseEntity<>(task, HttpStatus.OK);
+    }
+
+    /**
      * PATCH /api/tasks/{taskId}/dates
      * Lightweight endpoint for calendar drag-and-drop date updates.
      * Accepts { startDate: "YYYY-MM-DD", dueDate: "YYYY-MM-DD" }.
