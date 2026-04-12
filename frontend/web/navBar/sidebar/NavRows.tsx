@@ -46,7 +46,7 @@ export function NavRow({
         {label}
       </span>
       {badge !== undefined && badge > 0 && !collapsed && (
-        <span className="ml-auto bg-cu-primary/10 text-cu-primary text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+        <span className="bg-cu-primary/10 text-cu-primary text-[10px] px-1.5 py-0.5 rounded-full font-bold">
           {badge}
         </span>
       )}

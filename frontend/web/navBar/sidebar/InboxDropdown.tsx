@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { UserIcon, MessageSquareIcon } from './SidebarIcons';
+import { UserIcon, MessageSquareIcon, SearchIcon } from './SidebarIcons';
 import type { ChatInboxActivity } from '@/services/chat-service';
 import InboxBadge from '@/components/layout/sidebar/InboxBadge';
 
@@ -73,6 +73,8 @@ export function InboxDropdown({
   activities,
   loading,
   error,
+  search,
+  onSearch,
   onRetry,
   onClose,
 }: {
@@ -81,12 +83,25 @@ export function InboxDropdown({
   activities: ChatInboxActivity[];
   loading: boolean;
   error: string | null;
+  search: string;
+  onSearch: (s: string) => void;
   onRetry: () => void;
   onClose: () => void;
 }) {
   const router = useRouter();
 
-  const displayItems = activities.slice(0, 4);
+  const displayItems = activities
+    .filter(a => {
+      if (!search) return true;
+      const s = search.toLowerCase();
+      return (
+        (a.projectName || '').toLowerCase().includes(s) ||
+        (a.roomName || '').toLowerCase().includes(s) ||
+        (a.username || '').toLowerCase().includes(s) ||
+        (a.lastMessage || '').toLowerCase().includes(s)
+      );
+    })
+    .slice(0, 4);
 
   const openActivity = (item: ChatInboxActivity) => {
     if (typeof window !== 'undefined') {
@@ -126,8 +141,20 @@ export function InboxDropdown({
         maxHeight: '400px'
       }}
     >
-      <div className="px-3 pt-2.5 pb-2 border-b border-cu-border-light">
-        <div className="text-[10px] font-bold text-cu-text-muted uppercase tracking-wider">Recent Activity</div>
+      <div className="px-3 pt-3 pb-2 border-b border-cu-border-light">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+            <SearchIcon />
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={e => onSearch(e.target.value)}
+            placeholder="Search messages…"
+            autoFocus
+            className="w-full pl-8 pr-3 py-1.5 text-[12px] bg-cu-bg-tertiary border border-cu-border rounded-lg placeholder-cu-text-muted text-cu-text-primary focus:outline-none focus:ring-1 focus:ring-cu-primary/30 focus:border-cu-primary/40 transition-all"
+          />
+        </div>
       </div>
 
       <div className="overflow-y-auto flex-1 py-1 custom-scrollbar">

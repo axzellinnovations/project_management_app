@@ -182,7 +182,7 @@ export function TeamSkeleton() {
 // Main assembled skeleton for the full page
 export default function SummaryPageSkeleton() {
     return (
-        <div className="mobile-page-padding max-w-[1200px] mx-auto pb-28 sm:pb-8">
+        <div className="mobile-page-padding max-w-[1200px] mx-auto pb-6">
             {/* Metrics Section */}
             <div className="mb-6">
                 <MetricsSkeleton />
