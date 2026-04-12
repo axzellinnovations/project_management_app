@@ -5,6 +5,7 @@ import { Pencil, Trash2, MessageSquare, Pin, PinOff, FileText, Loader2 } from 'l
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatMessage, ChatReactionSummary } from './chat';
 import { EditMessageModal, ConfirmDeleteModal } from './chatModals';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import api from '@/lib/axios';
 
 interface ChatMessagesProps {
@@ -145,6 +146,13 @@ function TypingIndicator({ user, userProfilePics = {} }: { user: string; userPro
   );
 }
 
+const ClockIcon = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1 mt-[1px] inline-block opacity-80">
+    <circle cx="12" cy="12" r="10"></circle>
+    <polyline points="12 6 12 12 16 14"></polyline>
+  </svg>
+);
+
 export const ChatMessages = ({
   projectId,
   messages,
@@ -167,11 +175,25 @@ export const ChatMessages = ({
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
   const [messageToDelete, setMessageToDelete] = useState<number | null>(null);
 
+  const aliasSet = new Set([
+    currentUser.toLowerCase(),
+    ...currentUserAliases.map((a) => a.toLowerCase()),
+  ]);
+
+  const visibleMessages = messages.filter((msg) => msg.type !== 'JOIN');
+
+  const rowVirtualizer = useVirtualizer({
+    count: visibleMessages.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 80,
+    overscan: 10,
+  });
+
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (visibleMessages.length > 0) {
+      rowVirtualizer.scrollToIndex(visibleMessages.length - 1, { align: 'end' });
     }
-  }, [messages, typingUser, activeRoomId, isPrivateChat]);
+  }, [visibleMessages.length, rowVirtualizer, typingUser, activeRoomId, isPrivateChat]);
 
   const handleDocumentClick = async (
     e: React.MouseEvent<HTMLAnchorElement>,
@@ -193,13 +215,6 @@ export const ChatMessages = ({
     }
   };
 
-  const aliasSet = new Set([
-    currentUser.toLowerCase(),
-    ...currentUserAliases.map((a) => a.toLowerCase()),
-  ]);
-
-  const visibleMessages = messages.filter((msg) => msg.type !== 'JOIN');
-
   if (visibleMessages.length === 0 && !typingUser) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
@@ -218,22 +233,42 @@ export const ChatMessages = ({
       className="flex-1 min-h-0 overflow-y-auto px-2 sm:px-4 py-2.5 sm:py-4 space-y-0.5 scroll-smooth overscroll-y-contain touch-pan-y"
       style={{ WebkitOverflowScrolling: 'touch' }}
     >
-      <AnimatePresence initial={false}>
-        {visibleMessages.map((msg, idx) => {
-          const prevMsg = idx > 0 ? visibleMessages[idx - 1] : undefined;
-          const isMe = aliasSet.has((msg.sender || '').toLowerCase());
-          const hasAvatar = !isMe && !isPrivateChat;
-          const grouped = isGrouped(msg, prevMsg);
-          const showSeparator = shouldShowDateSeparator(msg, prevMsg);
-          const msgReactions = msg.id ? (reactionsByMessageId[msg.id] || []) : [];
-          const isPinned = pinnedMessageId === msg.id;
-          const fileDoc = !msg.deleted && isFileDocument(msg.content);
-          const isLoadingFile = loadingFileId === msg.id;
-          const isMentioned = !isMe && !msg.deleted && !fileDoc && messageIsMentioned(msg.content, aliasSet);
+      <div
+        style={{
+          height: `${rowVirtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        <AnimatePresence initial={false}>
+          {rowVirtualizer.getVirtualItems().map((row) => {
+            const idx = row.index;
+            const msg = visibleMessages[idx];
+            const prevMsg = idx > 0 ? visibleMessages[idx - 1] : undefined;
+            const isMe = aliasSet.has((msg.sender || '').toLowerCase());
+            const hasAvatar = !isMe && !isPrivateChat;
+            const grouped = isGrouped(msg, prevMsg);
+            const showSeparator = shouldShowDateSeparator(msg, prevMsg);
+            const msgReactions = msg.id ? (reactionsByMessageId[msg.id] || []) : [];
+            const isPinned = pinnedMessageId === msg.id;
+            const fileDoc = !msg.deleted && isFileDocument(msg.content);
+            const isLoadingFile = loadingFileId === msg.id;
+            const isMentioned = !isMe && !msg.deleted && !fileDoc && messageIsMentioned(msg.content, aliasSet);
 
-          return (
-            <React.Fragment key={msg.id ?? idx}>
-              {/* Date separator */}
+            return (
+              <div
+                key={msg.id ?? `local-msg-${idx}`}
+                data-index={idx}
+                ref={rowVirtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${row.start}px)`,
+                }}
+              >
+                {/* Date separator */}
               {showSeparator && (
                 <div className="flex items-center gap-3 my-4">
                   <div className="flex-1 h-px bg-gray-100" />
@@ -346,9 +381,11 @@ export const ChatMessages = ({
                       relative px-4 py-2.5 pr-14 pb-4 text-[13.5px] leading-relaxed shadow-sm
                       ${msg.deleted
                         ? 'bg-gray-100 text-gray-400 italic rounded-2xl'
-                        : isMe
-                          ? 'bg-cu-primary text-white rounded-2xl rounded-br-sm'
-                          : 'bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-bl-sm'
+                        : !msg.id
+                          ? 'bg-cu-primary/70 text-white opacity-80 rounded-2xl rounded-br-sm'
+                          : isMe
+                            ? 'bg-cu-primary text-white rounded-2xl rounded-br-sm'
+                            : 'bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-bl-sm'
                       }
                     `}>
                       {msg.deleted ? (
@@ -374,10 +411,14 @@ export const ChatMessages = ({
                       )}
 
                       {/* Time + edited inside bubble */}
-                      {!msg.deleted && msg.timestamp && (
-                        <span className={`absolute bottom-1.5 right-3 text-[10px] leading-none ${isMe ? 'text-blue-100/80' : 'text-gray-400'}`}>
+                      {!msg.deleted && (
+                        <span className={`absolute bottom-1.5 right-3 text-[10px] flex items-center leading-none ${isMe ? 'text-blue-100/80' : 'text-gray-400'}`}>
                           {msg.editedAt && <span className="mr-1 italic">edited</span>}
-                          {formatTime(msg.timestamp)}
+                          {!msg.id ? (
+                            <><ClockIcon /> Sending…</>
+                          ) : msg.timestamp ? (
+                            formatTime(msg.timestamp)
+                          ) : null}
                         </span>
                       )}
                     </div>
@@ -403,10 +444,11 @@ export const ChatMessages = ({
                   )}
                 </div>
               </motion.div>
-            </React.Fragment>
-          );
-        })}
-      </AnimatePresence>
+              </div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
 
       {/* Typing indicator */}
       <AnimatePresence>

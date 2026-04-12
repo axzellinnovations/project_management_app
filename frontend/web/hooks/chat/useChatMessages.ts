@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import * as chatApi from '@/services/chat-service';
 import type { ChatMessage } from '@/app/(project)/project/[id]/chat/components/chat';
 import { mergeMessage, isSameIdentity } from './chat-utils';
@@ -260,7 +260,9 @@ export function useChatMessages(projectId: string) {
       if (!trimmed) return;
 
       if (recipient) {
+        const localId = `loc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         const msg: ChatMessage = {
+          localId,
           sender: currentUser,
           content: trimmed,
           recipient,
@@ -277,7 +279,9 @@ export function useChatMessages(projectId: string) {
         return;
       }
 
+      const localId = `loc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       const msg: ChatMessage = {
+        localId,
         sender: currentUser,
         content: trimmed,
         type: 'CHAT',
@@ -305,7 +309,9 @@ export function useChatMessages(projectId: string) {
       const trimmed = content.trim();
       if (!trimmed) return;
 
+      const localId = `loc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       const msg: ChatMessage = {
+        localId,
         sender: currentUser,
         content: trimmed,
         roomId,

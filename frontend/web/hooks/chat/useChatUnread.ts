@@ -1,4 +1,4 @@
-﻿import { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import * as chatApi from '@/services/chat-service';
 import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
 import type {
