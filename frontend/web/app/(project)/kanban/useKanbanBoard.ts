@@ -1,6 +1,5 @@
 'use client';
 
-import { useCallback } from 'react';
 import { useKanbanData } from './hooks/useKanbanData';
 import { useKanbanFilters } from './hooks/useKanbanFilters';
 import { useKanbanActions } from './hooks/useKanbanActions';
@@ -21,7 +20,7 @@ export function useKanbanBoard(projectId: string | null) {
   );
 
   // Add a new column (= new status) to the kanban board
-  const handleAddColumn = useCallback(async (name: string) => {
+  const handleAddColumn = async (name: string) => {
     if (!data.kanbanId || !name.trim()) return;
     try {
       const position = data.columnConfigs.length;
@@ -30,10 +29,10 @@ export function useKanbanBoard(projectId: string | null) {
     } catch (err) {
       console.error('Error creating column:', err);
     }
-  }, [data.kanbanId, data.columnConfigs.length, data.setColumnConfigs]);
+  };
 
   // Create a new label for the project
-  const handleCreateLabel = useCallback(async (name: string, color: string) => {
+  const handleCreateLabel = async (name: string, color: string) => {
     if (!projectId || !name.trim()) return null;
     try {
       const label = await createProjectLabel(Number(projectId), name.trim(), color);
@@ -43,7 +42,7 @@ export function useKanbanBoard(projectId: string | null) {
       console.error('Error creating label:', err);
       return null;
     }
-  }, [projectId, data.setLabels]);
+  };
 
   return {
     // Data

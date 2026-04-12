@@ -29,7 +29,7 @@ const PRIORITY_LIST = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
 
 const LABEL_COLORS = ['#6366F1', '#EF4444', '#F59E0B', '#22C55E', '#3B82F6', '#EC4899', '#8B5CF6', '#14B8A6'];
 
-export default function KanbanCard({ task, onDelete, onEdit, onOpenTask, onInlineUpdate, usersMap, labels: allLabels, onCreateLabel }: KanbanCardProps) {
+export default function KanbanCard({ task, onDelete, onEdit: _onEdit, onOpenTask, onInlineUpdate, usersMap, labels: allLabels, onCreateLabel }: KanbanCardProps) {
   const avatarUrl =
     (task.assigneePhotoUrl && task.assigneePhotoUrl.startsWith('http') ? task.assigneePhotoUrl : null) ??
     (task.assigneeName && usersMap?.[task.assigneeName]?.startsWith('http') ? usersMap[task.assigneeName] : null);
