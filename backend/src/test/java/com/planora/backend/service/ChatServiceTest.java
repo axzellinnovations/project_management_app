@@ -169,7 +169,7 @@ class ChatServiceTest {
         actor.setEmail("alice@example.com");
         when(userCacheService.resolveUserByEmailOrUsername("alice")).thenReturn(actor);
         when(chatReactionRepository.findByMessageIdAndUserUserIdAndEmoji(11L, 33L, "👍")).thenReturn(Optional.empty());
-        when(chatReactionRepository.findWithUserByMessageIdOrderByCreatedAtAsc(11L)).thenReturn(List.of());
+        when(chatMessageRepository.findWithReactionsByIdAndProjectId(11L, 10L)).thenReturn(Optional.of(message));
 
         List<ChatService.ChatReactionSummary> summaries = chatService.toggleReaction(10L, 11L, "alice", "👍");
 
@@ -193,7 +193,7 @@ class ChatServiceTest {
         ChatReaction reaction = new ChatReaction();
         reaction.setEmoji("🔥");
         when(chatReactionRepository.findByMessageIdAndUserUserIdAndEmoji(12L, 44L, "🔥")).thenReturn(Optional.of(reaction));
-        when(chatReactionRepository.findWithUserByMessageIdOrderByCreatedAtAsc(12L)).thenReturn(List.of());
+        when(chatMessageRepository.findWithReactionsByIdAndProjectId(12L, 10L)).thenReturn(Optional.of(message));
 
         chatService.toggleReaction(10L, 12L, "bob", "🔥");
 

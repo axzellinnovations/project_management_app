@@ -104,6 +104,7 @@ class ChatRestControllerTest {
         member.setTeam(team);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(project));
+        when(projectMembershipService.resolveProjectTeamId(5L)).thenReturn(7L);
         when(userCacheService.resolveUserByEmailOrUsername("alice")).thenReturn(alice);
         when(userCacheService.resolveUserByEmailOrUsername("alice@example.com")).thenReturn(alice);
         when(teamMemberRepository.findByTeamIdAndUserUserId(7L, 10L)).thenReturn(Optional.of(member));
@@ -245,7 +246,7 @@ class ChatRestControllerTest {
         mockMvc.perform(get("/api/projects/5/chat/features"))
                 .andExpect(status().isOk());
 
-        verify(projectMembershipService).assertProjectMembership(5L, alice);
+        verify(projectMembershipService).assertTeamMembership(7L, alice);
     }
 
     @Test
