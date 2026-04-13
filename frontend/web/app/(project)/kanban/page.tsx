@@ -7,7 +7,6 @@ import DragDropProvider from './components/DragDropProvider';
 import KanbanColumn from './components/KanbanColumn';
 import SortableColumn from './components/SortableColumn';
 import KanbanFilterBar from './components/KanbanFilterBar';
-import MobileColumnSwitcher from './components/MobileColumnSwitcher';
 import CreateTaskModal from './components/CreateTaskModal';
 import { AlertCircle, Loader, CheckCircle2, Plus, LayoutGrid, X } from 'lucide-react';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
@@ -30,7 +29,7 @@ export default function KanbanPage() {
     selectedColumnStatus,
     completeSuccess, toastMessage,
     selectedTaskIdForModal, setSelectedTaskIdForModal,
-    updatingTaskId, usersMap, activeMobileColumn, setActiveMobileColumn,
+    updatingTaskId, usersMap, activeMobileColumn,
     handleDragEnd, handleColumnDragEnd, handleDeleteTask,
     handleAddTask, handleCreateTask, handleOpenCreateModal,
     handleEditTask, handleInlineUpdate, handleCompleteBoard,
@@ -40,6 +39,7 @@ export default function KanbanPage() {
 
   const [showAddColumn, setShowAddColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
 
   const handleAnyDragEnd = useCallback((event: DragEndEvent) => {
     if (!isNaN(Number(event.active.id))) {
@@ -115,7 +115,7 @@ export default function KanbanPage() {
 
             {/* Complete Board */}
             <button
-              onClick={handleCompleteBoard}
+              onClick={() => setShowCompleteConfirm(true)}
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-medium hover:bg-emerald-100 transition-colors"
             >
               <CheckCircle2 size={14} />
@@ -176,15 +176,7 @@ export default function KanbanPage() {
         </div>
       )}
 
-      {/* Mobile Column Switcher */}
-      <div className="px-3 pt-3">
-        <MobileColumnSwitcher
-          columnConfigs={columnConfigs}
-          columns={columns}
-          activeMobileColumn={activeMobileColumn}
-          setActiveMobileColumn={setActiveMobileColumn}
-        />
-      </div>
+      {/* Mobile Column Switcher - removed for native scroll */}
 
       {/* Board Content */}
       <div className="flex-1 overflow-hidden px-3 md:px-5 py-3">
@@ -197,14 +189,14 @@ export default function KanbanPage() {
           </div>
         ) : (
           <DragDropProvider tasks={tasks} onDragEnd={handleAnyDragEnd}>
-            {/* Desktop: all columns side-by-side */}
+            {/* Unified Desktop & Mobile side-by-side columns */}
             <SortableContext items={(columnConfigs || []).filter(c => c && c.status).map((c) => c.status)} strategy={horizontalListSortingStrategy}>
-              <div className="hidden md:flex gap-3 overflow-x-auto h-full pb-3 items-start"
+              <div className="flex gap-4 sm:gap-3 overflow-x-auto snap-x snap-mandatory h-full pb-3 items-start px-2 sm:px-0"
                    style={{ scrollbarWidth: 'thin' }}>
                 {columns.filter(c => c && c.status).map((column) => {
                   const cfg = columnConfigs.find(c => c.status === column.status);
                   return (
-                    <SortableColumn key={column.status} column={column} width="320px">
+                    <SortableColumn key={column.status} column={column}>
                       <KanbanColumn
                         column={column}
                         columnId={cfg?.id}
@@ -228,7 +220,7 @@ export default function KanbanPage() {
 
                 {/* Add Column button — ClickUp style */}
                 {kanbanId && (
-                  <div className="flex-shrink-0 self-start" style={{ width: '280px' }}>
+                  <div className="flex-shrink-0 self-start snap-center md:snap-none" style={{ width: '280px' }}>
                     {showAddColumn ? (
                       <div className="rounded-xl bg-[#F8F9FB] border border-gray-200/60 p-3">
                         <input
@@ -277,34 +269,7 @@ export default function KanbanPage() {
               </div>
             </SortableContext>
 
-            {/* Mobile: single active column */}
-            <div className="md:hidden h-[calc(100vh-280px)] overflow-y-auto">
-              {columns
-                .filter(col => col.status === activeMobileColumn)
-                .map(column => {
-                  const cfg = columnConfigs.find(c => c.status === column.status);
-                  return (
-                    <KanbanColumn
-                      key={column.status}
-                      column={column}
-                      columnId={cfg?.id}
-                      color={cfg?.color}
-                      wipLimit={cfg?.wipLimit}
-                      onDeleteTask={handleDeleteTask}
-                      onCreateTask={handleAddTask}
-                      onEditTask={handleEditTask}
-                      onOpenTask={setSelectedTaskIdForModal}
-                      onInlineUpdate={handleInlineUpdate}
-                      usersMap={usersMap}
-                      labels={labels}
-                      onCreateLabel={handleCreateLabel}
-                      onColumnRenamed={handleColumnRenamed}
-                      onColumnSettingsChanged={handleColumnSettingsChanged}
-                      onDeleteColumn={handleDeleteColumn}
-                    />
-                  );
-                })}
-            </div>
+
 
             {updatingTaskId && (
               <div className="fixed bottom-20 right-4 md:bottom-4 bg-gray-900 text-white px-4 py-2 rounded-lg shadow-xl flex items-center gap-2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
@@ -315,6 +280,44 @@ export default function KanbanPage() {
           </DragDropProvider>
         )}
       </div>
+
+      {/* Complete All Tasks Confirmation Dialog */}
+      {showCompleteConfirm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-[#EAECF0] p-6 max-w-sm w-full mx-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                <CheckCircle2 size={20} className="text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="text-[16px] font-bold text-[#101828]">Complete All Tasks</h3>
+                <p className="text-[13px] text-[#475467]">Archive entire board to Done?</p>
+              </div>
+            </div>
+            <p className="text-[14px] text-[#344054] mb-5 leading-relaxed">
+              This will mark all remaining tasks as <span className="font-bold text-emerald-600">Done</span>. This action is definitive but allows you to clear your board quickly.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCompleteConfirm(false)}
+                className="flex-1 px-4 py-2.5 border border-[#D0D5DD] rounded-xl text-[14px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setShowCompleteConfirm(false);
+                  await handleCompleteBoard();
+                }}
+                className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[14px] font-bold transition-colors shadow-lg shadow-emerald-200 flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 size={16} />
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Action Button — Quick Create (mobile) */}
       <button

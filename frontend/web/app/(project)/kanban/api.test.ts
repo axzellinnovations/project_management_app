@@ -36,9 +36,12 @@ describe('kanban api', () => {
   });
 
   it('createTask validates required fields', async () => {
-    await expect(createTask({ projectId: 12, status: 'TODO' })).rejects.toThrow('Failed to create task');
-    await expect(createTask({ title: 'Task', status: 'TODO' })).rejects.toThrow('Failed to create task');
-    await expect(createTask({ title: 'Task', projectId: 12 })).rejects.toThrow('Failed to create task');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(createTask({ projectId: 12, status: 'TODO' } as any)).rejects.toThrow('Failed to create task');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(createTask({ title: 'Task', status: 'TODO' } as any)).rejects.toThrow('Failed to create task');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(createTask({ title: 'Task', projectId: 12 } as any)).rejects.toThrow('Failed to create task');
   });
 
   it('createTask maps backend errors to user friendly message', async () => {

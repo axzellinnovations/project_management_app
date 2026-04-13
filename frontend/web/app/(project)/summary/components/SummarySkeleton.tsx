@@ -118,13 +118,16 @@ export function ChartsSkeleton() {
                     <Skeleton className="h-4 w-40 mb-8" />
                     <div className="h-[200px] flex items-end justify-between gap-2 px-2">
                        {/* Mock chart bars/lines */}
-                       {[...Array(8)].map((_, j) => (
-                           <div
-                               key={j}
-                               className="w-full rounded-t-sm rounded-cu-md bg-gradient-to-r from-cu-bg-tertiary via-cu-bg-secondary to-cu-bg-tertiary bg-[length:200%_100%] animate-shimmer"
-                               style={{ height: `${Math.random() * 60 + 20}%` }}
-                           />
-                       ))}
+                        {[...Array(8)].map((_, j) => {
+                            const heights = ['40%', '75%', '50%', '85%', '25%', '65%', '45%', '90%'];
+                            return (
+                                <div
+                                    key={j}
+                                    className="w-full rounded-t-sm rounded-cu-md bg-gradient-to-r from-cu-bg-tertiary via-cu-bg-secondary to-cu-bg-tertiary bg-[length:200%_100%] animate-shimmer"
+                                    style={{ height: heights[j % heights.length] }}
+                                />
+                            );
+                        })}
                     </div>
                     <div className="flex justify-between mt-4">
                         <Skeleton className="h-3 w-12" />

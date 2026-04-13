@@ -68,7 +68,7 @@ export default function CreateTaskModal({
       description: description.trim() || undefined,
       status: columnStatus,
       projectId,
-      startDate: startDate ? startDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      startDate: startDate ? startDate.toISOString().split('T')[0] : undefined,
       dueDate: dueDate ? dueDate.toISOString().split('T')[0] : undefined,
       assigneeId: assignee || undefined,
       priority,

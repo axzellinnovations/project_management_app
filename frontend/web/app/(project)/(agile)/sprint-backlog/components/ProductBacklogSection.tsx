@@ -33,6 +33,7 @@ interface ProductBacklogSectionProps {
   onDropTask: (taskId: number) => void;
   onAssignTask: (taskId: number, assigneeName: string, assigneePhotoUrl: string | null) => void;
   onStatusChange: (taskId: number, status: string) => void;
+  onRenameTask?: (taskId: number, title: string) => void;
   externalShowCreateModal?: boolean;
   onCloseCreateModal?: () => void;
   projectLabels?: Array<{ id: number; name: string; color?: string }>;
@@ -55,6 +56,7 @@ export default function ProductBacklogSection({
   onDropTask,
   onAssignTask,
   onStatusChange,
+  onRenameTask,
   externalShowCreateModal,
   onCloseCreateModal,
   projectLabels = [],
@@ -99,30 +101,30 @@ export default function ProductBacklogSection({
     if (loadingMembers) return;
 
     try {
-      setLoadingMembers(true);
-      const projectRes = await api.get(`/api/projects/${projectId}`);
-      const teamId = projectRes.data.teamId;
-      const membersRes = await api.get(`/api/teams/${teamId}/members`);
-      const data = membersRes.data;
-      setTeamMembers(Array.isArray(data) ? data : []);
-    } catch {
-      if (showError) {
-        toast('Failed to load team members.', 'error');
-      }
-    } finally {
-      setLoadingMembers(false);
-    }
-  };
+      setLoadingMembers(true);
+      const projectRes = await api.get(`/api/projects/${projectId}`);
+      const teamId = projectRes.data.teamId;
+      const membersRes = await api.get(`/api/teams/${teamId}/members`);
+      const data = membersRes.data;
+      setTeamMembers(Array.isArray(data) ? data : []);
+    } catch {
+      if (showError) {
+        toast('Failed to load team members.', 'error');
+      }
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
 
-  const handleAssignTask = async (taskId: number, userId: number) => {
-    try {
-      await api.patch(`/api/tasks/${taskId}/assign/${userId}`);
-      const member = teamMembers.find((m) => m.user.userId === userId);
-      if (member) {
-        onAssignTask(taskId, getMemberDisplayName(member), member.user.profilePicUrl || null);
-      }
-    } catch {
-      toast('Failed to assign task.', 'error');
+  const handleAssignTask = async (taskId: number, userId: number) => {
+    try {
+      await api.patch(`/api/tasks/${taskId}/assign/${userId}`);
+      const member = teamMembers.find((m) => m.user.userId === userId);
+      if (member) {
+        onAssignTask(taskId, getMemberDisplayName(member), member.user.profilePicUrl || null);
+      }
+    } catch {
+      toast('Failed to assign task.', 'error');
     }
   };
 
@@ -138,12 +140,15 @@ export default function ProductBacklogSection({
   const handleRenameTask = async (taskId: number, title: string) => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    try {
-      await api.put(`/api/tasks/${taskId}`, { title: trimmed });
-    } catch {
-      // silent
-    }
-  };
+    if (onRenameTask) onRenameTask(taskId, trimmed);
+    else {
+      try {
+        await api.put(`/api/tasks/${taskId}`, { title: trimmed });
+      } catch {
+        // silent
+      }
+    }
+  };
 
   const handleAddLabel = async (taskId: number, labelId: number) => {
     try {
@@ -189,15 +194,15 @@ export default function ProductBacklogSection({
   }, [tasks]);
 
   const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
+    e.preventDefault();
+  };
 
-  return (
-    <div 
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-      className="rounded-xl border border-[#E4E7EC] bg-[#F8F9FB] p-5 shadow-sm"
-    >
+  return (
+    <div 
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      className="rounded-xl border border-[#E4E7EC] bg-[#F8F9FB] p-5 shadow-sm"
+    >
 <div className="flex h-10 items-center border-b border-[#EAECF0] pb-3 mb-3 gap-3">
         {/* Left: collapse toggle + title + task count */}
         <div className="flex items-center gap-2 min-w-0">
@@ -244,12 +249,12 @@ export default function ProductBacklogSection({
           >
             <Rocket size={14} />
             <span>Create Sprint</span>
-          </button>
-        </div>
-      </div>
+          </button>
+        </div>
+      </div>
 
-      {isOpen && (
-        <div>
+      {isOpen && (
+        <div>
 <div className="flex flex-col gap-[5px]">
             {tasks.map((task) => (
               <div
@@ -275,9 +280,9 @@ export default function ProductBacklogSection({
                   onRemoveLabel={handleRemoveLabel}
                   onCreateLabel={onCreateLabel}
                 />
-              </div>
-            ))}
-          </div>
+              </div>
+            ))}
+          </div>
 
 
            {/* ── Inline Create Task ── */}
@@ -323,32 +328,32 @@ export default function ProductBacklogSection({
           />
 
           {/* ── Task Delete Confirmation Modal ── */}
-          <ConfirmModal
-            open={taskToDeleteId !== null}
-            onCancel={() => setTaskToDeleteId(null)}
-            onConfirm={() => {
-              if (taskToDeleteId) {
-                handleDeleteTask(taskToDeleteId);
-                setTaskToDeleteId(null);
-              }
-            }}
-            title="Delete Task"
-            message="Are you sure you want to delete this task? This action cannot be undone."
-            confirmLabel="Delete"
-            loading={false}
-            variant="danger"
-          />
-        </div>
-      )}
+          <ConfirmModal
+            open={taskToDeleteId !== null}
+            onCancel={() => setTaskToDeleteId(null)}
+            onConfirm={() => {
+              if (taskToDeleteId) {
+                handleDeleteTask(taskToDeleteId);
+                setTaskToDeleteId(null);
+              }
+            }}
+            title="Delete Task"
+            message="Are you sure you want to delete this task? This action cannot be undone."
+            confirmLabel="Delete"
+            loading={false}
+            variant="danger"
+          />
+        </div>
+      )}
 
-    {selectedTaskId !== null && (
-      <TaskCardModal
-        taskId={selectedTaskId}
-        onClose={(_wasModified) => setSelectedTaskId(null)}
-      />
-    )}
-    </div>
-  );
+    {selectedTaskId !== null && (
+      <TaskCardModal
+        taskId={selectedTaskId}
+        onClose={(_wasModified) => setSelectedTaskId(null)}
+      />
+    )}
+    </div>
+  );
 }
 
 // ── Reusable Confirmation Modal ──────────────────────────────────────────────

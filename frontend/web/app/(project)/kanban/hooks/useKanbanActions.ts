@@ -12,13 +12,15 @@ import {
   reorderKanbanColumns,
 } from '../api';
 import { type CreateTaskData } from '@/components/shared/CreateTaskModal';
+import { buildSessionCacheKey, removeSessionCache } from '@/lib/session-cache';
 
 export function useKanbanActions(
   projectId: string | null,
   tasks: Task[],
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>,
   columnConfigs: KanbanColumnConfig[],
-  setColumnConfigs: React.Dispatch<React.SetStateAction<KanbanColumnConfig[]>>
+  setColumnConfigs: React.Dispatch<React.SetStateAction<KanbanColumnConfig[]>>,
+  forceRefresh: () => void
 ) {
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -61,13 +63,16 @@ export function useKanbanActions(
 
     try {
       await updateTaskStatus(taskId, newStatus, task.title);
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
+      forceRefresh();
     } catch (err) {
       console.error('Error updating task status:', err);
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: task.status } : t));
     } finally {
       setUpdatingTaskId(null);
     }
-  }, [tasks, columnConfigs, setTasks]);
+  }, [tasks, columnConfigs, setTasks, projectId, forceRefresh]);
 
   // Column reorder
   const handleColumnDragEnd = useCallback(async (event: DragEndEvent) => {
@@ -107,11 +112,14 @@ export function useKanbanActions(
       } as Partial<Task> & { projectId: number; title: string; status: string });
       // Deduplicate: WebSocket may have already added this task
       setTasks(prev => prev.some(t => t.id === newTask.id) ? prev : [...prev, newTask]);
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
       setIsCreateModalOpen(false);
+      forceRefresh();
     } catch (err) {
       console.error('Error creating task:', err);
     }
-  }, [projectId, selectedColumnStatus, setTasks]);
+  }, [projectId, selectedColumnStatus, setTasks, forceRefresh]);
 
   // Task CRUD
   const handleAddTask = useCallback(async (title: string, status: string) => {
@@ -124,10 +132,13 @@ export function useKanbanActions(
       } as Partial<Task> & { projectId: number; title: string; status: string });
       // Deduplicate: WebSocket may have already added this task
       setTasks(prev => prev.some(t => t.id === newTask.id) ? prev : [...prev, newTask]);
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
+      forceRefresh();
     } catch (err) {
       console.error('Error creating task:', err);
     }
-  }, [projectId, setTasks]);
+  }, [projectId, setTasks, forceRefresh]);
 
   const handleEditTask = useCallback((task: Task) => {
     setEditingTask(task);
@@ -139,14 +150,17 @@ export function useKanbanActions(
     try {
       const updated = await updateTask(taskId, updates);
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updated } : t));
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
       setIsEditModalOpen(false);
       setEditingTask(null);
+      forceRefresh();
     } catch (err) {
       console.error('Error updating task:', err);
     } finally {
       setIsUpdatingTask(false);
     }
-  }, [setTasks]);
+  }, [setTasks, projectId, forceRefresh]);
 
   // Inline update — used by KanbanCard's inline edit mode (no modal)
   const handleInlineUpdate = useCallback(async (taskId: number, updates: Partial<Task>) => {
@@ -154,11 +168,14 @@ export function useKanbanActions(
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
     try {
       await updateTask(taskId, updates);
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
+      forceRefresh();
     } catch (err) {
       console.error('Error inline updating task:', err);
       // revert on error — reload from server would be better but this is faster
     }
-  }, [setTasks]);
+  }, [setTasks, projectId, forceRefresh]);
 
   const handleDeleteTask = useCallback(async (taskId: number) => {
     // Optimistic removal
@@ -166,6 +183,9 @@ export function useKanbanActions(
     setTasks(prev => prev.filter(t => t.id !== taskId));
     try {
       await deleteTask(taskId);
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
+      forceRefresh();
     } catch (err: unknown) {
       console.error('Error deleting task:', err);
       // Revert on failure
@@ -178,7 +198,7 @@ export function useKanbanActions(
       }
       setTimeout(() => setToastMessage(null), 4000);
     }
-  }, [tasks, setTasks]);
+  }, [tasks, setTasks, projectId, forceRefresh]);
 
   // Archive board
   const handleCompleteBoard = useCallback(async () => {
@@ -193,6 +213,9 @@ export function useKanbanActions(
     try {
       await Promise.all(nonDone.map(t => updateTaskStatus(t.id, 'DONE', t.title)));
       setTasks(prev => prev.map(t => ({ ...t, status: 'DONE' })));
+      const key = buildSessionCacheKey('kanban-board', [projectId]);
+      if (key) removeSessionCache(key);
+      forceRefresh();
       setCompleteSuccess(true);
       setToastMessage(`Archived ${nonDone.length} task${nonDone.length !== 1 ? 's' : ''} to Done.`);
       setTimeout(() => {
@@ -204,7 +227,7 @@ export function useKanbanActions(
       setToastMessage('Failed to archive board. Please try again.');
       setTimeout(() => setToastMessage(null), 3000);
     }
-  }, [tasks, setTasks]);
+  }, [tasks, setTasks, projectId, forceRefresh]);
 
   // Column management
   const handleColumnRenamed = useCallback((columnId: number, newName: string) => {

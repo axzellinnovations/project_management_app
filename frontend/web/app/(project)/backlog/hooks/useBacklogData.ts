@@ -4,6 +4,7 @@ import { fetchTasksByProject, fetchProjectLabels, fetchProject, fetchTeamMembers
 import api from '@/lib/axios';
 import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
 import { type CreateTaskData } from '@/components/shared/CreateTaskModal';
+import { buildSessionCacheKey, getSessionCache, setSessionCache, removeSessionCache } from '@/lib/session-cache';
 
 export function useBacklogData(projectId: string | null) {
 
@@ -25,50 +26,75 @@ export function useBacklogData(projectId: string | null) {
 
     const [teamMembers, setTeamMembers] = useState<TeamMemberOption[]>([]);
     const [labels, setLabels] = useState<Label[]>([]);
-    const [collapsed, setCollapsed] = useState(false);
+    const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+    const toggleGroup = useCallback((label: string) => {
+        setCollapsedGroups(prev => ({ ...prev, [label]: !prev[label] }));
+    }, []);
 
     // Bulk selection
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
-    const loadTasks = useCallback(async () => {
-        if (!projectId) return;
-        const cacheKey = `planora:backlog:${projectId}`;
-        // Stale-while-revalidate: show cached data immediately
-        try {
-            const cached = localStorage.getItem(cacheKey);
-            if (cached) {
-                setTasks(JSON.parse(cached) as Task[]);
-                setLoading(false);
-            }
-        } catch { /* ignore corrupt cache */ }
-
-        setLoading(prev => prev === false ? false : true);
-        setError(null);
-        try {
-            const n = parseInt(projectId, 10);
-            if (isNaN(n)) throw new Error('Invalid project ID');
-            const fetched = await fetchTasksByProject(n);
-            setTasks(fetched);
-            try { localStorage.setItem(cacheKey, JSON.stringify(fetched)); } catch { /* storage full / SSR */ }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load tasks');
-        } finally {
-            setLoading(false);
-        }
-    }, [projectId]);
-
-    useEffect(() => { void loadTasks(); }, [loadTasks]);
-
-    useEffect(() => {
+    // ── Static Data (Run once per project) ──
+    const fetchStaticData = useCallback(async () => {
         if (!projectId) return;
         const pid = parseInt(projectId, 10);
         if (isNaN(pid)) return;
-        fetchProjectLabels(pid).then(setLabels).catch(() => {});
-        fetchProject(pid).then(proj => {
-            if (proj.teamId) return fetchTeamMembers(proj.teamId as number);
-            return [];
-        }).then(setTeamMembers).catch(() => {});
+        try {
+            const [labelsData, project] = await Promise.all([
+                fetchProjectLabels(pid),
+                fetchProject(pid),
+            ]);
+            setLabels(labelsData);
+            if (project?.teamId) {
+                const members = await fetchTeamMembers(project.teamId as number);
+                setTeamMembers(members);
+            }
+        } catch (err) {
+            console.error('Error loading static backlog data:', err);
+        }
     }, [projectId]);
+
+    // ── Dynamic Data (Periodic Sync) ──
+    const fetchData = useCallback(async (options: { showSpinner?: boolean, forceNetwork?: boolean } = {}) => {
+        if (!projectId) return;
+        const { showSpinner = true, forceNetwork = false } = options;
+        const pid = parseInt(projectId, 10);
+        if (isNaN(pid)) return;
+
+        const cKey = buildSessionCacheKey('kanban-backlog', [projectId]);
+        if (cKey && !forceNetwork) {
+            const cached = getSessionCache<Task[]>(cKey, { allowStale: true });
+            if (cached.data) {
+                setTasks(cached.data);
+                setLoading(false);
+                if (!cached.isStale) return; // Fresh cache
+            }
+        }
+
+        if (showSpinner) setLoading(true);
+        setError(null);
+        try {
+            const fetched = await fetchTasksByProject(pid);
+            setTasks(fetched);
+            if (cKey) setSessionCache(cKey, fetched, 30 * 60_000);
+        } catch (err) {
+            console.error('Error loading backlog tasks:', err);
+            if (showSpinner) setError(err instanceof Error ? err.message : 'Failed to load tasks');
+        } finally {
+            if (showSpinner) setLoading(false);
+        }
+    }, [projectId]);
+
+    const forceRefresh = useCallback(() => void fetchData({ showSpinner: false, forceNetwork: true }), [fetchData]);
+
+    useEffect(() => {
+        if (!projectId) return;
+        void fetchStaticData();
+        void fetchData({ showSpinner: true });
+        const id = setInterval(() => void fetchData({ showSpinner: false }), 30_000);
+        return () => clearInterval(id);
+    }, [projectId, fetchStaticData, fetchData]);
 
     useTaskWebSocket(projectId, useCallback((event) => {
         if (event.type === 'TASK_CREATED' && event.task) {
@@ -88,16 +114,16 @@ export function useBacklogData(projectId: string | null) {
         } catch (e: unknown) {
             const status = (e as { response?: { status?: number } })?.response?.status;
             if ((status === 401 || status === 404) && task?.title) {
-                try { await api.put(`/api/tasks/${id}`, { title: task.title, status: 'DONE' }); return; } catch { /* fall through */ }
+                try { await api.put(`/api/tasks/${id}`, { title: task.title, status: 'DONE' }); forceRefresh(); return; } catch { /* fall through */ }
             }
-            void loadTasks();
+            forceRefresh();
         }
-    }, [tasks, loadTasks]);
+    }, [tasks, forceRefresh]);
 
     const handleDelete = useCallback(async (id: number) => {
         setTasks(prev => prev.filter(t => t.id !== id));
-        try { await api.delete(`/api/tasks/${id}`); } catch { void loadTasks(); }
-    }, [loadTasks]);
+        try { await api.delete(`/api/tasks/${id}`); forceRefresh(); } catch { forceRefresh(); }
+    }, [forceRefresh]);
 
     const handleAddTask = useCallback(async (data: CreateTaskData) => {
         if (!projectId) return;
@@ -112,10 +138,13 @@ export function useBacklogData(projectId: string | null) {
             const newTask = res.data as Task;
             // Deduplicate: WebSocket may have already added this task
             setTasks(prev => prev.some(t => t.id === newTask.id) ? prev : [...prev, newTask]);
+            const key = buildSessionCacheKey('kanban-backlog', [projectId]);
+            if (key) removeSessionCache(key);
+            forceRefresh();
         } catch (err) {
             console.error('Failed to create task:', err);
         }
-    }, [projectId]);
+    }, [projectId, forceRefresh]);
 
     const handleStatusChange = useCallback(async (id: number, status: string) => {
         const task = tasks.find(t => t.id === id);
@@ -125,18 +154,22 @@ export function useBacklogData(projectId: string | null) {
         } catch (e: unknown) {
             const errStatus = (e as { response?: { status?: number } })?.response?.status;
             if ((errStatus === 401 || errStatus === 404) && task?.title) {
-                try { await api.put(`/api/tasks/${id}`, { title: task.title, status }); return; } catch { /* fall through */ }
+                try { await api.put(`/api/tasks/${id}`, { title: task.title, status }); forceRefresh(); return; } catch { /* fall through */ }
             }
-            void loadTasks();
+            forceRefresh();
         }
-    }, [tasks, loadTasks]);
+    }, [tasks, forceRefresh]);
+
+    const handleDateChange = useCallback((id: number, dueDate: string | null) => {
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, dueDate: dueDate || undefined } : t));
+    }, []);
 
     const handleBulkDelete = useCallback(async () => {
         const ids = [...selectedIds];
         setTasks(prev => prev.filter(t => !ids.includes(t.id)));
         setSelectedIds(new Set());
-        try { await Promise.all(ids.map(id => api.delete(`/api/tasks/${id}`))); } catch { void loadTasks(); }
-    }, [selectedIds, loadTasks]);
+        try { await Promise.all(ids.map(id => api.delete(`/api/tasks/${id}`))); forceRefresh(); } catch { forceRefresh(); }
+    }, [selectedIds, forceRefresh]);
 
     const handleBulkDone = useCallback(async () => {
         const ids = [...selectedIds];
@@ -144,14 +177,16 @@ export function useBacklogData(projectId: string | null) {
         setSelectedIds(new Set());
         try {
             await api.patch('/api/tasks/bulk/status', { taskIds: ids, status: 'DONE' });
+            forceRefresh();
         } catch {
             // Fallback: update each task individually with PUT
             try {
                 const tasksToUpdate = tasks.filter(t => ids.includes(t.id));
                 await Promise.all(tasksToUpdate.map(t => api.put(`/api/tasks/${t.id}`, { title: t.title, status: 'DONE' })));
-            } catch { void loadTasks(); }
+                forceRefresh();
+            } catch { forceRefresh(); }
         }
-    }, [tasks, selectedIds, loadTasks]);
+    }, [tasks, selectedIds, forceRefresh]);
 
     const toggleSelect = useCallback((id: number) => {
         setSelectedIds(prev => {
@@ -202,7 +237,7 @@ export function useBacklogData(projectId: string | null) {
     }, [filteredTasks, groupBy]);
 
     return {
-        tasks, loading, error, collapsed, setCollapsed,
+        tasks, loading, error, collapsedGroups, toggleGroup,
         selectedTask, setSelectedTask,
         selectedTaskIdForModal, setSelectedTaskIdForModal,
         showCreateModal, setShowCreateModal,
@@ -218,6 +253,6 @@ export function useBacklogData(projectId: string | null) {
         filteredTasks, groupedTasks,
         handleMarkDone, handleDelete, handleAddTask,
         handleStatusChange, handleBulkDelete, handleBulkDone,
-        toggleSelect, loadTasks,
+        toggleSelect, loadTasks: fetchData, handleDateChange, forceRefresh,
     };
 }

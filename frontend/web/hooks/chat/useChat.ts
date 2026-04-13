@@ -20,6 +20,7 @@ import { useChatThreads } from './useChatThreads';
 import { useChatReactions } from './useChatReactions';
 import { useChatSearch } from './useChatSearch';
 import { useChatUnread } from './useChatUnread';
+import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
 
 // â”€â”€ Types used only within this composer â”€â”€
 
@@ -59,6 +60,13 @@ const DEFAULT_FEATURE_FLAGS: ChatFeatureFlags = {
   webhooksEnabled: process.env.NEXT_PUBLIC_CHAT_WEBHOOKS_ENABLED !== 'false',
   telemetryEnabled: process.env.NEXT_PUBLIC_CHAT_TELEMETRY_ENABLED !== 'false',
 };
+
+interface ChatInitCache {
+  flags?: ChatFeatureFlags;
+  users?: string[];
+  pics?: Record<string, string>;
+  rooms?: ChatRoom[];
+}
 
 // â”€â”€ Composer Hook â”€â”€
 
@@ -137,19 +145,6 @@ export const useChat = (projectId: string) => {
   const featureFlagsRef = useRef(featureFlags);
   useEffect(() => { featureFlagsRef.current = featureFlags; }, [featureFlags]);
 
-  const loadFeatureFlags = useCallback(async () => {
-    try {
-      const flags = await chatApi.fetchFeatureFlags(projectId);
-      setFeatureFlags({
-        phaseDEnabled: Boolean(flags.phaseDEnabled),
-        phaseEEnabled: Boolean(flags.phaseEEnabled),
-        webhooksEnabled: Boolean(flags.webhooksEnabled),
-        telemetryEnabled: Boolean(flags.telemetryEnabled),
-      });
-    } catch {
-      // keep defaults
-    }
-  }, [projectId]);
 
   const trackTelemetry = useCallback(
     async (eventName: string, scope: string, metadata?: string) => {
@@ -412,23 +407,8 @@ export const useChat = (projectId: string) => {
     }
   }, [projectId]);
 
-  const fetchUserProfilePics = useCallback(async () => {
-    try {
-      const profiles = await chatApi.fetchAllUserProfiles();
-      const pics: Record<string, string> = {};
-      profiles.forEach((p: chatApi.AuthUserSummary) => {
-        const key = (p.username || p.email || '').toLowerCase();
-        if (key && (p as Record<string, unknown>).profilePicUrl) {
-          pics[key] = (p as Record<string, unknown>).profilePicUrl as string;
-        }
-      });
-      setUserProfilePics(pics);
-    } catch {
-      // non-critical
-    }
-  }, []);
 
-  // â”€â”€ Initialization â”€â”€
+  // ── Initialization ──
   useEffect(() => {
     const initialize = async () => {
       const token = getValidToken();
@@ -436,6 +416,25 @@ export const useChat = (projectId: string) => {
         console.warn('[chat-ws] No valid token found, redirecting to login.');
         router.push('/login');
         return;
+      }
+
+      // ── Session Cache Restoration ──
+      const fKey = buildSessionCacheKey('chat-init', [projectId]);
+      if (fKey) {
+        const cached = getSessionCache<ChatInitCache>(fKey, { allowStale: true });
+        if (cached.data) {
+          if (cached.data.flags) setFeatureFlags(cached.data.flags);
+          if (cached.data.users) setUsers(cached.data.users);
+          if (cached.data.pics) setUserProfilePics(cached.data.pics);
+          if (cached.data.rooms) setRooms(cached.data.rooms);
+          setIsLoading(false);
+          if (!cached.isStale) {
+              restoreSelection(cached.data.users || [], cached.data.rooms || []);
+              // Fresh enough, but we should still sync reactions/history in background
+              await msg.loadHistory(reactions.hydrateReactions);
+              return;
+          }
+        }
       }
 
       try {
@@ -459,12 +458,34 @@ export const useChat = (projectId: string) => {
 
         setCurrentUserAliases(effectiveAliases);
         setCurrentUser(username);
+        
+        // Parallel fetches for speed
+        const [loadedUsers, pics, loadedRooms, flags] = await Promise.all([
+            fetchAllUsers(),
+            chatApi.fetchAllUserProfiles().then(profiles => {
+                const map: Record<string, string> = {};
+                profiles.forEach((p: chatApi.AuthUserSummary) => {
+                    const key = (p.username || p.email || '').toLowerCase();
+                    const profile = p as Record<string, unknown>;
+                    if (key && profile.profilePicUrl) map[key] = profile.profilePicUrl as string;
+                });
+                return map;
+            }).catch(() => ({})),
+            rm.loadRooms(),
+            chatApi.fetchFeatureFlags(projectId).catch(() => DEFAULT_FEATURE_FLAGS),
+        ]);
+
+        setUsers(loadedUsers);
+        setUserProfilePics(pics);
+        setRooms(loadedRooms);
+        setFeatureFlags(flags);
         setIsLoading(false);
 
-        const loadedUsers = await fetchAllUsers();
-        await fetchUserProfilePics();
-        const loadedRooms = await rm.loadRooms();
-        await loadFeatureFlags();
+        // Update Cache
+        if (fKey) {
+            setSessionCache(fKey, { flags, users: loadedUsers, pics, rooms: loadedRooms }, 30 * 60_000);
+        }
+
         await unread.loadSummaries(msg.setPrivateLastMessages, msg.setRoomLastMessages);
         await presence.loadPresence();
         await unread.loadUnreadBadge();
@@ -478,7 +499,7 @@ export const useChat = (projectId: string) => {
 
     initialize();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     setIsSocketConnected(realtimeConnected);

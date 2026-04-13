@@ -38,12 +38,12 @@ interface TaskSidebarProps {
   dates: {
     created: string;
     updated: string;
-    dueDate: string;
+    dueDate: string | null;
   };
   onUpdateStatus?: (status: string) => void;
   onUpdatePriority?: (priority: string) => void;
   onUpdateStoryPoint?: (storyPoint: number) => void;
-  onUpdateDueDate?: (dueDate: string) => void;
+  onUpdateDueDate?: (dueDate: string | null) => void;
   onUpdateMilestone?: (milestoneId: number | null) => void;
   onUpdateRecurrence?: (rule: string | null, end: string | null) => void;
   onUnassign?: () => void;

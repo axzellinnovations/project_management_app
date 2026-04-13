@@ -51,7 +51,7 @@ export default function BacklogPage() {
     ] = useState(false);
     const [inlineTitle, setInlineTitle] = useState('');
     const {
-        tasks, loading, error, collapsed, setCollapsed,
+        tasks, loading, error, collapsedGroups, toggleGroup,
         selectedTask, setSelectedTask,
         selectedTaskIdForModal, setSelectedTaskIdForModal,
         showCreateModal, setShowCreateModal,
@@ -67,7 +67,7 @@ export default function BacklogPage() {
         groupedTasks,
         handleMarkDone, handleDelete, handleAddTask,
         handleStatusChange, handleBulkDelete, handleBulkDone,
-        toggleSelect, loadTasks,
+        toggleSelect, loadTasks, handleDateChange
     } = useBacklogData(projectId);
 
     // Handle action triggers from TopBar (e.g. ?action=add-task)
@@ -125,9 +125,9 @@ export default function BacklogPage() {
     }
 
     return (
-        <div className="mobile-page-padding max-w-[900px] mx-auto pb-6">
+        <div className="flex flex-col h-full bg-slate-50 mobile-page-padding max-w-[900px] mx-auto overflow-y-auto custom-scrollbar touch-pan-y pb-6" style={{ WebkitOverflowScrolling: 'touch' }}>
             {/* ── Header ── */}
-            <div className="sticky-section-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-4 flex items-center gap-3 flex-wrap">
+            <div className="sticky-section-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-4 flex items-center gap-3 flex-wrap flex-shrink-0 z-40">
                 <div>
                     <h1 className="text-[18px] sm:text-xl font-bold text-[#101828]">Product Backlog</h1>
                     <p className="text-[12px] text-[#6A7282] mt-0.5 hidden sm:block">
@@ -170,7 +170,7 @@ export default function BacklogPage() {
             {groupedTasks.map(group => (
               <div key={group.label} className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden mb-4">
                 <button
-                    onClick={() => setCollapsed((c) => !c)}
+                    onClick={() => toggleGroup(group.label)}
                     className="sticky-section-header w-full flex items-center gap-3 px-4 py-3 border-b border-[#E5E7EB] hover:bg-[#F9FAFB] transition-colors"
                 >
                     <span className="text-[13px] font-semibold text-[#374151]">{group.label}</span>
@@ -178,12 +178,12 @@ export default function BacklogPage() {
                         {group.items.length}
                     </span>
                     <span className="ml-auto text-[#9CA3AF]">
-                        {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                        {collapsedGroups[group.label] ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
                     </span>
                 </button>
 
                 <AnimatePresence initial={false}>
-                    {!collapsed && (
+                    {!collapsedGroups[group.label] && (
                         <motion.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
@@ -200,13 +200,14 @@ export default function BacklogPage() {
                             ) : (
                                 <div className="flex flex-col gap-[5px] p-3">
                                     {/* Table header */}
-                                    <div className="hidden sm:grid grid-cols-[auto_1fr_120px_100px_120px_100px_32px] items-center gap-x-2 px-3 sm:px-4 text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF] mb-1">
+                                    <div className="hidden sm:grid grid-cols-[auto_1fr_120px_100px_120px_100px_100px_32px] items-center gap-x-2 px-3 sm:px-4 text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF] mb-1">
                                         <span className="w-3.5" />
                                         <span>Title</span>
                                         <span>Label</span>
                                         <span>Priority</span>
                                         <span>Status</span>
                                         <span>Assignee</span>
+                                        <span>Due Date</span>
                                         <span />
                                     </div>
                                     {group.items.map((task) => (
@@ -219,6 +220,7 @@ export default function BacklogPage() {
                                             onOpenModal={setSelectedTaskIdForModal}
                                             selected={selectedIds.has(task.id)}
                                             onToggleSelect={toggleSelect}
+                                            onDateChange={handleDateChange}
                                         />
                                     ))}
                                 </div>
