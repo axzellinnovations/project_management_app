@@ -18,6 +18,8 @@ import com.planora.backend.service.ChatService;
 import com.planora.backend.service.ChatWebhookService;
 import com.planora.backend.service.JWTService;
 import com.planora.backend.service.NotificationService;
+import com.planora.backend.service.ProjectMembershipService;
+import com.planora.backend.service.UserCacheService;
 import com.planora.backend.dto.ChatMessageDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,6 +57,10 @@ class ChatRestControllerTest {
     private ProjectRepository projectRepository;
     @MockBean
     private TeamMemberRepository teamMemberRepository;
+    @MockBean
+    private UserCacheService userCacheService;
+    @MockBean
+    private ProjectMembershipService projectMembershipService;
     @MockBean
     private UserRepository userRepository;
     @MockBean
@@ -98,8 +104,8 @@ class ChatRestControllerTest {
         member.setTeam(team);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(project));
-        when(userRepository.findByUsernameIgnoreCase("alice")).thenReturn(Optional.of(alice));
-        when(userRepository.findByEmailIgnoreCase("alice")).thenReturn(Optional.of(alice));
+        when(userCacheService.resolveUserByEmailOrUsername("alice")).thenReturn(alice);
+        when(userCacheService.resolveUserByEmailOrUsername("alice@example.com")).thenReturn(alice);
         when(teamMemberRepository.findByTeamIdAndUserUserId(7L, 10L)).thenReturn(Optional.of(member));
         when(teamMemberRepository.findByTeamId(7L)).thenReturn(List.of(member));
     }
@@ -140,8 +146,8 @@ class ChatRestControllerTest {
         bob.setUsername("bob");
         bob.setEmail("bob@example.com");
 
-        when(userRepository.findByUsernameIgnoreCase("bob")).thenReturn(Optional.of(bob));
-        when(userRepository.findByEmailIgnoreCase("bob")).thenReturn(Optional.of(bob));
+        when(userCacheService.resolveUserByEmailOrUsername("bob")).thenReturn(bob);
+        when(userCacheService.resolveUserByEmailOrUsername("bob@example.com")).thenReturn(bob);
         when(teamMemberRepository.findByTeamIdAndUserUserId(7L, 11L)).thenReturn(Optional.of(new TeamMember()));
 
 		ChatMessageDTO dm = new ChatMessageDTO();
@@ -235,6 +241,15 @@ class ChatRestControllerTest {
 
     @Test
     @WithMockUser(username = "alice")
+    void getFeatureFlags_validatesProjectMembershipViaService() throws Exception {
+        mockMvc.perform(get("/api/projects/5/chat/features"))
+                .andExpect(status().isOk());
+
+        verify(projectMembershipService).assertProjectMembership(5L, alice);
+    }
+
+    @Test
+    @WithMockUser(username = "alice")
     void createRoom_notifiesOnlyAddedMembers() throws Exception {
         User bob = new User();
         bob.setUserId(11L);
@@ -249,8 +264,8 @@ class ChatRestControllerTest {
         aliceMember.setUser(alice);
         aliceMember.setTeam(team);
 
-        when(userRepository.findByUsernameIgnoreCase("bob")).thenReturn(Optional.of(bob));
-        when(userRepository.findByEmailIgnoreCase("bob")).thenReturn(Optional.of(bob));
+        when(userCacheService.resolveUserByEmailOrUsername("bob")).thenReturn(bob);
+        when(userCacheService.resolveUserByEmailOrUsername("bob@example.com")).thenReturn(bob);
         when(teamMemberRepository.findByTeamIdAndUserUserId(7L, 11L)).thenReturn(Optional.of(bobMember));
         when(teamMemberRepository.findByTeamId(7L)).thenReturn(List.of(bobMember, aliceMember));
 

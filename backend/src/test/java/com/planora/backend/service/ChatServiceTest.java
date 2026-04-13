@@ -28,7 +28,6 @@ import com.planora.backend.repository.ChatReactionRepository;
 import com.planora.backend.repository.ChatReadStateRepository;
 import com.planora.backend.repository.ChatRoomRepository;
 import com.planora.backend.repository.ChatThreadRepository;
-import com.planora.backend.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("null")
@@ -45,7 +44,7 @@ class ChatServiceTest {
     @Mock
     private ChatReactionRepository chatReactionRepository;
     @Mock
-    private UserRepository userRepository;
+    private UserCacheService userCacheService;
     @Mock
     private ChatDocumentService chatDocumentService;
 
@@ -168,7 +167,7 @@ class ChatServiceTest {
         actor.setUserId(33L);
         actor.setUsername("alice");
         actor.setEmail("alice@example.com");
-        when(userRepository.findByUsernameIgnoreCase("alice")).thenReturn(Optional.of(actor));
+        when(userCacheService.resolveUserByEmailOrUsername("alice")).thenReturn(actor);
         when(chatReactionRepository.findByMessageIdAndUserUserIdAndEmoji(11L, 33L, "👍")).thenReturn(Optional.empty());
         when(chatReactionRepository.findWithUserByMessageIdOrderByCreatedAtAsc(11L)).thenReturn(List.of());
 
@@ -189,7 +188,7 @@ class ChatServiceTest {
         actor.setUserId(44L);
         actor.setUsername("bob");
         actor.setEmail("bob@example.com");
-        when(userRepository.findByUsernameIgnoreCase("bob")).thenReturn(Optional.of(actor));
+        when(userCacheService.resolveUserByEmailOrUsername("bob")).thenReturn(actor);
 
         ChatReaction reaction = new ChatReaction();
         reaction.setEmoji("🔥");
@@ -199,5 +198,20 @@ class ChatServiceTest {
         chatService.toggleReaction(10L, 12L, "bob", "🔥");
 
         verify(chatReactionRepository).delete(reaction);
+    }
+
+    @Test
+    void toggleReaction_rejectsWhenActorCannotBeResolved() {
+        ChatMessage message = new ChatMessage();
+        message.setId(13L);
+        message.setProjectId(10L);
+        when(chatMessageRepository.findByIdAndProjectId(13L, 10L)).thenReturn(Optional.of(message));
+        when(userCacheService.resolveUserByEmailOrUsername("ghost")).thenReturn(null);
+
+        RuntimeException ex = assertThrows(RuntimeException.class, () ->
+                chatService.toggleReaction(10L, 13L, "ghost", "👍"));
+
+        assertEquals("User not found", ex.getMessage());
+        verify(chatReactionRepository, never()).save(any(ChatReaction.class));
     }
 }
