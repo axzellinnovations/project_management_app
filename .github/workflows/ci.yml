@@ -2,9 +2,17 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "master", "test", "responsive-pages", "responsive-pages-fixes" ]
+    branches: [ "main", "master", "test", "responsive-pages", "responsive-pages-*" ]
   pull_request:
-    branches: [ "main", "master", "test", "responsive-pages", "responsive-pages-fixes" ]
+    branches: [ "main", "master", "test", "responsive-pages", "responsive-pages-*" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend-build:
@@ -28,15 +36,14 @@ jobs:
     - name: Ensure mvnw is executable
       run: chmod +x mvnw
         
-    - name: Build with Maven (Skip Tests)
-      run: ./mvnw -B package -DskipTests --file pom.xml
-      
-    - name: Run Backend Tests
-      run: ./mvnw -B test --file pom.xml
+    - name: Verify Backend (Build + Tests)
+      run: ./mvnw -B verify --file pom.xml
       
   frontend-build:
     name: Build Frontend
     runs-on: ubuntu-latest
+    env:
+      CI: true
     defaults:
       run:
         working-directory: ./frontend/web
