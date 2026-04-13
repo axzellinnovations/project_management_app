@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -48,6 +49,7 @@ public class TeamMemberController {
 
     // ---------------- GET ALL MEMBERS OF A TEAM ----------------
     @GetMapping("/{teamId}/members")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<TeamMemberResponseDTO>> getTeamMembers(
             @PathVariable Long teamId,
             @AuthenticationPrincipal UserPrincipal principal

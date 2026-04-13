@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.planora.backend.model.Team;
 import com.planora.backend.model.TeamMember;
@@ -19,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TeamMemberService {
     // Change member role with owner/admin permission logic
+        @Transactional
         public TeamMember changeMemberRoleWithPermissions(
                         Long teamId,
                         Long targetUserId,
@@ -135,6 +137,7 @@ public class TeamMemberService {
         // =====================================================
         // GET ALL MEMBERS OF A TEAM (ANY MEMBER)
         // =====================================================
+        @Transactional(readOnly = true)
         public List<TeamMember> getTeamMembers(Long teamId) {
                 return teamMemberRepository.findByTeamId(teamId);
         }
@@ -178,6 +181,7 @@ public class TeamMemberService {
         // =====================================================
         // REMOVE MEMBER FROM TEAM WITH PERMISSIONS
         // =====================================================
+        @Transactional
         public void removeMemberWithPermissions(
                         Long teamId,
                         Long targetUserId,

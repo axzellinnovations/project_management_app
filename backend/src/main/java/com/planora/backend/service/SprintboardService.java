@@ -154,29 +154,37 @@ public class SprintboardService {
 
         requireViewBoard(sprint.getProId(), currentUserId);
 
-        List<Task> tasks = taskRepository.findByProjectId(sprint.getProId()).stream()
-                .filter(task -> task.getSprint() != null && task.getSprint().getId().equals(sprint.getId()))
-                .filter(task -> {
-                    String status = task.getStatus();
-                    return status != null && status.equalsIgnoreCase(columnStatus);
-                })
+        // Phase 1: fetch scalar/single-valued associations
+        List<Task> scalarTasks = taskRepository.findBySprintIdWithScalars(sprint.getId()).stream()
+                .filter(task -> task.getStatus() != null && task.getStatus().equalsIgnoreCase(columnStatus))
                 .collect(Collectors.toList());
 
-        return tasks.stream()
+        if (scalarTasks.isEmpty()) {
+            return List.of();
+        }
+
+        // Phase 2: fetch collection associations via EntityGraph
+        List<Long> ids = scalarTasks.stream().map(Task::getId).collect(Collectors.toList());
+        List<Task> enriched = taskRepository.findByIdInWithCollections(ids);
+        java.util.Map<Long, Task> enrichedMap = enriched.stream()
+                .collect(Collectors.toMap(Task::getId, t -> t));
+
+        return scalarTasks.stream()
                 .map(task -> {
+                    Task t = enrichedMap.getOrDefault(task.getId(), task);
                     SprintboardTaskResponseDTO dto = new SprintboardTaskResponseDTO();
-                    dto.setTaskId(task.getId());
-                    dto.setTitle(task.getTitle());
-                    dto.setStoryPoint(task.getStoryPoint());
-                    dto.setStatus(task.getStatus() != null ? task.getStatus() : "TODO");
-                    dto.setPriority(task.getPriority() != null ? task.getPriority().toString() : "MEDIUM");
-                    dto.setDueDate(task.getDueDate());
+                    dto.setTaskId(t.getId());
+                    dto.setTitle(t.getTitle());
+                    dto.setStoryPoint(t.getStoryPoint());
+                    dto.setStatus(t.getStatus() != null ? t.getStatus() : "TODO");
+                    dto.setPriority(t.getPriority() != null ? t.getPriority().toString() : "MEDIUM");
+                    dto.setDueDate(t.getDueDate());
                     if (task.getAssignee() != null && task.getAssignee().getUser() != null) {
                         dto.setAssigneeName(task.getAssignee().getUser().getFullName());
                         dto.setAssigneePhotoUrl(task.getAssignee().getUser().getProfilePicUrl());
                     }
-                    if (task.getLabels() != null && !task.getLabels().isEmpty()) {
-                        var label = task.getLabels().iterator().next();
+                    if (t.getLabels() != null && !t.getLabels().isEmpty()) {
+                        var label = t.getLabels().iterator().next();
                         dto.setLabelName(label.getName());
                         dto.setLabelColor(label.getColor());
                     }

@@ -14,8 +14,38 @@ import com.planora.backend.model.Task;
 
 @Repository
 public interface TaskRepository extends JpaRepository<Task, Long> {
+    @Query("SELECT DISTINCT t FROM Task t " +
+           "LEFT JOIN FETCH t.project p " +
+           "LEFT JOIN FETCH p.team pt " +
+           "LEFT JOIN FETCH t.sprint " +
+           "LEFT JOIN FETCH t.assignee a " +
+           "LEFT JOIN FETCH a.user " +
+           "LEFT JOIN FETCH t.reporter r " +
+           "LEFT JOIN FETCH r.user " +
+           "LEFT JOIN FETCH t.milestone " +
+           "LEFT JOIN FETCH t.lastModifiedBy " +
+           "WHERE t.project.id = :projectId")
+    List<Task> findByProjectIdWithScalars(@Param("projectId") Long projectId);
+
+    @EntityGraph(attributePaths = {"labels", "assignees", "assignees.user", "subTasks", "attachments"})
+    @Query("SELECT DISTINCT t FROM Task t WHERE t.id IN :ids")
+    List<Task> findByIdInWithCollections(@Param("ids") List<Long> ids);
+
     @Query("SELECT DISTINCT t FROM Task t LEFT JOIN FETCH t.assignees LEFT JOIN FETCH t.labels WHERE t.project.id = :projectId")
     List<Task> findByProjectId(@Param("projectId") Long projectId);
+
+    @Query("SELECT DISTINCT t FROM Task t " +
+           "LEFT JOIN FETCH t.project p " +
+           "LEFT JOIN FETCH p.team pt " +
+           "LEFT JOIN FETCH t.sprint " +
+           "LEFT JOIN FETCH t.assignee a " +
+           "LEFT JOIN FETCH a.user " +
+           "LEFT JOIN FETCH t.reporter r " +
+           "LEFT JOIN FETCH r.user " +
+           "LEFT JOIN FETCH t.milestone " +
+           "LEFT JOIN FETCH t.lastModifiedBy " +
+           "WHERE t.sprint.id = :sprintId")
+    List<Task> findBySprintIdWithScalars(@Param("sprintId") Long sprintId);
 
     @Query("SELECT DISTINCT t FROM Task t LEFT JOIN FETCH t.assignees LEFT JOIN FETCH t.labels WHERE t.sprint.id = :sprintId")
     List<Task> findBySprintId(@Param("sprintId") Long sprintId);

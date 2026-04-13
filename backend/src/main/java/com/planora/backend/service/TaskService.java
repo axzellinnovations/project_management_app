@@ -347,10 +347,24 @@ public class TaskService {
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
         requireMinimumRole(project.getTeam().getId(), currentUserId, null);
 
-        return taskRepository.findByProjectIdFiltered(projectId, status, assigneeId, priority, sprintId)
-                .stream()
-                .distinct()
-                .map(this::mapToDTO)
+        boolean hasFilters = status != null || assigneeId != null || priority != null || sprintId != null;
+        if (hasFilters) {
+            return taskRepository.findByProjectIdFiltered(projectId, status, assigneeId, priority, sprintId)
+                    .stream()
+                    .distinct()
+                    .map(this::mapToDTO)
+                    .collect(Collectors.toList());
+        }
+
+        // Two-phase fetch to avoid cartesian product with multiple bags
+        List<Task> tasks = taskRepository.findByProjectIdWithScalars(projectId);
+        if (tasks.isEmpty()) return List.of();
+        List<Long> ids = tasks.stream().map(Task::getId).collect(Collectors.toList());
+        List<Task> enriched = taskRepository.findByIdInWithCollections(ids);
+        java.util.Map<Long, Task> enrichedMap = enriched.stream()
+                .collect(java.util.stream.Collectors.toMap(Task::getId, t -> t));
+        return tasks.stream()
+                .map(t -> mapToDTO(enrichedMap.getOrDefault(t.getId(), t)))
                 .collect(Collectors.toList());
     }
 

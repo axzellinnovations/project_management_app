@@ -260,27 +260,26 @@ public class ProjectService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         // Only return favourites from projects the user is still a team member of
-        List<Team> userTeams = teamMemberRepository.findByUserUserId(userId)
-                .stream().map(TeamMember::getTeam).collect(Collectors.toList());
+        List<TeamMember> memberships = teamMemberRepository.findByUserUserId(userId);
+        List<Team> userTeams = memberships.stream().map(TeamMember::getTeam).collect(Collectors.toList());
         java.util.Set<Long> memberProjectIds = userTeams.isEmpty()
                 ? java.util.Collections.emptySet()
                 : projectRepository.findByTeamIn(userTeams).stream()
                         .map(Project::getId).collect(java.util.stream.Collectors.toSet());
 
         // Pre-fetch data to avoid N+1 queries
-        User userRef = userRepository.getReferenceById(userId);
-        
-        java.util.Map<Long, LocalDateTime> teamJoinedMap = userTeams.stream()
-            .map(t -> teamMemberRepository.findByTeamIdAndUserUserId(t.getId(), userId).get())
+        java.util.Map<Long, LocalDateTime> teamJoinedMap = memberships.stream()
             .collect(Collectors.toMap(m -> m.getTeam().getId(), TeamMember::getJoinedAt, (a, b) -> a));
             
         java.util.Map<Long, LocalDateTime> accessMap = projectAccessRepository.findByUser_UserIdOrderByLastAccessedAtDesc(userId, Pageable.unpaged()).stream()
             .collect(Collectors.toMap(a -> a.getProject().getId(), ProjectAccess::getLastAccessedAt, (a, b) -> a));
-            
-        java.util.Map<Long, LocalDateTime> favoriteMap = projectFavoriteRepository.findByUserOrderByCreatedAtDesc(userRef).stream()
+
+        // Single query — reuse for both favoriteMap and the return stream
+        List<ProjectFavorite> favorites = projectFavoriteRepository.findByUserOrderByCreatedAtDesc(user);
+        java.util.Map<Long, LocalDateTime> favoriteMap = favorites.stream()
             .collect(Collectors.toMap(f -> f.getProject().getId(), ProjectFavorite::getCreatedAt, (a, b) -> a));
 
-        return projectFavoriteRepository.findByUserOrderByCreatedAtDesc(user).stream()
+        return favorites.stream()
                 .filter(fav -> memberProjectIds.contains(fav.getProject().getId()))
                 .map(fav -> convertToResponseDTO(fav.getProject(), userId, teamJoinedMap, accessMap, favoriteMap))
                 .collect(Collectors.toList());

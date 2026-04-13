@@ -303,6 +303,7 @@ public class ChatRestController {
      * Get list of project members' usernames for chat.
      */
     @GetMapping("/members")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<String>> getProjectMembers(@PathVariable Long projectId, Authentication authentication) {
         String username = authentication.getName();
         validateProjectMembership(projectId, username);
@@ -456,7 +457,8 @@ public class ChatRestController {
                                                                 @RequestParam(value = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
                                                                 Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        com.planora.backend.model.User currentUser = resolveAuthenticatedUser(authentication);
+        validateProjectMembership(projectId, currentUser);
 
         var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
         var participants = teamMemberRepository.findByTeamId(project.getTeam().getId()).stream()
@@ -465,9 +467,9 @@ public class ChatRestController {
 
         var visibleRooms = getVisibleRooms(projectId, username, includeArchived);
         var response = new ChatSidebarResponse(
-                chatService.buildTeamSummary(projectId, username),
-                chatService.buildRoomSummaries(projectId, username, visibleRooms),
-                chatService.buildDirectSummaries(projectId, username, participants));
+                chatService.buildTeamSummary(projectId, currentUser, username),
+                chatService.buildRoomSummaries(projectId, currentUser, username, visibleRooms),
+                chatService.buildDirectSummaries(projectId, currentUser, username, participants));
 
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
@@ -478,14 +480,15 @@ public class ChatRestController {
                                        @RequestParam(value = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
                                        Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        com.planora.backend.model.User currentUser = resolveAuthenticatedUser(authentication);
+        validateProjectMembership(projectId, currentUser);
 
         var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
         var participants = teamMemberRepository.findByTeamId(project.getTeam().getId()).stream()
             .map(tm -> tm.getUser().getUsername())
             .toList();
         var visibleRooms = getVisibleRooms(projectId, username, includeArchived);
-        var badge = chatService.buildUnreadBadge(projectId, username, visibleRooms, participants);
+        var badge = chatService.buildUnreadBadge(projectId, currentUser, username, visibleRooms, participants);
 
         return new ResponseEntity<>(
             new UnreadBadgeResponse(
@@ -964,11 +967,18 @@ public class ChatRestController {
         if (user == null) {
             throw new RuntimeException("User is not found");
         }
+        validateProjectMembership(projectId, user);
+    }
 
+    private void validateProjectMembership(Long projectId, com.planora.backend.model.User user) {
         var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
         boolean isMember = teamMemberRepository.findByTeamIdAndUserUserId(project.getTeam().getId(), user.getUserId()).isPresent();
         if (!isMember) {
             throw new RuntimeException("User is not a member of the project");
         }
+    }
+
+    private com.planora.backend.model.User resolveAuthenticatedUser(Authentication authentication) {
+        return resolveUserByEmailOrUsername(authentication.getName());
     }
 }
