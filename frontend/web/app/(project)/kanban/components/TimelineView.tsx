@@ -33,7 +33,7 @@ interface TimelineViewProps {
 
 const ZOOM_WIDTHS: Record<string, number> = { Day: 36, Week: 20, Month: 14 };
 type ZoomLevel = 'Day' | 'Week' | 'Month';
-type GroupByType = 'none' | 'status' | 'assignee';
+type GroupByType = 'none' | 'status' | 'assignee' | 'milestone';
 
 const statusColors = {
   TODO: { badge: 'bg-slate-100 text-slate-700' },
@@ -58,6 +58,7 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
   const [groupBy, setGroupBy] = useState<GroupByType>('none');
   const [hideWeekends, setHideWeekends] = useState(false);
   const [filterAssignee, setFilterAssignee] = useState('');
+  const [filterMilestone, setFilterMilestone] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [localTasks, setLocalTasks] = useState<Task[]>([]);
@@ -65,7 +66,7 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
 
   const dayColumnWidth = ZOOM_WIDTHS[zoom];
 
-  const { activeDrag, dragOffset, startDrag } = useTimelineDrag(dayColumnWidth, onTaskUpdated, setLocalTasks);
+  const { activeDrag, dragOffset, startDrag } = useTimelineDrag(dayColumnWidth, milestones, onTaskUpdated, setLocalTasks);
 
   const assigneeNames = useMemo(() => {
     const names = new Set<string>();
@@ -76,10 +77,12 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
   const effectiveTasks = useMemo(() => {
     return localTasks.filter((task) => {
       if (filterAssignee && task.assigneeName !== filterAssignee) return false;
+      if (filterMilestone === '__none__' && task.milestoneId != null) return false;
+      if (filterMilestone && filterMilestone !== '__none__' && String(task.milestoneId ?? '') !== filterMilestone) return false;
       if (searchQuery && !(task.title ?? '').toLowerCase().includes(searchQuery.toLowerCase())) return false;
       return true;
     });
-  }, [localTasks, filterAssignee, searchQuery]);
+  }, [localTasks, filterAssignee, filterMilestone, searchQuery]);
 
   // ── Compute timeline data ─────────────────────────────────────────────────
   const { timelineTasks, noDatesToShow, visibleDays, monthGroups, timelineStart, timelineEnd, timelineWidthPx, todayOffset } = useMemo(() => {
@@ -168,7 +171,15 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
       return [...map.entries()].map(([label, tasks]) => ({ label: label.replace(/_/g, ' '), tasks }));
     }
     const map = new Map<string, TimelineTask[]>();
-    timelineTasks.forEach(t => { const k = t.assigneeName || 'Unassigned'; if (!map.has(k)) map.set(k, []); map.get(k)!.push(t); });
+    if (groupBy === 'assignee') {
+      timelineTasks.forEach(t => { const k = t.assigneeName || 'Unassigned'; if (!map.has(k)) map.set(k, []); map.get(k)!.push(t); });
+      return [...map.entries()].map(([label, tasks]) => ({ label, tasks }));
+    }
+    timelineTasks.forEach((t) => {
+      const k = t.milestoneName || t.milestoneTitle || 'No milestone';
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(t);
+    });
     return [...map.entries()].map(([label, tasks]) => ({ label, tasks }));
   }, [timelineTasks, groupBy]);
 
@@ -176,6 +187,16 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
     const today = startOfDay(new Date());
     return timelineTasks.filter((task) => task.dueDateObj < today && (task.status ?? '').toUpperCase() !== 'DONE').length;
   }, [timelineTasks]);
+
+  const milestoneOptions = useMemo(
+    () => milestones.map((ms) => ({ id: ms.id, name: ms.name })),
+    [milestones]
+  );
+
+  const milestoneLinkedCount = useMemo(
+    () => localTasks.filter((task) => task.milestoneId != null).length,
+    [localTasks]
+  );
 
   if (timelineTasks.length === 0 && noDatesToShow.length === 0) {
     return (
@@ -200,7 +221,10 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
         groupBy={groupBy} setGroupBy={setGroupBy}
         hideWeekends={hideWeekends} setHideWeekends={setHideWeekends}
         filterAssignee={filterAssignee} setFilterAssignee={setFilterAssignee}
+        filterMilestone={filterMilestone}
+        setFilterMilestone={setFilterMilestone}
         assigneeNames={assigneeNames}
+        milestoneOptions={milestoneOptions}
         todayOffset={todayOffset} dayColumnWidth={dayColumnWidth}
         scrollContainerRef={scrollContainerRef}
         timelineStart={timelineStart} timelineEnd={timelineEnd}
@@ -209,6 +233,7 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
         scheduledCount={timelineTasks.length}
         noDateCount={noDatesToShow.length}
         overdueCount={overdueCount}
+        milestoneLinkedCount={milestoneLinkedCount}
       />
 
       <div ref={scrollContainerRef} className="overflow-x-auto overflow-y-hidden custom-scrollbar touch-pan-x" style={{ cursor: activeDrag ? 'grabbing' : undefined }}>

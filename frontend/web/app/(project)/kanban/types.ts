@@ -60,7 +60,8 @@ export interface Task {
   labels?: Label[];
   labelId?: number;        // single label ID (one label per task per SRS)
   milestoneId?: number;    // milestone ID (new feature — may be null)
-  milestoneTitle?: string; // milestone name for display
+  milestoneName?: string;  // milestone name for display (backend DTO)
+  milestoneTitle?: string; // legacy alias for older mapped surfaces
   dependencies?: Dependency[];
   subtasks?: Subtask[];
   commentCount?: number;     // number of comments on this task

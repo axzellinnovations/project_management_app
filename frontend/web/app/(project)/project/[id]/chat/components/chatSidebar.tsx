@@ -135,6 +135,7 @@ export const ChatSidebar = ({
     currentUser.toLowerCase(),
     ...currentUserAliases.map((a) => a.toLowerCase()),
   ]);
+  const dmUsers = users.filter((user) => !currentUserIdentitySet.has(user.toLowerCase()));
   const isTeamSelected = !selectedUser && !hasSelectedRoom;
 
   const getMessagePreview = (content?: string | null): string => {
@@ -333,21 +334,19 @@ export const ChatSidebar = ({
                 Direct Messages
               </p>
 
-              {users.length === 0 && (
+              {dmUsers.length === 0 && (
                 <p className="text-[12px] text-gray-400 italic px-1 py-1.5">
                   No team members found
                 </p>
               )}
 
               <div className="space-y-0.5">
-                {users.map((user) => {
+                {dmUsers.map((user) => {
                   const lastMsg = privateLastMessages[user];
                   const unseen = privateUnseenCounts[user] || 0;
                   const isTyping = privateTypingUsers.includes(user.toLowerCase());
                   const isSelectedDm = selectedUser === user;
                   const showTyping = isTyping && !isSelectedDm;
-                  const isSelf = currentUserIdentitySet.has(user.toLowerCase());
-
                   return (
                     <button
                       key={user}
@@ -376,7 +375,7 @@ export const ChatSidebar = ({
                       <div className="flex-1 min-w-0 text-left">
                         <div className="flex items-center justify-between gap-1">
                           <span className={`text-[13.5px] font-medium truncate ${isSelectedDm ? 'text-blue-700 font-semibold' : 'text-gray-800'}`}>
-                            {user}{isSelf ? ' (you)' : ''}
+                            {user}
                           </span>
                           {lastMsg?.timestamp && (
                             <span className="text-[10px] text-gray-400 flex-shrink-0">

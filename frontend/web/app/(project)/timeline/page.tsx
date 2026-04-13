@@ -78,6 +78,18 @@ export default function TimelinePage() {
     }
   }, [projectId]);
 
+  const loadMilestones = useCallback(async () => {
+    if (!projectId) return;
+    const pid = parseInt(projectId, 10);
+    if (isNaN(pid)) return;
+    try {
+      const data = await getMilestones(pid);
+      setMilestones(data);
+    } catch {
+      setMilestones([]);
+    }
+  }, [projectId]);
+
   // Load tasks on mount
   useEffect(() => {
     loadTasks();
@@ -89,13 +101,19 @@ export default function TimelinePage() {
     return () => window.removeEventListener('planora:task-updated', onTaskUpdated);
   }, [loadTasks]);
 
-  // Load milestones (graceful degradation)
   useEffect(() => {
-    if (!projectId) return;
-    const pid = parseInt(projectId, 10);
-    if (isNaN(pid)) return;
-    getMilestones(pid).then(setMilestones).catch(() => {});
-  }, [projectId]);
+    void loadMilestones();
+  }, [loadMilestones]);
+
+  useEffect(() => {
+    const refreshMilestones = () => { void loadMilestones(); };
+    window.addEventListener('planora:task-updated', refreshMilestones);
+    window.addEventListener('planora:milestone-updated', refreshMilestones);
+    return () => {
+      window.removeEventListener('planora:task-updated', refreshMilestones);
+      window.removeEventListener('planora:milestone-updated', refreshMilestones);
+    };
+  }, [loadMilestones]);
 
   if (!projectId) {
     return (

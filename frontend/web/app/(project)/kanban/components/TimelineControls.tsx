@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 
 const ZOOM_LEVELS = ['Day', 'Week', 'Month'] as const;
 type ZoomLevel = typeof ZOOM_LEVELS[number];
-type GroupByType = 'none' | 'status' | 'assignee';
+type GroupByType = 'none' | 'status' | 'assignee' | 'milestone';
 
 interface TimelineControlsProps {
   zoom: ZoomLevel;
@@ -17,7 +17,10 @@ interface TimelineControlsProps {
   setHideWeekends: React.Dispatch<React.SetStateAction<boolean>>;
   filterAssignee: string;
   setFilterAssignee: (v: string) => void;
+  filterMilestone: string;
+  setFilterMilestone: (v: string) => void;
   assigneeNames: string[];
+  milestoneOptions: Array<{ id: number; name: string }>;
   todayOffset: number;
   dayColumnWidth: number;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -28,21 +31,27 @@ interface TimelineControlsProps {
   scheduledCount: number;
   noDateCount: number;
   overdueCount: number;
+  milestoneLinkedCount: number;
 }
 
 export default function TimelineControls({
   zoom, setZoom, groupBy, setGroupBy,
   hideWeekends, setHideWeekends,
   filterAssignee, setFilterAssignee,
-  assigneeNames, todayOffset, dayColumnWidth, scrollContainerRef,
+  filterMilestone, setFilterMilestone,
+  assigneeNames, milestoneOptions, todayOffset, dayColumnWidth, scrollContainerRef,
   timelineStart, timelineEnd, searchQuery, setSearchQuery, scheduledCount, noDateCount, overdueCount,
+  milestoneLinkedCount,
 }: TimelineControlsProps) {
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const [milestoneDropdownOpen, setMilestoneDropdownOpen] = useState(false);
   const assigneeDropdownRef = useRef<HTMLDivElement>(null);
+  const milestoneDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (assigneeDropdownRef.current && !assigneeDropdownRef.current.contains(e.target as Node)) setAssigneeDropdownOpen(false);
+      if (milestoneDropdownRef.current && !milestoneDropdownRef.current.contains(e.target as Node)) setMilestoneDropdownOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -62,6 +71,7 @@ export default function TimelineControls({
             <span className="rounded-full border border-[#D0D5DD] bg-white px-2 py-0.5 text-[#667085]">scheduled: {scheduledCount}</span>
             <span className="rounded-full border border-[#FEDF89] bg-[#FFFAEB] px-2 py-0.5 text-[#B54708]">no date: {noDateCount}</span>
             <span className="rounded-full border border-[#FDA29B] bg-[#FEF3F2] px-2 py-0.5 text-[#B42318]">overdue: {overdueCount}</span>
+            <span className="rounded-full border border-[#D9D6FE] bg-[#F4F3FF] px-2 py-0.5 text-[#5925DC]">milestone linked: {milestoneLinkedCount}</span>
           </div>
         </div>
 
@@ -135,8 +145,54 @@ export default function TimelineControls({
             </div>
           )}
 
+          <div ref={milestoneDropdownRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setMilestoneDropdownOpen((o) => !o)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-600 hover:border-slate-400 transition-colors"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>
+                {filterMilestone === ''
+                  ? 'All Milestones'
+                  : filterMilestone === '__none__'
+                    ? 'No Milestone'
+                    : milestoneOptions.find((option) => String(option.id) === filterMilestone)?.name ?? 'Milestone'}
+              </span>
+              <ChevronDown size={12} className="text-slate-400" />
+            </button>
+            {milestoneDropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 min-w-[180px] max-h-56 overflow-y-auto py-1">
+                <button
+                  type="button"
+                  onClick={() => { setFilterMilestone(''); setMilestoneDropdownOpen(false); }}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 transition-colors ${filterMilestone === '' ? 'font-semibold text-blue-600' : 'text-slate-700'}`}
+                >
+                  All Milestones
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setFilterMilestone('__none__'); setMilestoneDropdownOpen(false); }}
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 transition-colors ${filterMilestone === '__none__' ? 'font-semibold text-blue-600' : 'text-slate-700'}`}
+                >
+                  No Milestone
+                </button>
+                {milestoneOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => { setFilterMilestone(String(option.id)); setMilestoneDropdownOpen(false); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 transition-colors ${filterMilestone === String(option.id) ? 'font-semibold text-blue-600' : 'text-slate-700'}`}
+                  >
+                    {option.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button
-            onClick={() => setGroupBy(g => g === 'none' ? 'status' : g === 'status' ? 'assignee' : 'none')}
+            onClick={() => setGroupBy((g) => g === 'none' ? 'status' : g === 'status' ? 'assignee' : g === 'assignee' ? 'milestone' : 'none')}
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-600 hover:border-slate-400 transition-colors"
             title="Toggle group by"
           >

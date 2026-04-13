@@ -84,6 +84,8 @@ export const useChat = (projectId: string) => {
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const selectedUserRef = useRef<string | null>(null);
   const selectedRoomIdRef = useRef<number | null>(null);
+  const loadingRoomRef = useRef<number | null>(null);
+  const loadingPrivateRef = useRef<string | null>(null);
 
   // â”€â”€ UI state â”€â”€
   const [featureFlags, setFeatureFlags] = useState<ChatFeatureFlags>(DEFAULT_FEATURE_FLAGS);
@@ -291,12 +293,18 @@ export const useChat = (projectId: string) => {
 
   const loadRoomHistory = useCallback(
     async (roomId: number) => {
+      if (loadingRoomRef.current === roomId) {
+        return;
+      }
+      loadingRoomRef.current = roomId;
       await msgLoadRoom(roomId, hydrateReactions);
       clearRoomUnread(roomId);
       try {
         await chatApi.markRoomAsRead(projectId, roomId);
       } catch {
         // Keep UI responsive even if read-state sync fails.
+      } finally {
+        loadingRoomRef.current = null;
       }
     },
     [msgLoadRoom, hydrateReactions, clearRoomUnread, projectId],
@@ -304,12 +312,19 @@ export const useChat = (projectId: string) => {
 
   const loadPrivateHistory = useCallback(
     async (recipient: string) => {
+      const normalizedRecipient = recipient.toLowerCase();
+      if (loadingPrivateRef.current === normalizedRecipient) {
+        return;
+      }
+      loadingPrivateRef.current = normalizedRecipient;
       await msgLoadPrivate(recipient, currentUser, hydrateReactions);
       clearPrivateUnread(recipient);
       try {
         await chatApi.markDirectConversationAsRead(projectId, recipient);
       } catch {
         // Keep UI responsive even if read-state sync fails.
+      } finally {
+        loadingPrivateRef.current = null;
       }
     },
     [msgLoadPrivate, currentUser, hydrateReactions, clearPrivateUnread, projectId],
@@ -400,13 +415,17 @@ export const useChat = (projectId: string) => {
   const fetchAllUsers = useCallback(async () => {
     try {
       const data = await chatApi.fetchChatMembers(projectId);
-      const normalized = data.map((u: string) => u.toLowerCase());
+      const currentAliasSet = new Set(currentUserAliases.map((alias) => alias.toLowerCase()));
+      currentAliasSet.add(currentUser.toLowerCase());
+      const normalized = data
+        .map((u: string) => u.toLowerCase())
+        .filter((u: string) => !currentAliasSet.has(u));
       setUsers(normalized);
       return normalized;
     } catch {
       return [] as string[];
     }
-  }, [projectId]);
+  }, [projectId, currentUserAliases, currentUser]);
 
 
   // ── Initialization ──

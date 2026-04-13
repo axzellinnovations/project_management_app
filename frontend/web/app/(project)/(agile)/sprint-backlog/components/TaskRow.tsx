@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, ChevronDown, Pencil, Tag, Trash2, UserPlus } from 'lucide-react';
+import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, Pencil, Tag, Trash2, UserPlus } from 'lucide-react';
 import AssigneeAvatar from './AssigneeAvatar';
 import { hexToLabelStyle } from '@/components/shared/LabelPicker';
 
@@ -53,6 +53,8 @@ export interface TaskRowProps {
   onRemoveLabel?: (taskId: number, labelId: number) => Promise<void>;
   onCreateLabel?: (name: string) => Promise<{ id: number; name: string; color?: string }>;
   extraStatuses?: Array<{ value: string; label: string }>;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -139,6 +141,8 @@ function TaskRow({
   onRemoveLabel,
   onCreateLabel,
   extraStatuses = [],
+  onMoveUp,
+  onMoveDown,
 }: TaskRowProps) {
   const [statusOpen, setStatusOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -275,7 +279,7 @@ function TaskRow({
 
   // Close dropdowns on outside click (portal-aware)
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handler = (e: Event) => {
       const target = e.target as Node;
       if (
         statusRef.current && !statusRef.current.contains(target) &&
@@ -291,7 +295,11 @@ function TaskRow({
       ) setLabelOpen(false);
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
   }, []);
 
   const openStatus = useCallback(() => {
@@ -337,7 +345,7 @@ function TaskRow({
           <div className="flex-1 min-w-0 p-4 border-r border-[#F2F4F7]">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[10px] font-bold text-[#98A2B3] tracking-wider">#{task.taskNo || task.id}</span>
-              <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${priorityStyle}`}>
+              <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${priorityStyle}`}>
                 {priorityKey}
               </span>
             </div>
@@ -385,7 +393,7 @@ function TaskRow({
                 <span
                   key={label.id}
                   style={hexToLabelStyle(label.color ?? '#6366F1')}
-                  className="px-2 py-0.5 rounded text-[9px] font-bold whitespace-nowrap shadow-sm"
+                  className="px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap shadow-sm"
                 >
                   {label.name}
                 </span>
@@ -394,22 +402,40 @@ function TaskRow({
           </div>
 
           {/* Horizontally Scrollable Metadata Options */}
-          <div className="flex-1 flex items-center gap-3 px-3 overflow-x-auto no-scrollbar bg-[#F9FAFB]/50">
+          <div className="flex-1 flex items-center gap-3 px-3 overflow-x-auto no-scrollbar bg-[#F9FAFB]/50 [scrollbar-width:none] [-webkit-overflow-scrolling:touch]">
             {/* Actions (Pencil / Trash) */}
             <div className="flex-shrink-0 flex items-center gap-1 border-r border-[#EAECF0] pr-2" onClick={(e) => e.stopPropagation()}>
+              {onMoveUp && (
+                <button
+                  type="button"
+                  onClick={onMoveUp}
+                  className="flex h-11 w-11 items-center justify-center rounded-lg text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF] active:scale-90 transition-all"
+                >
+                  <ArrowUp size={16} />
+                </button>
+              )}
+              {onMoveDown && (
+                <button
+                  type="button"
+                  onClick={onMoveDown}
+                  className="flex h-11 w-11 items-center justify-center rounded-lg text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF] active:scale-90 transition-all"
+                >
+                  <ArrowDown size={16} />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={startRename}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF] active:scale-90 transition-all"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-[#667085] hover:text-[#175CD3] hover:bg-[#EFF8FF] active:scale-90 transition-all"
               >
-                <Pencil size={14} />
+                <Pencil size={16} />
               </button>
               <button
                 type="button"
                 onClick={() => canDelete && onDeleteTask(task.id)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#667085] hover:text-[#D92D20] hover:bg-[#FEF3F2] active:scale-90 transition-all"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-[#667085] hover:text-[#D92D20] hover:bg-[#FEF3F2] active:scale-90 transition-all"
               >
-                <Trash2 size={14} />
+                <Trash2 size={16} />
               </button>
             </div>
 
@@ -418,7 +444,7 @@ function TaskRow({
               <button
                 type="button"
                 onClick={() => openStatus()}
-                className={`flex h-8 min-w-[90px] items-center justify-center gap-1.5 rounded-lg px-2 text-[9px] font-bold uppercase tracking-wider shadow-sm transition-all active:scale-95 ${displayStyle}`}
+                className={`flex h-11 min-w-[108px] items-center justify-center gap-1.5 rounded-lg px-2 text-[11px] font-bold uppercase tracking-wider shadow-sm transition-all active:scale-95 ${displayStyle}`}
               >
                 <span className="truncate">{displayLabel}</span>
                 <ChevronDown size={10} className="opacity-60 flex-shrink-0" />
@@ -435,8 +461,8 @@ function TaskRow({
                 {task.assigneeName && task.assigneeName !== 'Unassigned' ? (
                   <AssigneeAvatar name={task.assigneeName} profilePicUrl={task.assigneePhotoUrl} size={28} />
                 ) : (
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-[#EAECF0] text-[#98A2B3]">
-                    <UserPlus size={12} />
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-dashed border-[#EAECF0] text-[#98A2B3]">
+                    <UserPlus size={14} />
                   </div>
                 )}
               </button>
@@ -457,7 +483,7 @@ function TaskRow({
                 value={task.storyPoints} 
                 title="Points"
                 onChange={(e) => onStoryPointsChange(task.id, Number(e.target.value))}
-                className="text-[12px] font-bold text-[#101828] bg-[#F2F4F7] rounded-lg px-2 py-1 outline-none w-8 text-center"
+                className="text-[13px] font-bold text-[#101828] bg-[#F2F4F7] rounded-lg px-2 py-2 outline-none w-11 text-center min-h-[44px]"
               />
             </div>
 
@@ -467,7 +493,7 @@ function TaskRow({
                   type="button"
                   onClick={openDatePicker}
                   title={`Due Date: ${formatDate(task.dueDate)}`}
-                  className={`text-[11px] font-bold leading-none whitespace-nowrap bg-[#F2F4F7] px-2 py-1.5 rounded-lg ${dueClass === 'overdue' ? 'text-red-600 bg-red-50' : 'text-[#475467]'}`}
+                  className={`text-[12px] font-bold leading-none whitespace-nowrap bg-[#F2F4F7] px-2 py-2 rounded-lg min-h-[44px] ${dueClass === 'overdue' ? 'text-red-600 bg-red-50' : 'text-[#475467]'}`}
                 >
                   {formatDate(task.dueDate)}
                 </button>

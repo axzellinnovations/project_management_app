@@ -21,6 +21,8 @@ export default function ChatInterface() {
   const withParam = searchParams.get('with');
   const viewParam = searchParams.get('view');
   const handledQueryRef = useRef<string | null>(null);
+  const loadedPrivateRef = useRef<string | null>(null);
+  const loadedRoomRef = useRef<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -120,9 +122,16 @@ export default function ChatInterface() {
     : messages;
 
   const filteredUsers = users.filter(
-    (u) => u !== currentUser && u.toLowerCase().includes(searchTerm.trim().toLowerCase())
+    (u) =>
+      !currentUserAliases.some((alias) => alias && alias.toLowerCase() === u.toLowerCase()) &&
+      u.toLowerCase() !== currentUser.toLowerCase() &&
+      u.toLowerCase().includes(searchTerm.trim().toLowerCase()),
   );
-  const mentionCandidates = users.filter((u) => u !== currentUser);
+  const mentionCandidates = users.filter(
+    (u) =>
+      !currentUserAliases.some((alias) => alias && alias.toLowerCase() === u.toLowerCase()) &&
+      u.toLowerCase() !== currentUser.toLowerCase(),
+  );
 
   const filteredMessages = displayMessages.filter((msg) => {
     if (!searchTerm.trim()) return true;
@@ -179,7 +188,16 @@ export default function ChatInterface() {
     : teamTypingUsers[0];
 
   useEffect(() => {
-    if (selectedUser) loadPrivateHistory(selectedUser);
+    if (!selectedUser) {
+      loadedPrivateRef.current = null;
+      return;
+    }
+    const normalized = selectedUser.toLowerCase();
+    if (loadedPrivateRef.current === normalized) {
+      return;
+    }
+    loadedPrivateRef.current = normalized;
+    loadPrivateHistory(selectedUser);
   }, [selectedUser, loadPrivateHistory]);
 
   useEffect(() => {
@@ -215,7 +233,16 @@ export default function ChatInterface() {
   }, [roomIdParam, withParam, viewParam, selectRoom, selectPrivateUser]);
 
   useEffect(() => {
-    if (hasSelectedRoom) loadRoomHistory(selectedRoomId as number);
+    if (!hasSelectedRoom) {
+      loadedRoomRef.current = null;
+      return;
+    }
+    const normalizedRoomId = selectedRoomId as number;
+    if (loadedRoomRef.current === normalizedRoomId) {
+      return;
+    }
+    loadedRoomRef.current = normalizedRoomId;
+    loadRoomHistory(normalizedRoomId);
   }, [selectedRoomId, hasSelectedRoom, loadRoomHistory]);
 
   const handleSendMessage = (content: string) => {

@@ -31,7 +31,7 @@ describe('kanban api', () => {
 
     const result = await fetchTasksByProject(12);
 
-    expect(mockedAxios.get).toHaveBeenCalledWith('/api/tasks/project/12');
+    expect(mockedAxios.get).toHaveBeenCalledWith('/api/tasks/project/12', { params: {} });
     expect(result).toEqual([{ id: 1, title: 'Task 1' }]);
   });
 

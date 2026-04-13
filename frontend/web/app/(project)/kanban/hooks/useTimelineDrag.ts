@@ -2,20 +2,23 @@ import { useState, useCallback, useEffect } from 'react';
 import { Task } from '../types';
 import { format, addDays } from 'date-fns';
 import { updateTaskDates } from '../api';
+import { toast } from '@/components/ui';
 
 interface TimelineTaskLike {
   id: number;
   startDateObj: Date;
   dueDateObj: Date;
+  milestoneId?: number;
 }
 
 export function useTimelineDrag(
   dayColumnWidth: number,
+  milestones: Array<{ id: number; name: string; dueDate?: string }>,
   onTaskUpdated?: (taskId: number, updates: Partial<Task>) => void,
   setLocalTasks?: React.Dispatch<React.SetStateAction<Task[]>>,
 ) {
   const [activeDrag, setActiveDrag] = useState<{
-    taskId: number; type: 'move' | 'resize'; startX: number; origStart: Date; origDue: Date;
+    taskId: number; type: 'move' | 'resize'; startX: number; origStart: Date; origDue: Date; milestoneId?: number;
   } | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
 
@@ -32,7 +35,7 @@ export function useTimelineDrag(
       return;
     }
 
-    const { taskId, type, origStart, origDue } = activeDrag;
+    const { taskId, type, origStart, origDue, milestoneId } = activeDrag;
     let newStartDate: string | undefined;
     let newDueDate: string | undefined;
 
@@ -49,6 +52,13 @@ export function useTimelineDrag(
     if (newStartDate) updates.startDate = newStartDate;
     if (newDueDate) updates.dueDate = newDueDate;
 
+    if (milestoneId != null && updates.dueDate) {
+      const linkedMilestone = milestones.find((milestone) => milestone.id === milestoneId);
+      if (linkedMilestone?.dueDate && updates.dueDate > linkedMilestone.dueDate) {
+        toast(`Task due date moved past milestone "${linkedMilestone.name}". Milestone date is unchanged.`, 'warning');
+      }
+    }
+
     setLocalTasks?.(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
     onTaskUpdated?.(taskId, updates);
     setActiveDrag(null);
@@ -62,7 +72,7 @@ export function useTimelineDrag(
         t.id === taskId ? { ...t, startDate: format(origStart, 'yyyy-MM-dd'), dueDate: format(origDue, 'yyyy-MM-dd') } : t
       ));
     }
-  }, [activeDrag, dragOffset, onTaskUpdated, setLocalTasks]);
+  }, [activeDrag, dragOffset, milestones, onTaskUpdated, setLocalTasks]);
 
   useEffect(() => {
     if (!activeDrag) return;
@@ -76,7 +86,14 @@ export function useTimelineDrag(
 
   const startDrag = useCallback((e: React.MouseEvent, task: TimelineTaskLike, type: 'move' | 'resize') => {
     e.preventDefault();
-    setActiveDrag({ taskId: task.id, type, startX: e.clientX, origStart: task.startDateObj, origDue: task.dueDateObj });
+    setActiveDrag({
+      taskId: task.id,
+      type,
+      startX: e.clientX,
+      origStart: task.startDateObj,
+      origDue: task.dueDateObj,
+      milestoneId: task.milestoneId,
+    });
     setDragOffset(0);
   }, []);
 

@@ -18,9 +18,16 @@ export interface TeamMemberOption {
  * @param projectId - The project ID to fetch tasks for
  * @returns Promise with array of tasks
  */
-export async function fetchTasksByProject(projectId: number): Promise<Task[]> {
+export async function fetchTasksByProject(
+  projectId: number,
+  filters?: { milestoneId?: number | null }
+): Promise<Task[]> {
   try {
-    const response = await axios.get(`/api/tasks/project/${projectId}`);
+    const params: Record<string, number> = {};
+    if (filters?.milestoneId != null) {
+      params.milestoneId = filters.milestoneId;
+    }
+    const response = await axios.get(`/api/tasks/project/${projectId}`, { params });
     return response.data || [];
   } catch (error) {
     console.error('Error fetching tasks:', error);

@@ -33,7 +33,7 @@ interface BacklogCardProps {
   sprint: SprintItem;
   projectId: string;
   currentUserRole?: string | null;
-  onDropTask: (taskId: number, sprintId: number) => void;
+  onDropTask: (taskId: number, sprintId: number, targetIndex?: number) => void;
   onCreateTask: (title: string, sprintId: number) => void;
   onDeleteTask: (taskId: number, sprintId: number) => void;
   onToggleTask: (taskId: number) => void;
@@ -311,6 +311,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
   const createTaskRef = useRef<HTMLFormElement | null>(null);
 
   const [localTasks, setLocalTasks] = useState<LocalSprintTask[]>([]);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
 
   const getMemberDisplayName = (member: TeamMemberInfo) => member.user.fullName || member.user.username;
 
@@ -347,7 +348,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
   }, [projectId]);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: Event) => {
       if (
         sprintMenuRef.current &&
         !sprintMenuRef.current.contains(event.target as Node)
@@ -372,9 +373,11 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
     };
 
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     };
   }, []);
@@ -466,10 +469,18 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    setDropIndex(null);
     const taskId = Number(event.dataTransfer.getData('text/plain'));
     if (!taskId) return;
-
     onDropTask(taskId, sprint.id);
+  };
+
+  const handleRowDrop = (event: React.DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault();
+    setDropIndex(null);
+    const taskId = Number(event.dataTransfer.getData('text/plain'));
+    if (!taskId) return;
+    onDropTask(taskId, sprint.id, index);
   };
 
   const updateTask = (taskId: number, updates: Partial<LocalSprintTask>) => {
@@ -750,7 +761,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
     <>
     <div className="rounded-xl border border-[#E4E7EC] bg-[#F8F9FB] p-5 shadow-sm">
       {/* Sprint Header */}
-      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#EAECF0] pb-4 gap-4">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#EAECF0] pb-4 gap-3 sm:gap-4">
         <div className="flex items-center gap-3">
           <div className="h-5 w-5 rounded border border-[#98A2B3] bg-transparent" />
 
@@ -762,7 +773,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
             {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {isEditingName ? (
               <input
                 ref={nameInputRef}
@@ -848,7 +859,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
             {sprint.status === 'NOT_STARTED' ? (
               <button
                 onClick={handleStartSprint}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#175CD3] bg-[#175CD3] px-3.5 py-2 text-[12px] font-bold text-white hover:bg-[#1849A9] shadow-sm transform active:scale-95 transition-all duration-150"
+            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-[#175CD3] bg-[#175CD3] px-3.5 py-2 text-[12px] font-bold text-white hover:bg-[#1849A9] shadow-sm transform active:scale-95 transition-all duration-150"
               >
                 <Rocket size={14} />
                 <span>Start Sprint</span>
@@ -856,7 +867,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
             ) : sprint.status === 'ACTIVE' ? (
               <button
                 onClick={handleCompleteSprint}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#027A48] bg-[#039855] px-3.5 py-2 text-[12px] font-bold text-white hover:bg-[#027A48] shadow-sm transform active:scale-95 transition-all duration-150"
+                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-[#027A48] bg-[#039855] px-3.5 py-2 text-[12px] font-bold text-white hover:bg-[#027A48] shadow-sm transform active:scale-95 transition-all duration-150"
               >
                 <Check size={14} />
                 <span>Complete Sprint</span>
@@ -865,10 +876,10 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
 
             <button
               onClick={() => setShowReportModal(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#D0D5DD] bg-white px-3 py-2 text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-[#D0D5DD] bg-white px-3 py-2 text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all"
             >
               <BarChart3 size={14} />
-              <span className="hidden xs:inline">Sprint Report</span>
+                <span className="hidden sm:inline">Sprint Report</span>
             </button>
 
             <button
@@ -990,17 +1001,19 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
       )}
 
       {isOpen && (
-        <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
+        <div onDragOver={(e) => { e.preventDefault(); setDropIndex(localTasks.length); }} onDrop={handleDrop}>
           <div className="flex flex-col gap-[5px]">
             {localTasks.length > 0 ? (
-              localTasks.map((task) => (
+              localTasks.map((task, index) => (
                   <div
                     key={task.id}
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData('text/plain', String(task.id));
                     }}
-                    className="rounded-lg overflow-hidden border border-[#EAECF0]"
+                    onDragOver={(e) => { e.preventDefault(); setDropIndex(index); }}
+                    onDrop={(e) => handleRowDrop(e, index)}
+                    className={`rounded-lg overflow-hidden border ${dropIndex === index ? 'border-[#155DFC]' : 'border-[#EAECF0]'}`}
                   >
                     <TaskRow
                       task={task}
@@ -1021,6 +1034,8 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
                       onRemoveLabel={handleRemoveLabel}
                       onCreateLabel={onCreateLabel}
                       extraStatuses={extraStatuses}
+                      onMoveUp={() => onDropTask(task.id, sprint.id, Math.max(0, index - 1))}
+                      onMoveDown={() => onDropTask(task.id, sprint.id, Math.min(localTasks.length, index + 1))}
                     />
                   </div>
               ))
@@ -1035,7 +1050,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
             <div className="mt-2 flex justify-start">
               <button
                 onClick={() => setShowCreateTaskBox(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#344054] shadow-sm hover:bg-[#F9FAFB] transition-colors duration-150"
+                className="flex min-h-[44px] items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#344054] shadow-sm hover:bg-[#F9FAFB] transition-colors duration-150"
               >
                 <span className="text-[18px] leading-none mb-0.5">+</span>
                 Create Task
@@ -1074,7 +1089,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
               <button
                 type="submit"
                 disabled={!newTaskName.trim()}
-                className="flex h-7 w-7 items-center justify-center shrink-0 rounded-md bg-[#175CD3] text-white hover:bg-[#1849A9] disabled:opacity-50 transition-colors duration-150"
+                className="flex h-11 w-11 items-center justify-center shrink-0 rounded-md bg-[#175CD3] text-white hover:bg-[#1849A9] disabled:opacity-50 transition-colors duration-150"
                 title="Create Task"
               >
                 <CornerDownLeft size={14} />
