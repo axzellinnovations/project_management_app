@@ -67,7 +67,7 @@ public class BurndownService {
         }
 
         // Fetch tasks
-        List<Task> allTasks  = taskRepository.findBySprintId(sprintId);
+        List<Task> allTasks  = taskRepository.findBySprintIdWithScalars(sprintId);
         List<Task> doneTasks = allTasks.stream()
                 .filter(t -> "done".equalsIgnoreCase(t.getStatus()))
                 .collect(Collectors.toList());
@@ -133,17 +133,26 @@ public class BurndownService {
     @Transactional(readOnly = true)
     public List<SprintVelocityDTO> getVelocityData(Long projectId, Long currentUserId) {
         List<SprintResponseDTO> sprints = sprintService.getSprintsByProject(projectId, currentUserId);
-
-        return sprints.stream()
+        List<SprintResponseDTO> completedSprints = sprints.stream()
                 .filter(s -> "COMPLETED".equals(s.getStatus()))
+                .toList();
+        if (completedSprints.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> sprintIds = completedSprints.stream().map(SprintResponseDTO::getId).toList();
+        java.util.Map<Long, int[]> velocityBySprintId = new java.util.HashMap<>();
+        for (Object[] row : taskRepository.aggregateVelocityBySprintIds(sprintIds)) {
+            Long sprintId = (Long) row[0];
+            int committed = row[1] != null ? ((Number) row[1]).intValue() : 0;
+            int completed = row[2] != null ? ((Number) row[2]).intValue() : 0;
+            velocityBySprintId.put(sprintId, new int[]{committed, completed});
+        }
+
+        return completedSprints.stream()
                 .map(s -> {
-                    List<Task> tasks = taskRepository.findBySprintId(s.getId());
-                    int committed = tasks.stream().mapToInt(Task::getStoryPoint).sum();
-                    int completed = tasks.stream()
-                            .filter(t -> "DONE".equalsIgnoreCase(t.getStatus()))
-                            .mapToInt(Task::getStoryPoint)
-                            .sum();
-                    return new SprintVelocityDTO(s.getId(), s.getName(), committed, completed);
+                    int[] values = velocityBySprintId.getOrDefault(s.getId(), new int[]{0, 0});
+                    return new SprintVelocityDTO(s.getId(), s.getName(), values[0], values[1]);
                 })
                 .collect(Collectors.toList());
     }

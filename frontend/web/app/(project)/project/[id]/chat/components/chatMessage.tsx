@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Pencil, Trash2, MessageSquare, Pin, PinOff, FileText, Loader2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ChatMessage, ChatReactionSummary } from './chat';
 import { EditMessageModal, ConfirmDeleteModal } from './chatModals';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -243,7 +243,6 @@ export const ChatMessages = ({
           position: 'relative',
         }}
       >
-        <AnimatePresence initial={false}>
           {rowVirtualizer.getVirtualItems().map((row) => {
             const idx = row.index;
             const msg = visibleMessages[idx];
@@ -262,7 +261,13 @@ export const ChatMessages = ({
               <div
                 key={msg.id ?? `local-msg-${idx}`}
                 data-index={idx}
-                ref={rowVirtualizer.measureElement}
+                ref={(el) => {
+                  if (el) {
+                    requestAnimationFrame(() => {
+                      rowVirtualizer.measureElement(el);
+                    });
+                  }
+                }}
                 style={{
                   position: 'absolute',
                   top: 0,
@@ -282,10 +287,7 @@ export const ChatMessages = ({
                 </div>
               )}
 
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
+              <div
                 className={`flex items-end ${hasAvatar ? 'gap-2.5' : 'gap-1.5'} group relative ${grouped ? 'mt-0.5' : 'mt-3'} ${isMe ? 'flex-row-reverse' : 'flex-row'} ${isMentioned ? 'pl-1.5 border-l-2 border-amber-400 rounded-l' : ''}`}
               >
                 {/* Avatar */}
@@ -446,17 +448,14 @@ export const ChatMessages = ({
                     </div>
                   )}
                 </div>
-              </motion.div>
+              </div>
               </div>
             );
           })}
-        </AnimatePresence>
       </div>
 
       {/* Typing indicator */}
-      <AnimatePresence>
-        {typingUser && <TypingIndicator key="typing" user={typingUser} userProfilePics={userProfilePics} />}
-      </AnimatePresence>
+      {typingUser && <TypingIndicator key="typing" user={typingUser} userProfilePics={userProfilePics} />}
 
       {/* Modals */}
       <EditMessageModal

@@ -143,6 +143,7 @@ export default function SprintBacklogPage() {
     const { showSpinner = true, forceNetwork = false } = options;
     
     const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
+    let hasCachedData = false;
     if (cKey && !forceNetwork) {
       const cached = getSessionCache<CacheShape>(cKey, { allowStale: true });
       if (cached.data) {
@@ -150,11 +151,11 @@ export default function SprintBacklogPage() {
         setSprints(cached.data.sprints);
         setProjectKey(cached.data.projectKey);
         setLoading(false);
-        if (!cached.isStale) return;
+        hasCachedData = true;
       }
     }
 
-    if (showSpinner) setLoading(true);
+    if (showSpinner && !hasCachedData) setLoading(true);
     try {
       const [sprintsRes, tasksRes] = await Promise.all([
         api.get(`/api/sprints/project/${projectId}`),
@@ -164,7 +165,8 @@ export default function SprintBacklogPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawSprints = sprintsRes.data as any[];
       const rawTasks = tasksRes.data as RawTask[];
-      const mappedTasks = rawTasks.map((t, i) => mapRawTask(t, i));
+      const uniqueRaw = Array.from(new Map(rawTasks.map(t => [t.id, t])).values());
+      const mappedTasks = uniqueRaw.map((t, i) => mapRawTask(t, i));
 
       if (projectIdNum) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -210,7 +212,7 @@ export default function SprintBacklogPage() {
     } catch (err: any) {
       if (showSpinner) setError(err.response?.data?.message || 'Access denied or project not found.');
     } finally {
-      setLoading(false);
+      if (showSpinner && !hasCachedData) setLoading(false);
     }
   }, [projectId, projectIdNum, projectKey, setTasksForProject]);
 
@@ -248,6 +250,7 @@ export default function SprintBacklogPage() {
       if (selectedTasks.length > 0) setProductTasks(remainingTasks);
       const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
       if (cKey) removeSessionCache(cKey);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       void fetchData({ showSpinner: false, forceNetwork: true });
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -280,6 +283,7 @@ export default function SprintBacklogPage() {
       await api.put(`/api/tasks/${id}`, { storyPoint: value });
       const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
       if (cKey) removeSessionCache(cKey);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       void fetchData({ showSpinner: false, forceNetwork: true });
     } catch {
       toast('Failed to update story points', 'error');
@@ -312,6 +316,7 @@ export default function SprintBacklogPage() {
       setProductTasks((prev) => [...prev.filter((x) => x.id !== raw.id), newTask]);
       const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
       if (cKey) removeSessionCache(cKey);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       void fetchData({ showSpinner: false, forceNetwork: true });
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -356,80 +361,101 @@ export default function SprintBacklogPage() {
     }
   }, [projectId, fetchData]);
 
-  const moveTaskToSprint = useCallback(async (taskId: number, sprintId: number) => {
-    let draggedTask = productTasks.find((task) => task.id === taskId);
+  const moveTask = useCallback(async (
+    taskId: number,
+    toSprintId: number | null,
+    targetIndex?: number
+  ) => {
+    let draggedTask: TaskItem | undefined;
     let fromSprintId: number | null = null;
-    if (!draggedTask) {
+    let fromIndex = -1;
+
+    fromIndex = productTasks.findIndex((task) => task.id === taskId);
+    if (fromIndex >= 0) {
+      draggedTask = productTasks[fromIndex];
+      fromSprintId = null;
+    } else {
       for (const sprint of sprints) {
-        draggedTask = sprint.tasks.find((task) => task.id === taskId);
-        if (draggedTask) {
+        const idx = sprint.tasks.findIndex((task) => task.id === taskId);
+        if (idx >= 0) {
+          draggedTask = sprint.tasks[idx];
           fromSprintId = sprint.id;
+          fromIndex = idx;
           break;
         }
       }
     }
-    if (!draggedTask) return;
-    if (fromSprintId === sprintId) return;
+    if (!draggedTask || fromIndex < 0) return;
+
+    const isSameList = fromSprintId === toSprintId;
+    const desiredIndex = targetIndex == null ? Number.MAX_SAFE_INTEGER : Math.max(0, targetIndex);
+
+    const insertAt = (arr: TaskItem[], item: TaskItem, idx: number) => {
+      const next = [...arr];
+      const bounded = Math.max(0, Math.min(idx, next.length));
+      next.splice(bounded, 0, item);
+      return next.map((task, index) => ({ ...task, taskNo: index + 1 }));
+    };
+
+    const removeAt = (arr: TaskItem[], idx: number) => {
+      const next = [...arr];
+      next.splice(idx, 1);
+      return next.map((task, index) => ({ ...task, taskNo: index + 1 }));
+    };
+
+    if (isSameList) {
+      if (fromSprintId === null) {
+        setProductTasks((prev) => {
+          const currentIndex = prev.findIndex((t) => t.id === taskId);
+          if (currentIndex < 0) return prev;
+          const without = removeAt(prev, currentIndex);
+          const adjusted = desiredIndex > currentIndex ? desiredIndex - 1 : desiredIndex;
+          return insertAt(without, { ...draggedTask!, sprintId: null }, adjusted);
+        });
+      } else {
+        setSprints((prev) => prev.map((sprint) => {
+          if (sprint.id !== fromSprintId) return sprint;
+          const currentIndex = sprint.tasks.findIndex((t) => t.id === taskId);
+          if (currentIndex < 0) return sprint;
+          const without = removeAt(sprint.tasks, currentIndex);
+          const adjusted = desiredIndex > currentIndex ? desiredIndex - 1 : desiredIndex;
+          return { ...sprint, tasks: insertAt(without, { ...draggedTask!, sprintId: sprint.id }, adjusted) };
+        }));
+      }
+      return;
+    }
+
+    if (fromSprintId === null) {
+      setProductTasks((prev) => removeAt(prev, fromIndex));
+    } else {
+      setSprints((prev) => prev.map((s) => s.id === fromSprintId ? { ...s, tasks: removeAt(s.tasks, fromIndex) } : s));
+    }
+
+    if (toSprintId === null) {
+      setProductTasks((prev) => insertAt(prev, { ...draggedTask!, sprintId: null }, desiredIndex));
+    } else {
+      setSprints((prev) => prev.map((s) => s.id === toSprintId ? { ...s, tasks: insertAt(prev.find(x => x.id === toSprintId)?.tasks ?? s.tasks, { ...draggedTask!, sprintId: toSprintId }, desiredIndex) } : s));
+    }
 
     try {
-      await api.put(`/api/tasks/${taskId}`, { sprintId });
-      if (fromSprintId === null) {
-        setProductTasks((prev) => prev.filter((t) => t.id !== taskId));
-      } else {
-        setSprints((prev) =>
-          prev.map((s) =>
-            s.id === fromSprintId
-              ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }
-              : s
-          )
-        );
-      }
-      setSprints((prev) =>
-        prev.map((sprint) =>
-          sprint.id === sprintId
-            ? { ...sprint, tasks: [...sprint.tasks, { ...draggedTask!, sprintId }] }
-            : sprint
-        )
-      );
+      await api.put(`/api/tasks/${taskId}`, { sprintId: toSprintId });
       const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
       if (cKey) removeSessionCache(cKey);
-      void fetchData({ showSpinner: false, forceNetwork: true });
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
       toast(axiosErr?.response?.data?.message || 'Failed to move task.', 'error');
+      void fetchData({ showSpinner: false, forceNetwork: true });
     }
   }, [projectId, productTasks, sprints, fetchData]);
 
-  const moveTaskToBacklog = useCallback(async (taskId: number) => {
-    let draggedTask: TaskItem | undefined;
-    let fromSprintId: number | undefined;
-    for (const sprint of sprints) {
-      draggedTask = sprint.tasks.find((task) => task.id === taskId);
-      if (draggedTask) {
-        fromSprintId = sprint.id;
-        break;
-      }
-    }
-    if (!draggedTask || !fromSprintId) return;
+  const moveTaskToSprint = useCallback((taskId: number, sprintId: number, targetIndex?: number) => {
+    void moveTask(taskId, sprintId, targetIndex);
+  }, [moveTask]);
 
-    try {
-      await api.put(`/api/tasks/${taskId}`, { sprintId: null });
-      setSprints((prev) =>
-        prev.map((s) =>
-          s.id === fromSprintId
-            ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) }
-            : s
-        )
-      );
-      setProductTasks((prev) => [...prev, { ...draggedTask!, sprintId: null }]);
-      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
-      if (cKey) removeSessionCache(cKey);
-      void fetchData({ showSpinner: false, forceNetwork: true });
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      toast(axiosErr?.response?.data?.message || 'Failed to move task back to backlog.', 'error');
-    }
-  }, [projectId, sprints, fetchData]);
+  const moveTaskToBacklog = useCallback((taskId: number, targetIndex?: number) => {
+    void moveTask(taskId, null, targetIndex);
+  }, [moveTask]);
 
   const handleTaskStatusChange = useCallback(async (taskId: number, newStatus: string) => {
     try {
@@ -441,6 +467,7 @@ export default function SprintBacklogPage() {
       })));
       const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
       if (cKey) removeSessionCache(cKey);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       void fetchData({ showSpinner: false, forceNetwork: true });
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -563,6 +590,12 @@ export default function SprintBacklogPage() {
     return () => clearInterval(syncId);
   }, [projectId, fetchStaticData, fetchData]);
 
+  useEffect(() => {
+    const onTaskUpdated = () => { void fetchData({ showSpinner: false, forceNetwork: true }); };
+    window.addEventListener('planora:task-updated', onTaskUpdated);
+    return () => window.removeEventListener('planora:task-updated', onTaskUpdated);
+  }, [fetchData]);
+
   useTaskWebSocket(projectId, useCallback((event) => {
     if (event.type === 'TASK_CREATED' && event.task) {
       const t = event.task;
@@ -666,8 +699,8 @@ export default function SprintBacklogPage() {
   }, [productTasks, sprints]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
-      <div className="flex-shrink-0 z-40 w-full glass-panel border-b border-[#E4E7EC] px-4 py-4 sm:px-8">
+    <div className="flex h-full min-h-0 flex-col bg-slate-50 overflow-hidden">
+      <div className="sticky top-0 flex-shrink-0 z-40 w-full glass-panel border-b border-[#E4E7EC] px-4 py-4 sm:px-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Project Backlog</h1>
@@ -699,7 +732,7 @@ export default function SprintBacklogPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-8 custom-scrollbar">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8 custom-scrollbar touch-pan-y">
         <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-8 pb-32 sm:pb-8">
           {loading ? (
             <div className="space-y-6">
@@ -771,7 +804,7 @@ export default function SprintBacklogPage() {
                 onCreateTask={createTask}
                 onDeleteTask={(taskId) => { setProductTasks((prev) => prev.filter((t) => t.id !== taskId)); }}
                 onCreateSprint={() => { void createSprint(`${projectKey} Sprint ${sprints.length + 1}`); }}
-                onDropTask={moveTaskToBacklog}
+                      onDropTask={moveTaskToBacklog}
                 onStatusChange={handleTaskStatusChange}
                 onAssignTask={(taskId, assigneeName, assigneePhotoUrl) => {
                   setProductTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, assigneeName, assigneePhotoUrl } : t)));

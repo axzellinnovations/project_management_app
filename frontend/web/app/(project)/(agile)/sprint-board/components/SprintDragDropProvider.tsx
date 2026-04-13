@@ -62,9 +62,9 @@ export default function SprintDragDropProvider({
       onDragEnd={handleDragEnd}
     >
       {children}
-      <DragOverlay dropAnimation={null}>
+      <DragOverlay>
         {draggedTask ? (
-          <div className="opacity-90 scale-105 shadow-2xl">
+          <div className="opacity-95 scale-[1.03] shadow-2xl pointer-events-none">
             <SprintCard task={draggedTask} />
           </div>
         ) : null}

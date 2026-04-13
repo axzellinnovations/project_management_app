@@ -18,6 +18,9 @@ import com.planora.backend.service.ChatService;
 import com.planora.backend.service.ChatWebhookService;
 import com.planora.backend.service.JWTService;
 import com.planora.backend.service.NotificationService;
+import com.planora.backend.service.ProjectMembershipService;
+import com.planora.backend.service.UserCacheService;
+import com.planora.backend.dto.ChatMessageDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +57,10 @@ class ChatRestControllerTest {
     private ProjectRepository projectRepository;
     @MockBean
     private TeamMemberRepository teamMemberRepository;
+    @MockBean
+    private UserCacheService userCacheService;
+    @MockBean
+    private ProjectMembershipService projectMembershipService;
     @MockBean
     private UserRepository userRepository;
     @MockBean
@@ -97,8 +104,9 @@ class ChatRestControllerTest {
         member.setTeam(team);
 
         when(projectRepository.findById(5L)).thenReturn(Optional.of(project));
-        when(userRepository.findByUsernameIgnoreCase("alice")).thenReturn(Optional.of(alice));
-        when(userRepository.findByEmailIgnoreCase("alice")).thenReturn(Optional.of(alice));
+        when(projectMembershipService.resolveProjectTeamId(5L)).thenReturn(7L);
+        when(userCacheService.resolveUserByEmailOrUsername("alice")).thenReturn(alice);
+        when(userCacheService.resolveUserByEmailOrUsername("alice@example.com")).thenReturn(alice);
         when(teamMemberRepository.findByTeamIdAndUserUserId(7L, 10L)).thenReturn(Optional.of(member));
         when(teamMemberRepository.findByTeamId(7L)).thenReturn(List.of(member));
     }
@@ -106,9 +114,9 @@ class ChatRestControllerTest {
     @Test
     @WithMockUser(username = "alice")
     void getRoomMessages_marksAsRead_andReturnsPayload() throws Exception {
-        ChatMessage message = new ChatMessage();
-        message.setId(21L);
-        message.setContent("Hello room");
+		ChatMessageDTO message = new ChatMessageDTO();
+		message.setId(21L);
+		message.setContent("Hello room");
 
         ChatRoom room = new ChatRoom();
         room.setId(9L);
@@ -139,14 +147,14 @@ class ChatRestControllerTest {
         bob.setUsername("bob");
         bob.setEmail("bob@example.com");
 
-        when(userRepository.findByUsernameIgnoreCase("bob")).thenReturn(Optional.of(bob));
-        when(userRepository.findByEmailIgnoreCase("bob")).thenReturn(Optional.of(bob));
+        when(userCacheService.resolveUserByEmailOrUsername("bob")).thenReturn(bob);
+        when(userCacheService.resolveUserByEmailOrUsername("bob@example.com")).thenReturn(bob);
         when(teamMemberRepository.findByTeamIdAndUserUserId(7L, 11L)).thenReturn(Optional.of(new TeamMember()));
 
-        ChatMessage dm = new ChatMessage();
-        dm.setId(30L);
-        dm.setSender("alice");
-        dm.setRecipient("bob");
+		ChatMessageDTO dm = new ChatMessageDTO();
+		dm.setId(30L);
+		dm.setSender("alice");
+		dm.setRecipient("bob");
 
         when(chatService.getPrivateConversation(5L, "alice", "bob")).thenReturn(List.of(dm));
 
@@ -162,6 +170,7 @@ class ChatRestControllerTest {
     @Test
     @WithMockUser(username = "alice")
     void createThreadReply_rejectsBlankContent() throws Exception {
+            @SuppressWarnings("null")
         var request = new ChatRestController.ThreadReplyRequest("   ", ChatMessage.FormatType.PLAIN);
 
         mockMvc.perform(post("/api/projects/5/chat/messages/1/thread/replies")
@@ -174,12 +183,13 @@ class ChatRestControllerTest {
     @Test
     @WithMockUser(username = "alice")
     void createThreadReply_returnsCreatedMessage() throws Exception {
+            @SuppressWarnings("null")
         var request = new ChatRestController.ThreadReplyRequest("reply", ChatMessage.FormatType.PLAIN);
-        ChatMessage saved = new ChatMessage();
-        saved.setId(77L);
-        saved.setContent("reply");
+		ChatMessageDTO saved = new ChatMessageDTO();
+		saved.setId(77L);
+		saved.setContent("reply");
 
-        when(chatService.saveThreadReply(eq(5L), eq(1L), any(ChatMessage.class))).thenReturn(saved);
+		when(chatService.saveThreadReply(eq(5L), eq(1L), any(ChatMessage.class))).thenReturn(saved);
 
         mockMvc.perform(post("/api/projects/5/chat/messages/1/thread/replies")
                         .with(csrf())
@@ -193,6 +203,7 @@ class ChatRestControllerTest {
     @Test
     @WithMockUser(username = "alice")
     void toggleReaction_blankEmojiReturnsBadRequest() throws Exception {
+            @SuppressWarnings("null")
         var request = new ChatRestController.ReactionToggleRequest(" ");
 
         mockMvc.perform(post("/api/projects/5/chat/messages/9/reactions/toggle")
@@ -231,6 +242,15 @@ class ChatRestControllerTest {
 
     @Test
     @WithMockUser(username = "alice")
+    void getFeatureFlags_validatesProjectMembershipViaService() throws Exception {
+        mockMvc.perform(get("/api/projects/5/chat/features"))
+                .andExpect(status().isOk());
+
+        verify(projectMembershipService).assertTeamMembership(7L, alice);
+    }
+
+    @Test
+    @WithMockUser(username = "alice")
     void createRoom_notifiesOnlyAddedMembers() throws Exception {
         User bob = new User();
         bob.setUserId(11L);
@@ -245,8 +265,8 @@ class ChatRestControllerTest {
         aliceMember.setUser(alice);
         aliceMember.setTeam(team);
 
-        when(userRepository.findByUsernameIgnoreCase("bob")).thenReturn(Optional.of(bob));
-        when(userRepository.findByEmailIgnoreCase("bob")).thenReturn(Optional.of(bob));
+        when(userCacheService.resolveUserByEmailOrUsername("bob")).thenReturn(bob);
+        when(userCacheService.resolveUserByEmailOrUsername("bob@example.com")).thenReturn(bob);
         when(teamMemberRepository.findByTeamIdAndUserUserId(7L, 11L)).thenReturn(Optional.of(bobMember));
         when(teamMemberRepository.findByTeamId(7L)).thenReturn(List.of(bobMember, aliceMember));
 

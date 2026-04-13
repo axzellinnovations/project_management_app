@@ -4,7 +4,7 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SprintboardTask } from '../types';
-import { Calendar } from 'lucide-react';
+import { Calendar, GripVertical } from 'lucide-react';
 import AssigneeAvatar from '../../sprint-backlog/components/AssigneeAvatar';
 import { hexToLabelStyle } from '@/components/shared/LabelPicker';
 
@@ -68,16 +68,28 @@ export default function SprintCard({ task, onOpenTask }: SprintCardProps) {
       {...attributes}
       {...listeners}
       className={`
-        rounded-xl border border-[#EAECF0] bg-white p-4 shadow-sm
-        hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing
-        ${isDragging ? 'ring-2 ring-[#155DFC] z-50 scale-105' : ''}
+        rounded-xl border border-gray-200/80 bg-white p-3 shadow-sm
+        hover:shadow-md hover:border-blue-200 transition-all duration-200 cursor-grab active:cursor-grabbing
+        focus-within:ring-2 focus-within:ring-blue-100
+        ${isDragging ? 'ring-2 ring-[#155DFC] z-50 scale-[1.02]' : ''}
       `}
     >
       {/* Title — click to open task modal */}
-      <div className="flex items-start gap-1.5 mb-3">
+      <div className="flex items-start gap-1.5 mb-2.5">
+        <GripVertical size={14} className="text-gray-300 mt-0.5 flex-shrink-0" />
         <h3
-          className="text-[14px] font-semibold text-[#101828] leading-tight cursor-pointer hover:text-[#155DFC] transition-colors flex-1 min-w-0"
+          className="text-[14px] font-semibold text-[#101828] leading-tight cursor-pointer hover:text-[#155DFC] transition-colors flex-1 min-w-0 focus:outline-none focus:ring-2 focus:ring-blue-100 rounded"
           onClick={(e) => { e.stopPropagation(); onOpenTask?.(task.taskId); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              onOpenTask?.(task.taskId);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label={`Open task ${task.title}`}
         >
           {task.title}
         </h3>
@@ -93,7 +105,7 @@ export default function SprintCard({ task, onOpenTask }: SprintCardProps) {
 
       {/* Date */}
       {dueDateFormatted && (
-        <div className="flex items-center gap-2 text-[12px] font-medium text-[#475467] mb-4">
+        <div className="flex items-center gap-2 text-[11px] font-medium text-[#475467] mb-3">
           <Calendar size={14} className={isOverdue ? 'text-[#F04438]' : 'text-[#98A2B3]'} />
           <span className={isOverdue ? 'text-[#F04438]' : ''}>
             {dueDateFormatted}
@@ -102,27 +114,29 @@ export default function SprintCard({ task, onOpenTask }: SprintCardProps) {
       )}
 
       {/* Bottom row: Priority badge, Story points & Assignee */}
-      <div className="flex items-center justify-between mt-auto pt-1">
+      <div className="flex items-center justify-between mt-auto pt-1.5">
         <div className="flex items-center gap-2">
           {priorityStyle && (
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${priorityStyle.bg} ${priorityStyle.text}`}>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${priorityStyle.bg} ${priorityStyle.text}`}>
               {priorityStyle.label}
             </span>
           )}
           {task.storyPoint !== undefined && (
-            <div className="px-2.5 py-1 rounded-md text-[12px] font-bold bg-[#F2F4F7] text-[#344054]">
+            <div className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[#F2F4F7] text-[#344054]">
               {task.storyPoint}
             </div>
           )}
         </div>
         
-        {task.assigneeName && (
+        {task.assigneeName ? (
           <AssigneeAvatar 
             name={task.assigneeName} 
             profilePicUrl={task.assigneePhotoUrl}
             size={24} 
             className="border-2 border-white ring-1 ring-[#EAECF0]"
           />
+        ) : (
+          <span className="text-[10px] text-gray-400 font-medium">Unassigned</span>
         )}
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, animate } from 'framer-motion';
-import { Task } from '@/types';
+import { ProjectMetrics } from '@/types';
 
 const itemVariants = {
     hidden: { opacity: 0, y: 10 },
@@ -144,20 +144,12 @@ function SmallCircularProgress({ percentage }: { percentage: number }) {
     );
 }
 
-export default function MetricsGrid({ tasks = [] }: { tasks?: Task[] }) {
-    // Computations
-    const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(t => t.status === 'DONE').length;
-    
-    let dueIssues = 0;
-    const now = new Date().getTime();
-    tasks.forEach(t => {
-        if (t.status !== 'DONE' && t.dueDate) {
-            if (new Date(t.dueDate).getTime() < now) {
-                dueIssues++;
-            }
-        }
-    });
+export default function MetricsGrid({ metrics }: { metrics: ProjectMetrics }) {
+    const { 
+        totalTasks = 0, 
+        completedTasks = 0, 
+        overdueTasks = 0 
+    } = metrics || {};
 
     const percentage = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
 
@@ -226,7 +218,7 @@ export default function MetricsGrid({ tasks = [] }: { tasks?: Task[] }) {
                         <line x1="12" y1="16" x2="12.01" y2="16" />
                     </svg>
                 }
-                value={dueIssues}
+                value={overdueTasks}
                 label="Due Issues"
             />
         </motion.div>

@@ -34,7 +34,7 @@ export default function KanbanPage() {
     handleAddTask, handleCreateTask, handleOpenCreateModal,
     handleEditTask, handleInlineUpdate, handleCompleteBoard,
     handleColumnRenamed, handleColumnSettingsChanged, handleDeleteColumn,
-    handleAddColumn, handleCreateLabel,
+    handleAddColumn, handleCreateLabel, forceRefresh,
   } = useKanbanBoard(projectId);
 
   const [showAddColumn, setShowAddColumn] = useState(false);
@@ -352,7 +352,12 @@ export default function KanbanPage() {
       {selectedTaskIdForModal !== null && (
         <TaskCardModal
           taskId={selectedTaskIdForModal}
-          onClose={() => setSelectedTaskIdForModal(null)}
+          onClose={(wasModified) => {
+            setSelectedTaskIdForModal(null);
+            if (wasModified) {
+              void forceRefresh();
+            }
+          }}
         />
       )}
     </div>

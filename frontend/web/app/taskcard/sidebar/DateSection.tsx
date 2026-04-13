@@ -10,14 +10,18 @@ interface DateSectionProps {
     created: string;
     updated: string;
     dueDate: string | null;
+    startDate?: string | null;
   };
   onUpdateDueDate?: (dueDate: string | null) => void;
+  onUpdateStartDate?: (startDate: string | null) => void;
 }
 
-const DateSection: React.FC<DateSectionProps> = ({ dates, onUpdateDueDate }) => {
+const DateSection: React.FC<DateSectionProps> = ({ dates, onUpdateDueDate, onUpdateStartDate }) => {
   const [open, setOpen] = useState(false);
+  const [startOpen, setStartOpen] = useState(false);
 
   const parsedDueDate = dates.dueDate ? parseISO(dates.dueDate) : undefined;
+  const parsedStartDate = dates.startDate ? parseISO(dates.startDate) : undefined;
 
   const handleSelect = (date: Date | undefined) => {
     if (onUpdateDueDate) {
@@ -28,6 +32,17 @@ const DateSection: React.FC<DateSectionProps> = ({ dates, onUpdateDueDate }) => 
       }
     }
     setOpen(false);
+  };
+
+  const handleStartSelect = (date: Date | undefined) => {
+    if (onUpdateStartDate) {
+      if (date) {
+        onUpdateStartDate(format(date, 'yyyy-MM-dd'));
+      } else {
+        onUpdateStartDate(null);
+      }
+    }
+    setStartOpen(false);
   };
 
   return (
@@ -70,6 +85,37 @@ const DateSection: React.FC<DateSectionProps> = ({ dates, onUpdateDueDate }) => 
             ) : (
               <span className="text-sm text-gray-800 bg-gray-50 px-2 py-1 rounded border border-gray-100">
                 {parsedDueDate ? format(parsedDueDate, 'MMM d, yyyy') : 'No date'}
+              </span>
+            )}
+          </div>
+        )}
+        {dates.startDate !== undefined && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-500 font-medium">Start date</span>
+            {onUpdateStartDate ? (
+              <div className="flex items-center gap-2">
+                <Popover.Root open={startOpen} onOpenChange={setStartOpen}>
+                  <Popover.Trigger asChild>
+                    <button className="flex items-center gap-2 text-sm text-gray-800 bg-gray-50 hover:bg-gray-100 px-3 py-1.5 min-h-[44px] sm:min-h-0 rounded border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                      <CalendarIcon size={14} className="text-gray-500" />
+                      {parsedStartDate ? format(parsedStartDate, 'MMM d, yyyy') : 'No date'}
+                    </button>
+                  </Popover.Trigger>
+                  <Popover.Portal>
+                    <Popover.Content className="z-[10000] p-3 bg-white rounded-xl shadow-xl border border-gray-200" sideOffset={5} align="end">
+                      <DayPicker mode="single" selected={parsedStartDate} onSelect={handleStartSelect} showOutsideDays />
+                    </Popover.Content>
+                  </Popover.Portal>
+                </Popover.Root>
+                {parsedStartDate && (
+                  <button onClick={() => handleStartSelect(undefined)} className="p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors" title="Clear date">
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <span className="text-sm text-gray-800 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                {parsedStartDate ? format(parsedStartDate, 'MMM d, yyyy') : 'No date'}
               </span>
             )}
           </div>

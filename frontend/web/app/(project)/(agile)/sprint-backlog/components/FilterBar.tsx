@@ -39,13 +39,17 @@ export default function FilterBar({ filters, onChange, assigneeNames }: FilterBa
     filters.statuses.length + filters.priorities.length + (filters.assignee ? 1 : 0);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: Event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setOpenDropdown(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
   const toggleStatus = (status: string) => {
@@ -79,7 +83,7 @@ export default function FilterBar({ filters, onChange, assigneeNames }: FilterBa
             value={filters.search}
             onChange={(e) => onChange({ ...filters, search: e.target.value })}
             placeholder="Search tasks..."
-            className="w-full pl-9 pr-3 py-2 bg-white border border-[#EAECF0] rounded-lg text-[13px] text-[#344054] outline-none focus:ring-2 focus:ring-[#155DFC]/20 focus:border-[#155DFC] transition-all"
+            className="w-full min-h-[44px] pl-9 pr-3 py-2 bg-white border border-[#EAECF0] rounded-lg text-[14px] text-[#344054] outline-none focus:ring-2 focus:ring-[#155DFC]/20 focus:border-[#155DFC] transition-all"
           />
           {filters.search && (
             <button
@@ -94,7 +98,7 @@ export default function FilterBar({ filters, onChange, assigneeNames }: FilterBa
         {/* Filter toggle */}
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-[13px] font-bold transition-all ${
+            className={`flex min-h-[44px] items-center gap-1.5 px-3 py-2 rounded-lg border text-[13px] font-bold transition-all ${
             showFilters || activeFilterCount > 0
               ? 'bg-[#EFF8FF] border-[#B2DDFF] text-[#175CD3]'
               : 'bg-white border-[#EAECF0] text-[#344054] hover:bg-[#F9FAFB]'
@@ -112,7 +116,7 @@ export default function FilterBar({ filters, onChange, assigneeNames }: FilterBa
         {activeFilterCount > 0 && (
           <button
             onClick={clearFilters}
-            className="text-[12px] font-bold text-[#667085] hover:text-[#344054] transition-colors"
+            className="min-h-[44px] px-2 text-[12px] font-bold text-[#667085] hover:text-[#344054] transition-colors"
           >
             Clear all
           </button>
@@ -126,7 +130,7 @@ export default function FilterBar({ filters, onChange, assigneeNames }: FilterBa
           <div className="relative">
             <button
               onClick={() => setOpenDropdown(openDropdown === 'status' ? null : 'status')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#EAECF0] bg-white text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all"
+              className="flex min-h-[42px] items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#EAECF0] bg-white text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all"
             >
               Status
               {filters.statuses.length > 0 && (
@@ -140,7 +144,7 @@ export default function FilterBar({ filters, onChange, assigneeNames }: FilterBa
                   <button
                     key={opt.value}
                     onClick={() => toggleStatus(opt.value)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB]"
+                    className="flex min-h-[42px] w-full items-center gap-2 px-3 py-2 text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB]"
                   >
                     <div className={`h-2.5 w-2.5 rounded-full ${opt.dot}`} />
                     <span className="flex-1 text-left">{opt.label}</span>
@@ -157,7 +161,7 @@ export default function FilterBar({ filters, onChange, assigneeNames }: FilterBa
           <div className="relative">
             <button
               onClick={() => setOpenDropdown(openDropdown === 'priority' ? null : 'priority')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#EAECF0] bg-white text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all"
+              className="flex min-h-[42px] items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#EAECF0] bg-white text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all"
             >
               Priority
               {filters.priorities.length > 0 && (
@@ -171,7 +175,7 @@ export default function FilterBar({ filters, onChange, assigneeNames }: FilterBa
                   <button
                     key={opt.value}
                     onClick={() => togglePriority(opt.value)}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-[12px] font-bold hover:bg-[#F9FAFB] ${opt.color}`}
+                    className={`flex min-h-[42px] w-full items-center gap-2 px-3 py-2 text-[12px] font-bold hover:bg-[#F9FAFB] ${opt.color}`}
                   >
                     <span className="flex-1 text-left">{opt.label}</span>
                     {filters.priorities.includes(opt.value) && (
@@ -187,7 +191,7 @@ export default function FilterBar({ filters, onChange, assigneeNames }: FilterBa
           <div className="relative">
             <button
               onClick={() => setOpenDropdown(openDropdown === 'assignee' ? null : 'assignee')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#EAECF0] bg-white text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all"
+              className="flex min-h-[42px] items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#EAECF0] bg-white text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all"
             >
               Assignee
               {filters.assignee && (
@@ -199,7 +203,7 @@ export default function FilterBar({ filters, onChange, assigneeNames }: FilterBa
               <div className="absolute left-0 top-9 z-50 min-w-[160px] max-h-48 overflow-y-auto rounded-xl border border-[#E4E7EC] bg-white shadow-xl">
                 <button
                   onClick={() => { onChange({ ...filters, assignee: '' }); setOpenDropdown(null); }}
-                  className={`flex w-full items-center px-3 py-2 text-[12px] font-bold hover:bg-[#F9FAFB] ${!filters.assignee ? 'text-[#155DFC]' : 'text-[#344054]'}`}
+                  className={`flex min-h-[42px] w-full items-center px-3 py-2 text-[12px] font-bold hover:bg-[#F9FAFB] ${!filters.assignee ? 'text-[#155DFC]' : 'text-[#344054]'}`}
                 >
                   All
                 </button>
@@ -207,7 +211,7 @@ export default function FilterBar({ filters, onChange, assigneeNames }: FilterBa
                   <button
                     key={name}
                     onClick={() => { onChange({ ...filters, assignee: name }); setOpenDropdown(null); }}
-                    className={`flex w-full items-center px-3 py-2 text-[12px] font-bold hover:bg-[#F9FAFB] ${filters.assignee === name ? 'text-[#155DFC] bg-[#EFF8FF]' : 'text-[#344054]'}`}
+                    className={`flex min-h-[42px] w-full items-center px-3 py-2 text-[12px] font-bold hover:bg-[#F9FAFB] ${filters.assignee === name ? 'text-[#155DFC] bg-[#EFF8FF]' : 'text-[#344054]'}`}
                   >
                     {name}
                   </button>

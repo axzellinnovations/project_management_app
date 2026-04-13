@@ -29,6 +29,7 @@ interface TaskMainContentProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSubtaskAdded?: (subtask: any) => void;
   onDependencyChanged?: () => void;
+  readOnly?: boolean;
 }
 
 const TaskMainContent: React.FC<TaskMainContentProps> = ({ 
@@ -42,6 +43,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
   onUpdateDescription,
   onSubtaskAdded,
   onDependencyChanged,
+  readOnly = false,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(title);
@@ -63,7 +65,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-5 md:p-6 border-r border-[#EAECF0] scrollbar-thin scrollbar-thumb-[#E5E7EB] min-h-0">
+    <div className="flex-1 min-h-0 overflow-visible md:overflow-y-auto p-4 sm:p-5 md:p-6 border-r-0 md:border-r border-[#EAECF0] scrollbar-thin scrollbar-thumb-[#E5E7EB]">
       
       {/* Title */}
       <div className="group mb-6">
@@ -85,7 +87,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
           />
         ) : (
           <h1 
-            onClick={() => setIsEditingTitle(true)}
+            onClick={() => !readOnly && setIsEditingTitle(true)}
             className="text-[22px] font-bold text-[#101828] tracking-tight hover:bg-[#F8FAFF] px-2 py-1 rounded-lg -ml-2 cursor-text transition-colors font-outfit"
           >
             {title}
@@ -115,9 +117,9 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
         <TaskActionButton
           icon={<CheckSquare size={14} />}
           label="Add subtask"
-          onClick={() => setSubtaskAddTrigger(n => n + 1)}
+          onClick={() => !readOnly && setSubtaskAddTrigger(n => n + 1)}
         />
-        <TaskActionButton icon={<Link size={14} />} label="Link issue" onClick={() => setShowDependencyPicker(true)} />
+        <TaskActionButton icon={<Link size={14} />} label="Link issue" onClick={() => !readOnly && setShowDependencyPicker(true)} />
       </div>
       {attachError && (
         <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded mb-4">{attachError}</p>
@@ -161,6 +163,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
               </div>
               <button
                 onClick={async () => {
+                  if (readOnly) return;
                   if (!taskId) return;
                   try {
                     await api.delete(`/api/tasks/${taskId}/dependencies/${dep.id}`);
@@ -171,6 +174,7 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
                 }}
                 className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
                 title="Remove dependency"
+                disabled={readOnly}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>

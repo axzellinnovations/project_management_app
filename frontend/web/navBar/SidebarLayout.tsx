@@ -14,6 +14,7 @@ interface SidebarLayoutProps {
 export default function SidebarLayout({ children, showTopBar = true }: SidebarLayoutProps) {
     const pathname = usePathname();
     const isChatRoute = pathname?.includes('/chat');
+    const isSprintBacklogRoute = pathname?.includes('/sprint-backlog');
 
     return (
         <div className="flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-cu-bg relative overscroll-none">
@@ -30,7 +31,7 @@ export default function SidebarLayout({ children, showTopBar = true }: SidebarLa
                             </Suspense>
                         </div>
                     )}
-                    <div className={`flex-1 w-full flex flex-col min-h-0 relative ${isChatRoute ? 'overflow-hidden' : 'overflow-y-auto touch-pan-y'}`}>
+                    <div className={`flex-1 w-full flex flex-col min-h-0 relative ${isChatRoute || isSprintBacklogRoute ? 'overflow-hidden' : 'overflow-y-auto touch-pan-y'}`}>
                         {children}
                     </div>
                 </div>

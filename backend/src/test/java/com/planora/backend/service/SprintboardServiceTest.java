@@ -117,7 +117,7 @@ class SprintboardServiceTest {
         when(sprintboardRepository.findById(7L)).thenReturn(Optional.of(sprintboard));
         when(projectRepository.findById(3L)).thenReturn(Optional.of(project));
         when(teamMemberRepository.findByTeamIdAndUserUserId(10L, 500L)).thenReturn(Optional.of(actorMember));
-        when(taskRepository.findById(77L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdWithDetails(77L)).thenReturn(Optional.of(task));
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actor));
         when(userRepository.findAllById(any())).thenReturn(List.of(assigneeUser, reporterUser));
@@ -146,7 +146,7 @@ class SprintboardServiceTest {
         when(sprintboardRepository.findById(7L)).thenReturn(Optional.of(sprintboard));
         when(projectRepository.findById(3L)).thenReturn(Optional.of(project));
         when(teamMemberRepository.findByTeamIdAndUserUserId(10L, 500L)).thenReturn(Optional.of(actorMember));
-        when(taskRepository.findById(77L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdWithDetails(77L)).thenReturn(Optional.of(task));
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         sprintboardService.moveTaskToColumn(77L, 7L, "TODO", 500L);

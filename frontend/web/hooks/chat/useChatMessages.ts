@@ -217,13 +217,14 @@ export function useChatMessages(projectId: string) {
       hydrateReactions?: (msgs: ChatMessage[]) => void,
     ) => {
       if (!recipient || !currentUser) return;
+      const normalizedRecipient = recipient.toLowerCase();
 
-      const cached = readPrivateMessagesCache(recipient);
+      const cached = readPrivateMessagesCache(normalizedRecipient);
       if (cached?.data.length) {
-        setPrivateMessages(prev => ({ ...prev, [recipient]: cached.data }));
+        setPrivateMessages(prev => ({ ...prev, [normalizedRecipient]: cached.data }));
         setPrivateLastMessages(prev => ({
           ...prev,
-          [recipient]: cached.data[cached.data.length - 1] || null,
+          [normalizedRecipient]: cached.data[cached.data.length - 1] || null,
         }));
         hydrateReactions?.(cached.data);
         if (!cached.isStale) {
@@ -234,12 +235,12 @@ export function useChatMessages(projectId: string) {
       try {
         const data = await chatApi.fetchPrivateMessages(projectId, currentUser, recipient);
         const windowed = toWindowedMessages(data, PRIVATE_MESSAGES_CACHE_LIMIT);
-        setPrivateMessages(prev => ({ ...prev, [recipient]: windowed }));
+        setPrivateMessages(prev => ({ ...prev, [normalizedRecipient]: windowed }));
         setPrivateLastMessages(prev => ({
           ...prev,
-          [recipient]: windowed.length > 0 ? windowed[windowed.length - 1] : null,
+          [normalizedRecipient]: windowed.length > 0 ? windowed[windowed.length - 1] : null,
         }));
-        writePrivateMessagesCache(recipient, windowed);
+        writePrivateMessagesCache(normalizedRecipient, windowed);
         hydrateReactions?.(windowed);
       } catch (err) {
         console.error('Failed to load private history', err);

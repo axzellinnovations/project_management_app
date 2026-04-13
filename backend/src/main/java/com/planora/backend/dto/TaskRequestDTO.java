@@ -7,6 +7,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonSetter;
 
 @Data
 @AllArgsConstructor
@@ -54,6 +56,14 @@ public class TaskRequestDTO {
     private List<Long> labelIds;
 
     private Long milestoneId;
+    @JsonIgnore
+    private boolean milestoneIdProvided;
+
+    @JsonSetter("milestoneId")
+    public void setMilestoneId(Long milestoneId) {
+        this.milestoneId = milestoneId;
+        this.milestoneIdProvided = true;
+    }
 
     // Recurring task fields (V7)
     private String recurrenceRule;    // DAILY | WEEKLY | MONTHLY | YEARLY

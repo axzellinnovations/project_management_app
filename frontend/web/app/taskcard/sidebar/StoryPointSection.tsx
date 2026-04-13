@@ -45,8 +45,8 @@ const StoryPointSection: React.FC<StoryPointSectionProps> = ({ storyPoint, onUpd
         </div>
       ) : (
         <span
-          onClick={() => setIsEditing(true)}
-          className="bg-gray-100 text-gray-700 text-xs font-bold px-2 py-1 rounded-full inline-block cursor-pointer hover:bg-gray-200 transition-colors"
+          onClick={() => onUpdateStoryPoint && setIsEditing(true)}
+          className={`bg-gray-100 text-gray-700 text-xs font-bold px-2 py-1 rounded-full inline-block transition-colors ${onUpdateStoryPoint ? 'cursor-pointer hover:bg-gray-200' : 'cursor-not-allowed opacity-70'}`}
         >
           {storyPoint}
         </span>

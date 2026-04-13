@@ -75,14 +75,14 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ subtasks: initialSubtasks, ta
   return (
     <div className="mb-8">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-gray-800">Subtasks</h3>
+        <h3 className="text-sm font-bold text-[#344054]">Subtasks</h3>
         <div className="flex items-center gap-3">
           {subtasks.length > 0 && (
             <>
-              <span className="text-xs text-gray-500">{completedCount} of {subtasks.length} done</span>
-              <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <span className="text-xs text-[#667085]">{completedCount} of {subtasks.length} done</span>
+              <div className="w-24 h-1.5 bg-[#EAECF0] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-blue-500 transition-all duration-300"
+                  className="h-full bg-[#155DFC] transition-all duration-300"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -91,7 +91,7 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ subtasks: initialSubtasks, ta
           {taskId && (
             <button
               onClick={() => { setIsAdding(true); setTimeout(() => inputRef.current?.focus(), 50); }}
-              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
+              className="flex items-center gap-1 text-xs font-semibold text-[#155DFC] hover:text-[#0042A8] transition-colors"
             >
               <Plus size={12} /> Add
             </button>
@@ -99,13 +99,13 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ subtasks: initialSubtasks, ta
         </div>
       </div>
 
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {subtasks.map((st) => {
           const isDone = st.status?.toUpperCase() === 'DONE';
           return (
             <div
               key={st.id}
-              className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded group cursor-pointer border border-transparent hover:border-gray-100 transition-colors"
+              className="flex items-center gap-3 p-2.5 hover:bg-[#F8FAFF] rounded-xl group cursor-pointer border border-[#F2F4F7] hover:border-[#D0D5DD] transition-colors"
               onClick={() => handleToggle(st)}
             >
               {toggleLoading === st.id ? (
@@ -115,14 +115,14 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ subtasks: initialSubtasks, ta
               ) : (
                 <Square size={16} className="text-gray-400 flex-shrink-0" />
               )}
-              <span className={`text-xs font-medium flex-shrink-0 ${isDone ? 'text-gray-400' : 'text-gray-500'}`}>
+              <span className={`text-xs font-medium flex-shrink-0 ${isDone ? 'text-[#98A2B3]' : 'text-[#667085]'}`}>
                 TASK-{st.id}
               </span>
-              <span className={`text-sm flex-1 min-w-0 ${isDone ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+              <span className={`text-sm flex-1 min-w-0 ${isDone ? 'text-[#98A2B3] line-through' : 'text-[#101828]'}`}>
                 {st.title}
               </span>
               <span className={`text-xs px-2 py-0.5 rounded font-medium flex-shrink-0 ${
-                isDone ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                isDone ? 'bg-green-100 text-green-700' : 'bg-[#F2F4F7] text-[#667085]'
               }`}>
                 {st.status}
               </span>
@@ -131,11 +131,11 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ subtasks: initialSubtasks, ta
         })}
 
         {subtasks.length === 0 && !isAdding && (
-          <p className="text-sm text-gray-400 pl-1">No subtasks yet</p>
+          <p className="text-sm text-[#98A2B3] pl-1">No subtasks yet</p>
         )}
 
         {isAdding && (
-          <div className="flex items-center gap-2 p-2 border border-blue-200 rounded bg-blue-50/40">
+          <div className="flex items-center gap-2 p-2.5 border border-[#BFDBFE] rounded-xl bg-[#EFF6FF]">
             <Square size={16} className="text-gray-400 flex-shrink-0" />
             <input
               ref={inputRef}
@@ -147,20 +147,20 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ subtasks: initialSubtasks, ta
                 if (e.key === 'Escape') { setIsAdding(false); setNewTitle(''); }
               }}
               placeholder="Subtask title..."
-              className="flex-1 text-sm bg-transparent outline-none text-gray-800 placeholder:text-gray-400"
+              className="flex-1 text-sm bg-transparent outline-none text-[#101828] placeholder:text-[#98A2B3]"
               disabled={saving}
             />
             <button
               onClick={() => void handleAddSubtask()}
               disabled={!newTitle.trim() || saving}
-              className="px-2.5 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 transition-colors flex items-center gap-1"
+              className="px-2.5 py-1.5 text-xs bg-[#155DFC] text-white rounded-lg hover:bg-[#0042A8] disabled:opacity-40 transition-colors flex items-center gap-1 font-semibold"
             >
               {saving ? <Loader2 size={12} className="animate-spin" /> : null}
               Save
             </button>
             <button
               onClick={() => { setIsAdding(false); setNewTitle(''); }}
-              className="px-2.5 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+              className="px-2.5 py-1.5 text-xs bg-[#F2F4F7] text-[#344054] rounded-lg hover:bg-[#EAECF0] transition-colors font-semibold"
             >
               Cancel
             </button>
@@ -170,7 +170,7 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ subtasks: initialSubtasks, ta
         {!isAdding && taskId && subtasks.length > 0 && (
           <button
             onClick={() => { setIsAdding(true); setTimeout(() => inputRef.current?.focus(), 50); }}
-            className="mt-1 text-sm text-blue-600 hover:text-blue-700 pl-2 flex items-center gap-1 transition-colors"
+            className="mt-1 text-sm text-[#155DFC] hover:text-[#0042A8] pl-2 flex items-center gap-1 transition-colors font-medium"
           >
             <Plus size={13} /> Add subtask
           </button>

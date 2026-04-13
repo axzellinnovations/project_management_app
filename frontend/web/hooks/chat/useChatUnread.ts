@@ -12,6 +12,20 @@ const CHAT_SUMMARIES_TTL_MS = 5 * 60_000;
 const chatSummariesCache = new Map<string, { timestamp: number; data: chatApi.ChatSummaries }>();
 const CHAT_UNREAD_BADGE_TTL_MS = 60_000;
 
+function updateCachedSummaries(
+  projectId: string,
+  updater: (summaries: chatApi.ChatSummaries) => chatApi.ChatSummaries,
+) {
+  const cached = chatSummariesCache.get(projectId);
+  if (!cached?.data) return;
+  const next = updater(cached.data);
+  chatSummariesCache.set(projectId, { timestamp: Date.now(), data: next });
+  const summariesCacheKey = buildSessionCacheKey('chat-summaries', [projectId]);
+  if (summariesCacheKey) {
+    setSessionCache(summariesCacheKey, next, CHAT_SUMMARIES_TTL_MS);
+  }
+}
+
 function applySummariesState(
   summaries: chatApi.ChatSummaries,
   setTeamUnseenCount: React.Dispatch<React.SetStateAction<number>>,
@@ -91,11 +105,78 @@ export function useChatUnread(projectId: string) {
   });
 
   const markTeamAsRead = useCallback(async () => {
+    setTeamUnseenCount(0);
+    setUnreadBadge((prev) => {
+      const roomsUnread = Number(prev.roomsUnread) || 0;
+      const directsUnread = Number(prev.directsUnread) || 0;
+      return {
+        teamUnread: 0,
+        roomsUnread,
+        directsUnread,
+        totalUnread: roomsUnread + directsUnread,
+      };
+    });
     try {
       await chatApi.markTeamAsRead(projectId);
     } catch {
       // non-critical
     }
+  }, [projectId]);
+
+  const clearRoomUnread = useCallback((roomId: number) => {
+    setRoomUnseenCounts((prev) => {
+      const current = Number(prev[roomId]) || 0;
+      if (current <= 0) return prev;
+      const next = { ...prev, [roomId]: 0 };
+      setUnreadBadge((badgePrev) => {
+        const teamUnread = Number(badgePrev.teamUnread) || 0;
+        const directsUnread = Number(badgePrev.directsUnread) || 0;
+        const roomsUnread = Math.max(0, (Number(badgePrev.roomsUnread) || 0) - current);
+        return {
+          teamUnread,
+          roomsUnread,
+          directsUnread,
+          totalUnread: teamUnread + roomsUnread + directsUnread,
+        };
+      });
+      updateCachedSummaries(projectId, (summaries) => ({
+        ...summaries,
+        roomSummaries: summaries.roomSummaries.map((room) =>
+          Number(room.roomId) === roomId ? { ...room, unseenCount: 0 } : room,
+        ),
+      }));
+      return next;
+    });
+  }, [projectId]);
+
+  const clearPrivateUnread = useCallback((participant: string) => {
+    const key = participant.toLowerCase();
+    setPrivateUnseenCounts((prev) => {
+      const current = Number(prev[key]) || 0;
+      if (current <= 0) return prev;
+      const next = { ...prev, [key]: 0 };
+      setUnreadBadge((badgePrev) => {
+        const teamUnread = Number(badgePrev.teamUnread) || 0;
+        const roomsUnread = Number(badgePrev.roomsUnread) || 0;
+        const directsUnread = Math.max(0, (Number(badgePrev.directsUnread) || 0) - current);
+        return {
+          teamUnread,
+          roomsUnread,
+          directsUnread,
+          totalUnread: teamUnread + roomsUnread + directsUnread,
+        };
+      });
+      const normalizedParticipant = participant.toLowerCase();
+      updateCachedSummaries(projectId, (summaries) => ({
+        ...summaries,
+        directSummaries: summaries.directSummaries.map((direct) =>
+          direct.username.toLowerCase() === normalizedParticipant
+            ? { ...direct, unseenCount: 0 }
+            : direct,
+        ),
+      }));
+      return next;
+    });
   }, [projectId]);
 
   const loadUnreadBadge = useCallback(async () => {
@@ -208,6 +289,8 @@ export function useChatUnread(projectId: string) {
     unreadBadge,
     setUnreadBadge,
     markTeamAsRead,
+    clearRoomUnread,
+    clearPrivateUnread,
     loadUnreadBadge,
     loadSummaries,
   };

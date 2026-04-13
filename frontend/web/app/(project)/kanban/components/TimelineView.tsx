@@ -33,7 +33,7 @@ interface TimelineViewProps {
 
 const ZOOM_WIDTHS: Record<string, number> = { Day: 36, Week: 20, Month: 14 };
 type ZoomLevel = 'Day' | 'Week' | 'Month';
-type GroupByType = 'none' | 'status' | 'assignee';
+type GroupByType = 'none' | 'status' | 'assignee' | 'milestone';
 
 const statusColors = {
   TODO: { badge: 'bg-slate-100 text-slate-700' },
@@ -58,13 +58,15 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
   const [groupBy, setGroupBy] = useState<GroupByType>('none');
   const [hideWeekends, setHideWeekends] = useState(false);
   const [filterAssignee, setFilterAssignee] = useState('');
+  const [filterMilestone, setFilterMilestone] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [localTasks, setLocalTasks] = useState<Task[]>([]);
   useEffect(() => { setLocalTasks(tasks); }, [tasks]);
 
   const dayColumnWidth = ZOOM_WIDTHS[zoom];
 
-  const { activeDrag, dragOffset, startDrag } = useTimelineDrag(dayColumnWidth, onTaskUpdated, setLocalTasks);
+  const { activeDrag, dragOffset, startDrag } = useTimelineDrag(dayColumnWidth, milestones, onTaskUpdated, setLocalTasks);
 
   const assigneeNames = useMemo(() => {
     const names = new Set<string>();
@@ -73,9 +75,14 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
   }, [tasks]);
 
   const effectiveTasks = useMemo(() => {
-    if (!filterAssignee) return localTasks;
-    return localTasks.filter(t => t.assigneeName === filterAssignee);
-  }, [localTasks, filterAssignee]);
+    return localTasks.filter((task) => {
+      if (filterAssignee && task.assigneeName !== filterAssignee) return false;
+      if (filterMilestone === '__none__' && task.milestoneId != null) return false;
+      if (filterMilestone && filterMilestone !== '__none__' && String(task.milestoneId ?? '') !== filterMilestone) return false;
+      if (searchQuery && !(task.title ?? '').toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      return true;
+    });
+  }, [localTasks, filterAssignee, filterMilestone, searchQuery]);
 
   // ── Compute timeline data ─────────────────────────────────────────────────
   const { timelineTasks, noDatesToShow, visibleDays, monthGroups, timelineStart, timelineEnd, timelineWidthPx, todayOffset } = useMemo(() => {
@@ -164,9 +171,32 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
       return [...map.entries()].map(([label, tasks]) => ({ label: label.replace(/_/g, ' '), tasks }));
     }
     const map = new Map<string, TimelineTask[]>();
-    timelineTasks.forEach(t => { const k = t.assigneeName || 'Unassigned'; if (!map.has(k)) map.set(k, []); map.get(k)!.push(t); });
+    if (groupBy === 'assignee') {
+      timelineTasks.forEach(t => { const k = t.assigneeName || 'Unassigned'; if (!map.has(k)) map.set(k, []); map.get(k)!.push(t); });
+      return [...map.entries()].map(([label, tasks]) => ({ label, tasks }));
+    }
+    timelineTasks.forEach((t) => {
+      const k = t.milestoneName || t.milestoneTitle || 'No milestone';
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(t);
+    });
     return [...map.entries()].map(([label, tasks]) => ({ label, tasks }));
   }, [timelineTasks, groupBy]);
+
+  const overdueCount = useMemo(() => {
+    const today = startOfDay(new Date());
+    return timelineTasks.filter((task) => task.dueDateObj < today && (task.status ?? '').toUpperCase() !== 'DONE').length;
+  }, [timelineTasks]);
+
+  const milestoneOptions = useMemo(
+    () => milestones.map((ms) => ({ id: ms.id, name: ms.name })),
+    [milestones]
+  );
+
+  const milestoneLinkedCount = useMemo(
+    () => localTasks.filter((task) => task.milestoneId != null).length,
+    [localTasks]
+  );
 
   if (timelineTasks.length === 0 && noDatesToShow.length === 0) {
     return (
@@ -191,23 +221,32 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
         groupBy={groupBy} setGroupBy={setGroupBy}
         hideWeekends={hideWeekends} setHideWeekends={setHideWeekends}
         filterAssignee={filterAssignee} setFilterAssignee={setFilterAssignee}
+        filterMilestone={filterMilestone}
+        setFilterMilestone={setFilterMilestone}
         assigneeNames={assigneeNames}
+        milestoneOptions={milestoneOptions}
         todayOffset={todayOffset} dayColumnWidth={dayColumnWidth}
         scrollContainerRef={scrollContainerRef}
         timelineStart={timelineStart} timelineEnd={timelineEnd}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        scheduledCount={timelineTasks.length}
+        noDateCount={noDatesToShow.length}
+        overdueCount={overdueCount}
+        milestoneLinkedCount={milestoneLinkedCount}
       />
 
-      <div ref={scrollContainerRef} className="overflow-x-auto overflow-y-hidden" style={{ cursor: activeDrag ? 'grabbing' : undefined }}>
+      <div ref={scrollContainerRef} className="overflow-x-auto overflow-y-hidden custom-scrollbar touch-pan-x" style={{ cursor: activeDrag ? 'grabbing' : undefined }}>
         <div className="min-w-max" style={{ width: `${300 + timelineWidthPx}px` }}>
           {/* Column headers */}
-          <div className="sticky top-0 z-20 bg-white">
+          <div className="sticky top-0 z-20 bg-white/95 backdrop-blur">
             <div className="flex border-b border-slate-200">
               <div className="w-[300px] flex-shrink-0 px-4 py-3 bg-slate-50 border-r border-slate-200">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Task</p>
               </div>
               <div className="flex" style={{ width: `${timelineWidthPx}px` }}>
                 {monthGroups.map((group) => (
-                  <div key={group.label} className="px-2 py-3 border-r border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600" style={{ width: `${group.span * dayColumnWidth}px` }}>
+                  <div key={`${group.label}-${group.span}`} className="px-2 py-3 border-r border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600" style={{ width: `${group.span * dayColumnWidth}px` }}>
                     {group.label}
                   </div>
                 ))}

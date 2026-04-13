@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TimelineView from '../kanban/components/TimelineView';
 import { Task } from '../kanban/types';
 import { fetchTasksByProject } from '../kanban/api';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, CalendarRange, Diamond, ListChecks } from 'lucide-react';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
 import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
 import { getMilestones } from '@/services/milestone-service';
@@ -20,6 +20,24 @@ export default function TimelinePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+
+  const timelineStats = useMemo(() => {
+    const dated = tasks.filter((task) => task.startDate || task.dueDate).length;
+    const overdue = tasks.filter((task) => {
+      if (!task.dueDate || (task.status ?? '').toUpperCase() === 'DONE') return false;
+      const due = new Date((task.dueDate.length === 10 ? task.dueDate + 'T00:00:00' : task.dueDate));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      due.setHours(0, 0, 0, 0);
+      return due < today;
+    }).length;
+    return {
+      total: tasks.length,
+      dated,
+      overdue,
+      milestones: milestones.length,
+    };
+  }, [tasks, milestones]);
 
   useTaskWebSocket(projectId, (event) => {
     if (event.type === 'TASK_UPDATED' && event.task) {
@@ -60,18 +78,42 @@ export default function TimelinePage() {
     }
   }, [projectId]);
 
+  const loadMilestones = useCallback(async () => {
+    if (!projectId) return;
+    const pid = parseInt(projectId, 10);
+    if (isNaN(pid)) return;
+    try {
+      const data = await getMilestones(pid);
+      setMilestones(data);
+    } catch {
+      setMilestones([]);
+    }
+  }, [projectId]);
+
   // Load tasks on mount
   useEffect(() => {
     loadTasks();
   }, [loadTasks]);
 
-  // Load milestones (graceful degradation)
   useEffect(() => {
-    if (!projectId) return;
-    const pid = parseInt(projectId, 10);
-    if (isNaN(pid)) return;
-    getMilestones(pid).then(setMilestones).catch(() => {});
-  }, [projectId]);
+    const onTaskUpdated = () => { void loadTasks(); };
+    window.addEventListener('planora:task-updated', onTaskUpdated);
+    return () => window.removeEventListener('planora:task-updated', onTaskUpdated);
+  }, [loadTasks]);
+
+  useEffect(() => {
+    void loadMilestones();
+  }, [loadMilestones]);
+
+  useEffect(() => {
+    const refreshMilestones = () => { void loadMilestones(); };
+    window.addEventListener('planora:task-updated', refreshMilestones);
+    window.addEventListener('planora:milestone-updated', refreshMilestones);
+    return () => {
+      window.removeEventListener('planora:task-updated', refreshMilestones);
+      window.removeEventListener('planora:milestone-updated', refreshMilestones);
+    };
+  }, [loadMilestones]);
 
   if (!projectId) {
     return (
@@ -90,12 +132,31 @@ export default function TimelinePage() {
   }
 
   return (
-    <div className="mobile-page-padding pb-6">
+    <div className="flex-1 flex flex-col min-w-0 h-full bg-gray-50 overflow-y-auto">
+      <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="sticky-section-header glass-panel border border-[#E4E7EC] rounded-2xl px-4 sm:px-6 py-4 mb-4 flex items-center gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Timeline</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Gantt view of your project tasks</p>
+          <h1 className="text-[20px] sm:text-2xl font-bold text-[#101828]">Timeline</h1>
+          <p className="text-[12px] sm:text-[13px] text-[#6A7282] mt-0.5">Modern gantt planning view with drag/resize scheduling.</p>
+        </div>
+        <div className="ml-auto grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto">
+          <div className="rounded-xl border border-[#EAECF0] bg-white px-3 py-2 min-w-[120px]">
+            <p className="text-[10px] font-semibold text-[#667085] uppercase">Tasks</p>
+            <p className="text-[16px] font-bold text-[#101828]">{timelineStats.total}</p>
+          </div>
+          <div className="rounded-xl border border-[#EAECF0] bg-white px-3 py-2 min-w-[120px]">
+            <p className="text-[10px] font-semibold text-[#667085] uppercase inline-flex items-center gap-1"><CalendarRange size={11} />Scheduled</p>
+            <p className="text-[16px] font-bold text-[#175CD3]">{timelineStats.dated}</p>
+          </div>
+          <div className="rounded-xl border border-[#EAECF0] bg-white px-3 py-2 min-w-[120px]">
+            <p className="text-[10px] font-semibold text-[#667085] uppercase inline-flex items-center gap-1"><ListChecks size={11} />Overdue</p>
+            <p className="text-[16px] font-bold text-[#B42318]">{timelineStats.overdue}</p>
+          </div>
+          <div className="rounded-xl border border-[#EAECF0] bg-white px-3 py-2 min-w-[120px]">
+            <p className="text-[10px] font-semibold text-[#667085] uppercase inline-flex items-center gap-1"><Diamond size={11} />Milestones</p>
+            <p className="text-[16px] font-bold text-[#6941C6]">{timelineStats.milestones}</p>
+          </div>
         </div>
       </div>
 
@@ -134,9 +195,15 @@ export default function TimelinePage() {
       {selectedTaskId !== null && (
         <TaskCardModal
           taskId={selectedTaskId}
-          onClose={() => setSelectedTaskId(null)}
+          onClose={(wasModified) => {
+            setSelectedTaskId(null);
+            if (wasModified) {
+              void loadTasks();
+            }
+          }}
         />
       )}
+      </div>
     </div>
   );
 }

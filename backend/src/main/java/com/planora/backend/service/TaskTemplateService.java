@@ -60,7 +60,7 @@ public class TaskTemplateService {
     /** Save an existing task as a template. */
     @Transactional
     public TaskTemplateDTO saveTaskAsTemplate(Long taskId, String templateName, Long userId) {
-        Task task = taskRepository.findById(taskId)
+        Task task = taskRepository.findByIdWithDetails(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
         User creator = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));

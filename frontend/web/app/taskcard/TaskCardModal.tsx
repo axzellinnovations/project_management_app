@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
 import TaskHeader from './TaskHeader';
 import TaskMainContent from './TaskMainContent';
 import TaskSidebar from './TaskSidebar';
@@ -39,6 +38,25 @@ interface TaskData {
   assignees?: MultiAssignee[];
   recurrenceRule?: string | null;
   recurrenceEnd?: string | null;
+  reporterId?: number | null;
+  sprintId?: number | null;
+  startDate?: string | null;
+}
+
+interface ProjectMemberOption {
+  memberId: number;
+  userId: number;
+  name: string;
+}
+
+interface LabelOption {
+  id: number;
+  name: string;
+}
+
+interface SprintOption {
+  id: number;
+  name: string;
 }
 
 interface TaskCardModalProps {
@@ -50,6 +68,10 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
   const [taskData, setTaskData] = useState<TaskData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [canEdit, setCanEdit] = useState(true);
+  const [projectMembers, setProjectMembers] = useState<ProjectMemberOption[]>([]);
+  const [projectLabels, setProjectLabels] = useState<LabelOption[]>([]);
+  const [projectSprints, setProjectSprints] = useState<SprintOption[]>([]);
   const wasModified = useRef<boolean>(false);
 
   const fetchTaskData = async () => {
@@ -58,12 +80,50 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
       const response = await api.get(`/api/tasks/${taskId}`);
       setTaskData(response.data);
       setError(null);
+      if (response.data?.projectId) {
+        void loadTaskMeta(response.data.projectId);
+      }
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
       setError(axiosErr?.response?.data?.message || 'Failed to fetch task data');
       setTaskData(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTaskMeta = async (projectId: number) => {
+    try {
+      const [projectRes, currentUserRes, membersRes, labelsRes, sprintsRes] = await Promise.all([
+        api.get(`/api/projects/${projectId}`),
+        api.get('/api/user/me'),
+        api.get(`/api/projects/${projectId}/members`),
+        api.get(`/api/labels/project/${projectId}`),
+        api.get(`/api/sprints/project/${projectId}`).catch(() => ({ data: [] })),
+      ]);
+      const teamId = projectRes.data?.teamId as number | undefined;
+      const currentUserId = currentUserRes.data?.userId as number | undefined;
+      const membersRaw = (membersRes.data || []) as Array<{ id: number; user?: { userId: number; username: string } }>;
+      const memberRole = membersRaw.find((member) => member.user?.userId === currentUserId) as { role?: string } | undefined;
+      setCanEdit((memberRole?.role || 'MEMBER') !== 'VIEWER');
+      setProjectMembers(
+        membersRaw
+          .filter((member) => member.user?.userId != null)
+          .map((member) => ({
+            memberId: member.id,
+            userId: member.user!.userId,
+            name: member.user!.username,
+          })),
+      );
+      const labelsRaw = (labelsRes.data || []) as Array<{ id: number; name: string }>;
+      setProjectLabels(labelsRaw.map((label) => ({ id: label.id, name: label.name })));
+      const sprintsRaw = (sprintsRes.data || []) as Array<{ id: number; name: string }>;
+      setProjectSprints(sprintsRaw.map((sprint) => ({ id: sprint.id, name: sprint.name })));
+      if (!teamId) {
+        setCanEdit(true);
+      }
+    } catch {
+      setCanEdit(true);
     }
   };
 
@@ -88,6 +148,14 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, []);
+
   const updateTask = async (updates: Partial<{
     title: string;
     description: string;
@@ -98,6 +166,10 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
     milestoneId: number | null;
     recurrenceRule: string | null;
     recurrenceEnd: string | null;
+    reporterId: number | null;
+    sprintId: number | null;
+    startDate: string | null;
+    labelIds: number[];
   }>) => {
     if (!taskData) return;
     // Optimistic update — apply immediately so the UI feels instant
@@ -105,6 +177,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
     try {
       await api.put(`/api/tasks/${taskId}`, updates);
       wasModified.current = true;
+      window.dispatchEvent(new CustomEvent('planora:task-updated', { detail: { taskId } }));
       // Bust the taskcard page cache so standalone page shows fresh data
       localStorage.removeItem(`planora:task:${taskId}`);
     } catch (err: unknown) {
@@ -113,6 +186,15 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
       toast('Failed to update task: ' + (axiosErr?.response?.data?.message || 'Unknown error'), 'error');
     }
+  };
+
+  const handleUpdateLabels = (nextLabelIds: number[]) => {
+    const labelIdSet = new Set(nextLabelIds);
+    const nextLabels = projectLabels
+      .filter((label) => labelIdSet.has(label.id))
+      .map((label) => ({ id: label.id, name: label.name }));
+    setTaskData((prev) => (prev ? { ...prev, labels: nextLabels } : prev));
+    void updateTask({ labelIds: nextLabelIds });
   };
 
   return (
@@ -130,7 +212,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
         animate={{ x: 0, boxShadow: '-10px 0 30px rgba(0,0,0,0.1)' }}
         exit={{ x: '100%', boxShadow: '-10px 0 30px rgba(0,0,0,0)' }}
         transition={{ type: 'spring', damping: 26, stiffness: 220 }}
-        className="absolute inset-0 md:inset-y-0 md:left-auto md:right-0 md:w-[900px] max-h-[100dvh] bg-white flex flex-col font-sans overflow-hidden md:shadow-2xl"
+        className="absolute inset-0 md:inset-y-3 md:left-auto md:right-3 md:w-[980px] md:max-w-[calc(100vw-24px)] max-h-[100dvh] bg-white flex flex-col font-sans overflow-hidden md:shadow-2xl md:rounded-2xl border border-transparent md:border-[#E5E7EB]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Mobile drag handle */}
@@ -138,15 +220,6 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
           <div className="w-10 h-1 bg-gray-300 rounded-full" />
         </div>
 
-        {/* Close button (visible on mobile, replaces TaskHeader close) */}
-        <button
-          onClick={() => onClose(wasModified.current)}
-          style={{ touchAction: 'manipulation' }}
-          className="absolute top-3 right-3 w-11 h-11 flex items-center justify-center rounded-full hover:bg-gray-100 z-10 md:hidden"
-          aria-label="Close task"
-        >
-          <X size={20} />
-        </button>
         {loading && (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
@@ -179,8 +252,8 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
               numericTaskId={taskData.id}
               onClose={() => onClose(wasModified.current)}
             />
-            <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
-              <div className="flex flex-1 flex-col md:overflow-y-auto">
+            <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-y-auto md:overflow-hidden">
+              <div className="flex flex-1 flex-col min-h-0 md:overflow-y-auto">
                 <TaskMainContent
                   title={taskData.title}
                   description={taskData.description}
@@ -189,12 +262,13 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                   taskId={taskData.id}
                   projectId={taskData.projectId}
                   onUpdateTitle={(title) => updateTask({ title })}
-                  onUpdateDescription={(description) => updateTask({ description })}
+                  onUpdateDescription={(description) => canEdit && updateTask({ description })}
                   onSubtaskAdded={(newSubtask) => setTaskData(prev => prev ? { ...prev, subtasks: [...prev.subtasks, newSubtask] } : prev)}
                   onDependencyChanged={fetchTaskData}
+                  readOnly={!canEdit}
                 />
               </div>
-              <div className="flex flex-col md:overflow-y-auto flex-shrink-0">
+              <div className="flex flex-col min-h-0 md:overflow-y-auto flex-shrink-0">
                 <TaskSidebar
                   taskId={taskData.id}
                   projectId={taskData.projectId}
@@ -202,8 +276,11 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                   assignee={taskData.assigneeName}
                   reporter={taskData.reporterName}
                   labels={taskData.labels?.map((l) => l.name) || []}
+                  labelIds={taskData.labels?.map((l) => l.id) || []}
                   priority={taskData.priority}
                   sprint={taskData.sprintName}
+                  sprintId={taskData.sprintId}
+                  reporterId={taskData.reporterId}
                   storyPoint={taskData.storyPoint}
                   milestoneId={taskData.milestoneId}
                   milestoneName={taskData.milestoneName}
@@ -211,18 +288,28 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                     created: taskData.createdAt,
                     updated: taskData.updatedAt,
                     dueDate: taskData.dueDate,
+                    startDate: taskData.startDate ?? null,
                   }}
-                  onUpdateStatus={(status) => updateTask({ status })}
-                  onUpdatePriority={(priority) => updateTask({ priority })}
-                  onUpdateStoryPoint={(storyPoint) => updateTask({ storyPoint })}
-                  onUpdateDueDate={(dueDate) => updateTask({ dueDate })}
-                  onUpdateMilestone={(milestoneId) => updateTask({ milestoneId })}
+                  onUpdateStatus={(status) => canEdit && updateTask({ status })}
+                  onUpdatePriority={(priority) => canEdit && updateTask({ priority })}
+                  onUpdateStoryPoint={(storyPoint) => canEdit && updateTask({ storyPoint })}
+                  onUpdateDueDate={(dueDate) => canEdit && updateTask({ dueDate })}
+                  onUpdateStartDate={(startDate) => canEdit && updateTask({ startDate })}
+                  onUpdateMilestone={(milestoneId) => canEdit && updateTask({ milestoneId })}
                   assignees={taskData.assignees ?? []}
                   onAssigneesChanged={fetchTaskData}
                   recurrenceRule={taskData.recurrenceRule}
                   recurrenceEnd={taskData.recurrenceEnd}
-                  onUpdateRecurrence={(rule, end) => updateTask({ recurrenceRule: rule, recurrenceEnd: end })}
+                  onUpdateRecurrence={(rule, end) => canEdit && updateTask({ recurrenceRule: rule, recurrenceEnd: end })}
+                  canEdit={canEdit}
+                  members={projectMembers}
+                  allLabels={projectLabels}
+                  sprints={projectSprints}
+                  onUpdateReporter={(reporterId) => canEdit && updateTask({ reporterId })}
+                  onUpdateSprint={(sprintId) => canEdit && updateTask({ sprintId })}
+                  onUpdateLabels={(labelIds) => canEdit && handleUpdateLabels(labelIds)}
                   onUnassign={async () => {
+                    if (!canEdit) return;
                     try {
                       await api.delete(`/api/tasks/${taskData.id}/assignee`);
                       await fetchTaskData();

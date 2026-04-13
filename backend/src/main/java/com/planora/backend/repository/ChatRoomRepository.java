@@ -9,5 +9,6 @@ import com.planora.backend.model.ChatRoom;
 
 public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
     List<ChatRoom> findByProjectId(Long projectId);
+    List<ChatRoom> findByProjectIdIn(java.util.Collection<Long> projectIds);
     Optional<ChatRoom> findByIdAndProjectId(Long id, Long projectId);
 }

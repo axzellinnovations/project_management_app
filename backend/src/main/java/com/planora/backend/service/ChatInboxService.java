@@ -3,8 +3,10 @@ package com.planora.backend.service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -14,10 +16,11 @@ import org.springframework.stereotype.Service;
 
 import com.planora.backend.dto.ProjectResponseDTO;
 import com.planora.backend.model.ChatRoom;
+import com.planora.backend.model.ChatMessage;
+import com.planora.backend.repository.ChatMessageRepository;
 import com.planora.backend.repository.ChatRoomMemberRepository;
 import com.planora.backend.repository.ChatRoomRepository;
 import com.planora.backend.repository.TeamMemberRepository;
-import com.planora.backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -59,13 +62,16 @@ public class ChatInboxService {
 
     private static final Comparator<ChatInboxActivity> ACTIVITY_SORT =
             Comparator.comparing((ChatInboxActivity a) -> parseTimestamp(a.lastMessageTimestamp())).reversed();
+    private record ProjectRoomKey(Long projectId, Long roomId) {}
+    private record ProjectDirectKey(Long projectId, String participant) {}
 
     private final ChatService chatService;
     private final ProjectService projectService;
     private final TeamMemberRepository teamMemberRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
-    private final UserRepository userRepository;
+    private final ChatMessageRepository chatMessageRepository;
+    private final UserCacheService userCacheService;
 
     public ChatInboxResponse getInbox(
             Long userId,
@@ -74,7 +80,7 @@ public class ChatInboxService {
             int activityLimit,
             String status
     ) {
-        var currentUser = resolveUserByEmailOrUsername(usernameOrEmail);
+        var currentUser = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (currentUser == null) {
             return new ChatInboxResponse(List.of(), List.of(), 0, 0, 0);
         }
@@ -83,11 +89,107 @@ public class ChatInboxService {
         if (projectLimit > 0 && projects.size() > projectLimit) {
             projects = projects.subList(0, projectLimit);
         }
+        var projectIds = projects.stream()
+                .map(ProjectResponseDTO::getId)
+                .filter(Objects::nonNull)
+                .toList();
 
-        Set<Long> memberRoomIds = chatRoomMemberRepository.findByUserUserId(currentUser.getUserId()).stream()
-                .map(roomMember -> roomMember.getChatRoom().getId())
+        Set<Long> memberRoomIds = chatRoomMemberRepository.findRoomIdsByUserId(currentUser.getUserId()).stream()
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        // Pre-fetch team members for all projects to avoid N+1 inside the loop
+        java.util.Set<Long> allTeamIds = projects.stream()
+                .map(ProjectResponseDTO::getTeamId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        Map<Long, List<String>> participantsByTeam = allTeamIds.isEmpty()
+                ? Map.of()
+                : teamMemberRepository.findByTeamIdIn(allTeamIds).stream()
+                        .filter(tm -> tm.getTeam() != null && tm.getTeam().getId() != null)
+                        .filter(tm -> tm.getUser() != null && tm.getUser().getUsername() != null && !tm.getUser().getUsername().isBlank())
+                        .collect(Collectors.groupingBy(
+                                tm -> tm.getTeam().getId(),
+                                Collectors.mapping(tm -> tm.getUser().getUsername(), Collectors.toList())));
+
+        Map<Long, List<ChatRoom>> roomsByProject = projectIds.isEmpty()
+                ? Map.of()
+                : chatRoomRepository.findByProjectIdIn(projectIds).stream()
+                        .filter(room -> room.getProjectId() != null)
+                        .collect(Collectors.groupingBy(ChatRoom::getProjectId));
+
+        Map<Long, List<ChatRoom>> visibleRoomsByProject = new LinkedHashMap<>();
+        Map<Long, List<String>> participantsByProject = new LinkedHashMap<>();
+        for (ProjectResponseDTO project : projects) {
+            Long projectId = project.getId();
+            Long teamId = project.getTeamId();
+            if (projectId == null || teamId == null) {
+                continue;
+            }
+            participantsByProject.put(projectId, participantsByTeam.getOrDefault(teamId, List.of()));
+            visibleRoomsByProject.put(
+                    projectId,
+                    getVisibleRooms(roomsByProject.getOrDefault(projectId, List.of()), currentUser, usernameOrEmail, memberRoomIds));
+        }
+
+        var currentUserAliases = resolveUserAliases(currentUser, usernameOrEmail);
+        var allVisibleRoomIds = visibleRoomsByProject.values().stream()
+                .flatMap(List::stream)
+                .map(ChatRoom::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<ProjectRoomKey, ChatMessage> latestRoomMessageByProjectRoom = allVisibleRoomIds.isEmpty()
+                ? Map.of()
+                : chatMessageRepository.findLatestMessagesForRoomsInProjects(projectIds, allVisibleRoomIds).stream()
+                        .filter(m -> m.getProjectId() != null && m.getRoomId() != null)
+                        .collect(Collectors.toMap(
+                                m -> new ProjectRoomKey(m.getProjectId(), m.getRoomId()),
+                                m -> m,
+                                (m1, m2) -> m1));
+        Map<ProjectRoomKey, Long> roomUnreadByProjectRoom = allVisibleRoomIds.isEmpty()
+                ? Map.of()
+                : chatMessageRepository.countUnreadBatchRoomsForProjects(projectIds, allVisibleRoomIds, currentUserAliases, currentUser.getUserId()).stream()
+                        .collect(Collectors.toMap(
+                                row -> new ProjectRoomKey((Long) row[0], (Long) row[1]),
+                                row -> ((Number) row[2]).longValue(),
+                                (v1, v2) -> v1));
+
+        Map<ProjectDirectKey, ChatMessage> latestDirectByProjectParticipant = projectIds.isEmpty()
+                ? Map.of()
+                : chatMessageRepository.findLatestMessagesForDirectsInProjects(projectIds, currentUserAliases).stream()
+                        .filter(m -> m.getProjectId() != null)
+                        .collect(Collectors.toMap(
+                                m -> new ProjectDirectKey(
+                                        m.getProjectId(),
+                                        currentUserAliases.contains((m.getSender() != null ? m.getSender().toLowerCase() : ""))
+                                                ? (m.getRecipient() != null ? m.getRecipient().toLowerCase() : "")
+                                                : (m.getSender() != null ? m.getSender().toLowerCase() : "")),
+                                m -> m,
+                                (m1, m2) -> m1));
+        Map<ProjectDirectKey, Long> directUnreadByProjectParticipant = projectIds.isEmpty()
+                ? Map.of()
+                : chatMessageRepository.countUnreadBatchDirectsForProjects(projectIds, currentUserAliases, currentUser.getUserId()).stream()
+                        .collect(Collectors.toMap(
+                                row -> new ProjectDirectKey((Long) row[0], (String) row[1]),
+                                row -> ((Number) row[2]).longValue(),
+                                (v1, v2) -> v1));
+
+        var latestTeamMessagesByProject = chatMessageRepository.findLatestTeamMessagesForProjects(projectIds).stream()
+                .collect(Collectors.toMap(message -> message.getProjectId(), message -> message, (m1, m2) -> m1));
+
+        Map<Long, Long> teamUnreadByProject = projectIds.isEmpty()
+                ? Map.of()
+                : chatMessageRepository.countUnreadTeamMessagesForProjectsByAliases(
+                                projectIds,
+                                currentUserAliases,
+                                currentUser.getUserId(),
+                                "__TEAM_CHAT__")
+                        .stream()
+                        .collect(Collectors.toMap(
+                                row -> (Long) row[0],
+                                row -> ((Number) row[1]).longValue(),
+                                (v1, v2) -> v1));
 
         List<ChatInboxProjectGroup> grouped = new ArrayList<>();
         List<ChatInboxActivity> allActivities = new ArrayList<>();
@@ -99,61 +201,66 @@ public class ChatInboxService {
                 continue;
             }
 
-            List<String> participants = teamMemberRepository.findByTeamId(teamId).stream()
-                    .map(teamMember -> teamMember.getUser() != null ? teamMember.getUser().getUsername() : null)
-                    .filter(name -> name != null && !name.isBlank())
-                    .toList();
-
-            List<ChatRoom> visibleRooms = getVisibleRooms(projectId, currentUser, usernameOrEmail, memberRoomIds);
+            List<String> participants = participantsByProject.getOrDefault(projectId, List.of());
+            List<ChatRoom> visibleRooms = visibleRoomsByProject.getOrDefault(projectId, List.of());
             List<ChatInboxActivity> projectActivities = new ArrayList<>();
 
-            var teamSummary = chatService.buildTeamSummary(projectId, usernameOrEmail);
+            var teamSummary = chatService.buildTeamSummary(
+                    latestTeamMessagesByProject.get(projectId),
+                    teamUnreadByProject.getOrDefault(projectId, 0L));
             ChatInboxActivity teamActivity = toTeamActivity(projectId, project.getName(), teamSummary);
             if (teamActivity != null) {
                 projectActivities.add(teamActivity);
             }
 
-            for (var roomSummary : chatService.buildRoomSummaries(projectId, usernameOrEmail, visibleRooms)) {
-                if (roomSummary.lastMessageTimestamp() == null) {
+            for (var room : visibleRooms) {
+                var latestRoomMessage = latestRoomMessageByProjectRoom.get(new ProjectRoomKey(projectId, room.getId()));
+                if (latestRoomMessage == null || latestRoomMessage.getTimestamp() == null) {
                     continue;
                 }
-
-                boolean unread = roomSummary.unseenCount() > 0;
+                long unreadCount = roomUnreadByProjectRoom.getOrDefault(new ProjectRoomKey(projectId, room.getId()), 0L);
+                boolean unread = unreadCount > 0;
                 projectActivities.add(new ChatInboxActivity(
                         projectId,
                         project.getName(),
                         "ROOM",
-                        roomSummary.roomId(),
-                        roomSummary.roomName(),
+                        room.getId(),
+                        room.getName(),
                         null,
-                        roomSummary.roomName(),
-                        roomSummary.lastMessage(),
-                        roomSummary.lastMessageSender(),
-                        roomSummary.lastMessageTimestamp(),
-                        roomSummary.unseenCount(),
+                        room.getName(),
+                        latestRoomMessage.getContent(),
+                        latestRoomMessage.getSender(),
+                        latestRoomMessage.getTimestamp().toString(),
+                        unreadCount,
                         unread,
                         unread ? "UNREAD" : "READ"
                 ));
             }
 
-            for (var directSummary : chatService.buildDirectSummaries(projectId, usernameOrEmail, participants)) {
-                if (directSummary.lastMessageTimestamp() == null) {
+            for (var participant : participants.stream()
+                    .filter(value -> value != null && !value.isBlank())
+                    .map(String::toLowerCase)
+                    .filter(value -> !currentUserAliases.contains(value))
+                    .distinct()
+                    .toList()) {
+                var latestDirect = latestDirectByProjectParticipant.get(new ProjectDirectKey(projectId, participant));
+                if (latestDirect == null || latestDirect.getTimestamp() == null) {
                     continue;
                 }
-
-                boolean unread = directSummary.unseenCount() > 0;
+                long unreadCount = directUnreadByProjectParticipant.getOrDefault(new ProjectDirectKey(projectId, participant), 0L);
+                boolean unread = unreadCount > 0;
                 projectActivities.add(new ChatInboxActivity(
                         projectId,
                         project.getName(),
                         "DIRECT",
                         null,
                         null,
-                        directSummary.username(),
-                        directSummary.username(),
-                        directSummary.lastMessage(),
-                        directSummary.lastMessageSender(),
-                        directSummary.lastMessageTimestamp(),
-                        directSummary.unseenCount(),
+                        participant,
+                        participant,
+                        latestDirect.getContent(),
+                        latestDirect.getSender(),
+                        latestDirect.getTimestamp().toString(),
+                        unreadCount,
                         unread,
                         unread ? "UNREAD" : "READ"
                 ));
@@ -224,7 +331,7 @@ public class ChatInboxService {
     }
 
     private List<ChatRoom> getVisibleRooms(
-            Long projectId,
+            List<ChatRoom> projectRooms,
             com.planora.backend.model.User currentUser,
             String usernameOrEmail,
             Set<Long> memberRoomIds
@@ -238,7 +345,7 @@ public class ChatInboxService {
                 .map(String::toLowerCase)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        return chatRoomRepository.findByProjectId(projectId).stream()
+        return projectRooms.stream()
                 .filter(room -> {
                     if (room.getId() != null && memberRoomIds.contains(room.getId())) {
                         return true;
@@ -248,28 +355,6 @@ public class ChatInboxService {
                 })
                 .filter(room -> !Boolean.TRUE.equals(room.getArchived()))
                 .toList();
-    }
-
-    private com.planora.backend.model.User resolveUserByEmailOrUsername(String usernameOrEmail) {
-        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
-            return null;
-        }
-
-        String normalized = usernameOrEmail.toLowerCase();
-        if (normalized.contains("@")) {
-            var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
-            if (byEmail != null) {
-                return byEmail;
-            }
-            return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        }
-
-        var byUsername = userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        if (byUsername != null) {
-            return byUsername;
-        }
-
-        return userRepository.findByEmailIgnoreCase(normalized).orElse(null);
     }
 
     private static LocalDateTime parseTimestamp(String rawTimestamp) {
@@ -282,5 +367,17 @@ public class ChatInboxService {
         } catch (Exception ex) {
             return LocalDateTime.MIN;
         }
+    }
+
+    private List<String> resolveUserAliases(com.planora.backend.model.User user, String fallbackName) {
+        if (user == null) {
+            return List.of(fallbackName != null ? fallbackName.toLowerCase() : "");
+        }
+
+        return Stream.of(user.getUsername(), user.getEmail(), fallbackName)
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::toLowerCase)
+                .distinct()
+                .toList();
     }
 }

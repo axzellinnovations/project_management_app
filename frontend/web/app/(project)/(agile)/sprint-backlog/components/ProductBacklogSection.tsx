@@ -30,7 +30,7 @@ interface ProductBacklogSectionProps {
   onCreateTask: (data: CreateTaskData) => Promise<void>;
   onDeleteTask?: (id: number) => void;
   onCreateSprint: () => void;
-  onDropTask: (taskId: number) => void;
+  onDropTask: (taskId: number, targetIndex?: number) => void;
   onAssignTask: (taskId: number, assigneeName: string, assigneePhotoUrl: string | null) => void;
   onStatusChange: (taskId: number, status: string) => void;
   onRenameTask?: (taskId: number, title: string) => void;
@@ -88,6 +88,7 @@ export default function ProductBacklogSection({
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [showCreateTaskBox, setShowCreateTaskBox] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
 
   const canDeleteTask = currentUserRole !== 'VIEWER';
 
@@ -180,9 +181,19 @@ export default function ProductBacklogSection({
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    setDropIndex(null);
     const taskId = Number(e.dataTransfer.getData('text/plain'));
     if (taskId) {
       onDropTask(taskId);
+    }
+  };
+
+  const handleDropAtIndex = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setDropIndex(null);
+    const taskId = Number(e.dataTransfer.getData('text/plain'));
+    if (taskId) {
+      onDropTask(taskId, index);
     }
   };
 
@@ -193,17 +204,9 @@ export default function ProductBacklogSection({
     return { total, inProgress, done, count: tasks.length };
   }, [tasks]);
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
   return (
-    <div 
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-      className="rounded-xl border border-[#E4E7EC] bg-[#F8F9FB] p-5 shadow-sm"
-    >
-<div className="flex h-10 items-center border-b border-[#EAECF0] pb-3 mb-3 gap-3">
+    <div className="rounded-xl border border-[#E4E7EC] bg-[#F8F9FB] p-4 sm:p-5 shadow-sm">
+<div className="mb-3 flex min-h-10 flex-wrap items-center justify-between border-b border-[#EAECF0] pb-3 gap-2">
         {/* Left: collapse toggle + title + task count */}
         <div className="flex items-center gap-2 min-w-0">
           <button
@@ -235,17 +238,17 @@ export default function ProductBacklogSection({
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => { setIsOpen(true); setShowCreateTaskBox(true); }}
-            className="flex items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-3 py-1.5 text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] shadow-sm transition-all active:scale-95"
+            className="flex min-h-[44px] items-center gap-1.5 rounded-lg border border-[#D0D5DD] bg-white px-3 py-1.5 text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] shadow-sm transition-all active:scale-95"
           >
             <span className="text-[14px] leading-none">+</span>
             <span>Task</span>
           </button>
           <button
             onClick={() => onCreateSprint()}
-            className="flex items-center gap-1.5 rounded-lg border border-[#175CD3] bg-[#175CD3] px-3 py-1.5 text-[12px] font-bold text-white hover:bg-[#1849A9] shadow-sm transition-all active:scale-95"
+            className="flex min-h-[44px] items-center gap-1.5 rounded-lg border border-[#175CD3] bg-[#175CD3] px-3 py-1.5 text-[12px] font-bold text-white hover:bg-[#1849A9] shadow-sm transition-all active:scale-95"
           >
             <Rocket size={14} />
             <span>Create Sprint</span>
@@ -255,13 +258,15 @@ export default function ProductBacklogSection({
 
       {isOpen && (
         <div>
-<div className="flex flex-col gap-[5px]">
-            {tasks.map((task) => (
+<div className="flex flex-col gap-[5px]" onDragOver={(e) => { e.preventDefault(); setDropIndex(tasks.length); }} onDrop={handleDrop}>
+            {tasks.map((task, index) => (
               <div
                 key={task.id}
                 draggable
                 onDragStart={(e) => e.dataTransfer.setData('text/plain', String(task.id))}
-                className="rounded-lg overflow-hidden border border-[#EAECF0]"
+                onDragOver={(e) => { e.preventDefault(); setDropIndex(index); }}
+                onDrop={(e) => handleDropAtIndex(e, index)}
+                className={`rounded-lg overflow-hidden border ${dropIndex === index ? 'border-[#155DFC]' : 'border-[#EAECF0]'}`}
               >
                 <TaskRow
                   task={{ ...task, status: task.status ?? 'TODO', labels: labelCache[task.id] ?? task.labels ?? [] }}
@@ -279,6 +284,8 @@ export default function ProductBacklogSection({
                   onAddLabel={handleAddLabel}
                   onRemoveLabel={handleRemoveLabel}
                   onCreateLabel={onCreateLabel}
+                  onMoveUp={() => onDropTask(task.id, Math.max(0, index - 1))}
+                  onMoveDown={() => onDropTask(task.id, Math.min(tasks.length, index + 1))}
                 />
               </div>
             ))}
@@ -311,7 +318,7 @@ export default function ProductBacklogSection({
               <button
                 type="submit"
                 disabled={!newTaskTitle.trim()}
-                className="flex h-7 w-7 items-center justify-center shrink-0 rounded-md bg-[#175CD3] text-white hover:bg-[#1849A9] disabled:opacity-50 transition-colors duration-150"
+                className="flex h-11 w-11 items-center justify-center shrink-0 rounded-md bg-[#175CD3] text-white hover:bg-[#1849A9] disabled:opacity-50 transition-colors duration-150"
                 title="Create Task"
               >
                 <CornerDownLeft size={14} />
@@ -349,7 +356,12 @@ export default function ProductBacklogSection({
     {selectedTaskId !== null && (
       <TaskCardModal
         taskId={selectedTaskId}
-        onClose={(_wasModified) => setSelectedTaskId(null)}
+        onClose={(wasModified) => {
+          setSelectedTaskId(null);
+          if (wasModified) {
+            window.dispatchEvent(new CustomEvent('planora:task-updated'));
+          }
+        }}
       />
     )}
     </div>

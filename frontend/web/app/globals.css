@@ -173,7 +173,7 @@ button, a {
 /* ── Section sticky header ── */
 .sticky-section-header {
   position: sticky;
-  top: 0;
+  top: env(safe-area-inset-top, 0px);
   z-index: 20;
   background: rgba(255,255,255,0.92);
   backdrop-filter: blur(8px);

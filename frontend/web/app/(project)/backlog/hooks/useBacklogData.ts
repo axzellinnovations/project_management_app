@@ -63,16 +63,17 @@ export function useBacklogData(projectId: string | null) {
         if (isNaN(pid)) return;
 
         const cKey = buildSessionCacheKey('kanban-backlog', [projectId]);
+        let hasCachedData = false;
         if (cKey && !forceNetwork) {
             const cached = getSessionCache<Task[]>(cKey, { allowStale: true });
             if (cached.data) {
                 setTasks(cached.data);
                 setLoading(false);
-                if (!cached.isStale) return; // Fresh cache
+                hasCachedData = true;
             }
         }
 
-        if (showSpinner) setLoading(true);
+        if (showSpinner && !hasCachedData) setLoading(true);
         setError(null);
         try {
             const fetched = await fetchTasksByProject(pid);
@@ -82,7 +83,7 @@ export function useBacklogData(projectId: string | null) {
             console.error('Error loading backlog tasks:', err);
             if (showSpinner) setError(err instanceof Error ? err.message : 'Failed to load tasks');
         } finally {
-            if (showSpinner) setLoading(false);
+            if (showSpinner && !hasCachedData) setLoading(false);
         }
     }, [projectId]);
 
@@ -95,6 +96,12 @@ export function useBacklogData(projectId: string | null) {
         const id = setInterval(() => void fetchData({ showSpinner: false }), 30_000);
         return () => clearInterval(id);
     }, [projectId, fetchStaticData, fetchData]);
+
+    useEffect(() => {
+        const onTaskUpdated = () => void fetchData({ showSpinner: false, forceNetwork: true });
+        window.addEventListener('planora:task-updated', onTaskUpdated);
+        return () => window.removeEventListener('planora:task-updated', onTaskUpdated);
+    }, [fetchData]);
 
     useTaskWebSocket(projectId, useCallback((event) => {
         if (event.type === 'TASK_CREATED' && event.task) {

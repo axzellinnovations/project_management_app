@@ -2,8 +2,10 @@ package com.planora.backend.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -39,7 +41,6 @@ import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.SprintRepository;
 import com.planora.backend.repository.TaskAccessRepository;
 import com.planora.backend.repository.TaskRepository;
-import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
 
 @Service
@@ -50,9 +51,6 @@ public class TaskService {
 
     @Autowired
     private ProjectRepository projectRepository;
-
-    @Autowired
-    private TeamMemberRepository teamMemberRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -81,6 +79,8 @@ public class TaskService {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private TeamMembershipLookupService teamMembershipLookupService;
 
     // 1. CREATE TASK
     @Transactional
@@ -112,6 +112,10 @@ public class TaskService {
             Sprint sprint = sprintRepository.findById(request.getSprintId())
                     .orElseThrow(()-> new ResourceNotFoundException("Sprint not found"));
             task.setSprint(sprint);
+        }
+
+        if (request.getMilestoneId() != null) {
+            task.setMilestone(resolveMilestoneForProject(project.getId(), request.getMilestoneId()));
         }
 
         // handle labels
@@ -165,14 +169,14 @@ public class TaskService {
             notificationService.createNotification(task.getAssignee().getUser(), message, link);
         }
 
-        return mapToDTO(savedTask);
+        return getTaskById(savedTask.getId());
 
     }
 
     //2. GET TASK BY ID
     @Transactional(readOnly = true)
     public TaskResponseDTO getTaskById(Long taskId) {
-        Task task = taskRepository.findById(taskId)
+        Task task = taskRepository.findByIdWithDetails(taskId)
                 .orElseThrow(()-> new ResourceNotFoundException("Task not found"));
         return mapToDTO(task);
     }
@@ -180,8 +184,7 @@ public class TaskService {
     //3. UPDATE TASK
     @Transactional
     public TaskResponseDTO updateTask(Long taskId, TaskRequestDTO request, Long currentUserId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(()-> new ResourceNotFoundException("Task not found"));
+        Task task = findTaskWithProjectTeam(taskId);
 
         Long teamId = task.getProject().getTeam().getId();
 
@@ -219,10 +222,12 @@ public class TaskService {
         }
 
         // update milestone
-        if (request.getMilestoneId() != null) {
-            Milestone milestone = milestoneRepository.findById(request.getMilestoneId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
-            task.setMilestone(milestone);
+        if (request.isMilestoneIdProvided()) {
+            if (request.getMilestoneId() == null) {
+                task.setMilestone(null);
+            } else {
+                task.setMilestone(resolveMilestoneForProject(task.getProject().getId(), request.getMilestoneId()));
+            }
         }
 
         //update reporter
@@ -273,14 +278,13 @@ public class TaskService {
             notifyTaskStakeholders(saved, currentUserId, message, taskLink);
             }
         }
-        return mapToDTO(saved);
+        return getTaskById(saved.getId());
     }
 
     /** Lightweight date-only update used by calendar drag-and-drop. */
     @Transactional
     public void patchTaskDates(Long taskId, LocalDate startDate, LocalDate dueDate, Long currentUserId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        Task task = findTaskWithProjectTeam(taskId);
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
         if (startDate != null) task.setStartDate(startDate);
         if (dueDate != null) task.setDueDate(dueDate);
@@ -291,15 +295,14 @@ public class TaskService {
     //4. DELETE TASK
     @Transactional
     public Long deleteTask(Long taskId, Long currentUserId) {
-        Task task = taskRepository.findById(taskId)
+        Task task = taskRepository.findByIdWithDetails(taskId)
                 .orElseThrow(()-> new ResourceNotFoundException("Task not found"));
 
         //validate user - OWNER or ADMIN only
         Long teamId = task.getProject().getTeam().getId();
         Long projectId = task.getProject().getId();
 
-        TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId, currentUserId)
-                .orElseThrow(()-> new ForbiddenException("User is not a member of this team"));
+        TeamMember member = requireMinimumRole(teamId, currentUserId, null);
 
         if (member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN) {
             throw new ForbiddenException("Access Denied: Only Project Owners or Admins can delete tasks.");
@@ -340,14 +343,40 @@ public class TaskService {
     @Transactional(readOnly = true)
     public List<TaskResponseDTO> getTasksByProject(Long projectId, Long currentUserId,
                                                    String status, Long assigneeId,
-                                                   String priority, Long sprintId) {
+                                                   String priority, Long sprintId, Long milestoneId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
         requireMinimumRole(project.getTeam().getId(), currentUserId, null);
 
-        return taskRepository.findByProjectIdFiltered(projectId, status, assigneeId, priority, sprintId)
-                .stream()
-                .map(this::mapToDTO)
+        boolean hasFilters = status != null || assigneeId != null || priority != null || sprintId != null || milestoneId != null;
+        if (hasFilters) {
+            List<Task> filteredTasks = taskRepository.findByProjectIdFiltered(projectId, status, assigneeId, priority, sprintId, milestoneId)
+                    .stream()
+                    .distinct()
+                    .toList();
+            if (filteredTasks.isEmpty()) {
+                return List.of();
+            }
+            List<Long> ids = filteredTasks.stream().map(Task::getId).toList();
+            List<Task> enriched = taskRepository.findByIdInWithCollections(ids);
+            java.util.Map<Long, List<DependencyDTO>> dependencyMap = buildDependencyMap(ids);
+            java.util.Map<Long, Task> enrichedMap = enriched.stream()
+                    .collect(java.util.stream.Collectors.toMap(Task::getId, t -> t));
+            return filteredTasks.stream()
+                    .map(t -> mapToDTO(enrichedMap.getOrDefault(t.getId(), t), dependencyMap))
+                    .collect(Collectors.toList());
+        }
+
+        // Two-phase fetch to avoid cartesian product with multiple bags
+        List<Task> tasks = taskRepository.findByProjectIdWithScalars(projectId);
+        if (tasks.isEmpty()) return List.of();
+        List<Long> ids = tasks.stream().map(Task::getId).collect(Collectors.toList());
+        List<Task> enriched = taskRepository.findByIdInWithCollections(ids);
+        java.util.Map<Long, List<DependencyDTO>> dependencyMap = buildDependencyMap(ids);
+        java.util.Map<Long, Task> enrichedMap = enriched.stream()
+                .collect(java.util.stream.Collectors.toMap(Task::getId, t -> t));
+        return tasks.stream()
+                .map(t -> mapToDTO(enrichedMap.getOrDefault(t.getId(), t), dependencyMap))
                 .collect(Collectors.toList());
     }
 
@@ -356,8 +385,7 @@ public class TaskService {
     //6. CREATE SUB TASK
     @Transactional
     public TaskResponseDTO createSubTask(Long parentId, TaskRequestDTO subTaskRequest, Long currentUserId) {
-        Task parent = taskRepository.findById(parentId)
-                .orElseThrow(()-> new ResourceNotFoundException("Parent task not found"));
+        Task parent = findTaskWithProjectTeam(parentId);
 
         //permission check
         requireMinimumRole(parent.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
@@ -376,7 +404,7 @@ public class TaskService {
         taskActivityService.logActivity(parentId, TaskActivityType.SUBTASK_ADDED,
                 actorName, actorName + " added subtask: " + savedChild.getTitle());
 
-        return mapToDTO(savedChild);
+        return getTaskById(savedChild.getId());
     }
 
     //DEPENDENCY
@@ -384,16 +412,14 @@ public class TaskService {
     //7. ADD DEPENDENCY
     @Transactional
     public void addDependency(Long taskId, Long blockerId, Long currentUserId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        Task task = findTaskWithProjectTeam(taskId);
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
         if (taskId.equals(blockerId)) {
             throw new IllegalArgumentException("A task cannot depend on itself");
         }
 
-        Task blocker = taskRepository.findById(blockerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Blocker task not found"));
+        Task blocker = findTaskWithProjectTeam(blockerId);
         task.getDependencies().add(blocker);
         task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
@@ -402,12 +428,10 @@ public class TaskService {
     //8. REMOVE DEPENDENCY
     @Transactional
     public void removeDependency(Long taskId, Long blockerId, Long currentUserId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        Task task = findTaskWithProjectTeam(taskId);
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
-        Task blocker = taskRepository.findById(blockerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Blocker task not found"));
+        Task blocker = findTaskWithProjectTeam(blockerId);
         task.getDependencies().remove(blocker);
         task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
@@ -418,8 +442,7 @@ public class TaskService {
     //9. ADD LABEL
     @Transactional
     public void addLabel(Long taskId, Long labelId, Long currentUserId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        Task task = findTaskWithProjectTeam(taskId);
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
         Label label = labelRepository.findById(labelId)
@@ -432,8 +455,7 @@ public class TaskService {
     //10. REMOVE LABEL
     @Transactional
     public void removeLabel(Long taskId, Long labelId, Long currentUserId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        Task task = findTaskWithProjectTeam(taskId);
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
         Label label = labelRepository.findById(labelId)
@@ -489,8 +511,7 @@ public class TaskService {
 
     @Transactional(readOnly = true)
     public List<com.planora.backend.dto.CommentResponseDTO> getComments(Long taskId, Long currentUserId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        Task task = findTaskWithProjectTeam(taskId);
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, null);
         
         return commentRepository.findByTaskOrderByCreatedAtAsc(task).stream()
@@ -506,8 +527,7 @@ public class TaskService {
     //12. ASSIGN MEMBER
     @Transactional
     public void assignUser(Long taskID, Long userId, Long currentUserId) {
-        Task task = taskRepository.findById(taskID)
-                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        Task task = findTaskWithProjectTeam(taskID);
 
         //permission check
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
@@ -532,8 +552,7 @@ public class TaskService {
     //12b. UPDATE MULTI-ASSIGNEES (dedicated PATCH endpoint)
     @Transactional
     public TaskResponseDTO updateAssignees(Long taskId, List<Long> userIds, Long currentUserId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        Task task = findTaskWithProjectTeam(taskId);
 
         Long teamId = task.getProject().getTeam().getId();
         requireMinimumRole(teamId, currentUserId, TeamRole.MEMBER);
@@ -550,7 +569,7 @@ public class TaskService {
         taskActivityService.logActivity(saved.getId(), TaskActivityType.ASSIGNEE_CHANGED,
                 actorName, actorName + " updated assignees");
 
-        return mapToDTO(saved);
+        return getTaskById(saved.getId());
     }
 
     //13. RECORD TASK ACCESS
@@ -571,37 +590,30 @@ public class TaskService {
     @Transactional(readOnly = true)
     public List<TaskResponseDTO> getRecentTasks(Long currentUserId, int limit) {
         Pageable pageable = PageRequest.of(0, limit);
-        return taskAccessRepository.findByUserUserIdOrderByLastAccessedAtDesc(currentUserId, pageable)
-                .stream()
-                .map(access -> mapToDTO(access.getTask()))
-                .collect(Collectors.toList());
+        List<Long> taskIds = taskAccessRepository.findRecentTaskIdsByUser(currentUserId, pageable);
+        return loadTaskDtosByIds(taskIds);
     }
 
     //15. GET ASSIGNED TASKS
     @Transactional(readOnly = true)
     public List<TaskResponseDTO> getAssignedTasks(Long currentUserId, int limit) {
         Pageable pageable = PageRequest.of(0, limit);
-        return taskRepository.findByAssigneeUserUserIdOrderByUpdatedAtDesc(currentUserId, pageable)
-                .stream()
-                .map(this::mapToDTO)
-                .collect(Collectors.toList());
+        List<Long> taskIds = taskRepository.findAssignedTaskIdsByUser(currentUserId, pageable);
+        return loadTaskDtosByIds(taskIds);
     }
 
     //16. GET WORKED ON TASKS
     @Transactional(readOnly = true)
     public List<TaskResponseDTO> getWorkedOnTasks(Long currentUserId, int limit) {
         Pageable pageable = PageRequest.of(0, limit);
-        return taskRepository.findTasksWorkedOnByUser(currentUserId, pageable)
-                .stream()
-                .map(this::mapToDTO)
-                .collect(Collectors.toList());
+        List<Long> taskIds = taskRepository.findWorkedOnTaskIdsByUser(currentUserId, pageable);
+        return loadTaskDtosByIds(taskIds);
     }
 
     //17. UPDATE PRIORITY
     @Transactional
     public TaskResponseDTO updatePriority(Long taskId, String priority, Long currentUserId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        Task task = findTaskWithProjectTeam(taskId);
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
         String oldPriority = task.getPriority() != null ? task.getPriority().name() : "NONE";
         task.setPriority(Priority.valueOf(priority));
@@ -617,14 +629,13 @@ public class TaskService {
                     + "\" from " + oldPriority + " to " + priority;
             notifyTaskStakeholders(saved, currentUserId, message, "/taskcard?taskId=" + saved.getId());
         }
-        return mapToDTO(saved);
+        return getTaskById(saved.getId());
     }
 
     //17b. UPDATE STATUS (lightweight — used by kanban drag-and-drop)
     @Transactional
     public TaskResponseDTO updateStatus(Long taskId, String status, Long currentUserId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        Task task = findTaskWithProjectTeam(taskId);
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
         String oldStatus = task.getStatus();
@@ -652,14 +663,13 @@ public class TaskService {
             notifyTaskStakeholders(saved, currentUserId, message, "/taskcard?taskId=" + saved.getId());
         }
 
-        return mapToDTO(saved);
+        return getTaskById(saved.getId());
     }
 
     //18. UNASSIGN TASK
     @Transactional
     public void unassignTask(Long taskId, Long currentUserId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        Task task = findTaskWithProjectTeam(taskId);
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
         task.setAssignee(null);
@@ -675,10 +685,16 @@ public class TaskService {
     //19. BULK UPDATE STATUS
     @Transactional
     public void bulkUpdateStatus(List<Long> taskIds, String status, Long currentUserId) {
-        List<Task> tasks = taskRepository.findAllById(taskIds);
+        if (taskIds == null || taskIds.isEmpty()) return;
+        List<Task> tasks = taskRepository.findByIdInWithDetails(taskIds);
+        java.util.Map<Long, TeamMember> membershipByTeamId = preloadMembershipByTeamIds(tasks, currentUserId);
         List<Task> doneTransitioned = new java.util.ArrayList<>();
+        User currentUser = userRepository.findById(currentUserId).orElseThrow();
+        String actorName = currentUser.getUsername();
+
         for (Task task : tasks) {
-            requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
+            TeamMember member = membershipByTeamId.get(task.getProject().getTeam().getId());
+            ensureMinimumRole(member, TeamRole.MEMBER);
             String oldTaskStatus = task.getStatus();
             task.setStatus(status);
             if ("DONE".equalsIgnoreCase(status) && !"DONE".equalsIgnoreCase(oldTaskStatus)) {
@@ -687,14 +703,12 @@ public class TaskService {
             } else if (!"DONE".equalsIgnoreCase(status)) {
                 task.setCompletedAt(null);
             }
-            task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+            task.setLastModifiedBy(currentUser);
         }
         taskRepository.saveAll(tasks);
 
         // NTH-2: notify stakeholders of tasks that just moved to DONE
         if (!doneTransitioned.isEmpty()) {
-            User actor = userRepository.findById(currentUserId).orElse(null);
-            String actorName = actor != null ? actor.getUsername() : "Unknown";
             for (Task doneTask : doneTransitioned) {
                 String message = actorName + " marked \"" + doneTask.getTitle() + "\" as Done";
                 String link = "/taskcard?taskId=" + doneTask.getId();
@@ -706,11 +720,12 @@ public class TaskService {
     //20. BULK DELETE
     @Transactional
     public void bulkDelete(List<Long> taskIds, Long currentUserId) {
-        List<Task> tasks = taskRepository.findAllById(taskIds);
+        if (taskIds == null || taskIds.isEmpty()) return;
+        List<Task> tasks = taskRepository.findByIdInWithDetails(taskIds);
+        java.util.Map<Long, TeamMember> membershipByTeamId = preloadMembershipByTeamIds(tasks, currentUserId);
         for (Task task : tasks) {
-            TeamMember member = teamMemberRepository
-                    .findByTeamIdAndUserUserId(task.getProject().getTeam().getId(), currentUserId)
-                    .orElseThrow(() -> new ForbiddenException("User is not a member of the team"));
+            TeamMember member = membershipByTeamId.get(task.getProject().getTeam().getId());
+            ensureMinimumRole(member, null);
             if (member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN) {
                 throw new ForbiddenException("Access Denied: Only Project Owners or Admins can delete tasks.");
             }
@@ -739,12 +754,18 @@ public class TaskService {
 
     //---HELPER-01--- : Require minimum role in team ---
     private TeamMember requireMinimumRole(Long teamId, Long userId, TeamRole minimumRole) {
-        TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId, userId)
-                .orElseThrow(() -> new ForbiddenException("User is not a member of this team"));
+        TeamMember member = teamMembershipLookupService.getTeamMember(teamId, userId);
+        ensureMinimumRole(member, minimumRole);
+        return member;
+    }
+
+    private void ensureMinimumRole(TeamMember member, TeamRole minimumRole) {
+        if (member == null) {
+            throw new ForbiddenException("User is not a member of this team");
+        }
         if (minimumRole != null && roleRank(member.getRole()) < roleRank(minimumRole)) {
             throw new ForbiddenException("Insufficient permissions: requires " + minimumRole + " or higher");
         }
-        return member;
     }
 
     private int roleRank(TeamRole role) {
@@ -758,18 +779,59 @@ public class TaskService {
 
     //---HELPER-02--- : For Validate User is in Team---
     private TeamMember validateTeamMember(Long teamId, Long userId){
-        return teamMemberRepository.findByTeamIdAndUserUserId(teamId, userId)
-                .orElseThrow(()-> new ForbiddenException("Cannot assign task: user is not in the team"));
+        TeamMember member = teamMembershipLookupService.getTeamMember(teamId, userId);
+        if (member == null) {
+            throw new ForbiddenException("Cannot assign task: user is not in the team");
+        }
+        return member;
+    }
+
+    private Task findTaskWithProjectTeam(Long taskId) {
+        return taskRepository.findByIdWithProjectTeam(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+    }
+
+    private java.util.Map<Long, TeamMember> preloadMembershipByTeamIds(List<Task> tasks, Long userId) {
+        java.util.Set<Long> teamIds = tasks.stream()
+                .map(Task::getProject)
+                .filter(java.util.Objects::nonNull)
+                .map(Project::getTeam)
+                .filter(java.util.Objects::nonNull)
+                .map(com.planora.backend.model.Team::getId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        if (teamIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        return teamMembershipLookupService.getTeamMembersForTeams(teamIds, userId).stream()
+                .filter(member -> member.getTeam() != null && member.getTeam().getId() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        member -> member.getTeam().getId(),
+                        member -> member,
+                        (left, right) -> left));
+    }
+
+    private Milestone resolveMilestoneForProject(Long projectId, Long milestoneId) {
+        Milestone milestone = milestoneRepository.findById(milestoneId)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        if (milestone.getProject() == null || !Objects.equals(milestone.getProject().getId(), projectId)) {
+            throw new ForbiddenException("Milestone does not belong to this project");
+        }
+        return milestone;
     }
 
     //MAPPING DTO
     private TaskResponseDTO mapToDTO(Task task){
+        return mapToDTO(task, null);
+    }
+
+    private TaskResponseDTO mapToDTO(Task task, java.util.Map<Long, List<DependencyDTO>> dependencyMap){
         TaskResponseDTO dto = new TaskResponseDTO();
         dto.setId(task.getId());
         dto.setTitle(task.getTitle());
         dto.setDescription(task.getDescription());
-        dto.setProjectId(task.getProject().getId());
-        dto.setProjectName(task.getProject().getName());
+        dto.setProjectId(task.getProject() != null ? task.getProject().getId() : null);
+        dto.setProjectName(task.getProject() != null ? task.getProject().getName() : null);
         dto.setPriority(task.getPriority() != null ? task.getPriority().name(): null);
         dto.setStatus(task.getStatus());
         dto.setStoryPoint(task.getStoryPoint());
@@ -783,7 +845,7 @@ public class TaskService {
             dto.setSprintName(task.getSprint().getName());
         }
 
-        if(task.getAssignee() != null){
+        if(task.getAssignee() != null && task.getAssignee().getUser() != null){
             dto.setAssigneeId(task.getAssignee().getId());
             dto.setAssigneeName(task.getAssignee().getUser().getUsername());
             dto.setAssigneePhotoUrl(userService.generatePresignedUrl(task.getAssignee().getUser().getProfilePicUrl()));
@@ -791,16 +853,20 @@ public class TaskService {
 
         // Map multiple assignees (V4)
         if (task.getAssignees() != null) {
-            dto.setAssignees(task.getAssignees().stream()
-                .map(m -> new TaskResponseDTO.AssigneeDTO(
+            dto.setAssignees(new ArrayList<>(task.getAssignees()).stream()
+                .map(m -> {
+                    if (m.getUser() == null) return null;
+                    return new TaskResponseDTO.AssigneeDTO(
                     m.getId(),
                     m.getUser().getUserId(),
                     m.getUser().getUsername(),
-                    userService.generatePresignedUrl(m.getUser().getProfilePicUrl())))
+                    userService.generatePresignedUrl(m.getUser().getProfilePicUrl()));
+                })
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList()));
         }
 
-        if(task.getReporter() != null){
+        if(task.getReporter() != null && task.getReporter().getUser() != null){
             dto.setReporterId(task.getReporter().getId());
             dto.setReporterName(task.getReporter().getUser().getUsername());
         }
@@ -812,31 +878,33 @@ public class TaskService {
 
         // Map subtasks
         if(task.getSubTasks() != null){
-            dto.setSubtasks(task.getSubTasks().stream()
+            dto.setSubtasks(new ArrayList<>(task.getSubTasks()).stream()
                 .map(st -> new SubtaskDTO(st.getId(), st.getTitle(), st.getStatus()))
                 .collect(Collectors.toList()));
         }
 
         // Map labels
         if(task.getLabels() != null){
-            dto.setLabels(task.getLabels().stream()
+            dto.setLabels(new ArrayList<>(task.getLabels()).stream()
                 .map(l -> new TaskResponseDTO.LabelDTO(l.getId(), l.getName(), l.getColor()))
                 .collect(Collectors.toList()));
         }
 
         // Map dependencies
-        if(task.getDependencies() != null){
-            dto.setDependencies(task.getDependencies().stream()
+        if (dependencyMap != null) {
+            dto.setDependencies(dependencyMap.getOrDefault(task.getId(), List.of()));
+        } else if(task.getDependencies() != null){
+            dto.setDependencies(new ArrayList<>(task.getDependencies()).stream()
                 .map(d -> new DependencyDTO(d.getId(), d.getTitle(), "BLOCKED_BY"))
                 .collect(Collectors.toList()));
         }
 
         // Map attachments
         if(task.getAttachments() != null){
-            dto.setAttachments(task.getAttachments().stream()
+            dto.setAttachments(new ArrayList<>(task.getAttachments()).stream()
                 .map(a -> new TaskResponseDTO.AttachmentDTO(
                     a.getId(), a.getFileName(), a.getContentType(),
-                    a.getFileSize(), a.getUploadedBy().getUsername()))
+                    a.getFileSize(), a.getUploadedBy() != null ? a.getUploadedBy().getUsername() : "Unknown"))
                 .collect(Collectors.toList()));
         }
 
@@ -849,6 +917,62 @@ public class TaskService {
         }
 
         return dto;
+    }
+
+    private java.util.Map<Long, List<DependencyDTO>> buildDependencyMap(List<Long> taskIds) {
+        if (taskIds == null || taskIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<Long, List<DependencyDTO>> map = new java.util.HashMap<>();
+        for (Object[] row : taskRepository.findDependencyRowsByTaskIds(taskIds)) {
+            Long blockedTaskId = (Long) row[0];
+            Long blockerTaskId = (Long) row[1];
+            String blockerTitle = (String) row[2];
+            if (blockedTaskId == null || blockerTaskId == null) {
+                continue;
+            }
+            map.computeIfAbsent(blockedTaskId, ignored -> new ArrayList<>())
+                    .add(new DependencyDTO(blockerTaskId, blockerTitle, "BLOCKED_BY"));
+        }
+        return map;
+    }
+
+    private List<TaskResponseDTO> loadTaskDtosByIds(List<Long> taskIds) {
+        if (taskIds == null || taskIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<Task> scalarTasks = taskRepository.findByIdInWithScalars(taskIds);
+        if (scalarTasks.isEmpty()) {
+            return List.of();
+        }
+        List<Task> enrichedTasks = taskRepository.findByIdInWithCollections(taskIds);
+        java.util.Map<Long, Task> scalarById = scalarTasks.stream()
+                .collect(Collectors.toMap(Task::getId, t -> t));
+        java.util.Map<Long, Task> enrichedById = enrichedTasks.stream()
+                .collect(Collectors.toMap(Task::getId, t -> t));
+        java.util.Map<Long, List<DependencyDTO>> dependencyMap = buildDependencyMap(taskIds);
+
+        return taskIds.stream()
+                .distinct()
+                .map(id -> {
+                    Task scalar = scalarById.get(id);
+                    if (scalar == null) {
+                        return null;
+                    }
+                    Task enriched = enrichedById.get(id);
+                    if (enriched == null) {
+                        return mapToDTO(scalar, dependencyMap);
+                    }
+                    enriched.setProject(scalar.getProject());
+                    enriched.setSprint(scalar.getSprint());
+                    enriched.setAssignee(scalar.getAssignee());
+                    enriched.setReporter(scalar.getReporter());
+                    enriched.setMilestone(scalar.getMilestone());
+                    return mapToDTO(enriched, dependencyMap);
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
     /** Compute the next occurrence date after today based on recurrence rule. */

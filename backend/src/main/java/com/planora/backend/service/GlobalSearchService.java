@@ -81,6 +81,7 @@ public class GlobalSearchService {
             String query, List<Long> projectIds) {
         List<Task> results = entityManager.createQuery(
                         "SELECT t FROM Task t " +
+                                "LEFT JOIN FETCH t.project p " +
                                 "WHERE t.project.id IN :projectIds " +
                                 "AND (LOWER(t.title) LIKE LOWER(CONCAT('%', :q, '%')) " +
                                 "OR LOWER(COALESCE(t.description, '')) LIKE LOWER(CONCAT('%', :q, '%'))) " +
@@ -111,6 +112,7 @@ public class GlobalSearchService {
             String query, List<Long> projectIds) {
         List<Document> results = entityManager.createQuery(
                         "SELECT d FROM Document d " +
+                                "LEFT JOIN FETCH d.project p " +
                                 "WHERE d.project.id IN :projectIds " +
                                 "AND LOWER(d.name) LIKE LOWER(CONCAT('%', :q, '%')) " +
                                 "ORDER BY d.updatedAt DESC",
@@ -138,6 +140,7 @@ public class GlobalSearchService {
             String query, List<Long> projectIds) {
         List<TeamMember> teamMembers = entityManager.createQuery(
                         "SELECT tm FROM TeamMember tm " +
+                                "LEFT JOIN FETCH tm.user u " +
                                 "WHERE tm.team.id IN (SELECT p.team.id FROM Project p WHERE p.id IN :projectIds) " +
                                 "AND (LOWER(COALESCE(tm.user.fullName, tm.user.username)) LIKE LOWER(CONCAT('%', :q, '%')) " +
                                 "OR LOWER(tm.user.email) LIKE LOWER(CONCAT('%', :q, '%'))) " +
@@ -190,9 +193,15 @@ public class GlobalSearchService {
     }
 
     private List<Long> resolveProjectScope(Long projectId, Long userId) {
-        List<Long> accessibleProjectIds = teamMemberRepository.findByUserUserId(userId)
-                .stream()
-                .flatMap(tm -> projectRepository.findByTeamIn(List.of(tm.getTeam())).stream())
+        // Find all teams the user belongs to
+        List<Team> teams = teamMemberRepository.findByUserUserId(userId).stream()
+            .map(TeamMember::getTeam)
+            .collect(Collectors.toList());
+            
+        if (teams.isEmpty()) return List.of();
+        
+        // Single query for all projects in those teams
+        List<Long> accessibleProjectIds = projectRepository.findByTeamIn(teams).stream()
                 .map(Project::getId)
                 .distinct()
                 .collect(Collectors.toList());

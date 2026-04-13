@@ -16,6 +16,7 @@ interface TaskEvent {
     sprintId: number | null;
     assigneeName: string | null;
     assigneePhotoUrl: string | null;
+    assignees?: Array<{ id?: number; userId?: number; name?: string; username?: string; photoUrl?: string | null; avatar?: string | null }>;
     startDate: string | null;
     dueDate: string | null;
   };

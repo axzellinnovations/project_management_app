@@ -84,6 +84,8 @@ export const useChat = (projectId: string) => {
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const selectedUserRef = useRef<string | null>(null);
   const selectedRoomIdRef = useRef<number | null>(null);
+  const loadingRoomRef = useRef<number | null>(null);
+  const loadingPrivateRef = useRef<string | null>(null);
 
   // â”€â”€ UI state â”€â”€
   const [featureFlags, setFeatureFlags] = useState<ChatFeatureFlags>(DEFAULT_FEATURE_FLAGS);
@@ -114,7 +116,8 @@ export const useChat = (projectId: string) => {
           updateRoomMeta: rmUpdateMeta, pinRoomMessage: rmPin } = rm;
   const { setOnlineUsers, setTeamTypingUsers, setPrivateTypingUsers, setRoomTypingUsers } = presence;
   const { setTeamUnseenCount, setPrivateUnseenCounts, setRoomUnseenCounts,
-          setRoomMentionCounts, setTeamMentionCount, setUnreadBadge, markTeamAsRead } = unread;
+          setRoomMentionCounts, setTeamMentionCount, setUnreadBadge, markTeamAsRead,
+          clearRoomUnread, clearPrivateUnread } = unread;
   const { setMessageReactions, loadMessageReactions: loadMsgReactions,
           toggleReaction: reactionsToggle, hydrateReactions } = reactions;
   const { setThreadMessages, sendThreadReply: threadsSendReply,
@@ -290,28 +293,41 @@ export const useChat = (projectId: string) => {
 
   const loadRoomHistory = useCallback(
     async (roomId: number) => {
+      if (loadingRoomRef.current === roomId) {
+        return;
+      }
+      loadingRoomRef.current = roomId;
       await msgLoadRoom(roomId, hydrateReactions);
-      setRoomUnseenCounts(prev => ({ ...prev, [roomId]: 0 }));
+      clearRoomUnread(roomId);
       try {
         await chatApi.markRoomAsRead(projectId, roomId);
       } catch {
         // Keep UI responsive even if read-state sync fails.
+      } finally {
+        loadingRoomRef.current = null;
       }
     },
-    [msgLoadRoom, hydrateReactions, setRoomUnseenCounts, projectId],
+    [msgLoadRoom, hydrateReactions, clearRoomUnread, projectId],
   );
 
   const loadPrivateHistory = useCallback(
     async (recipient: string) => {
+      const normalizedRecipient = recipient.toLowerCase();
+      if (loadingPrivateRef.current === normalizedRecipient) {
+        return;
+      }
+      loadingPrivateRef.current = normalizedRecipient;
       await msgLoadPrivate(recipient, currentUser, hydrateReactions);
-      setPrivateUnseenCounts(prev => ({ ...prev, [recipient]: 0 }));
+      clearPrivateUnread(recipient);
       try {
         await chatApi.markDirectConversationAsRead(projectId, recipient);
       } catch {
         // Keep UI responsive even if read-state sync fails.
+      } finally {
+        loadingPrivateRef.current = null;
       }
     },
-    [msgLoadPrivate, currentUser, hydrateReactions, setPrivateUnseenCounts, projectId],
+    [msgLoadPrivate, currentUser, hydrateReactions, clearPrivateUnread, projectId],
   );
 
   const sendTyping = useCallback(
@@ -399,13 +415,17 @@ export const useChat = (projectId: string) => {
   const fetchAllUsers = useCallback(async () => {
     try {
       const data = await chatApi.fetchChatMembers(projectId);
-      const normalized = data.map((u: string) => u.toLowerCase());
+      const currentAliasSet = new Set(currentUserAliases.map((alias) => alias.toLowerCase()));
+      currentAliasSet.add(currentUser.toLowerCase());
+      const normalized = data
+        .map((u: string) => u.toLowerCase())
+        .filter((u: string) => !currentAliasSet.has(u));
       setUsers(normalized);
       return normalized;
     } catch {
       return [] as string[];
     }
-  }, [projectId]);
+  }, [projectId, currentUserAliases, currentUser]);
 
 
   // ── Initialization ──
@@ -770,8 +790,8 @@ export const useChat = (projectId: string) => {
   useEffect(() => {
     if (!selectedUser) { setPrivateTypingUsers([]); return; }
     setPrivateTypingUsers(prev => prev.filter(u => isSameIdentity(u, selectedUser)));
-    setPrivateUnseenCounts(prev => ({ ...prev, [selectedUser]: 0 }));
-  }, [selectedUser, setPrivateTypingUsers, setPrivateUnseenCounts]);
+    clearPrivateUnread(selectedUser);
+  }, [selectedUser, setPrivateTypingUsers, clearPrivateUnread]);
 
   useEffect(() => {
     if (selectedRoomId === null || !Number.isFinite(selectedRoomId)) {
@@ -779,9 +799,9 @@ export const useChat = (projectId: string) => {
       return;
     }
     setRoomTypingUsers(prev => ({ [selectedRoomId]: prev[selectedRoomId] || [] }));
-    setRoomUnseenCounts(prev => ({ ...prev, [selectedRoomId]: 0 }));
+    clearRoomUnread(selectedRoomId);
     setRoomMentionCounts(prev => ({ ...prev, [selectedRoomId]: 0 }));
-  }, [selectedRoomId, setRoomTypingUsers, setRoomUnseenCounts, setRoomMentionCounts]);
+  }, [selectedRoomId, setRoomTypingUsers, clearRoomUnread, setRoomMentionCounts]);
 
   useEffect(() => {
     if (!hasRestoredSelection) return;
