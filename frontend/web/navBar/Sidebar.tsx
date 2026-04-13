@@ -232,9 +232,13 @@ export default function Sidebar() {
       const target = e.target as Node;
       const inFav = favRef.current?.contains(target);
       const inRecent = recentRef.current?.contains(target);
+      const inInbox = inboxRef.current?.contains(target);
+      const inNotif = notifRef.current?.contains(target);
       const inDropdown = (target as Element)?.closest?.('[data-sidebar-dropdown]');
       if (!inFav && !inDropdown) setFavOpen(false);
       if (!inRecent && !inDropdown) setRecentOpen(false);
+      if (!inInbox && !inDropdown) setInboxPanelOpen(false);
+      if (!inNotif && !inDropdown) setNotifPanelOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
 
@@ -474,13 +478,13 @@ export default function Sidebar() {
         )}
 
         {/* Inbox dropdown */}
-        {inboxPanelOpen && chatInbox && (
+        {inboxPanelOpen && (
           <InboxDropdown
             fixedTop={dropdownPos.top}
             fixedLeft={dropdownPos.left}
-            activities={chatInbox.recentActivities || []}
+            activities={chatInbox?.recentActivities || []}
             loading={loadingInbox}
-            error={null}
+            error={!chatInbox && !loadingInbox ? "Unable to load inbox." : null}
             search={inboxSearch}
             onSearch={setInboxSearch}
             onRetry={() => void fetchInboxActivity({ force: true })}

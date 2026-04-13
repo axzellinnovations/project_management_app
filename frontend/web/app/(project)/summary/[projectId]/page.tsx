@@ -26,20 +26,47 @@ const ProjectTeam = dynamic(() => import('../components/ProjectTeam'), {
     loading: () => <div className="h-[200px] bg-gray-50 animate-pulse rounded-xl" />
 });
 
+import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
+
 const fetcher = (url: string) => api.get(url).then(res => res.data);
 
 export default function SummaryPage() {
     const params = useParams();
     const projectId = Number(params.projectId);
 
-    // Fetch primary data points using SWR for caching and non-blocking background updates
+    const tasksCacheKey = buildSessionCacheKey('project-tasks', [projectId]);
+    const cachedTasks = tasksCacheKey ? getSessionCache<Task[]>(tasksCacheKey, { allowStale: true }).data : undefined;
+
+    const sprintsCacheKey = buildSessionCacheKey('project-sprints', [projectId]);
+    const cachedSprints = sprintsCacheKey ? getSessionCache<Sprint[]>(sprintsCacheKey, { allowStale: true }).data : undefined;
+
+    // Fetch primary data points using SWR & Session Cache for instant rendering
     const { data: tasks, isLoading: tasksLoading } = useSWR<Task[]>(
         projectId ? `/api/tasks/project/${projectId}` : null, 
-        fetcher
+        async (url) => {
+            const data = await fetcher(url);
+            if (tasksCacheKey) setSessionCache(tasksCacheKey, data, 2 * 60_000);
+            return data;
+        },
+        {
+            fallbackData: cachedTasks || undefined,
+            revalidateOnFocus: false,
+            dedupingInterval: 30000
+        }
     );
+
     const { data: sprints, isLoading: sprintsLoading } = useSWR<Sprint[]>(
         projectId ? `/api/sprints/project/${projectId}` : null, 
-        fetcher
+        async (url) => {
+            const data = await fetcher(url);
+            if (sprintsCacheKey) setSessionCache(sprintsCacheKey, data, 2 * 60_000);
+            return data;
+        },
+        {
+            fallbackData: cachedSprints || undefined,
+            revalidateOnFocus: false,
+            dedupingInterval: 30000
+        }
     );
 
     // Show full-page skeleton only for critical primary data (sprints/tasks)
