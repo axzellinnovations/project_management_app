@@ -18,6 +18,8 @@ import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
 import com.planora.backend.service.ChatWebhookService;
 import com.planora.backend.service.NotificationService;
+import com.planora.backend.service.ProjectMembershipService;
+import com.planora.backend.service.UserCacheService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,6 +58,10 @@ class ChatControllerNotificationTest {
     private TeamMemberRepository teamMemberRepository;
     @Mock
     private ProjectRepository projectRepository;
+    @Mock
+    private UserCacheService userCacheService;
+    @Mock
+    private ProjectMembershipService projectMembershipService;
     @Mock
     private UserRepository userRepository;
     @Mock
@@ -131,13 +137,12 @@ class ChatControllerNotificationTest {
         bobMember.setUser(bob);
         bobMember.setTeam(team);
 
-        when(projectRepository.findById(10L)).thenReturn(Optional.of(project));
-        when(teamMemberRepository.findByTeamIdAndUserUserId(99L, 1L)).thenReturn(Optional.of(aliceMember));
-        lenient().when(teamMemberRepository.findByTeamIdAndUserUserId(99L, 2L)).thenReturn(Optional.of(bobMember));
+        lenient().when(projectRepository.findById(10L)).thenReturn(Optional.of(project));
         lenient().when(teamMemberRepository.findByTeamId(99L)).thenReturn(List.of(aliceMember, bobMember));
 
-        when(userRepository.findByUsernameIgnoreCase("alice")).thenReturn(Optional.of(alice));
-        lenient().when(userRepository.findByUsernameIgnoreCase("bob")).thenReturn(Optional.of(bob));
+        when(userCacheService.resolveUserByEmailOrUsername("alice")).thenReturn(alice);
+        lenient().when(userCacheService.resolveUserByEmailOrUsername("bob")).thenReturn(bob);
+        lenient().when(userCacheService.resolveUserByEmailOrUsername("carol")).thenReturn(carol);
 
         lenient().when(chatRoomMemberRepository.findByUserUserId(anyLong())).thenReturn(List.of());
         lenient().when(chatRoomRepository.findByProjectId(10L)).thenReturn(List.of());
@@ -241,7 +246,6 @@ class ChatControllerNotificationTest {
         bobMembership.setUser(bob);
 
         when(chatRoomRepository.findById(7L)).thenReturn(Optional.of(room));
-        when(userRepository.findByUsernameIgnoreCase("carol")).thenReturn(Optional.of(carol));
         when(chatRoomMemberRepository.findByChatRoomIdAndUserUserId(7L, 1L)).thenReturn(Optional.of(senderMembership));
         when(chatRoomMemberRepository.findByChatRoomId(7L)).thenReturn(List.of(senderMembership, bobMembership));
         @SuppressWarnings("null")
