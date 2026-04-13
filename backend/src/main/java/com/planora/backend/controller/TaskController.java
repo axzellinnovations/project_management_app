@@ -10,13 +10,16 @@ import com.planora.backend.service.TaskActivityService;
 import com.planora.backend.service.TaskService;
 import com.planora.backend.service.TaskTemplateService;
 import jakarta.validation.Valid;
+import jakarta.validation.groups.Default;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
 
 import java.time.LocalDate;
 import java.util.List;
@@ -40,7 +43,7 @@ public class TaskController {
 
     @PostMapping
     public ResponseEntity<TaskResponseDTO> createTask(
-            @Valid @RequestBody TaskRequestDTO request,
+            @Validated({TaskRequestDTO.OnCreate.class, Default.class}) @RequestBody TaskRequestDTO request,
             @AuthenticationPrincipal UserPrincipal currentUser){
         Long currentUserId = currentUser.getUserId();
         TaskResponseDTO task = service.createTask(request, currentUserId);
@@ -63,7 +66,7 @@ public class TaskController {
     @PutMapping("/{taskId}")
     public ResponseEntity<TaskResponseDTO> updateTask(
             @PathVariable Long taskId,
-            @Valid @RequestBody TaskRequestDTO request,
+            @Validated @RequestBody TaskRequestDTO request,
             @AuthenticationPrincipal UserPrincipal currentUser){
         Long currentUserId = currentUser.getUserId();
         TaskResponseDTO task = service.updateTask(taskId, request, currentUserId);
@@ -134,7 +137,7 @@ public class TaskController {
     @PostMapping("/{parentId}/subtasks")
     public ResponseEntity<TaskResponseDTO> createSubTask(
             @PathVariable Long parentId,
-            @RequestBody TaskRequestDTO subTaskRequest,
+            @Validated({TaskRequestDTO.OnCreate.class, Default.class}) @RequestBody TaskRequestDTO subTaskRequest,
             @AuthenticationPrincipal UserPrincipal currentUser
     ){
         Long currentUserId = currentUser.getUserId();
@@ -269,6 +272,26 @@ public class TaskController {
     }
 
     /**
+     * PATCH /api/tasks/{taskId}/status
+     * Lightweight endpoint for Kanban drag-and-drop status changes.
+     * Accepts { "status": "IN_PROGRESS" }.
+     */
+    @PatchMapping("/{taskId}/status")
+    public ResponseEntity<TaskResponseDTO> updateStatus(
+            @PathVariable Long taskId,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ){
+        Long currentUserId = currentUser.getUserId();
+        String status = body.get("status");
+        TaskResponseDTO task = service.updateStatus(taskId, status, currentUserId);
+        messagingTemplate.convertAndSend(
+                "/topic/project/" + task.getProjectId() + "/tasks",
+                Map.of("type", "TASK_UPDATED", "task", task));
+        return new ResponseEntity<>(task, HttpStatus.OK);
+    }
+
+    /**
      * PATCH /api/tasks/{taskId}/dates
      * Lightweight endpoint for calendar drag-and-drop date updates.
      * Accepts { startDate: "YYYY-MM-DD", dueDate: "YYYY-MM-DD" }.
@@ -279,9 +302,9 @@ public class TaskController {
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
-        LocalDate startDate = body.containsKey("startDate") && body.get("startDate") != null
+        LocalDate startDate = body.containsKey("startDate") && body.get("startDate") != null && !body.get("startDate").trim().isEmpty()
                 ? LocalDate.parse(body.get("startDate")) : null;
-        LocalDate dueDate = body.containsKey("dueDate") && body.get("dueDate") != null
+        LocalDate dueDate = body.containsKey("dueDate") && body.get("dueDate") != null && !body.get("dueDate").trim().isEmpty()
                 ? LocalDate.parse(body.get("dueDate")) : null;
         service.patchTaskDates(taskId, startDate, dueDate, currentUser.getUserId());
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);

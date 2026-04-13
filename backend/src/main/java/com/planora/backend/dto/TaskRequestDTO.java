@@ -6,14 +6,19 @@ import lombok.*;
 import java.time.LocalDate;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Setter
 @Getter
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class TaskRequestDTO {
 
-    @NotBlank(message = "Task title is required")
+    public interface OnCreate {}
+
+    @NotBlank(message = "Task title is required", groups = OnCreate.class)
     @Size(max = 500, message = "Task title must not exceed 500 characters")
     private String title;
 

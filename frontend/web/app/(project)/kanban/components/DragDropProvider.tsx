@@ -6,11 +6,13 @@ import {
   DragEndEvent,
   DragOverEvent,
   DragStartEvent,
-  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
   DragOverlay,
+  closestCorners,
+  PointerSensor,
+  KeyboardSensor,
 } from '@dnd-kit/core';
 import { Task } from '../types';
 import KanbanCard from './KanbanCard';
@@ -31,17 +33,18 @@ export default function DragDropProvider({
   onDragOver,
 }: DragDropProviderProps) {
   const sensors = useSensors(
-    useSensor(MouseSensor, {
+    useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 200,
+        delay: 150,
         tolerance: 5,
       },
-    })
+    }),
+    useSensor(KeyboardSensor)
   );
 
   const [draggedTask, setDraggedTask] = React.useState<Task | null>(null);
@@ -68,14 +71,15 @@ export default function DragDropProvider({
   return (
     <DndContext
       sensors={sensors}
+      collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragOver={handleDragOver}
     >
       {children}
-      <DragOverlay>
+      <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
         {draggedTask ? (
-          <div className="opacity-80">
+          <div className="rotate-[2deg] scale-105 opacity-90" style={{ maxWidth: '300px' }}>
             <KanbanCard task={draggedTask} onDelete={undefined} />
           </div>
         ) : null}

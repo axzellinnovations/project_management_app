@@ -1,5 +1,6 @@
 package com.planora.backend.controller;
 
+import com.planora.backend.dto.KanbanBoardResponseDTO;
 import com.planora.backend.dto.KanbanRequestDTO;
 import com.planora.backend.model.Kanban;
 import com.planora.backend.service.KanbanService;
@@ -47,5 +48,17 @@ public class KanbanController {
     @GetMapping("/project/{projectId}")
     public ResponseEntity<List<Kanban>> getKanbansByProjectId(@PathVariable Long projectId) {
         return ResponseEntity.ok(kanbanService.getKanbansByProjectId(projectId));
+    }
+
+    // Returns the Kanban board with its saved column definitions for a project
+    @GetMapping("/project/{projectId}/board")
+    public ResponseEntity<KanbanBoardResponseDTO> getKanbanBoard(@PathVariable Long projectId) {
+        return ResponseEntity.ok(kanbanService.getKanbanBoard(projectId));
+    }
+
+    // Auto-create a Kanban board with default columns for a project
+    @PostMapping("/project/{projectId}/auto-create")
+    public ResponseEntity<Kanban> autoCreateKanban(@PathVariable Long projectId) {
+        return ResponseEntity.ok(kanbanService.getOrCreateKanbanForProject(projectId));
     }
 }

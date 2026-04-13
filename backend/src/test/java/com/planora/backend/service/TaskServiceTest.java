@@ -167,8 +167,8 @@ class TaskServiceTest {
 
         assertEquals(999L, result.getId());
         assertEquals("Build tests", result.getTitle());
-        assertEquals(LocalDate.now(), result.getStartDate());
-        assertEquals(LocalDate.now(), result.getDueDate());
+        assertNull(result.getStartDate());
+        assertNull(result.getDueDate());
         assertEquals(0, result.getStoryPoint());
         verify(notificationService).createNotification(
                 assignee.getUser(),

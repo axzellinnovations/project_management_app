@@ -12,7 +12,7 @@ interface Subtask {
 interface SubtaskListProps {
   subtasks: Subtask[];
   taskId?: number;
-  onSubtaskAdded?: () => void;
+  onSubtaskAdded?: (subtask: Subtask) => void;
   addTrigger?: number;
 }
 
@@ -48,7 +48,7 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ subtasks: initialSubtasks, ta
       setSubtasks(prev => [...prev, res.data]);
       setNewTitle('');
       setIsAdding(false);
-      onSubtaskAdded?.();
+      onSubtaskAdded?.(res.data);
     } catch {
       // keep input open on error
     } finally {
@@ -63,7 +63,7 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ subtasks: initialSubtasks, ta
     // optimistic update
     setSubtasks(prev => prev.map(s => s.id === st.id ? { ...s, status: newStatus } : s));
     try {
-      await api.put(`/api/tasks/${st.id}`, { status: newStatus });
+      await api.patch(`/api/tasks/${st.id}/status`, { status: newStatus });
     } catch {
       // revert on failure
       setSubtasks(prev => prev.map(s => s.id === st.id ? { ...s, status: st.status } : s));

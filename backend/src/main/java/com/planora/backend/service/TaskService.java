@@ -100,10 +100,8 @@ public class TaskService {
 
         task.setStoryPoint(request.getStoryPoint() != null ? request.getStoryPoint() : 0);
 
-        // Ensure every task has a start date (use creation date when not provided) and a due date.
-        LocalDate startDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
-        task.setStartDate(startDate);
-        task.setDueDate(request.getDueDate() != null ? request.getDueDate() : startDate);
+        task.setStartDate(request.getStartDate());
+        task.setDueDate(request.getDueDate());
 
         //enum assign
         if(request.getPriority() != null) task.setPriority(Priority.valueOf(request.getPriority()));
@@ -619,6 +617,41 @@ public class TaskService {
                     + "\" from " + oldPriority + " to " + priority;
             notifyTaskStakeholders(saved, currentUserId, message, "/taskcard?taskId=" + saved.getId());
         }
+        return mapToDTO(saved);
+    }
+
+    //17b. UPDATE STATUS (lightweight — used by kanban drag-and-drop)
+    @Transactional
+    public TaskResponseDTO updateStatus(Long taskId, String status, Long currentUserId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
+
+        String oldStatus = task.getStatus();
+        task.setStatus(status);
+
+        // Set or clear completedAt when status transitions to/from DONE
+        if ("DONE".equalsIgnoreCase(status) && !"DONE".equalsIgnoreCase(oldStatus)) {
+            task.setCompletedAt(LocalDateTime.now());
+        } else if (!"DONE".equalsIgnoreCase(status)) {
+            task.setCompletedAt(null);
+        }
+
+        task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+        Task saved = taskRepository.save(task);
+
+        User actor = userRepository.findById(currentUserId).orElse(null);
+        String actorName = actor != null ? actor.getUsername() : "Unknown";
+
+        if (!status.equals(oldStatus)) {
+            taskActivityService.logActivity(saved.getId(), TaskActivityType.STATUS_CHANGED,
+                    actorName, "Status changed from " + oldStatus + " to " + status);
+            String fromStatus = oldStatus != null ? oldStatus : "NONE";
+            String message = actorName + " changed task status for \"" + saved.getTitle()
+                    + "\" from " + fromStatus + " to " + status;
+            notifyTaskStakeholders(saved, currentUserId, message, "/taskcard?taskId=" + saved.getId());
+        }
+
         return mapToDTO(saved);
     }
 

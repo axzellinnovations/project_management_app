@@ -14,6 +14,9 @@ import axios from '@/lib/axios';
 import { AxiosError } from 'axios';
 import { toast } from '@/components/ui';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
+import { buildSessionCacheKey, getSessionCache, setSessionCache, removeSessionCache } from '@/lib/session-cache';
+
+type SprintBoardCache = { activeList: SprintSummary[]; boards: Sprintboard[] };
 
 interface SprintSummary {
   id: number;
@@ -34,9 +37,10 @@ export default function SprintBoardPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
-  const [isAgile, setIsAgile] = useState(true);
+  const [isAgile, setIsAgile] = useState<boolean | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [sprintIdToComplete, setSprintIdToComplete] = useState<number | null>(null);
 
   // Derived from selected index
   const sprintboard = allBoards[selectedIdx] ?? null;
@@ -50,49 +54,72 @@ export default function SprintBoardPage() {
   const toColumnStatus = (name: string) =>
     name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_');
 
-  const fetchActiveSprintAndBoard = useCallback(async () => {
+  // ── Static Project Data (Run once per projectId) ──
+  const fetchProjectInfo = useCallback(async () => {
     if (!projectIdStr) return;
+    try {
+      const res = await axios.get(`/api/projects/${projectIdStr}`);
+      setIsAgile(res.data.type === 'AGILE' || res.data.type === 'Agile Scrum' || res.data.type === 'SCRUM');
+    } catch (err) {
+      console.error('Failed to fetch project info:', err);
+      setIsAgile(false);
+    }
+  }, [projectIdStr]);
 
-    setLoading(true);
+  // ── Dynamic Sprint/Board Data (Periodic Sync) ──
+  const fetchData = useCallback(async (options: { showSpinner?: boolean, forceNetwork?: boolean } = {}) => {
+    if (!projectIdStr) return;
+    const { showSpinner = true, forceNetwork = false } = options;
+    const pid = parseInt(projectIdStr);
+
+    const cKey = buildSessionCacheKey('sprint-board', [projectIdStr]);
+    if (cKey && !forceNetwork) {
+      const cached = getSessionCache<SprintBoardCache>(cKey, { allowStale: true });
+      if (cached.data) {
+        setAllActiveSprints(cached.data.activeList);
+        setAllBoards(cached.data.boards);
+        setLoading(false);
+        if (!cached.isStale) return; // Fresh cache
+      }
+    }
+
+    if (showSpinner) setLoading(true);
     setError(null);
     try {
-      const projectId = parseInt(projectIdStr);
-
-      // 1. Check if project is AGILE
-      const projectRes = await axios.get(`/api/projects/${projectId}`);
-      const project = projectRes.data;
-
-      if (project.type !== 'AGILE') {
-        setIsAgile(false);
-        setLoading(false);
-        return;
-      }
-
-      // 2. Fetch all sprints to find active ones
-      const sprints = await fetchSprintsByProject(projectId) as SprintSummary[];
+      const sprints = await fetchSprintsByProject(pid) as SprintSummary[];
       const activeList = sprints.filter((s) => s.status === 'ACTIVE');
 
       if (activeList.length === 0) {
+        setAllActiveSprints([]);
+        setAllBoards([]);
         setLoading(false);
         return;
       }
 
-      // 3. Fetch boards for all active sprints in parallel
       const boards = await Promise.all(activeList.map(s => fetchSprintboardBySprintId(s.id)));
       setAllActiveSprints(activeList);
       setAllBoards(boards);
-      setSelectedIdx(0);
-    } catch (err: unknown) {
-      const axiosErr = err as AxiosError<{ message?: string }>;
-      setError(axiosErr?.response?.data?.message || 'Failed to load sprint board. Please make sure the sprint has been started.');
+      
+      if (cKey) {
+        setSessionCache(cKey, { activeList, boards }, 30 * 60_000);
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (err: any) {
+      if (showSpinner) setError(err.response?.data?.message || 'Failed to load sprint board.');
     } finally {
       setLoading(false);
     }
   }, [projectIdStr]);
 
+  const forceRefresh = useCallback(() => void fetchData({ showSpinner: false, forceNetwork: true }), [fetchData]);
+
   useEffect(() => {
-    fetchActiveSprintAndBoard();
-  }, [fetchActiveSprintAndBoard]);
+    if (!projectIdStr) return;
+    void fetchProjectInfo();
+    void fetchData({ showSpinner: true });
+    const syncId = setInterval(() => void fetchData({ showSpinner: false }), 30_000);
+    return () => clearInterval(syncId);
+  }, [projectIdStr, fetchProjectInfo, fetchData]);
 
   // Search filter
   const filteredColumns = useMemo(() => {
@@ -114,7 +141,6 @@ export default function SprintBoardPage() {
     const taskId = parseInt(active.id as string);
     const newStatus = over.id as string;
 
-    // Find the task and current column
     let taskToMove: SprintboardTask | undefined;
     let oldColumnStatus: string | undefined;
 
@@ -144,22 +170,11 @@ export default function SprintBoardPage() {
 
     try {
       await moveTaskToColumn(taskId, sprintboard.id, newStatus);
+      const cKey = buildSessionCacheKey('sprint-board', [projectIdStr]);
+      if (cKey) removeSessionCache(cKey);
+      forceRefresh();
     } catch (_err) {
-      // Revert if failed
-      fetchActiveSprintAndBoard();
-    }
-  };
-
-  const _handleCreateTask = async (taskData: Record<string, unknown>) => {
-    if (!projectIdStr) return;
-    try {
-      await axios.post('/api/tasks', taskData);
-      setSuccessMsg('Task created!');
-      setTimeout(() => setSuccessMsg(''), 2000);
-      fetchActiveSprintAndBoard();
-    } catch (_err: unknown) {
-      const axiosErr = _err as AxiosError<{ message?: string }>;
-      toast(axiosErr?.response?.data?.message || 'Failed to create task.', 'error');
+      void fetchData({ showSpinner: false, forceNetwork: true });
     }
   };
 
@@ -194,25 +209,35 @@ export default function SprintBoardPage() {
           ),
         };
       }));
+      const cKey = buildSessionCacheKey('sprint-board', [projectIdStr]);
+      if (cKey) removeSessionCache(cKey);
+      forceRefresh();
     } catch (err: unknown) {
       const axiosErr = err as AxiosError<{ message?: string }>;
       toast(axiosErr?.response?.data?.message || 'Failed to create task.', 'error');
     }
-  }, [projectIdStr, activeSprint, sprintboard, selectedIdx]);
+  }, [projectIdStr, activeSprint, sprintboard, selectedIdx, forceRefresh]);
 
   const handleCompleteSprint = async () => {
-    if (!activeSprint) return;
+    const targetId = sprintIdToComplete;
+    if (!targetId) return;
 
     setIsUpdating(true);
     try {
-      await completeSprint(activeSprint.id);
-      // Remove the completed sprint from both lists
-      setAllActiveSprints(prev => prev.filter((_, i) => i !== selectedIdx));
-      setAllBoards(prev => prev.filter((_, i) => i !== selectedIdx));
-      setSelectedIdx(prev => Math.max(0, prev - 1));
+      await completeSprint(targetId);
+      // Update UI state
+      setAllActiveSprints(prev => prev.filter(s => s.id !== targetId));
+      setAllBoards(prev => {
+        const idxToRemove = allActiveSprints.findIndex(s => s.id === targetId);
+        return prev.filter((_, i) => i !== idxToRemove);
+      });
+      setSelectedIdx(0);
       setShowCompleteConfirm(false);
       setSuccessMsg('Sprint completed successfully!');
       setTimeout(() => setSuccessMsg(''), 2000);
+      const cKey = buildSessionCacheKey('sprint-board', [projectIdStr]);
+      if (cKey) removeSessionCache(cKey);
+      forceRefresh();
     } catch (_err) {
       toast('Failed to complete sprint.', 'error');
     } finally {
@@ -231,7 +256,9 @@ export default function SprintBoardPage() {
       setTimeout(() => setSuccessMsg(''), 2000);
       setIsAddingColumn(false);
       setNewColumnName('');
-      fetchActiveSprintAndBoard();
+      const cKey = buildSessionCacheKey('sprint-board', [projectIdStr]);
+      if (cKey) removeSessionCache(cKey);
+      void fetchData({ showSpinner: false, forceNetwork: true });
     } catch (err: unknown) {
       const axiosErr = err as AxiosError<{ message?: string }>;
       const msg = axiosErr?.response?.data?.message || axiosErr?.message || 'Failed to add column.';
@@ -251,6 +278,15 @@ export default function SprintBoardPage() {
         </div>
       </div>
     );
+  }
+
+  // Still evaluating agile status
+  if (isAgile === null) {
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <Loader className="w-8 h-8 text-[#155DFC] animate-spin" />
+        </div>
+      );
   }
 
   if (!isAgile) {
@@ -286,7 +322,7 @@ export default function SprintBoardPage() {
               <h2 className="text-lg font-bold text-[#101828]">Sprint Board not ready</h2>
               <p className="text-[#475467] text-sm mt-2 mb-6">{error}</p>
               <button
-                onClick={() => fetchActiveSprintAndBoard()}
+                onClick={() => forceRefresh()}
                 className="px-4 py-2 bg-white border border-[#EAECF0] rounded-xl text-sm font-semibold hover:bg-gray-50 shadow-sm"
               >
                 Try Again
@@ -320,48 +356,86 @@ export default function SprintBoardPage() {
               onSelectSprint={setSelectedIdx}
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
-              onCompleteSprint={() => setShowCompleteConfirm(true)}
+              onCompleteSprint={() => {
+                  setSprintIdToComplete(activeSprint?.id || null);
+                  setShowCompleteConfirm(true);
+              }}
               isLoading={isUpdating}
             />
 
             {/* Complete Sprint Confirmation Dialog */}
-            {showCompleteConfirm && activeSprint && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                <div className="bg-white rounded-2xl shadow-2xl border border-[#EAECF0] p-6 max-w-sm w-full mx-4 animate-in fade-in zoom-in-95 duration-200">
-                  <div className="flex items-center gap-3 mb-4">
+            {showCompleteConfirm && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+                <div className="bg-white rounded-2xl shadow-2xl border border-[#EAECF0] p-6 max-w-md w-full animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex items-center gap-3 mb-6">
                     <div className="w-10 h-10 rounded-full bg-[#FEF3F2] flex items-center justify-center flex-shrink-0">
-                      <CheckCircle2 size={20} className="text-[#D92D20]" />
+                      <CheckCircle2 size={24} className="text-[#D92D20]" />
                     </div>
                     <div>
-                      <h3 className="text-[16px] font-bold text-[#101828]">Complete Sprint</h3>
-                      <p className="text-[13px] text-[#475467]">This cannot be undone</p>
+                      <h3 className="text-lg font-bold text-[#101828]">Complete Sprint</h3>
+                      <p className="text-xs text-[#475467] mt-0.5 uppercase tracking-wider font-bold">This cannot be undone</p>
                     </div>
                   </div>
-                  <p className="text-[14px] text-[#344054] mb-2">
-                    You are about to complete:
-                  </p>
-                  <div className="bg-[#F9FAFB] border border-[#EAECF0] rounded-xl px-4 py-3 mb-5">
-                    <p className="text-[14px] font-bold text-[#101828]">{activeSprint.sprintName ?? `Sprint #${activeSprint.id}`}</p>
-                    <p className="text-[12px] text-[#667085] mt-0.5">The sprint will be marked as complete.</p>
+
+                  <div className="space-y-4 mb-8">
+                    <p className="text-sm text-[#344054]">
+                        {allActiveSprints.length > 1 
+                          ? "Select the active sprint you want to complete:" 
+                          : "Are you sure you want to complete this sprint?"}
+                    </p>
+                    
+                    {allActiveSprints.length > 1 ? (
+                        <div className="flex flex-col gap-2">
+                            {allActiveSprints.map(s => (
+                                <button
+                                    key={s.id}
+                                    onClick={() => setSprintIdToComplete(s.id)}
+                                    className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                                        sprintIdToComplete === s.id 
+                                        ? 'border-[#155DFC] bg-blue-50/50' 
+                                        : 'border-[#EAECF0] hover:border-gray-300'
+                                    }`}
+                                >
+                                    <div className="text-left">
+                                        <p className={`text-sm font-bold ${sprintIdToComplete === s.id ? 'text-[#155DFC]' : 'text-[#101828]'}`}>
+                                            {s.sprintName || `Sprint #${s.id}`}
+                                        </p>
+                                        <p className="text-[11px] text-[#667085] mt-0.5">Tasks will be moved out of board</p>
+                                    </div>
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                        sprintIdToComplete === s.id ? 'border-[#155DFC] bg-[#155DFC]' : 'border-[#D0D5DD]'
+                                    }`}>
+                                        {sprintIdToComplete === s.id && <div className="w-2 h-2 rounded-full bg-white" />}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="bg-[#F9FAFB] border border-[#EAECF0] rounded-2xl p-4">
+                            <p className="text-sm font-bold text-[#101828]">{activeSprint?.sprintName || `Sprint #${activeSprint?.id}`}</p>
+                            <p className="text-xs text-[#667085] mt-1">The sprint will be marked as complete and moved to history.</p>
+                        </div>
+                    )}
                   </div>
+
                   <div className="flex gap-3">
                     <button
                       onClick={() => setShowCompleteConfirm(false)}
-                      className="flex-1 px-4 py-2.5 border border-[#D0D5DD] rounded-xl text-[14px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors"
+                      className="flex-1 px-4 py-3 border border-[#D0D5DD] rounded-xl text-sm font-bold text-[#344054] hover:bg-[#F9FAFB] transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleCompleteSprint}
-                      disabled={isUpdating}
-                      className="flex-1 px-4 py-2.5 bg-[#D92D20] hover:bg-[#B42318] text-white rounded-xl text-[14px] font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      disabled={isUpdating || !sprintIdToComplete}
+                      className="flex-1 px-4 py-3 bg-[#D92D20] hover:bg-[#B42318] text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-red-500/10"
                     >
                       {isUpdating ? (
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       ) : (
-                        <CheckCircle2 size={16} />
+                        <CheckCircle2 size={18} />
                       )}
-                      Complete
+                      Complete Sprint
                     </button>
                   </div>
                 </div>

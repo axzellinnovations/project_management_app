@@ -22,15 +22,41 @@ export const isSameIdentity = (left?: string | null, right?: string | null): boo
 // ── Message merge ──
 
 export const mergeMessage = (list: ChatMessage[], incoming: ChatMessage): ChatMessage[] => {
-  if (!incoming.id) {
-    return [...list, incoming];
+  if (incoming.id) {
+    const index = list.findIndex(item => item.id === incoming.id);
+    if (index !== -1) {
+      const next = [...list];
+      next[index] = { ...next[index], ...incoming };
+      return next;
+    }
   }
 
-  const index = list.findIndex(item => item.id === incoming.id);
-  if (index !== -1) {
-    const next = [...list];
-    next[index] = { ...next[index], ...incoming };
-    return next;
+  if (incoming.localId) {
+    const optimisticIndex = list.findIndex(item => item.localId === incoming.localId);
+    if (optimisticIndex !== -1) {
+      const next = [...list];
+      next[optimisticIndex] = { ...next[optimisticIndex], ...incoming };
+      return next;
+    }
+  }
+
+  // Fallback: match by content and timestamp window (~3s)
+  if (incoming.id) {
+    const ts = new Date(incoming.timestamp || '').getTime();
+    if (!isNaN(ts)) {
+      const dup = list.findIndex(m => 
+        !m.id && 
+        m.content === incoming.content &&
+        isSameIdentity(m.sender, incoming.sender) &&
+        m.roomId === incoming.roomId &&
+        Math.abs(new Date(m.timestamp || '').getTime() - ts) < 3000
+      );
+      if (dup !== -1) {
+        const next = [...list];
+        next[dup] = { ...next[dup], ...incoming };
+        return next;
+      }
+    }
   }
 
   const optimistic = list.findIndex(
