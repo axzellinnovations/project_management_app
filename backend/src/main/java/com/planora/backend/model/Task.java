@@ -1,5 +1,6 @@
 package com.planora.backend.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.BatchSize;
@@ -28,18 +29,22 @@ public class Task {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
+    @JsonIgnore
     private Project project;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sprint_id")
+    @JsonIgnore
     private Sprint sprint;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "kanban_column_id")
+    @JsonIgnore
     private KanbanColumn kanbanColumn;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assignee_id")
+    @JsonIgnore
     private TeamMember assignee;
 
     @BatchSize(size = 20)
@@ -66,17 +71,20 @@ public class Task {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reporter_id")
+    @JsonIgnore
     private TeamMember reporter;
 
     private int storyPoint;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "last_modified_by_id")
+    @JsonIgnore
     private User lastModifiedBy;
 
     //The "Parent" (If this is null, It's th main taks. If ser, it's a subtask)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
+    @JsonIgnore
     private Task parentTask;
 
     @BatchSize(size = 20)
@@ -123,6 +131,7 @@ public class Task {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "milestone_id")
+    @JsonIgnore
     private Milestone milestone;
 
     // Recurring task fields (V7 migration)
@@ -134,6 +143,7 @@ public class Task {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recurrence_parent_id")
+    @JsonIgnore
     private Task recurrenceParent;
 
     @Column(name = "next_occurrence")

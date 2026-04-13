@@ -95,10 +95,11 @@ public class TaskController {
             @RequestParam(required = false) Long assigneeId,
             @RequestParam(required = false) String priority,
             @RequestParam(required = false) Long sprintId,
+            @RequestParam(required = false) Long milestoneId,
             @AuthenticationPrincipal UserPrincipal currentUser
     ){
         Long currentUserId = currentUser.getUserId();
-        return new ResponseEntity<>(service.getTasksByProject(projectId, currentUserId, status, assigneeId, priority, sprintId), HttpStatus.OK);
+        return new ResponseEntity<>(service.getTasksByProject(projectId, currentUserId, status, assigneeId, priority, sprintId, milestoneId), HttpStatus.OK);
     }
 
     // DASHBOARD ENDPOINTS

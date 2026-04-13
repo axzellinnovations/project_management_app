@@ -39,8 +39,10 @@ public class MilestoneController {
     @Operation(summary = "Get all milestones for a project")
     @ApiResponse(responseCode = "200", description = "Success")
     @GetMapping("/api/projects/{projectId}/milestones")
-    public ResponseEntity<List<MilestoneResponseDTO>> getMilestones(@PathVariable Long projectId) {
-        return ResponseEntity.ok(milestoneService.getMilestonesByProject(projectId));
+    public ResponseEntity<List<MilestoneResponseDTO>> getMilestones(
+            @PathVariable Long projectId,
+            Authentication auth) {
+        return ResponseEntity.ok(milestoneService.getMilestonesByProject(projectId, currentUserId(auth)));
     }
 
     @Operation(summary = "Get a single milestone")

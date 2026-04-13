@@ -52,7 +52,10 @@ public class MilestoneService {
     }
 
     @Transactional(readOnly = true)
-    public List<MilestoneResponseDTO> getMilestonesByProject(Long projectId) {
+    public List<MilestoneResponseDTO> getMilestonesByProject(Long projectId, Long currentUserId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+        requireAtLeastMember(project.getTeam().getId(), currentUserId);
         return milestoneRepository.findByProjectId(projectId)
                 .stream()
                 .map(this::toDTO)
@@ -94,6 +97,9 @@ public class MilestoneService {
             task.setMilestone(null);
         } else {
             Milestone milestone = findOrThrow(milestoneId);
+            if (!task.getProject().getId().equals(milestone.getProject().getId())) {
+                throw new ForbiddenException("Milestone does not belong to task project");
+            }
             task.setMilestone(milestone);
         }
         taskRepository.save(task);

@@ -16,7 +16,12 @@ public class CacheConfiguration {
 
     @Bean
     public CacheManager cacheManager() {
-        var manager = new CaffeineCacheManager("users-by-identity", "project-membership", "user-details");
+        var manager = new CaffeineCacheManager(
+                "users-by-identity",
+                "project-membership",
+                "user-details",
+                "team-member",
+                "project-team-id");
         manager.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(Duration.ofSeconds(60))
                 .maximumSize(500));
@@ -24,6 +29,16 @@ public class CacheConfiguration {
                 Caffeine.newBuilder()
                         .expireAfterWrite(Duration.ofSeconds(120))
                         .maximumSize(1000)
+                        .build());
+        manager.registerCustomCache("team-member",
+                Caffeine.newBuilder()
+                        .expireAfterWrite(Duration.ofSeconds(60))
+                        .maximumSize(2_000)
+                        .build());
+        manager.registerCustomCache("project-team-id",
+                Caffeine.newBuilder()
+                        .expireAfterWrite(Duration.ofMinutes(10))
+                        .maximumSize(1_000)
                         .build());
         return manager;
     }

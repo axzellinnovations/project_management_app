@@ -1,6 +1,7 @@
 package com.planora.backend.model;
 
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import org.hibernate.annotations.CreationTimestamp;
@@ -26,6 +27,7 @@ import lombok.Setter;
 public class ChatMessage {
     
     @jakarta.persistence.OneToMany(mappedBy = "message", cascade = jakarta.persistence.CascadeType.ALL, fetch = jakarta.persistence.FetchType.LAZY)
+    @JsonIgnore
     private java.util.List<ChatReaction> reactions = new java.util.ArrayList<>();
 
     @Id

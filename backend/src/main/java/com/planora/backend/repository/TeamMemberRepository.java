@@ -22,5 +22,14 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
     @EntityGraph(attributePaths = {"user"})
     List<TeamMember> findByTeamId(Long teamId);
 
+    @EntityGraph(attributePaths = {"user"})
+    List<TeamMember> findByTeamIdIn(Set<Long> teamIds);
+
+    @EntityGraph(attributePaths = {"user", "team"})
+    List<TeamMember> findByTeamIdInAndUserUserId(Set<Long> teamIds, Long userId);
+
+    @EntityGraph(attributePaths = {"user", "team"})
+    List<TeamMember> findByTeamIdAndUserUserIdIn(Long teamId, java.util.Collection<Long> userIds);
+
     List<TeamMember> findByTeamIdAndRoleIn(Long teamId, Set<com.planora.backend.model.TeamRole> roles);
 }

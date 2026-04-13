@@ -1,6 +1,7 @@
 package com.planora.backend.controller;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
@@ -98,6 +99,16 @@ public class ProjectMemberController {
         Long currentUserId = principal.getUserId();
         teamMemberService.validateMembership(teamId, currentUserId);
         List<TeamMember> members = teamMemberService.getTeamMembers(teamId);
+        List<Long> userIds = members.stream()
+                .map(member -> member.getUser() != null ? member.getUser().getUserId() : null)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        Map<Long, Long> taskCountByUserId = userIds.isEmpty()
+                ? Map.of()
+                : taskRepository.countTasksByAssigneeUserIdsAndTeamId(userIds, teamId).stream()
+                        .collect(Collectors.toMap(
+                                row -> (Long) row[0],
+                                row -> ((Number) row[1]).longValue()));
         List<TeamMemberResponseDTO> dtos = members.stream()
                 .map(member -> TeamMemberResponseDTO.builder()
                         .id(member.getId())
@@ -110,7 +121,7 @@ public class ProjectMemberController {
                                 .profilePicUrl(userService.generatePresignedUrl(member.getUser().getProfilePicUrl()))
                                 .build())
                         .lastActive(member.getUser().getLastActive())
-                        .taskCount(taskRepository.countByAssigneeAndProject_TeamId(member, teamId))
+                        .taskCount(taskCountByUserId.getOrDefault(member.getUser().getUserId(), 0L))
                         .status("Active")
                         .build())
                 .collect(Collectors.toList());

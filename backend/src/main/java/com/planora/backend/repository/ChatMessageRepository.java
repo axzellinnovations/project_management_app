@@ -30,6 +30,9 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     Optional<ChatMessage> findByIdAndProjectId(Long id, Long projectId);
 
     @EntityGraph(attributePaths = {"reactions", "reactions.user"})
+    Optional<ChatMessage> findWithReactionsByIdAndProjectId(Long id, Long projectId);
+
+    @EntityGraph(attributePaths = {"reactions", "reactions.user"})
     List<ChatMessage> findByProjectIdAndRecipientIsNullAndRoomIdIsNullAndParentMessageIdIsNullOrderByIdAsc(Long projectId);
 
     @EntityGraph(attributePaths = {"reactions", "reactions.user"})
@@ -111,17 +114,27 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     @Query("SELECT m.roomId as roomId, COUNT(m) as count FROM ChatMessage m " +
            "WHERE m.projectId = :projectId AND m.roomId IN :roomIds AND m.parentMessageId IS NULL " +
            "AND LOWER(m.sender) NOT IN :currentUserAliases " +
+           "AND m.id > COALESCE((" +
+           "   SELECT MAX(rs.lastReadMessageId) FROM ChatReadState rs " +
+           "   WHERE rs.projectId = :projectId AND rs.user.userId = :userId AND rs.roomId = m.roomId" +
+           "), 0) " +
            "GROUP BY m.roomId")
     List<Object[]> countUnreadBatchRooms(@Param("projectId") Long projectId,
                                         @Param("roomIds") List<Long> roomIds,
-                                        @Param("currentUserAliases") List<String> currentUserAliases);
+                                        @Param("currentUserAliases") List<String> currentUserAliases,
+                                        @Param("userId") Long userId);
 
     @Query("SELECT LOWER(m.sender) as other, COUNT(m) as count FROM ChatMessage m " +
-           "WHERE m.projectId = :projectId AND m.recipient IN :currentUserAliases " +
+           "WHERE m.projectId = :projectId AND LOWER(m.recipient) IN :currentUserAliases " +
            "AND m.parentMessageId IS NULL " +
+           "AND m.id > COALESCE((" +
+           "   SELECT MAX(rs.lastReadMessageId) FROM ChatReadState rs " +
+           "   WHERE rs.projectId = :projectId AND rs.user.userId = :userId AND LOWER(rs.otherParticipant) = LOWER(m.sender)" +
+           "), 0) " +
            "GROUP BY LOWER(m.sender)")
     List<Object[]> countUnreadBatchDirects(@Param("projectId") Long projectId,
-                                          @Param("currentUserAliases") List<String> currentUserAliases);
+                                          @Param("currentUserAliases") List<String> currentUserAliases,
+                                          @Param("userId") Long userId);
 
     @EntityGraph(attributePaths = {"reactions", "reactions.user"})
     @Query("SELECT DISTINCT m FROM ChatMessage m WHERE m.projectId = :projectId AND m.content IS NOT NULL AND LOWER(m.content) LIKE LOWER(CONCAT('%', :query, '%')) ORDER BY m.id DESC")
@@ -131,11 +144,64 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     @Query("SELECT m FROM ChatMessage m WHERE m.id IN (SELECT MAX(m2.id) FROM ChatMessage m2 WHERE m2.projectId = :projectId AND m2.roomId IN :roomIds GROUP BY m2.roomId)")
     List<ChatMessage> findLatestMessagesForSpecificRooms(@Param("projectId") Long projectId, @Param("roomIds") List<Long> roomIds);
 
+    @Query("SELECT m FROM ChatMessage m WHERE m.id IN (" +
+           "SELECT MAX(m2.id) FROM ChatMessage m2 " +
+           "WHERE m2.projectId IN :projectIds AND m2.roomId IN :roomIds GROUP BY m2.projectId, m2.roomId)")
+    List<ChatMessage> findLatestMessagesForRoomsInProjects(@Param("projectIds") List<Long> projectIds,
+                                                           @Param("roomIds") List<Long> roomIds);
+
     @Query("SELECT m FROM ChatMessage m WHERE m.id IN (SELECT MAX(m2.id) FROM ChatMessage m2 WHERE m2.projectId = :projectId AND (LOWER(m2.sender) IN :userAliases OR LOWER(m2.recipient) IN :userAliases) AND m2.recipient IS NOT NULL GROUP BY m2.sender, m2.recipient)")
     List<ChatMessage> findLatestMessagesForSpecificDirects(@Param("projectId") Long projectId, @Param("userAliases") List<String> userAliases);
 
+    @Query("SELECT m FROM ChatMessage m WHERE m.id IN (" +
+           "SELECT MAX(m2.id) FROM ChatMessage m2 " +
+           "WHERE m2.projectId IN :projectIds " +
+           "AND (LOWER(m2.sender) IN :userAliases OR LOWER(m2.recipient) IN :userAliases) " +
+           "AND m2.recipient IS NOT NULL " +
+           "GROUP BY m2.projectId, m2.sender, m2.recipient)")
+    List<ChatMessage> findLatestMessagesForDirectsInProjects(@Param("projectIds") List<Long> projectIds,
+                                                             @Param("userAliases") List<String> userAliases);
+
     @Query("SELECT m FROM ChatMessage m WHERE m.id IN (SELECT MAX(m2.id) FROM ChatMessage m2 WHERE m2.projectId IN :projectIds AND m2.recipient IS NULL AND m2.roomId IS NULL AND m2.parentMessageId IS NULL GROUP BY m2.projectId)")
     List<ChatMessage> findLatestTeamMessagesForProjects(@Param("projectIds") List<Long> projectIds);
+
+    @Query("SELECT m.projectId, m.roomId, COUNT(m) FROM ChatMessage m " +
+           "WHERE m.projectId IN :projectIds AND m.roomId IN :roomIds AND m.parentMessageId IS NULL " +
+           "AND LOWER(m.sender) NOT IN :currentUserAliases " +
+           "AND m.id > COALESCE((" +
+           "   SELECT MAX(rs.lastReadMessageId) FROM ChatReadState rs " +
+           "   WHERE rs.projectId = m.projectId AND rs.user.userId = :userId AND rs.roomId = m.roomId" +
+           "), 0) " +
+           "GROUP BY m.projectId, m.roomId")
+    List<Object[]> countUnreadBatchRoomsForProjects(@Param("projectIds") List<Long> projectIds,
+                                                    @Param("roomIds") List<Long> roomIds,
+                                                    @Param("currentUserAliases") List<String> currentUserAliases,
+                                                    @Param("userId") Long userId);
+
+    @Query("SELECT m.projectId, LOWER(m.sender), COUNT(m) FROM ChatMessage m " +
+           "WHERE m.projectId IN :projectIds AND LOWER(m.recipient) IN :currentUserAliases " +
+           "AND m.parentMessageId IS NULL " +
+           "AND m.id > COALESCE((" +
+           "   SELECT MAX(rs.lastReadMessageId) FROM ChatReadState rs " +
+           "   WHERE rs.projectId = m.projectId AND rs.user.userId = :userId AND LOWER(rs.otherParticipant) = LOWER(m.sender)" +
+           "), 0) " +
+           "GROUP BY m.projectId, LOWER(m.sender)")
+    List<Object[]> countUnreadBatchDirectsForProjects(@Param("projectIds") List<Long> projectIds,
+                                                      @Param("currentUserAliases") List<String> currentUserAliases,
+                                                      @Param("userId") Long userId);
+
+    @Query("SELECT m.projectId, COUNT(m) FROM ChatMessage m " +
+           "WHERE m.projectId IN :projectIds AND m.recipient IS NULL AND m.roomId IS NULL AND m.parentMessageId IS NULL " +
+           "AND LOWER(m.sender) NOT IN :currentUserAliases " +
+           "AND m.id > COALESCE((" +
+           "   SELECT MAX(rs.lastReadMessageId) FROM ChatReadState rs " +
+           "   WHERE rs.projectId = m.projectId AND rs.user.userId = :userId AND LOWER(rs.otherParticipant) = LOWER(:teamKey)" +
+           "), 0) " +
+           "GROUP BY m.projectId")
+    List<Object[]> countUnreadTeamMessagesForProjectsByAliases(@Param("projectIds") List<Long> projectIds,
+                                                               @Param("currentUserAliases") List<String> currentUserAliases,
+                                                               @Param("userId") Long userId,
+                                                               @Param("teamKey") String teamKey);
 
     @Query("""
             SELECT u.userId, COUNT(m.id)

@@ -14,7 +14,7 @@ public class UserCacheService {
 
     private final UserRepository userRepository;
 
-    @Cacheable(cacheNames = "users-by-identity", key = "#identity.toLowerCase()", unless = "#result == null")
+    @Cacheable(cacheNames = "users-by-identity", key = "#identity.toLowerCase()", sync = true)
     public User resolveUserByEmailOrUsername(String identity) {
         if (identity == null || identity.isBlank()) {
             return null;

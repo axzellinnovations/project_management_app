@@ -19,7 +19,7 @@ public class JpaUserDetailedService implements UserDetailsService {
     private final UserRepository repository;
 
     @Override
-    @Cacheable(cacheNames = "user-details", key = "#username.toLowerCase()")
+    @Cacheable(cacheNames = "user-details", key = "#username.toLowerCase()", sync = true)
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = repository.findByEmailIgnoreCase(username).orElse(null);
 

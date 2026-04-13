@@ -14,7 +14,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/teams")
@@ -62,6 +64,16 @@ public class TeamMemberController {
 
 
         List<TeamMember> members = teamMemberService.getTeamMembers(teamId);
+        List<Long> userIds = members.stream()
+                .map(member -> member.getUser() != null ? member.getUser().getUserId() : null)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        Map<Long, Long> taskCountByUserId = userIds.isEmpty()
+                ? Map.of()
+                : taskRepository.countTasksByAssigneeUserIdsAndTeamId(userIds, teamId).stream()
+                        .collect(Collectors.toMap(
+                                row -> (Long) row[0],
+                                row -> ((Number) row[1]).longValue()));
         List<TeamMemberResponseDTO> dtos = members.stream()
                 .map(member -> TeamMemberResponseDTO.builder()
                         .id(member.getId())
@@ -74,7 +86,7 @@ public class TeamMemberController {
                                 .profilePicUrl(member.getUser().getProfilePicUrl())
                                 .build())
                         .lastActive(member.getUser().getLastActive())
-                        .taskCount(taskRepository.countByAssigneeAndProject_TeamId(member, teamId))
+                        .taskCount(taskCountByUserId.getOrDefault(member.getUser().getUserId(), 0L))
                         .status("Active")
                         .build())
                 .toList();

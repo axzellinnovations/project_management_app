@@ -64,7 +64,7 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public List<ChatMessageDTO> getThreadMessages(Long projectId, Long rootMessageId) {
-        var root = chatMessageRepository.findByIdAndProjectId(rootMessageId, projectId)
+        var root = chatMessageRepository.findWithReactionsByIdAndProjectId(rootMessageId, projectId)
                 .orElseThrow(() -> new RuntimeException("Thread root message not found"));
 
         var replies = chatMessageRepository.findByProjectIdAndParentMessageIdOrderByIdAsc(projectId, rootMessageId);
@@ -174,14 +174,17 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public List<ChatReactionSummary> getMessageReactions(Long projectId, Long messageId, String currentUser) {
-        chatMessageRepository.findByIdAndProjectId(messageId, projectId)
+        var message = chatMessageRepository.findWithReactionsByIdAndProjectId(messageId, projectId)
                 .orElseThrow(() -> new RuntimeException("Message not found"));
 
         var currentAliases = resolveUserAliases(currentUser);
         Map<String, Long> counts = new LinkedHashMap<>();
         Map<String, Boolean> reactedByCurrentUser = new LinkedHashMap<>();
 
-        chatReactionRepository.findWithUserByMessageIdOrderByCreatedAtAsc(messageId).forEach(reaction -> {
+        var reactions = message.getReactions() != null ? message.getReactions() : List.<ChatReaction>of();
+        reactions.stream()
+                .sorted(Comparator.comparing(ChatReaction::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .forEach(reaction -> {
             var emoji = reaction.getEmoji();
             if (emoji == null || emoji.isBlank()) {
                 return;
@@ -387,6 +390,14 @@ public class ChatService {
                 unseenCount);
     }
 
+    public TeamChatSummary buildTeamSummary(ChatMessage latestTeamMessage, long unseenCount) {
+        return new TeamChatSummary(
+                latestTeamMessage != null ? latestTeamMessage.getContent() : null,
+                latestTeamMessage != null ? latestTeamMessage.getSender() : null,
+                latestTeamMessage != null && latestTeamMessage.getTimestamp() != null ? latestTeamMessage.getTimestamp().toString() : null,
+                unseenCount);
+    }
+
     @Transactional(readOnly = true)
     public UnreadBadgeSummary buildUnreadBadge(Long projectId, String currentUser, List<ChatRoom> rooms, List<String> participants) {
         var user = userCacheService.resolveUserByEmailOrUsername(currentUser);
@@ -457,6 +468,9 @@ public class ChatService {
 
         var currentUserAliases = resolveUserAliases(currentUserEntity, currentUserAlias);
         var roomIds = rooms.stream().map(ChatRoom::getId).toList();
+        if (roomIds.isEmpty()) {
+            return List.of();
+        }
 
         // 1. Batch Fetch Latest Messages (Filter by room IDs to avoid full project scan)
         var latestMessagesByRoom = chatMessageRepository.findLatestMessagesForSpecificRooms(projectId, roomIds).stream()
@@ -470,7 +484,7 @@ public class ChatService {
 
         // 3. Batch Fetch Unread Counts (Simplified: only for rooms with different IDs than read states)
         // Actually, for performance, we can just fetch ALL rooms in groups.
-        var unreadCountsByRoom = chatMessageRepository.countUnreadBatchRooms(projectId, roomIds, currentUserAliases).stream()
+        var unreadCountsByRoom = chatMessageRepository.countUnreadBatchRooms(projectId, roomIds, currentUserAliases, currentUserEntity.getUserId()).stream()
                 .collect(java.util.stream.Collectors.toMap(
                         row -> (Long) row[0],
                         row -> (Long) row[1]
@@ -506,6 +520,9 @@ public class ChatService {
         }
 
         var currentUserAliases = resolveUserAliases(currentUserEntity, currentUserAlias);
+        if (participants == null || participants.isEmpty()) {
+            return List.of();
+        }
 
         // 1. Batch Fetch Latest Messages (Filter by user aliases for performance)
         var latestMessagesByOther = chatMessageRepository.findLatestMessagesForSpecificDirects(projectId, currentUserAliases).stream()
@@ -520,7 +537,7 @@ public class ChatService {
                 ));
 
         // 2. Batch Fetch Unread Counts
-        var unreadCountsByOther = chatMessageRepository.countUnreadBatchDirects(projectId, currentUserAliases).stream()
+        var unreadCountsByOther = chatMessageRepository.countUnreadBatchDirects(projectId, currentUserAliases, currentUserEntity.getUserId()).stream()
                 .collect(java.util.stream.Collectors.toMap(
                         row -> (String) row[0],
                         row -> (Long) row[1]
@@ -630,7 +647,7 @@ public class ChatService {
             return List.of(fallbackName != null ? fallbackName.toLowerCase() : "");
         }
 
-        return Stream.of(user.getUsername(), user.getEmail(), user.getFullName(), fallbackName)
+        return Stream.of(user.getUsername(), user.getEmail(), fallbackName)
                 .filter(value -> value != null && !value.isBlank())
                 .map(String::toLowerCase)
                 .distinct()

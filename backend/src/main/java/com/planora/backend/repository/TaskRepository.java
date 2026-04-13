@@ -55,17 +55,50 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     long countByAssigneeAndProject_TeamId(com.planora.backend.model.TeamMember assignee, Long teamId);
 
+    @Query("""
+           SELECT a.user.userId, COUNT(t.id)
+           FROM Task t
+           JOIN t.assignee a
+           WHERE a.user.userId IN :userIds
+             AND t.project.team.id = :teamId
+           GROUP BY a.user.userId
+           """)
+    List<Object[]> countTasksByAssigneeUserIdsAndTeamId(@Param("userIds") List<Long> userIds,
+                                                        @Param("teamId") Long teamId);
+
     @Query("SELECT t FROM Task t " +
+           "LEFT JOIN FETCH t.project p " +
+           "LEFT JOIN FETCH p.team pt " +
+           "LEFT JOIN FETCH t.assignee a " +
+           "LEFT JOIN FETCH a.user au " +
+           "LEFT JOIN FETCH t.reporter r " +
+           "LEFT JOIN FETCH r.user ru " +
+           "LEFT JOIN FETCH t.sprint s " +
+           "LEFT JOIN FETCH t.milestone m " +
            "WHERE t.assignee.user.userId = :userId " +
            "ORDER BY t.updatedAt DESC")
     List<Task> findByAssigneeUserUserIdOrderByUpdatedAtDesc(@Param("userId") Long userId, Pageable pageable);
 
     // "Worked On" — tasks this user was involved in (assigned or reported) and last modified by them
     @Query("SELECT DISTINCT t FROM Task t " +
+           "LEFT JOIN FETCH t.project p " +
+           "LEFT JOIN FETCH p.team pt " +
+           "LEFT JOIN FETCH t.assignee a2 " +
+           "LEFT JOIN FETCH a2.user au " +
+           "LEFT JOIN FETCH t.reporter r " +
+           "LEFT JOIN FETCH r.user ru " +
+           "LEFT JOIN FETCH t.sprint s " +
+           "LEFT JOIN FETCH t.milestone m " +
            "LEFT JOIN t.assignee a " +
            "WHERE t.lastModifiedBy.userId = :userId OR a.user.userId = :userId " +
            "ORDER BY t.updatedAt DESC")
     List<Task> findTasksWorkedOnByUser(@Param("userId") Long userId, Pageable pageable);
+
+    @Query("SELECT t FROM Task t " +
+           "LEFT JOIN FETCH t.project p " +
+           "LEFT JOIN FETCH p.team pt " +
+           "WHERE t.id = :taskId")
+    java.util.Optional<Task> findByIdWithProjectTeam(@Param("taskId") Long taskId);
 
     @Query("SELECT DISTINCT t FROM Task t " +
            "LEFT JOIN FETCH t.project p " +
@@ -100,13 +133,15 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
            "AND (:assigneeId IS NULL OR au.userId = :assigneeId) " +
            "AND (:priority IS NULL OR CAST(t.priority AS string) = :priority) " +
            "AND (:sprintId IS NULL OR s.id = :sprintId) " +
+           "AND (:milestoneId IS NULL OR m.id = :milestoneId) " +
            "ORDER BY t.createdAt DESC")
     List<Task> findByProjectIdFiltered(
             @Param("projectId") Long projectId,
             @Param("status") String status,
             @Param("assigneeId") Long assigneeId,
             @Param("priority") String priority,
-            @Param("sprintId") Long sprintId);
+            @Param("sprintId") Long sprintId,
+            @Param("milestoneId") Long milestoneId);
 
     @Query("SELECT t FROM Task t " +
            "LEFT JOIN FETCH t.project p " +
@@ -137,4 +172,37 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
            "LEFT JOIN FETCH r.user ru " +
            "WHERE t.id IN :ids")
     List<Task> findByIdInWithDetails(@Param("ids") List<Long> ids);
+
+    @Query("SELECT DISTINCT t FROM Task t " +
+           "LEFT JOIN FETCH t.project p " +
+           "LEFT JOIN FETCH p.team pt " +
+           "LEFT JOIN FETCH t.sprint s " +
+           "LEFT JOIN FETCH t.assignee a " +
+           "LEFT JOIN FETCH a.user au " +
+           "LEFT JOIN FETCH t.reporter r " +
+           "LEFT JOIN FETCH r.user ru " +
+           "LEFT JOIN FETCH t.milestone m " +
+           "LEFT JOIN FETCH t.lastModifiedBy " +
+           "WHERE t.id IN :ids")
+    List<Task> findByIdInWithScalars(@Param("ids") List<Long> ids);
+
+    @Query("SELECT t.id FROM Task t " +
+           "WHERE t.assignee.user.userId = :userId " +
+           "ORDER BY t.updatedAt DESC")
+    List<Long> findAssignedTaskIdsByUser(@Param("userId") Long userId, Pageable pageable);
+
+    @Query("SELECT t.id FROM Task t " +
+           "LEFT JOIN t.assignee a " +
+           "WHERE t.lastModifiedBy.userId = :userId OR a.user.userId = :userId " +
+           "GROUP BY t.id, t.updatedAt " +
+           "ORDER BY t.updatedAt DESC")
+    List<Long> findWorkedOnTaskIdsByUser(@Param("userId") Long userId, Pageable pageable);
+
+    @Query("SELECT t.sprint.id, SUM(t.storyPoint), " +
+           "SUM(CASE WHEN UPPER(t.status) = 'DONE' THEN t.storyPoint ELSE 0 END) " +
+           "FROM Task t WHERE t.sprint.id IN :sprintIds GROUP BY t.sprint.id")
+    List<Object[]> aggregateVelocityBySprintIds(@Param("sprintIds") List<Long> sprintIds);
+
+    @Query("SELECT t.id, d.id, d.title FROM Task t LEFT JOIN t.dependencies d WHERE t.id IN :taskIds")
+    List<Object[]> findDependencyRowsByTaskIds(@Param("taskIds") List<Long> taskIds);
 }
