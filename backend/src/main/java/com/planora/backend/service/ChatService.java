@@ -1,3 +1,4 @@
+
 package com.planora.backend.service;
 
 import java.time.LocalDateTime;
@@ -12,6 +13,8 @@ import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.planora.backend.dto.ChatMessageDTO;
+import com.planora.backend.dto.ChatReactionDTO;
 import com.planora.backend.model.ChatMessage;
 import com.planora.backend.model.ChatReaction;
 import com.planora.backend.model.ChatReadState;
@@ -53,21 +56,37 @@ public class ChatService {
      * Persist a chat message.
      */
     @SuppressWarnings("null")
-    public ChatMessage saveMessage(ChatMessage message) {
+    public ChatMessageDTO saveMessage(ChatMessage message) {
         if (message.getFormatType() == null) {
             message.setFormatType(ChatMessage.FormatType.PLAIN);
         }
-        return chatMessageRepository.save(message);
+        return convertToDTO(chatMessageRepository.save(message));
     }
 
-    public List<ChatMessage> getThreadMessages(Long projectId, Long rootMessageId) {
+    @Transactional(readOnly = true)
+    public List<ChatMessageDTO> getThreadMessages(Long projectId, Long rootMessageId) {
         var root = chatMessageRepository.findByIdAndProjectId(rootMessageId, projectId)
                 .orElseThrow(() -> new RuntimeException("Thread root message not found"));
 
         var replies = chatMessageRepository.findByProjectIdAndParentMessageIdOrderByIdAsc(projectId, rootMessageId);
-        return Stream.concat(Stream.of(root), replies.stream()).toList();
+        return mapToDTOList(Stream.concat(Stream.of(root), replies.stream()).toList());
     }
 
+    @Transactional(readOnly = true)
+    public Optional<Long> resolveThreadTopicRootId(Long projectId, ChatMessageDTO message) {
+        if (message == null || message.getId() == null) {
+            return Optional.empty();
+        }
+
+        if (message.getParentMessageId() != null) {
+            return Optional.of(message.getParentMessageId());
+        }
+
+        return chatThreadRepository.findByProjectIdAndRootMessageId(projectId, message.getId())
+                .map(thread -> thread.getRootMessageId());
+    }
+
+    @Transactional(readOnly = true)
     public Optional<Long> resolveThreadTopicRootId(Long projectId, ChatMessage message) {
         if (message == null || message.getId() == null) {
             return Optional.empty();
@@ -81,11 +100,12 @@ public class ChatService {
                 .map(thread -> thread.getRootMessageId());
     }
 
-    public ChatMessage saveThreadReply(Long projectId, Long rootMessageId, ChatMessage replyMessage) {
+    public ChatMessageDTO saveThreadReply(Long projectId, Long rootMessageId, ChatMessage replyMessage) {
         var root = chatMessageRepository.findByIdAndProjectId(rootMessageId, projectId)
                 .orElseThrow(() -> new RuntimeException("Thread root message not found"));
 
         if (root.getRoomId() != null) {
+            @SuppressWarnings("null")
             var room = chatRoomRepository.findById(root.getRoomId())
                     .orElseThrow(() -> new RuntimeException("Chat room not found"));
             if (Boolean.TRUE.equals(room.getArchived())) {
@@ -115,10 +135,10 @@ public class ChatService {
                     return chatThreadRepository.save(thread);
                 });
 
-        return saved;
+        return convertToDTO(saved);
     }
 
-    public ChatMessage editMessage(Long projectId, Long messageId, String actor, String content, ChatMessage.FormatType formatType) {
+    public ChatMessageDTO editMessage(Long projectId, Long messageId, String actor, String content, ChatMessage.FormatType formatType) {
         if (content == null || content.trim().isEmpty()) {
             throw new RuntimeException("Message content is required");
         }
@@ -134,10 +154,10 @@ public class ChatService {
         message.setContent(content.trim());
         message.setFormatType(formatType != null ? formatType : ChatMessage.FormatType.PLAIN);
         message.setEditedAt(LocalDateTime.now());
-        return chatMessageRepository.save(message);
+        return convertToDTO(chatMessageRepository.save(message));
     }
 
-    public ChatMessage softDeleteMessage(Long projectId, Long messageId, String actor) {
+    public ChatMessageDTO softDeleteMessage(Long projectId, Long messageId, String actor) {
         var message = chatMessageRepository.findByIdAndProjectId(messageId, projectId)
                 .orElseThrow(() -> new RuntimeException("Message not found"));
 
@@ -150,7 +170,7 @@ public class ChatService {
         message.setDeleted(true);
         message.setDeletedAt(LocalDateTime.now());
         message.setContent("[message deleted]");
-        return chatMessageRepository.save(message);
+        return convertToDTO(chatMessageRepository.save(message));
     }
 
     @Transactional(readOnly = true)
@@ -221,29 +241,32 @@ public class ChatService {
     /**
      * Retrieve all group messages for a project (no recipient, no room).
      */
-    public List<ChatMessage> getGroupMessages(Long projectId) {
-        return chatMessageRepository.findByProjectIdAndRecipientIsNullAndRoomIdIsNullAndParentMessageIdIsNullOrderByIdAsc(projectId);
+    @Transactional(readOnly = true)
+    public List<ChatMessageDTO> getGroupMessages(Long projectId) {
+        return mapToDTOList(chatMessageRepository.findByProjectIdAndRecipientIsNullAndRoomIdIsNullAndParentMessageIdIsNullOrderByIdAsc(projectId));
     }
 
     /**
      * Retrieve room messages for a given room.
      */
-    public List<ChatMessage> getRoomMessages(Long projectId, Long roomId) {
-        return chatMessageRepository.findByProjectIdAndRoomIdAndParentMessageIdIsNullOrderByIdAsc(projectId, roomId);
+    @Transactional(readOnly = true)
+    public List<ChatMessageDTO> getRoomMessages(Long projectId, Long roomId) {
+        return mapToDTOList(chatMessageRepository.findByProjectIdAndRoomIdAndParentMessageIdIsNullOrderByIdAsc(projectId, roomId));
     }
 
     /**
      * Retrieve the private conversation between two users in a project.
      */
-    public List<ChatMessage> getPrivateConversation(Long projectId, String user, String other) {
+    @Transactional(readOnly = true)
+    public List<ChatMessageDTO> getPrivateConversation(Long projectId, String user, String other) {
         if (user == null || other == null) {
             return List.of();
         }
 
-        return chatMessageRepository.findConversationByAliases(
+        return mapToDTOList(chatMessageRepository.findConversationByAliases(
                 projectId,
                 resolveUserAliases(user),
-                resolveUserAliases(other));
+                resolveUserAliases(other)));
     }
 
     public void markRoomAsRead(Long projectId, Long roomId, String usernameOrEmail) {
@@ -315,8 +338,14 @@ public class ChatService {
         chatReadStateRepository.save(readState);
     }
 
+    @Transactional(readOnly = true)
     public TeamChatSummary buildTeamSummary(Long projectId, String currentUser) {
-        var currentUserEntity = resolveUserByEmailOrUsername(currentUser);
+        var user = resolveUserByEmailOrUsername(currentUser);
+        return buildTeamSummary(projectId, user, currentUser);
+    }
+
+    @Transactional(readOnly = true)
+    public TeamChatSummary buildTeamSummary(Long projectId, com.planora.backend.model.User currentUserEntity, String currentUserAlias) {
         if (currentUserEntity == null) {
             return new TeamChatSummary(null, null, null, 0);
         }
@@ -327,7 +356,7 @@ public class ChatService {
                 .orElse(null);
         var unseenCount = chatMessageRepository.countUnreadTeamMessagesByAliases(
                 projectId,
-                resolveUserAliases(currentUser),
+                resolveUserAliases(currentUserEntity, currentUserAlias),
                 readState != null ? readState.getLastReadMessageId() : null);
 
         return new TeamChatSummary(
@@ -337,10 +366,17 @@ public class ChatService {
                 unseenCount);
     }
 
+    @Transactional(readOnly = true)
     public UnreadBadgeSummary buildUnreadBadge(Long projectId, String currentUser, List<ChatRoom> rooms, List<String> participants) {
-        var teamSummary = buildTeamSummary(projectId, currentUser);
-        var roomSummaries = buildRoomSummaries(projectId, currentUser, rooms);
-        var directSummaries = buildDirectSummaries(projectId, currentUser, participants);
+        var user = resolveUserByEmailOrUsername(currentUser);
+        return buildUnreadBadge(projectId, user, currentUser, rooms, participants);
+    }
+
+    @Transactional(readOnly = true)
+    public UnreadBadgeSummary buildUnreadBadge(Long projectId, com.planora.backend.model.User currentUserEntity, String currentUserAlias, List<ChatRoom> rooms, List<String> participants) {
+        var teamSummary = buildTeamSummary(projectId, currentUserEntity, currentUserAlias);
+        var roomSummaries = buildRoomSummaries(projectId, currentUserEntity, currentUserAlias, rooms);
+        var directSummaries = buildDirectSummaries(projectId, currentUserEntity, currentUserAlias, participants);
 
         long teamUnread = teamSummary.unseenCount();
         long roomUnread = roomSummaries.stream().mapToLong(RoomChatSummary::unseenCount).sum();
@@ -353,7 +389,8 @@ public class ChatService {
                 teamUnread + roomUnread + directUnread);
     }
 
-    public List<ChatMessage> searchMessages(Long projectId,
+    @Transactional(readOnly = true)
+    public List<ChatMessageDTO> searchMessages(Long projectId,
                                             String currentUser,
                                             String query,
                                             Set<Long> visibleRoomIds,
@@ -365,10 +402,10 @@ public class ChatService {
         var normalized = query.trim().toLowerCase();
         var currentAliases = resolveUserAliases(currentUser);
 
-        return chatMessageRepository.searchMessages(projectId, normalized).stream()
+        return mapToDTOList(chatMessageRepository.searchMessages(projectId, normalized).stream()
                 .filter(message -> isMessageVisibleToUser(message, currentAliases, visibleRoomIds))
                 .limit(Math.max(1, limit))
-                .toList();
+                .toList());
     }
 
     private boolean isMessageVisibleToUser(ChatMessage message, List<String> currentAliases, Set<Long> visibleRoomIds) {
@@ -385,23 +422,43 @@ public class ChatService {
         return true;
     }
 
+    @Transactional(readOnly = true)
     public List<RoomChatSummary> buildRoomSummaries(Long projectId, String currentUser, List<ChatRoom> rooms) {
-        var currentUserEntity = resolveUserByEmailOrUsername(currentUser);
+        var user = resolveUserByEmailOrUsername(currentUser);
+        return buildRoomSummaries(projectId, user, currentUser, rooms);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RoomChatSummary> buildRoomSummaries(Long projectId, com.planora.backend.model.User currentUserEntity, String currentUserAlias, List<ChatRoom> rooms) {
         if (currentUserEntity == null) {
             return List.of();
         }
 
-        var currentUserAliases = resolveUserAliases(currentUser);
+        var currentUserAliases = resolveUserAliases(currentUserEntity, currentUserAlias);
+        var roomIds = rooms.stream().map(ChatRoom::getId).toList();
+
+        // 1. Batch Fetch Latest Messages (Filter by room IDs to avoid full project scan)
+        var latestMessagesByRoom = chatMessageRepository.findLatestMessagesForSpecificRooms(projectId, roomIds).stream()
+                .filter(m -> m.getRoomId() != null)
+                .collect(java.util.stream.Collectors.toMap(ChatMessage::getRoomId, m -> m, (m1, m2) -> m1));
+
+        // 2. Batch Fetch Read States
+        // var readStatesByRoom = chatReadStateRepository.findByProjectIdAndUserUserId(projectId, currentUserEntity.getUserId()).stream()
+        //         .filter(rs -> rs.getRoomId() != null)
+        //         .collect(java.util.stream.Collectors.toMap(ChatReadState::getRoomId, rs -> rs, (rs1, rs2) -> rs1));
+
+        // 3. Batch Fetch Unread Counts (Simplified: only for rooms with different IDs than read states)
+        // Actually, for performance, we can just fetch ALL rooms in groups.
+        var unreadCountsByRoom = chatMessageRepository.countUnreadBatchRooms(projectId, roomIds, currentUserAliases).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
 
         return rooms.stream()
                 .map(room -> {
-                    var latestMessage = chatMessageRepository.findTopByProjectIdAndRoomIdAndParentMessageIdIsNullOrderByIdDesc(projectId, room.getId()).orElse(null);
-                    var readState = chatReadStateRepository.findByProjectIdAndUserUserIdAndRoomId(projectId, currentUserEntity.getUserId(), room.getId()).orElse(null);
-                    var unseenCount = chatMessageRepository.countUnreadRoomMessagesByAliases(
-                            projectId,
-                            room.getId(),
-                            currentUserAliases,
-                            readState != null ? readState.getLastReadMessageId() : null);
+                    var latestMessage = latestMessagesByRoom.get(room.getId());
+                    var unreadCount = unreadCountsByRoom.getOrDefault(room.getId(), 0L);
 
                     return new RoomChatSummary(
                             room.getId(),
@@ -409,48 +466,128 @@ public class ChatService {
                             latestMessage != null ? latestMessage.getContent() : null,
                             latestMessage != null ? latestMessage.getSender() : null,
                             latestMessage != null && latestMessage.getTimestamp() != null ? latestMessage.getTimestamp().toString() : null,
-                            unseenCount);
+                            unreadCount);
                 })
                 .sorted(Comparator.comparing((RoomChatSummary summary) -> summary.lastMessageTimestamp() == null ? "" : summary.lastMessageTimestamp()).reversed())
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<DirectChatSummary> buildDirectSummaries(Long projectId, String currentUser, List<String> participants) {
-        var currentUserEntity = resolveUserByEmailOrUsername(currentUser);
+        var user = resolveUserByEmailOrUsername(currentUser);
+        return buildDirectSummaries(projectId, user, currentUser, participants);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DirectChatSummary> buildDirectSummaries(Long projectId, com.planora.backend.model.User currentUserEntity, String currentUserAlias, List<String> participants) {
         if (currentUserEntity == null) {
             return List.of();
         }
 
-        var currentUsername = currentUserEntity.getUsername() != null ? currentUserEntity.getUsername().toLowerCase() : null;
-        var currentEmail = currentUserEntity.getEmail() != null ? currentUserEntity.getEmail().toLowerCase() : null;
-        var currentUserAliases = resolveUserAliases(currentUser);
+        var currentUserAliases = resolveUserAliases(currentUserEntity, currentUserAlias);
+
+        // 1. Batch Fetch Latest Messages (Filter by user aliases for performance)
+        var latestMessagesByOther = chatMessageRepository.findLatestMessagesForSpecificDirects(projectId, currentUserAliases).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                    m -> {
+                        var sender = m.getSender() != null ? m.getSender().toLowerCase() : "";
+                        var recipient = m.getRecipient() != null ? m.getRecipient().toLowerCase() : "";
+                        return currentUserAliases.contains(sender) ? recipient : sender;
+                    },
+                    m -> m,
+                    (m1, m2) -> m1 // Keep first match
+                ));
+
+        // 2. Batch Fetch Unread Counts
+        var unreadCountsByOther = chatMessageRepository.countUnreadBatchDirects(projectId, currentUserAliases).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> (String) row[0],
+                        row -> (Long) row[1]
+                ));
 
         return participants.stream()
                 .filter(participant -> participant != null && !participant.isBlank())
                 .map(String::toLowerCase)
-            .filter(participant -> !currentUserAliases.contains(participant))
-                .filter(participant -> currentUsername == null || !participant.equals(currentUsername))
-                .filter(participant -> currentEmail == null || !participant.equals(currentEmail))
+                .filter(participant -> !currentUserAliases.contains(participant.toLowerCase()))
                 .distinct()
                 .map(participant -> {
-                var latestMessage = findLatestConversationMessage(projectId, currentUserAliases, resolveUserAliases(participant)).orElse(null);
-                    var readState = chatReadStateRepository
-                            .findByProjectIdAndUserUserIdAndOtherParticipantIgnoreCase(projectId, currentUserEntity.getUserId(), participant)
-                            .orElse(null);
-                var unseenCount = chatMessageRepository.countUnreadPrivateMessagesByAliases(
-                            projectId,
-                    resolveUserAliases(participant),
-                    currentUserAliases,
-                            readState != null ? readState.getLastReadMessageId() : null);
+                    var latestMessage = latestMessagesByOther.get(participant);
+                    var unreadCount = unreadCountsByOther.getOrDefault(participant, 0L);
 
                     return new DirectChatSummary(
                             participant,
                             latestMessage != null ? latestMessage.getContent() : null,
                             latestMessage != null ? latestMessage.getSender() : null,
                             latestMessage != null && latestMessage.getTimestamp() != null ? latestMessage.getTimestamp().toString() : null,
-                            unseenCount);
+                            unreadCount);
                 })
                 .sorted(Comparator.comparing((DirectChatSummary summary) -> summary.lastMessageTimestamp() == null ? "" : summary.lastMessageTimestamp()).reversed())
+                .toList();
+    }
+
+    public ChatMessageDTO convertToDTO(ChatMessage message) {
+        if (message == null) return null;
+
+        List<ChatReactionDTO> reactionDTOs = message.getReactions() != null 
+                ? message.getReactions().stream()
+                        .map(this::convertToReactionDTO)
+                        .toList()
+                : List.of();
+
+        return new ChatMessageDTO(
+                message.getId(),
+                null, // localId is only used for new messages
+                message.getType(),
+                message.getContent(),
+                message.getSender(),
+                message.getRecipient(),
+                message.getProjectId(),
+                message.getRoomId(),
+                message.getChatType(),
+                message.getParentMessageId(),
+                message.getFormatType(),
+                message.getDeleted(),
+                message.getDeletedAt(),
+                message.getEditedAt(),
+                message.getTimestamp(),
+                reactionDTOs
+        );
+    }
+
+    public ChatMessage convertToEntity(ChatMessageDTO dto) {
+        if (dto == null) return null;
+        ChatMessage message = new ChatMessage();
+        message.setId(dto.getId());
+        message.setType(dto.getType());
+        message.setContent(dto.getContent());
+        message.setSender(dto.getSender());
+        message.setRecipient(dto.getRecipient());
+        message.setProjectId(dto.getProjectId());
+        message.setRoomId(dto.getRoomId());
+        message.setChatType(dto.getChatType());
+        message.setParentMessageId(dto.getParentMessageId());
+        message.setFormatType(dto.getFormatType());
+        message.setDeleted(dto.getDeleted());
+        message.setDeletedAt(dto.getDeletedAt());
+        message.setEditedAt(dto.getEditedAt());
+        // timestamp is managed by JPA (@CreationTimestamp)
+        return message;
+    }
+
+    private ChatReactionDTO convertToReactionDTO(ChatReaction reaction) {
+        if (reaction == null) return null;
+        return new ChatReactionDTO(
+                reaction.getId(),
+                reaction.getUser() != null ? reaction.getUser().getUserId() : null,
+                reaction.getUser() != null ? reaction.getUser().getUsername() : null,
+                reaction.getEmoji(),
+                reaction.getCreatedAt()
+        );
+    }
+
+    private List<ChatMessageDTO> mapToDTOList(List<ChatMessage> messages) {
+        return messages.stream()
+                .map(this::convertToDTO)
                 .toList();
     }
 
@@ -464,11 +601,15 @@ public class ChatService {
     // Current string-alias lookup can cause messages to disappear on mismatch.
     private List<String> resolveUserAliases(String usernameOrEmail) {
         var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        return resolveUserAliases(user, usernameOrEmail);
+    }
+
+    private List<String> resolveUserAliases(com.planora.backend.model.User user, String fallbackName) {
         if (user == null) {
-            return List.of(usernameOrEmail.toLowerCase());
+            return List.of(fallbackName != null ? fallbackName.toLowerCase() : "");
         }
 
-        return Stream.of(user.getUsername(), user.getEmail(), usernameOrEmail)
+        return Stream.of(user.getUsername(), user.getEmail(), user.getFullName(), fallbackName)
                 .filter(value -> value != null && !value.isBlank())
                 .map(String::toLowerCase)
                 .distinct()

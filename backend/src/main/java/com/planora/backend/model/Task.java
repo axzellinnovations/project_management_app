@@ -2,6 +2,7 @@ package com.planora.backend.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -41,6 +42,7 @@ public class Task {
     @JoinColumn(name = "assignee_id")
     private TeamMember assignee;
 
+    @BatchSize(size = 20)
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "task_assignees",
@@ -77,9 +79,11 @@ public class Task {
     @JoinColumn(name = "parent_id")
     private Task parentTask;
 
+    @BatchSize(size = 20)
     @OneToMany(mappedBy = "parentTask" , cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Task> subTasks = new ArrayList<>();
+    private Set<Task> subTasks = new HashSet<>();
 
+    @BatchSize(size = 20)
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "task_labels",
@@ -88,9 +92,11 @@ public class Task {
     )
     private Set<Label> labels = new HashSet<>();
 
+    @BatchSize(size = 20)
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Comment> comments = new ArrayList<>();
 
+    @BatchSize(size = 20)
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "task_dependencies",
@@ -99,15 +105,19 @@ public class Task {
     )
     private Set<Task> dependencies = new HashSet<>();
 
+    @BatchSize(size = 20)
     @ManyToMany(mappedBy = "dependencies", fetch = FetchType.LAZY)
     private Set<Task> dependents = new HashSet<>();
 
+    @BatchSize(size = 20)
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<TaskAttachment> attachments = new ArrayList<>();
+    private Set<TaskAttachment> attachments = new HashSet<>();
 
+    @BatchSize(size = 20)
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TaskAccess> taskAccess = new ArrayList<>();
 
+    @BatchSize(size = 20)
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TaskActivity> taskActivities = new ArrayList<>();
 

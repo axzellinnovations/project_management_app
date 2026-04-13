@@ -317,7 +317,8 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
     setLocalTasks((prev) => {
       const prevMap = new Map(prev.map((task) => [task.id, task]));
 
-      return sprint.tasks.map((task) => {
+      const uniqueTasks = Array.from(new Map(sprint.tasks.map(t => [t.id, t])).values());
+      return uniqueTasks.map((task) => {
         const existing = prevMap.get(task.id);
 
         return {

@@ -31,6 +31,7 @@ import com.planora.backend.repository.ChatThreadRepository;
 import com.planora.backend.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class ChatServiceTest {
 
     @Mock
@@ -65,6 +66,7 @@ class ChatServiceTest {
     }
 
     @Test
+    @SuppressWarnings("null")
     void saveThreadReply_inheritsRootMetadata_andCreatesThreadWhenMissing() {
         ChatRoom room = new ChatRoom();
         room.setId(99L);
@@ -84,13 +86,13 @@ class ChatServiceTest {
         when(chatThreadRepository.findByProjectIdAndRootMessageId(10L, 1L)).thenReturn(Optional.empty());
         when(chatThreadRepository.save(any(ChatThread.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ChatMessage saved = chatService.saveThreadReply(10L, 1L, reply);
+        var savedDto = chatService.saveThreadReply(10L, 1L, reply);
 
-        assertEquals(200L, saved.getId());
-        assertEquals(1L, saved.getParentMessageId());
-        assertEquals(10L, saved.getProjectId());
-        assertEquals(99L, saved.getRoomId());
-        assertEquals(ChatMessage.ChatType.GROUP, saved.getChatType());
+        assertEquals(200L, savedDto.getId());
+        assertEquals(1L, savedDto.getParentMessageId());
+        assertEquals(10L, savedDto.getProjectId());
+        assertEquals(99L, savedDto.getRoomId());
+        assertEquals(ChatMessage.ChatType.GROUP, savedDto.getChatType());
         verify(chatThreadRepository).save(any(ChatThread.class));
     }
 
@@ -129,11 +131,11 @@ class ChatServiceTest {
         when(chatMessageRepository.findByIdAndProjectId(5L, 10L)).thenReturn(Optional.of(existing));
         when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ChatMessage updated = chatService.editMessage(10L, 5L, "alice", " new content ", ChatMessage.FormatType.MARKDOWN);
+        var updatedDto = chatService.editMessage(10L, 5L, "alice", " new content ", ChatMessage.FormatType.MARKDOWN);
 
-        assertEquals("new content", updated.getContent());
-        assertEquals(ChatMessage.FormatType.MARKDOWN, updated.getFormatType());
-        assertNotNull(updated.getEditedAt());
+        assertEquals("new content", updatedDto.getContent());
+        assertEquals(ChatMessage.FormatType.MARKDOWN, updatedDto.getFormatType());
+        assertNotNull(updatedDto.getEditedAt());
     }
 
     @Test
@@ -147,12 +149,12 @@ class ChatServiceTest {
         when(chatMessageRepository.findByIdAndProjectId(7L, 10L)).thenReturn(Optional.of(existing));
         when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ChatMessage deleted = chatService.softDeleteMessage(10L, 7L, "alice");
+        var deletedDto = chatService.softDeleteMessage(10L, 7L, "alice");
 
         verify(chatDocumentService).deleteChatDocument("http://files/doc.png");
-        assertTrue(deleted.getDeleted());
-        assertEquals("[message deleted]", deleted.getContent());
-        assertNotNull(deleted.getDeletedAt());
+        assertTrue(deletedDto.getDeleted());
+        assertEquals("[message deleted]", deletedDto.getContent());
+        assertNotNull(deletedDto.getDeletedAt());
     }
 
     @Test

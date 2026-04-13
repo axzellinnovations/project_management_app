@@ -11,6 +11,7 @@ import com.planora.backend.model.ChatRoomMember;
 
 public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, Long> {
     List<ChatRoomMember> findByChatRoomId(Long roomId);
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"chatRoom"})
     List<ChatRoomMember> findByUserUserId(Long userId);
     Optional<ChatRoomMember> findByChatRoomIdAndUserUserId(Long roomId, Long userId);
     @Modifying

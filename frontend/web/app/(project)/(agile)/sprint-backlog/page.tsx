@@ -164,7 +164,8 @@ export default function SprintBacklogPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawSprints = sprintsRes.data as any[];
       const rawTasks = tasksRes.data as RawTask[];
-      const mappedTasks = rawTasks.map((t, i) => mapRawTask(t, i));
+      const uniqueRaw = Array.from(new Map(rawTasks.map(t => [t.id, t])).values());
+      const mappedTasks = uniqueRaw.map((t, i) => mapRawTask(t, i));
 
       if (projectIdNum) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

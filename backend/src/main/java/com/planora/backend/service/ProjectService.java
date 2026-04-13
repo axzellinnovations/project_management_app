@@ -24,6 +24,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 @Service
 @RequiredArgsConstructor
@@ -123,6 +124,7 @@ public class ProjectService {
     }
 
     // ---------------- READ ALL (FOR AUTH USER) ----------------
+    @Transactional(readOnly = true)
     public List<ProjectResponseDTO> getProjectsForUser(Long userId, String type, String sort, String order) {
         List<Team> userTeams = teamMemberRepository.findByUserUserId(userId)
                 .stream()
@@ -138,6 +140,7 @@ public class ProjectService {
         String normalizedType = type == null ? null : type.trim();
         String normalizedSort = sort == null ? "lastAccessedAt" : sort.trim();
         String normalizedOrder = order == null ? "desc" : order.trim();
+
         boolean asc = "asc".equalsIgnoreCase(normalizedOrder);
 
         Comparator<ProjectResponseDTO> comparator;
@@ -160,9 +163,20 @@ public class ProjectService {
         if (!asc) {
             comparator = comparator.reversed();
         }
+        // Pre-fetch data to avoid N+1 queries
+        User userRef = userRepository.getReferenceById(userId);
+        
+        java.util.Map<Long, LocalDateTime> teamJoinedMap = teamMemberRepository.findByUserUserId(userId).stream()
+            .collect(Collectors.toMap(m -> m.getTeam().getId(), TeamMember::getJoinedAt, (a, b) -> a));
+            
+        java.util.Map<Long, LocalDateTime> accessMap = projectAccessRepository.findByUser_UserIdOrderByLastAccessedAtDesc(userId, Pageable.unpaged()).stream()
+            .collect(Collectors.toMap(a -> a.getProject().getId(), ProjectAccess::getLastAccessedAt, (a, b) -> a));
+            
+        java.util.Map<Long, LocalDateTime> favoriteMap = projectFavoriteRepository.findByUserOrderByCreatedAtDesc(userRef).stream()
+            .collect(Collectors.toMap(f -> f.getProject().getId(), ProjectFavorite::getCreatedAt, (a, b) -> a));
 
         return userProjects.stream()
-            .map(p -> convertToResponseDTO(p, userId))
+            .map(p -> convertToResponseDTO(p, userId, teamJoinedMap, accessMap, favoriteMap))
             .filter(dto -> normalizedType == null || normalizedType.isEmpty() ||
                 (dto.getType() != null && dto.getType().name().equalsIgnoreCase(normalizedType)))
             .sorted(comparator)
@@ -204,6 +218,7 @@ public class ProjectService {
     }
 
     // ---------------- READ RECENT (TOP N FOR AUTH USER) ----------------
+    @Transactional(readOnly = true)
     public List<ProjectResponseDTO> getRecentProjectsForUser(Long userId, int limit) {
         // Get the teams the user currently belongs to
         List<Team> userTeams = teamMemberRepository.findByUserUserId(userId)
@@ -214,9 +229,21 @@ public class ProjectService {
         // Fetch ALL candidate projects from user's teams
         List<Project> allMemberProjects = projectRepository.findByTeamIn(userTeams);
 
+        // Pre-fetch data to avoid N+1 queries
+        User userRef = userRepository.getReferenceById(userId);
+        
+        java.util.Map<Long, LocalDateTime> teamJoinedMap = teamMemberRepository.findByUserUserId(userId).stream()
+            .collect(Collectors.toMap(m -> m.getTeam().getId(), TeamMember::getJoinedAt, (a, b) -> a));
+            
+        java.util.Map<Long, LocalDateTime> accessMap = projectAccessRepository.findByUser_UserIdOrderByLastAccessedAtDesc(userId, Pageable.unpaged()).stream()
+            .collect(Collectors.toMap(a -> a.getProject().getId(), ProjectAccess::getLastAccessedAt, (a, b) -> a));
+            
+        java.util.Map<Long, LocalDateTime> favoriteMap = projectFavoriteRepository.findByUserOrderByCreatedAtDesc(userRef).stream()
+            .collect(Collectors.toMap(f -> f.getProject().getId(), ProjectFavorite::getCreatedAt, (a, b) -> a));
+
         // Map and sort by the effective lastAccessedAt field (which now includes joinedAt fallback)
         return allMemberProjects.stream()
-                .map(p -> convertToResponseDTO(p, userId))
+                .map(p -> convertToResponseDTO(p, userId, teamJoinedMap, accessMap, favoriteMap))
                 .sorted((d1, d2) -> {
                     LocalDateTime t1 = d1.getLastAccessedAt() != null ? d1.getLastAccessedAt() : LocalDateTime.MIN;
                     LocalDateTime t2 = d2.getLastAccessedAt() != null ? d2.getLastAccessedAt() : LocalDateTime.MIN;
@@ -227,6 +254,7 @@ public class ProjectService {
     }
 
     // ---------------- READ FAVORITES (FOR AUTH USER) ----------------
+    @Transactional(readOnly = true)
     public List<ProjectResponseDTO> getFavoriteProjectsForUser(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -239,13 +267,27 @@ public class ProjectService {
                 : projectRepository.findByTeamIn(userTeams).stream()
                         .map(Project::getId).collect(java.util.stream.Collectors.toSet());
 
+        // Pre-fetch data to avoid N+1 queries
+        User userRef = userRepository.getReferenceById(userId);
+        
+        java.util.Map<Long, LocalDateTime> teamJoinedMap = userTeams.stream()
+            .map(t -> teamMemberRepository.findByTeamIdAndUserUserId(t.getId(), userId).get())
+            .collect(Collectors.toMap(m -> m.getTeam().getId(), TeamMember::getJoinedAt, (a, b) -> a));
+            
+        java.util.Map<Long, LocalDateTime> accessMap = projectAccessRepository.findByUser_UserIdOrderByLastAccessedAtDesc(userId, Pageable.unpaged()).stream()
+            .collect(Collectors.toMap(a -> a.getProject().getId(), ProjectAccess::getLastAccessedAt, (a, b) -> a));
+            
+        java.util.Map<Long, LocalDateTime> favoriteMap = projectFavoriteRepository.findByUserOrderByCreatedAtDesc(userRef).stream()
+            .collect(Collectors.toMap(f -> f.getProject().getId(), ProjectFavorite::getCreatedAt, (a, b) -> a));
+
         return projectFavoriteRepository.findByUserOrderByCreatedAtDesc(user).stream()
                 .filter(fav -> memberProjectIds.contains(fav.getProject().getId()))
-                .map(fav -> convertToResponseDTO(fav.getProject(), userId))
+                .map(fav -> convertToResponseDTO(fav.getProject(), userId, teamJoinedMap, accessMap, favoriteMap))
                 .collect(Collectors.toList());
     }
 
     // ---------------- READ ALL (SYSTEM WIDE) ----------------
+    @Transactional(readOnly = true)
     public List<ProjectResponseDTO> getAllProjects() {
         return projectRepository.findAll()
                 .stream()
@@ -254,12 +296,14 @@ public class ProjectService {
     }
 
     // ---------------- READ BY ID ----------------
+    @Transactional(readOnly = true)
     public ProjectResponseDTO getProjectById(Long id) {
         Project project = findProjectById(id);
         return convertToResponseDTO(project, null);
     }
 
     // ---------------- READ BY ID (with user context for isFavorite) ----------------
+    @Transactional(readOnly = true)
     public ProjectResponseDTO getProjectByIdForUser(Long id, Long userId) {
         Project project = findProjectById(id);
         return convertToResponseDTO(project, userId);
@@ -299,26 +343,42 @@ public class ProjectService {
                 .orElseThrow(() -> new RuntimeException("Project not found with id: " + id));
     }
 
-    // Mapping logic: Entity -> DTO
     private ProjectResponseDTO convertToResponseDTO(Project project, Long userId) {
+        return convertToResponseDTO(project, userId, null, null, null);
+    }
+
+    // Mapping logic: Entity -> DTO with bulk maps to prevent N+1
+    private ProjectResponseDTO convertToResponseDTO(Project project, Long userId,
+            java.util.Map<Long, LocalDateTime> teamJoinedMap,
+            java.util.Map<Long, LocalDateTime> accessMap,
+            java.util.Map<Long, LocalDateTime> favoriteMap) {
         LocalDateTime lastAccessedAt = null;
         LocalDateTime favoriteMarkedAt = null;
         if (userId != null) {
-            lastAccessedAt = projectAccessRepository
-                    .findByProject_IdAndUser_UserId(project.getId(), userId)
-                    .map(ProjectAccess::getLastAccessedAt)
-                    .orElseGet(() -> {
-                        // FALLBACK: If user never accessed, use joinedAt from TeamMember
-                        return teamMemberRepository
+            // Determine access time from maps first, or fallback to repo (for single fetches)
+            if (accessMap != null) {
+                lastAccessedAt = accessMap.get(project.getId());
+                if (lastAccessedAt == null && teamJoinedMap != null) {
+                    lastAccessedAt = teamJoinedMap.get(project.getTeam().getId());
+                }
+            } else {
+                lastAccessedAt = projectAccessRepository
+                        .findByProject_IdAndUser_UserId(project.getId(), userId)
+                        .map(ProjectAccess::getLastAccessedAt)
+                        .orElseGet(() -> teamMemberRepository
                                 .findByTeamIdAndUserUserId(project.getTeam().getId(), userId)
                                 .map(TeamMember::getJoinedAt)
-                                .orElse(null);
-                    });
+                                .orElse(null));
+            }
 
-                        favoriteMarkedAt = projectFavoriteRepository
-                            .findByUserAndProject(userRepository.getReferenceById(userId), project)
-                            .map(ProjectFavorite::getCreatedAt)
-                            .orElse(null);
+            if (favoriteMap != null) {
+                favoriteMarkedAt = favoriteMap.get(project.getId());
+            } else {
+                favoriteMarkedAt = projectFavoriteRepository
+                    .findByUserAndProject(userRepository.getReferenceById(userId), project)
+                    .map(ProjectFavorite::getCreatedAt)
+                    .orElse(null);
+            }
         }
 
         return ProjectResponseDTO.builder()
@@ -333,8 +393,7 @@ public class ProjectService {
                 .ownerName(project.getOwner().getUsername())
                 .teamId(project.getTeam().getId())
                 .teamName(project.getTeam().getName())
-                .isFavorite(userId != null && projectFavoriteRepository.existsByUserAndProject(
-                        userRepository.getReferenceById(userId), project))
+                .isFavorite(favoriteMarkedAt != null)
                 .favoriteMarkedAt(favoriteMarkedAt)
                 .lastAccessedAt(lastAccessedAt)
                 .build();
@@ -344,6 +403,7 @@ public class ProjectService {
     // METRICS
     // =====================================================
 
+    @Transactional(readOnly = true)
     public ProjectMetricsDTO getProjectMetrics(Long projectId) {
         Project project = findProjectById(projectId);
 

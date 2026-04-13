@@ -2,8 +2,10 @@ package com.planora.backend.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -165,14 +167,14 @@ public class TaskService {
             notificationService.createNotification(task.getAssignee().getUser(), message, link);
         }
 
-        return mapToDTO(savedTask);
+        return getTaskById(savedTask.getId());
 
     }
 
     //2. GET TASK BY ID
     @Transactional(readOnly = true)
     public TaskResponseDTO getTaskById(Long taskId) {
-        Task task = taskRepository.findById(taskId)
+        Task task = taskRepository.findByIdWithDetails(taskId)
                 .orElseThrow(()-> new ResourceNotFoundException("Task not found"));
         return mapToDTO(task);
     }
@@ -273,7 +275,7 @@ public class TaskService {
             notifyTaskStakeholders(saved, currentUserId, message, taskLink);
             }
         }
-        return mapToDTO(saved);
+        return getTaskById(saved.getId());
     }
 
     /** Lightweight date-only update used by calendar drag-and-drop. */
@@ -347,6 +349,7 @@ public class TaskService {
 
         return taskRepository.findByProjectIdFiltered(projectId, status, assigneeId, priority, sprintId)
                 .stream()
+                .distinct()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }
@@ -376,7 +379,7 @@ public class TaskService {
         taskActivityService.logActivity(parentId, TaskActivityType.SUBTASK_ADDED,
                 actorName, actorName + " added subtask: " + savedChild.getTitle());
 
-        return mapToDTO(savedChild);
+        return getTaskById(savedChild.getId());
     }
 
     //DEPENDENCY
@@ -550,7 +553,7 @@ public class TaskService {
         taskActivityService.logActivity(saved.getId(), TaskActivityType.ASSIGNEE_CHANGED,
                 actorName, actorName + " updated assignees");
 
-        return mapToDTO(saved);
+        return getTaskById(saved.getId());
     }
 
     //13. RECORD TASK ACCESS
@@ -617,7 +620,7 @@ public class TaskService {
                     + "\" from " + oldPriority + " to " + priority;
             notifyTaskStakeholders(saved, currentUserId, message, "/taskcard?taskId=" + saved.getId());
         }
-        return mapToDTO(saved);
+        return getTaskById(saved.getId());
     }
 
     //17b. UPDATE STATUS (lightweight — used by kanban drag-and-drop)
@@ -652,7 +655,7 @@ public class TaskService {
             notifyTaskStakeholders(saved, currentUserId, message, "/taskcard?taskId=" + saved.getId());
         }
 
-        return mapToDTO(saved);
+        return getTaskById(saved.getId());
     }
 
     //18. UNASSIGN TASK
@@ -768,8 +771,8 @@ public class TaskService {
         dto.setId(task.getId());
         dto.setTitle(task.getTitle());
         dto.setDescription(task.getDescription());
-        dto.setProjectId(task.getProject().getId());
-        dto.setProjectName(task.getProject().getName());
+        dto.setProjectId(task.getProject() != null ? task.getProject().getId() : null);
+        dto.setProjectName(task.getProject() != null ? task.getProject().getName() : null);
         dto.setPriority(task.getPriority() != null ? task.getPriority().name(): null);
         dto.setStatus(task.getStatus());
         dto.setStoryPoint(task.getStoryPoint());
@@ -783,7 +786,7 @@ public class TaskService {
             dto.setSprintName(task.getSprint().getName());
         }
 
-        if(task.getAssignee() != null){
+        if(task.getAssignee() != null && task.getAssignee().getUser() != null){
             dto.setAssigneeId(task.getAssignee().getId());
             dto.setAssigneeName(task.getAssignee().getUser().getUsername());
             dto.setAssigneePhotoUrl(userService.generatePresignedUrl(task.getAssignee().getUser().getProfilePicUrl()));
@@ -791,16 +794,20 @@ public class TaskService {
 
         // Map multiple assignees (V4)
         if (task.getAssignees() != null) {
-            dto.setAssignees(task.getAssignees().stream()
-                .map(m -> new TaskResponseDTO.AssigneeDTO(
+            dto.setAssignees(new ArrayList<>(task.getAssignees()).stream()
+                .map(m -> {
+                    if (m.getUser() == null) return null;
+                    return new TaskResponseDTO.AssigneeDTO(
                     m.getId(),
                     m.getUser().getUserId(),
                     m.getUser().getUsername(),
-                    userService.generatePresignedUrl(m.getUser().getProfilePicUrl())))
+                    userService.generatePresignedUrl(m.getUser().getProfilePicUrl()));
+                })
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList()));
         }
 
-        if(task.getReporter() != null){
+        if(task.getReporter() != null && task.getReporter().getUser() != null){
             dto.setReporterId(task.getReporter().getId());
             dto.setReporterName(task.getReporter().getUser().getUsername());
         }
@@ -812,31 +819,31 @@ public class TaskService {
 
         // Map subtasks
         if(task.getSubTasks() != null){
-            dto.setSubtasks(task.getSubTasks().stream()
+            dto.setSubtasks(new ArrayList<>(task.getSubTasks()).stream()
                 .map(st -> new SubtaskDTO(st.getId(), st.getTitle(), st.getStatus()))
                 .collect(Collectors.toList()));
         }
 
         // Map labels
         if(task.getLabels() != null){
-            dto.setLabels(task.getLabels().stream()
+            dto.setLabels(new ArrayList<>(task.getLabels()).stream()
                 .map(l -> new TaskResponseDTO.LabelDTO(l.getId(), l.getName(), l.getColor()))
                 .collect(Collectors.toList()));
         }
 
         // Map dependencies
         if(task.getDependencies() != null){
-            dto.setDependencies(task.getDependencies().stream()
+            dto.setDependencies(new ArrayList<>(task.getDependencies()).stream()
                 .map(d -> new DependencyDTO(d.getId(), d.getTitle(), "BLOCKED_BY"))
                 .collect(Collectors.toList()));
         }
 
         // Map attachments
         if(task.getAttachments() != null){
-            dto.setAttachments(task.getAttachments().stream()
+            dto.setAttachments(new ArrayList<>(task.getAttachments()).stream()
                 .map(a -> new TaskResponseDTO.AttachmentDTO(
                     a.getId(), a.getFileName(), a.getContentType(),
-                    a.getFileSize(), a.getUploadedBy().getUsername()))
+                    a.getFileSize(), a.getUploadedBy() != null ? a.getUploadedBy().getUsername() : "Unknown"))
                 .collect(Collectors.toList()));
         }
 

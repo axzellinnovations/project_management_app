@@ -2,8 +2,9 @@ package com.planora.backend.model;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.antlr.v4.runtime.misc.NotNull;
 
 import java.time.LocalDate;
@@ -11,8 +12,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+@Getter
+@Setter
 @Entity
-@Data
 @Table(name = "projects")
 @AllArgsConstructor
 @NoArgsConstructor
@@ -55,6 +57,19 @@ public class Project {
     @PreUpdate
     public void setLastUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Project project = (Project) o;
+        return java.util.Objects.equals(id, project.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(id);
     }
 
 }

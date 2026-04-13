@@ -19,8 +19,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleResourceNotFound(ResourceNotFoundException ex) {
@@ -66,7 +71,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntime(RuntimeException ex) {
-        return buildError(HttpStatus.BAD_REQUEST, ex.getMessage(), null);
+        log.error("Internal Server Error (RuntimeException): ", ex);
+        return buildError(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), null);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex) {
+        log.error("Unhandled Exception: ", ex);
+        return buildError(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", null);
     }
 
     private ResponseEntity<Map<String, Object>> buildError(HttpStatus status, String message, Object details) {

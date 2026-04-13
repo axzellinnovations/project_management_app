@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,27 +14,62 @@ import com.planora.backend.model.Task;
 
 @Repository
 public interface TaskRepository extends JpaRepository<Task, Long> {
-    List<Task> findByProjectId(Long projectId);
-    List<Task> findBySprintId(Long sprintId);
-    List<Task> findBySprintIdAndStatus(Long sprintId, String status);
+    @Query("SELECT DISTINCT t FROM Task t LEFT JOIN FETCH t.assignees LEFT JOIN FETCH t.labels WHERE t.project.id = :projectId")
+    List<Task> findByProjectId(@Param("projectId") Long projectId);
+
+    @Query("SELECT DISTINCT t FROM Task t LEFT JOIN FETCH t.assignees LEFT JOIN FETCH t.labels WHERE t.sprint.id = :sprintId")
+    List<Task> findBySprintId(@Param("sprintId") Long sprintId);
+
+    @Query("SELECT DISTINCT t FROM Task t LEFT JOIN FETCH t.assignees LEFT JOIN FETCH t.labels WHERE t.sprint.id = :sprintId AND t.status = :status")
+    List<Task> findBySprintIdAndStatus(@Param("sprintId") Long sprintId, @Param("status") String status);
 
     long countByAssigneeAndProject_TeamId(com.planora.backend.model.TeamMember assignee, Long teamId);
 
-    // "Assigned to me"
-    List<Task> findByAssigneeUserUserIdOrderByUpdatedAtDesc(Long userId, Pageable pageable);
+    @Query("SELECT t FROM Task t " +
+           "WHERE t.assignee.user.userId = :userId " +
+           "ORDER BY t.updatedAt DESC")
+    List<Task> findByAssigneeUserUserIdOrderByUpdatedAtDesc(@Param("userId") Long userId, Pageable pageable);
 
     // "Worked On" — tasks this user was involved in (assigned or reported) and last modified by them
-    @Query("SELECT DISTINCT t FROM Task t WHERE t.lastModifiedBy.userId = :userId OR t.assignee.user.userId = :userId ORDER BY t.updatedAt DESC")
+    @Query("SELECT DISTINCT t FROM Task t " +
+           "LEFT JOIN t.assignee a " +
+           "WHERE t.lastModifiedBy.userId = :userId OR a.user.userId = :userId " +
+           "ORDER BY t.updatedAt DESC")
     List<Task> findTasksWorkedOnByUser(@Param("userId") Long userId, Pageable pageable);
 
+    @Query("SELECT DISTINCT t FROM Task t " +
+           "LEFT JOIN FETCH t.project p " +
+           "LEFT JOIN FETCH p.team pt " +
+           "LEFT JOIN FETCH t.sprint s " +
+           "LEFT JOIN FETCH t.assignee a " +
+           "LEFT JOIN FETCH a.user au " +
+           "LEFT JOIN FETCH t.reporter r " +
+           "LEFT JOIN FETCH r.user ru " +
+           "LEFT JOIN FETCH t.milestone m " +
+           "LEFT JOIN FETCH t.kanbanColumn kc " +
+           "LEFT JOIN FETCH t.assignees " +
+           "LEFT JOIN FETCH t.labels " +
+           "WHERE t.id = :taskId")
+    java.util.Optional<Task> findByIdWithDetails(@Param("taskId") Long taskId);
+
     // Server-side filtered tasks for a project
-    @Query("SELECT t FROM Task t " +
-           "LEFT JOIN t.assignee a LEFT JOIN a.user au " +
-           "WHERE t.project.id = :projectId " +
+    @Query("SELECT DISTINCT t FROM Task t " +
+           "LEFT JOIN FETCH t.project p " +
+           "LEFT JOIN FETCH p.team pt " +
+           "LEFT JOIN FETCH t.sprint s " +
+           "LEFT JOIN FETCH t.assignee a " +
+           "LEFT JOIN FETCH a.user au " +
+           "LEFT JOIN FETCH t.reporter r " +
+           "LEFT JOIN FETCH r.user ru " +
+           "LEFT JOIN FETCH t.milestone m " +
+           "LEFT JOIN FETCH t.kanbanColumn kc " +
+           "LEFT JOIN FETCH t.assignees " +
+           "LEFT JOIN FETCH t.labels " +
+           "WHERE p.id = :projectId " +
            "AND (:status IS NULL OR t.status = :status) " +
            "AND (:assigneeId IS NULL OR au.userId = :assigneeId) " +
            "AND (:priority IS NULL OR CAST(t.priority AS string) = :priority) " +
-           "AND (:sprintId IS NULL OR t.sprint.id = :sprintId) " +
+           "AND (:sprintId IS NULL OR s.id = :sprintId) " +
            "ORDER BY t.createdAt DESC")
     List<Task> findByProjectIdFiltered(
             @Param("projectId") Long projectId,

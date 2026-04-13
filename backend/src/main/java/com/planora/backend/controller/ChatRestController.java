@@ -11,20 +11,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.planora.backend.dto.ChatMessageDTO;
 import com.planora.backend.model.ChatMessage;
 import com.planora.backend.model.ChatRoom;
 import com.planora.backend.model.ChatRoomMember;
@@ -193,7 +184,7 @@ public class ChatRestController {
      * Get group or private chat history for a project.
      */
     @GetMapping("/messages")
-    public ResponseEntity<List<ChatMessage>> getMessages(
+    public ResponseEntity<List<ChatMessageDTO>> getMessages(
             @PathVariable Long projectId,
             @RequestParam(value = "roomId", required = false) Long roomId,
             @RequestParam(value = "recipient", required = false) String recipient,
@@ -220,16 +211,16 @@ public class ChatRestController {
     }
 
     @GetMapping("/messages/{messageId}/thread")
-    public ResponseEntity<List<ChatMessage>> getThreadMessages(@PathVariable Long projectId,
-                                                               @PathVariable Long messageId,
-                                                               Authentication authentication) {
+    public ResponseEntity<List<ChatMessageDTO>> getThreadMessages(@PathVariable Long projectId,
+                                                                @PathVariable Long messageId,
+                                                                Authentication authentication) {
         String username = authentication.getName();
         validateProjectMembership(projectId, username);
         return new ResponseEntity<>(chatService.getThreadMessages(projectId, messageId), HttpStatus.OK);
     }
 
     @PostMapping("/messages/{messageId}/thread/replies")
-    public ResponseEntity<ChatMessage> createThreadReply(@PathVariable Long projectId,
+    public ResponseEntity<ChatMessageDTO> createThreadReply(@PathVariable Long projectId,
                                                          @PathVariable Long messageId,
                                                          @RequestBody ThreadReplyRequest request,
                                                          Authentication authentication) {
@@ -251,7 +242,7 @@ public class ChatRestController {
     }
 
     @PatchMapping("/messages/{messageId}")
-    public ResponseEntity<ChatMessage> editMessage(@PathVariable Long projectId,
+    public ResponseEntity<ChatMessageDTO> editMessage(@PathVariable Long projectId,
                                                    @PathVariable Long messageId,
                                                    @RequestBody EditMessageRequest request,
                                                    Authentication authentication) {
@@ -273,7 +264,7 @@ public class ChatRestController {
     }
 
     @DeleteMapping("/messages/{messageId}")
-    public ResponseEntity<ChatMessage> deleteMessage(@PathVariable Long projectId,
+    public ResponseEntity<ChatMessageDTO> deleteMessage(@PathVariable Long projectId,
                                                      @PathVariable Long messageId,
                                                      Authentication authentication) {
         String username = authentication.getName();
@@ -343,6 +334,7 @@ public class ChatRestController {
     }
 
     @GetMapping("/search")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<SearchResultResponse>> searchMessages(@PathVariable Long projectId,
                                                                      @RequestParam("query") String query,
                                                                      @RequestParam(value = "limit", required = false, defaultValue = "20") int limit,
@@ -459,6 +451,7 @@ public class ChatRestController {
     }
 
     @GetMapping("/summaries")
+    @Transactional(readOnly = true)
     public ResponseEntity<ChatSidebarResponse> getChatSummaries(@PathVariable Long projectId,
                                                                 @RequestParam(value = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
                                                                 Authentication authentication) {
@@ -480,6 +473,7 @@ public class ChatRestController {
     }
 
         @GetMapping("/unread-badge")
+        @Transactional(readOnly = true)
         public ResponseEntity<UnreadBadgeResponse> getUnreadBadge(@PathVariable Long projectId,
                                        @RequestParam(value = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
                                        Authentication authentication) {

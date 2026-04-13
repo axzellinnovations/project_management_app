@@ -18,11 +18,12 @@ import com.planora.backend.service.ChatService;
 import com.planora.backend.service.ChatWebhookService;
 import com.planora.backend.service.JWTService;
 import com.planora.backend.service.NotificationService;
+import com.planora.backend.dto.ChatMessageDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.mockito.Mock;
 import org.springframework.http.MediaType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -48,31 +49,31 @@ class ChatRestControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @Mock
     private ChatService chatService;
-    @MockBean
+    @Mock
     private ProjectRepository projectRepository;
-    @MockBean
+    @Mock
     private TeamMemberRepository teamMemberRepository;
-    @MockBean
+    @Mock
     private UserRepository userRepository;
-    @MockBean
+    @Mock
     private ChatRoomRepository chatRoomRepository;
-    @MockBean
+    @Mock
     private ChatRoomMemberRepository chatRoomMemberRepository;
-    @MockBean
+    @Mock
     private SimpMessagingTemplate simpMessagingTemplate;
-    @MockBean
+    @Mock
     private ChatPresenceService chatPresenceService;
-    @MockBean
+    @Mock
     private ChatWebhookService chatWebhookService;
-    @MockBean
+    @Mock
     private ChatDocumentService chatDocumentService;
-    @MockBean
+    @Mock
     private NotificationService notificationService;
-    @MockBean
+    @Mock
     private JWTService jwtService;
-    @MockBean
+    @Mock
     private UserDetailsService userDetailsService;
 
     private User alice;
@@ -106,9 +107,9 @@ class ChatRestControllerTest {
     @Test
     @WithMockUser(username = "alice")
     void getRoomMessages_marksAsRead_andReturnsPayload() throws Exception {
-        ChatMessage message = new ChatMessage();
-        message.setId(21L);
-        message.setContent("Hello room");
+		ChatMessageDTO message = new ChatMessageDTO();
+		message.setId(21L);
+		message.setContent("Hello room");
 
         ChatRoom room = new ChatRoom();
         room.setId(9L);
@@ -143,10 +144,10 @@ class ChatRestControllerTest {
         when(userRepository.findByEmailIgnoreCase("bob")).thenReturn(Optional.of(bob));
         when(teamMemberRepository.findByTeamIdAndUserUserId(7L, 11L)).thenReturn(Optional.of(new TeamMember()));
 
-        ChatMessage dm = new ChatMessage();
-        dm.setId(30L);
-        dm.setSender("alice");
-        dm.setRecipient("bob");
+		ChatMessageDTO dm = new ChatMessageDTO();
+		dm.setId(30L);
+		dm.setSender("alice");
+		dm.setRecipient("bob");
 
         when(chatService.getPrivateConversation(5L, "alice", "bob")).thenReturn(List.of(dm));
 
@@ -162,6 +163,7 @@ class ChatRestControllerTest {
     @Test
     @WithMockUser(username = "alice")
     void createThreadReply_rejectsBlankContent() throws Exception {
+            @SuppressWarnings("null")
         var request = new ChatRestController.ThreadReplyRequest("   ", ChatMessage.FormatType.PLAIN);
 
         mockMvc.perform(post("/api/projects/5/chat/messages/1/thread/replies")
@@ -174,12 +176,13 @@ class ChatRestControllerTest {
     @Test
     @WithMockUser(username = "alice")
     void createThreadReply_returnsCreatedMessage() throws Exception {
+            @SuppressWarnings("null")
         var request = new ChatRestController.ThreadReplyRequest("reply", ChatMessage.FormatType.PLAIN);
-        ChatMessage saved = new ChatMessage();
-        saved.setId(77L);
-        saved.setContent("reply");
+		ChatMessageDTO saved = new ChatMessageDTO();
+		saved.setId(77L);
+		saved.setContent("reply");
 
-        when(chatService.saveThreadReply(eq(5L), eq(1L), any(ChatMessage.class))).thenReturn(saved);
+		when(chatService.saveThreadReply(eq(5L), eq(1L), any(ChatMessage.class))).thenReturn(saved);
 
         mockMvc.perform(post("/api/projects/5/chat/messages/1/thread/replies")
                         .with(csrf())
@@ -193,6 +196,7 @@ class ChatRestControllerTest {
     @Test
     @WithMockUser(username = "alice")
     void toggleReaction_blankEmojiReturnsBadRequest() throws Exception {
+            @SuppressWarnings("null")
         var request = new ChatRestController.ReactionToggleRequest(" ");
 
         mockMvc.perform(post("/api/projects/5/chat/messages/9/reactions/toggle")

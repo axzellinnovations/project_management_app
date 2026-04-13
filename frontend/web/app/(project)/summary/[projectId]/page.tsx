@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import api from '@/lib/axios';
-import { Task, Sprint } from '@/types';
+import { Task, Sprint, ProjectMetrics } from '@/types';
 import useSWR from 'swr';
 
 import MetricsGrid from "../components/MetricsGrid";
@@ -41,10 +41,14 @@ export default function SummaryPage() {
         projectId ? `/api/sprints/project/${projectId}` : null, 
         fetcher
     );
+    const { data: metrics, isLoading: metricsLoading } = useSWR<ProjectMetrics>(
+        projectId ? `/api/projects/${projectId}/metrics` : null,
+        fetcher
+    );
 
-    // Show full-page skeleton only for critical primary data (sprints/tasks)
+    // Show full-page skeleton only for critical primary data (sprints/tasks/metrics)
     // SWR will skip this if data is cached!
-    if (tasksLoading || sprintsLoading || !tasks || !sprints) {
+    if (tasksLoading || sprintsLoading || metricsLoading || !tasks || !sprints || !metrics) {
         return <SummaryPageSkeleton />;
     }
 
@@ -53,7 +57,7 @@ export default function SummaryPage() {
 
             {/* Metrics Section */}
             <div className="mb-6">
-                <MetricsGrid tasks={tasks} />
+                <MetricsGrid metrics={metrics} />
             </div>
 
             {/* Main Grid: 2 Columns */}

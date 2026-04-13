@@ -7,6 +7,8 @@ import java.time.Instant;
 
 @Entity
 @Builder
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 @Table(name = "verification_tokens", uniqueConstraints = {
@@ -18,32 +20,20 @@ public class VerificationToken {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Getter
-    @Setter
     private String token;
 
-    @Getter
-    @Setter
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Getter
-    @Setter
     private Instant expiry;
 
-    @Getter
-    @Setter
     @Builder.Default
     private boolean used = false;
 
-    @Setter
-    @Getter
     @Builder.Default
     private int attempts = 0;
 
-    @Getter
-    @Setter
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private TokenType tokenType = TokenType.VERIFICATION;
@@ -56,5 +46,18 @@ public class VerificationToken {
         VERIFICATION,
         PASSWORD_RESET,
         REFRESH_TOKEN
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        VerificationToken that = (VerificationToken) o;
+        return java.util.Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(id);
     }
 }

@@ -151,6 +151,9 @@ public class UserController {
 
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return new ResponseEntity<>("User is not authenticated", HttpStatus.UNAUTHORIZED);
+        }
         try {
             String email = authentication.getName();
             User user = service.getUserByEmail(email);
@@ -165,11 +168,18 @@ public class UserController {
                     user.isVerified(),
                     presignedUrl,
                     user.getLastActive(),
-                    null, null, null, null, null, null, null, null
+                    user.getFirstName(),
+                    user.getLastName(),
+                    user.getContactNumber(),
+                    user.getCountryCode(),
+                    user.getJobTitle(),
+                    user.getCompany(),
+                    user.getPosition(),
+                    user.getBio()
             );
             return new ResponseEntity<>(dto, HttpStatus.OK);
         } catch (Exception e) {
-            return new ResponseEntity<>("Failed to fetch current user: " + e.getMessage(), HttpStatus.BAD_REQUEST);
+            return new ResponseEntity<>("Failed to fetch current user: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

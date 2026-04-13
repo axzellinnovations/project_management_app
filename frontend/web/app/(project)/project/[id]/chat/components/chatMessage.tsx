@@ -262,7 +262,13 @@ export const ChatMessages = ({
               <div
                 key={msg.id ?? `local-msg-${idx}`}
                 data-index={idx}
-                ref={rowVirtualizer.measureElement}
+                ref={(el) => {
+                  if (el) {
+                    requestAnimationFrame(() => {
+                      rowVirtualizer.measureElement(el);
+                    });
+                  }
+                }}
                 style={{
                   position: 'absolute',
                   top: 0,

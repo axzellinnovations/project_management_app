@@ -162,6 +162,12 @@ class TaskServiceTest {
             saved.setId(999L);
             return saved;
         });
+        when(taskRepository.findByIdWithDetails(999L)).thenAnswer(invocation -> {
+            Task t = buildTask(999L);
+            t.setAssignee(assignee);
+            t.setReporter(creator);
+            return Optional.of(t);
+        });
 
         TaskResponseDTO result = taskService.createTask(request, 100L);
 
@@ -207,6 +213,7 @@ class TaskServiceTest {
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
         when(userRepository.findAllById(any())).thenReturn(List.of(creatorUser, assigneeUser));
+        when(taskRepository.findByIdWithDetails(50L)).thenReturn(Optional.of(task));
 
         TaskResponseDTO result = taskService.updateTask(50L, request, 500L);
 
@@ -225,6 +232,7 @@ class TaskServiceTest {
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
         when(userRepository.findAllById(any())).thenReturn(List.of(creatorUser, assigneeUser));
+        when(taskRepository.findByIdWithDetails(51L)).thenReturn(Optional.of(task));
 
         TaskResponseDTO result = taskService.updatePriority(51L, "HIGH", 500L);
 
@@ -373,6 +381,11 @@ class TaskServiceTest {
             saved.setId(1001L);
             return saved;
         });
+        when(taskRepository.findByIdWithDetails(1001L)).thenAnswer(invocation -> {
+            Task t = buildTask(1001L);
+            t.setReporter(creator);
+            return Optional.of(t);
+        });
 
         TaskResponseDTO result = taskService.createTask(request, 100L);
 
@@ -453,6 +466,7 @@ class TaskServiceTest {
         request.setStatus("DONE");
 
         when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(task));
         when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -472,6 +486,7 @@ class TaskServiceTest {
         request.setStatus("IN_PROGRESS");
 
         when(taskRepository.findById(2L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdWithDetails(2L)).thenReturn(Optional.of(task));
         when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
