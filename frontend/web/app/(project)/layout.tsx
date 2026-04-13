@@ -52,16 +52,19 @@ export default function ProjectLayout({
     if (syncedProjectIdRef.current === projectId) return;
     syncedProjectIdRef.current = projectId;
 
-    // Keep localStorage in sync so TopBar, Sidebar, etc. work correctly
+    // Keep project context scoped to this tab while preserving global fallback.
+    sessionStorage.setItem('currentProjectId', projectId);
     localStorage.setItem('currentProjectId', projectId);
 
     const syncProjectContext = async () => {
       try {
         const projectRes = await api.get(`/api/projects/${projectId}`);
         if (projectRes?.data?.name) {
+          sessionStorage.setItem('currentProjectName', projectRes.data.name);
           localStorage.setItem('currentProjectName', projectRes.data.name);
           // Update project type for TopBar logic
           if (projectRes.data.type) {
+            sessionStorage.setItem('currentProjectType', projectRes.data.type);
             localStorage.setItem('currentProjectType', projectRes.data.type);
           }
         }

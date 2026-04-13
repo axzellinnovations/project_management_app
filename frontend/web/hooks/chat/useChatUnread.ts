@@ -91,12 +91,64 @@ export function useChatUnread(projectId: string) {
   });
 
   const markTeamAsRead = useCallback(async () => {
+    setTeamUnseenCount(0);
+    setUnreadBadge((prev) => {
+      const roomsUnread = Number(prev.roomsUnread) || 0;
+      const directsUnread = Number(prev.directsUnread) || 0;
+      return {
+        teamUnread: 0,
+        roomsUnread,
+        directsUnread,
+        totalUnread: roomsUnread + directsUnread,
+      };
+    });
     try {
       await chatApi.markTeamAsRead(projectId);
     } catch {
       // non-critical
     }
   }, [projectId]);
+
+  const clearRoomUnread = useCallback((roomId: number) => {
+    setRoomUnseenCounts((prev) => {
+      const current = Number(prev[roomId]) || 0;
+      if (current <= 0) return prev;
+      const next = { ...prev, [roomId]: 0 };
+      setUnreadBadge((badgePrev) => {
+        const teamUnread = Number(badgePrev.teamUnread) || 0;
+        const directsUnread = Number(badgePrev.directsUnread) || 0;
+        const roomsUnread = Math.max(0, (Number(badgePrev.roomsUnread) || 0) - current);
+        return {
+          teamUnread,
+          roomsUnread,
+          directsUnread,
+          totalUnread: teamUnread + roomsUnread + directsUnread,
+        };
+      });
+      return next;
+    });
+  }, []);
+
+  const clearPrivateUnread = useCallback((participant: string) => {
+    const key = participant.toLowerCase();
+    setPrivateUnseenCounts((prev) => {
+      const current = Number(prev[key]) || 0;
+      if (current <= 0) return prev;
+      const next = { ...prev, [key]: 0 };
+      setUnreadBadge((badgePrev) => {
+        const teamUnread = Number(badgePrev.teamUnread) || 0;
+        const roomsUnread = Number(badgePrev.roomsUnread) || 0;
+        const directsUnread = Math.max(0, (Number(badgePrev.directsUnread) || 0) - current);
+        return {
+          teamUnread,
+          roomsUnread,
+          directsUnread,
+          totalUnread: teamUnread + roomsUnread + directsUnread,
+        };
+      });
+      return next;
+    });
+  }, []);
 
   const loadUnreadBadge = useCallback(async () => {
     const badgeCacheKey = buildSessionCacheKey('chat-unread-badge', [projectId]);
@@ -208,6 +260,8 @@ export function useChatUnread(projectId: string) {
     unreadBadge,
     setUnreadBadge,
     markTeamAsRead,
+    clearRoomUnread,
+    clearPrivateUnread,
     loadUnreadBadge,
     loadSummaries,
   };

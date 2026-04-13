@@ -22,6 +22,7 @@ import type { SprintItem, TaskItem } from '@/types';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
 import api from '@/lib/axios';
 import SprintReportModal from './SprintReportModal';
+import { toast } from '@/components/ui';
 
 interface TeamMemberInfo {
   id: number;
@@ -559,10 +560,14 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
   const doCompleteSprint = async () => {
     setCompletingSprintLoading(true);
     try {
-      await api.put(`/api/sprints/${sprint.id}`, { status: 'COMPLETED' });
+      await api.put(`/api/sprints/${sprint.id}/complete`);
       setConfirmCompleteSprint(false);
       sprint.status = 'COMPLETED'; // Optimistic update
-    } catch {
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
+      toast('Sprint completed successfully.', 'success');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      toast(axiosErr?.response?.data?.message || 'Failed to complete sprint.', 'error');
       setConfirmCompleteSprint(false);
     } finally {
       setCompletingSprintLoading(false);
@@ -618,6 +623,7 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
       sprint.status = 'ACTIVE'; // Optimistic update
       sprint.startDate = startDate.toISOString().split('T')[0];
       sprint.endDate = endDate.toISOString().split('T')[0];
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
       setStartSprintError(error.response?.data?.message || 'Failed to start sprint. Please try again.');
@@ -1082,7 +1088,12 @@ function BacklogCard({ sprint, projectId, currentUserRole, onDropTask, onCreateT
     {selectedTaskId !== null && (
       <TaskCardModal
         taskId={selectedTaskId}
-        onClose={(_wasModified) => setSelectedTaskId(null)}
+        onClose={(wasModified) => {
+          setSelectedTaskId(null);
+          if (wasModified) {
+            window.dispatchEvent(new CustomEvent('planora:task-updated'));
+          }
+        }}
       />
     )}
 

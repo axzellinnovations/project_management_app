@@ -143,6 +143,7 @@ export default function SprintBacklogPage() {
     const { showSpinner = true, forceNetwork = false } = options;
     
     const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
+    let hasCachedData = false;
     if (cKey && !forceNetwork) {
       const cached = getSessionCache<CacheShape>(cKey, { allowStale: true });
       if (cached.data) {
@@ -150,11 +151,11 @@ export default function SprintBacklogPage() {
         setSprints(cached.data.sprints);
         setProjectKey(cached.data.projectKey);
         setLoading(false);
-        if (!cached.isStale) return;
+        hasCachedData = true;
       }
     }
 
-    if (showSpinner) setLoading(true);
+    if (showSpinner && !hasCachedData) setLoading(true);
     try {
       const [sprintsRes, tasksRes] = await Promise.all([
         api.get(`/api/sprints/project/${projectId}`),
@@ -211,7 +212,7 @@ export default function SprintBacklogPage() {
     } catch (err: any) {
       if (showSpinner) setError(err.response?.data?.message || 'Access denied or project not found.');
     } finally {
-      setLoading(false);
+      if (showSpinner && !hasCachedData) setLoading(false);
     }
   }, [projectId, projectIdNum, projectKey, setTasksForProject]);
 
@@ -249,6 +250,7 @@ export default function SprintBacklogPage() {
       if (selectedTasks.length > 0) setProductTasks(remainingTasks);
       const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
       if (cKey) removeSessionCache(cKey);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       void fetchData({ showSpinner: false, forceNetwork: true });
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -281,6 +283,7 @@ export default function SprintBacklogPage() {
       await api.put(`/api/tasks/${id}`, { storyPoint: value });
       const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
       if (cKey) removeSessionCache(cKey);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       void fetchData({ showSpinner: false, forceNetwork: true });
     } catch {
       toast('Failed to update story points', 'error');
@@ -313,6 +316,7 @@ export default function SprintBacklogPage() {
       setProductTasks((prev) => [...prev.filter((x) => x.id !== raw.id), newTask]);
       const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
       if (cKey) removeSessionCache(cKey);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       void fetchData({ showSpinner: false, forceNetwork: true });
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -394,6 +398,7 @@ export default function SprintBacklogPage() {
       );
       const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
       if (cKey) removeSessionCache(cKey);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       void fetchData({ showSpinner: false, forceNetwork: true });
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -425,6 +430,7 @@ export default function SprintBacklogPage() {
       setProductTasks((prev) => [...prev, { ...draggedTask!, sprintId: null }]);
       const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
       if (cKey) removeSessionCache(cKey);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       void fetchData({ showSpinner: false, forceNetwork: true });
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -442,6 +448,7 @@ export default function SprintBacklogPage() {
       })));
       const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
       if (cKey) removeSessionCache(cKey);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       void fetchData({ showSpinner: false, forceNetwork: true });
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -563,6 +570,12 @@ export default function SprintBacklogPage() {
     const syncId = setInterval(() => void fetchData({ showSpinner: false }), 30_000);
     return () => clearInterval(syncId);
   }, [projectId, fetchStaticData, fetchData]);
+
+  useEffect(() => {
+    const onTaskUpdated = () => { void fetchData({ showSpinner: false, forceNetwork: true }); };
+    window.addEventListener('planora:task-updated', onTaskUpdated);
+    return () => window.removeEventListener('planora:task-updated', onTaskUpdated);
+  }, [fetchData]);
 
   useTaskWebSocket(projectId, useCallback((event) => {
     if (event.type === 'TASK_CREATED' && event.task) {

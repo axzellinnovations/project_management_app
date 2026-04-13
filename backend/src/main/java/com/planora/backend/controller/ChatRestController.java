@@ -33,12 +33,9 @@ import com.planora.backend.service.UserCacheService;
 
 import com.planora.backend.service.ChatDocumentService;
 
-import lombok.RequiredArgsConstructor;
-
 @RestController
 @CrossOrigin(origins = "http://localhost:3000")
 @RequestMapping("/api/projects/{projectId}/chat")
-@RequiredArgsConstructor
 public class ChatRestController {
 
     public static record ChatRoomResponse(Long id,
@@ -115,6 +112,34 @@ public class ChatRestController {
     private final ChatDocumentService chatDocumentService;
 
     private final NotificationService notificationService;
+
+    public ChatRestController(ChatService chatService,
+                              ProjectRepository projectRepository,
+                              TeamMemberRepository teamMemberRepository,
+                              UserCacheService userCacheService,
+                              UserRepository userRepository,
+                              ProjectMembershipService projectMembershipService,
+                              ChatRoomRepository chatRoomRepository,
+                              ChatRoomMemberRepository chatRoomMemberRepository,
+                              SimpMessagingTemplate simpMessagingTemplate,
+                              ChatPresenceService chatPresenceService,
+                              ChatWebhookService chatWebhookService,
+                              ChatDocumentService chatDocumentService,
+                              NotificationService notificationService) {
+        this.chatService = chatService;
+        this.projectRepository = projectRepository;
+        this.teamMemberRepository = teamMemberRepository;
+        this.userCacheService = userCacheService;
+        this.userRepository = userRepository;
+        this.projectMembershipService = projectMembershipService;
+        this.chatRoomRepository = chatRoomRepository;
+        this.chatRoomMemberRepository = chatRoomMemberRepository;
+        this.simpMessagingTemplate = simpMessagingTemplate;
+        this.chatPresenceService = chatPresenceService;
+        this.chatWebhookService = chatWebhookService;
+        this.chatDocumentService = chatDocumentService;
+        this.notificationService = notificationService;
+    }
     /**
      * Upload a document to chat (S3-backed, like WhatsApp)
      */

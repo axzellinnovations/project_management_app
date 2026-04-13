@@ -136,4 +136,99 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
 
     @Query("SELECT m FROM ChatMessage m WHERE m.id IN (SELECT MAX(m2.id) FROM ChatMessage m2 WHERE m2.projectId IN :projectIds AND m2.recipient IS NULL AND m2.roomId IS NULL AND m2.parentMessageId IS NULL GROUP BY m2.projectId)")
     List<ChatMessage> findLatestTeamMessagesForProjects(@Param("projectIds") List<Long> projectIds);
+
+    @Query("""
+            SELECT u.userId, COUNT(m.id)
+            FROM User u, ChatMessage m
+            WHERE u.userId IN :userIds
+              AND m.projectId = :projectId
+              AND m.parentMessageId IS NULL
+              AND m.recipient IS NULL
+              AND m.roomId IS NULL
+              AND LOWER(m.sender) <> LOWER(u.username)
+              AND LOWER(m.sender) <> LOWER(u.email)
+              AND m.id > COALESCE((
+                    SELECT MAX(rs.lastReadMessageId)
+                    FROM ChatReadState rs
+                    WHERE rs.projectId = :projectId
+                      AND rs.user.userId = u.userId
+                      AND LOWER(rs.otherParticipant) = LOWER(:teamKey)
+              ), 0)
+            GROUP BY u.userId
+            """)
+    List<Object[]> countUnreadTeamMessagesForUsers(@Param("projectId") Long projectId,
+                                                   @Param("userIds") List<Long> userIds,
+                                                   @Param("teamKey") String teamKey);
+
+    @Query("""
+            SELECT u.userId, COUNT(m.id)
+            FROM User u, ChatMessage m
+            WHERE u.userId IN :userIds
+              AND m.projectId = :projectId
+              AND m.parentMessageId IS NULL
+              AND m.roomId IS NOT NULL
+              AND EXISTS (
+                    SELECT 1
+                    FROM ChatRoom r
+                    WHERE r.id = m.roomId
+                      AND r.projectId = :projectId
+                      AND COALESCE(r.archived, false) = false
+              )
+              AND (
+                    EXISTS (
+                        SELECT 1
+                        FROM ChatRoomMember crm
+                        WHERE crm.chatRoom.id = m.roomId
+                          AND crm.user.userId = u.userId
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM ChatRoom r2
+                        WHERE r2.id = m.roomId
+                          AND (LOWER(r2.createdBy) = LOWER(u.username) OR LOWER(r2.createdBy) = LOWER(u.email))
+                    )
+              )
+              AND LOWER(m.sender) <> LOWER(u.username)
+              AND LOWER(m.sender) <> LOWER(u.email)
+              AND m.id > COALESCE((
+                    SELECT MAX(rs.lastReadMessageId)
+                    FROM ChatReadState rs
+                    WHERE rs.projectId = :projectId
+                      AND rs.user.userId = u.userId
+                      AND rs.roomId = m.roomId
+              ), 0)
+            GROUP BY u.userId
+            """)
+    List<Object[]> countUnreadRoomMessagesForUsers(@Param("projectId") Long projectId,
+                                                   @Param("userIds") List<Long> userIds);
+
+    @Query("""
+            SELECT u.userId, COUNT(m.id)
+            FROM User u, ChatMessage m
+            WHERE u.userId IN :userIds
+              AND m.projectId = :projectId
+              AND m.parentMessageId IS NULL
+              AND m.recipient IS NOT NULL
+              AND (LOWER(m.recipient) = LOWER(u.username) OR LOWER(m.recipient) = LOWER(u.email))
+              AND LOWER(m.sender) <> LOWER(u.username)
+              AND LOWER(m.sender) <> LOWER(u.email)
+              AND (
+                    NOT EXISTS (
+                        SELECT 1 FROM ChatReadState rsMissing
+                        WHERE rsMissing.projectId = :projectId
+                          AND rsMissing.user.userId = u.userId
+                          AND LOWER(rsMissing.otherParticipant) = LOWER(m.sender)
+                    )
+                    OR EXISTS (
+                        SELECT 1 FROM ChatReadState rsRead
+                        WHERE rsRead.projectId = :projectId
+                          AND rsRead.user.userId = u.userId
+                          AND LOWER(rsRead.otherParticipant) = LOWER(m.sender)
+                          AND (rsRead.lastReadMessageId IS NULL OR m.id > rsRead.lastReadMessageId)
+                    )
+              )
+            GROUP BY u.userId
+            """)
+    List<Object[]> countUnreadDirectMessagesForUsers(@Param("projectId") Long projectId,
+                                                     @Param("userIds") List<Long> userIds);
 }

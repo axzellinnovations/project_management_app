@@ -349,7 +349,12 @@ export default function ProductBacklogSection({
     {selectedTaskId !== null && (
       <TaskCardModal
         taskId={selectedTaskId}
-        onClose={(_wasModified) => setSelectedTaskId(null)}
+        onClose={(wasModified) => {
+          setSelectedTaskId(null);
+          if (wasModified) {
+            window.dispatchEvent(new CustomEvent('planora:task-updated'));
+          }
+        }}
       />
     )}
     </div>

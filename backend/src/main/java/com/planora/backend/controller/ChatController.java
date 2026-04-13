@@ -2,8 +2,14 @@ package com.planora.backend.controller;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +42,8 @@ import com.planora.backend.service.UserCacheService;
 public class ChatController {
 
     private static final Pattern MENTION_PATTERN = Pattern.compile("(?<!\\S)@([A-Za-z0-9._-]+)");
+    private static final String TEAM_CHAT_READ_KEY = "__TEAM_CHAT__";
+    private static final long UNREAD_BADGE_DEBOUNCE_MS = 200L;
 
     public static record EditMessagePayload(String content, ChatMessage.FormatType formatType) {}
 
@@ -101,6 +109,9 @@ public class ChatController {
     @Autowired
     private NotificationService notificationService;
     // ─────────────────────────────────────────────────────────────────────────
+    private final ScheduledExecutorService unreadBadgeScheduler = Executors.newSingleThreadScheduledExecutor();
+    private final ConcurrentHashMap<Long, Long> unreadBadgeVersionByProject = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, ScheduledFuture<?>> unreadBadgeTasks = new ConcurrentHashMap<>();
 
     @MessageMapping("/project/{projectId}/chat.sendMessage")
     public void sendMessage(@DestinationVariable Long projectId,
@@ -123,7 +134,7 @@ public class ChatController {
             publishMentionNotifications(projectId, saved, "TEAM");
             publishTeamChatNotifications(projectId, saved);
             chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "TEAM", saved);
-            publishUnreadBadgesForProject(projectId);
+            scheduleUnreadBadgePublish(projectId);
         });
     }
     @MessageMapping("/project/{projectId}/chat.sendPrivateMessage")
@@ -150,7 +161,7 @@ public class ChatController {
         chatTaskExecutor.execute(() -> {
             publishMentionNotifications(projectId, saved, "PRIVATE");
             chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "PRIVATE", saved);
-            publishUnreadBadgesForProject(projectId);
+            scheduleUnreadBadgePublish(projectId);
             publishPrivateMessageNotification(projectId, saved);
         });
     }
@@ -184,7 +195,7 @@ public class ChatController {
             publishMentionNotifications(projectId, saved, "ROOM");
             publishRoomChatNotifications(projectId, roomId, saved);
             chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "ROOM", saved);
-            publishUnreadBadgesForProject(projectId);
+            scheduleUnreadBadgePublish(projectId);
         });
     }
 
@@ -421,8 +432,25 @@ public class ChatController {
         simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/public", message);
         chatTaskExecutor.execute(() -> {
             chatWebhookService.dispatchMessageEvent(projectId, eventType, "TEAM", message);
-            publishUnreadBadgesForProject(projectId);
+            scheduleUnreadBadgePublish(projectId);
         });
+    }
+
+    private void scheduleUnreadBadgePublish(Long projectId) {
+        long version = unreadBadgeVersionByProject.merge(projectId, 1L, Long::sum);
+        var prior = unreadBadgeTasks.remove(projectId);
+        if (prior != null) {
+            prior.cancel(false);
+        }
+
+        ScheduledFuture<?> task = unreadBadgeScheduler.schedule(() -> {
+            Long latestVersion = unreadBadgeVersionByProject.get(projectId);
+            if (latestVersion != null && latestVersion.equals(version)) {
+                publishUnreadBadgesForProject(projectId);
+                unreadBadgeTasks.remove(projectId);
+            }
+        }, UNREAD_BADGE_DEBOUNCE_MS, TimeUnit.MILLISECONDS);
+        unreadBadgeTasks.put(projectId, task);
     }
 
     private void publishUnreadBadgesForProject(Long projectId) {
@@ -432,49 +460,54 @@ public class ChatController {
         }
 
         var teamMembers = teamMemberRepository.findByTeamId(project.getTeam().getId());
-        
-        // Cache tools to avoid O(n) repetitive DB fetching during message broadcasts
-        var userMap = new java.util.HashMap<String, com.planora.backend.model.User>();
-        var userRoomsCache = new java.util.HashMap<Long, java.util.List<Long>>();
-
-        var participants = teamMembers.stream()
-                .map(tm -> {
-                    com.planora.backend.model.User u = tm.getUser();
-                    if (u != null && u.getUsername() != null) {
-                        userMap.put(u.getUsername().toLowerCase(), u);
-                        // Preload the room assignments for this user
-                        var roomIds = chatRoomMemberRepository.findByUserUserId(u.getUserId()).stream()
-                            .map(rm -> rm.getChatRoom().getId()).toList();
-                        userRoomsCache.put(u.getUserId(), roomIds);
-                        return u.getUsername();
-                    }
-                    return null;
-                })
+        var users = teamMembers.stream()
+                .map(com.planora.backend.model.TeamMember::getUser)
                 .filter(Objects::nonNull)
+                .filter(user -> user.getUserId() != null)
                 .toList();
+        if (users.isEmpty()) {
+            return;
+        }
 
-        var projectRooms = chatRoomRepository.findByProjectId(projectId);
+        var userIds = users.stream().map(com.planora.backend.model.User::getUserId).toList();
+        Map<Long, Long> teamUnreadByUserId = chatMessageRepository
+                .countUnreadTeamMessagesForUsers(projectId, userIds, TEAM_CHAT_READ_KEY)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> ((Number) row[1]).longValue()));
+        Map<Long, Long> roomUnreadByUserId = chatMessageRepository
+                .countUnreadRoomMessagesForUsers(projectId, userIds)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> ((Number) row[1]).longValue()));
+        Map<Long, Long> directUnreadByUserId = chatMessageRepository
+                .countUnreadDirectMessagesForUsers(projectId, userIds)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> ((Number) row[1]).longValue()));
 
-        participants.forEach(participant -> {
-            var user = userMap.get(participant.toLowerCase());
-            if (user == null) {
-                user = userCacheService.resolveUserByEmailOrUsername(participant);
+        users.forEach(user -> {
+            String participant = user.getUsername();
+            if (participant == null || participant.isBlank()) {
+                return;
             }
-
-            var userRoomIds = user != null ? userRoomsCache.getOrDefault(user.getUserId(), java.util.List.of()) : java.util.List.<Long>of();
-            
-            var visibleRooms = projectRooms.stream()
-                    .filter(r -> (r.getCreatedBy() != null && r.getCreatedBy().equalsIgnoreCase(participant)) || userRoomIds.contains(r.getId()))
-                    .filter(r -> !Boolean.TRUE.equals(r.getArchived()))
-                    .toList();
-
-            var badge = chatService.buildUnreadBadge(projectId, user, participant, visibleRooms, participants);
+            long teamUnread = teamUnreadByUserId.getOrDefault(user.getUserId(), 0L);
+            long roomsUnread = roomUnreadByUserId.getOrDefault(user.getUserId(), 0L);
+            long directsUnread = directUnreadByUserId.getOrDefault(user.getUserId(), 0L);
+            var badge = new ChatService.UnreadBadgeSummary(
+                    teamUnread,
+                    roomsUnread,
+                    directsUnread,
+                    teamUnread + roomsUnread + directsUnread);
             simpMessagingTemplate.convertAndSendToUser(
                     participant.toLowerCase(),
                     "/queue/project/" + projectId + "/unread-badge",
                     badge);
 
-            if (user != null && user.getEmail() != null && !user.getEmail().isBlank()) {
+            if (user.getEmail() != null && !user.getEmail().isBlank()) {
                 simpMessagingTemplate.convertAndSendToUser(
                         user.getEmail().toLowerCase(),
                         "/queue/project/" + projectId + "/unread-badge",

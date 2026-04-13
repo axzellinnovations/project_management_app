@@ -114,7 +114,8 @@ export const useChat = (projectId: string) => {
           updateRoomMeta: rmUpdateMeta, pinRoomMessage: rmPin } = rm;
   const { setOnlineUsers, setTeamTypingUsers, setPrivateTypingUsers, setRoomTypingUsers } = presence;
   const { setTeamUnseenCount, setPrivateUnseenCounts, setRoomUnseenCounts,
-          setRoomMentionCounts, setTeamMentionCount, setUnreadBadge, markTeamAsRead } = unread;
+          setRoomMentionCounts, setTeamMentionCount, setUnreadBadge, markTeamAsRead,
+          clearRoomUnread, clearPrivateUnread } = unread;
   const { setMessageReactions, loadMessageReactions: loadMsgReactions,
           toggleReaction: reactionsToggle, hydrateReactions } = reactions;
   const { setThreadMessages, sendThreadReply: threadsSendReply,
@@ -291,27 +292,27 @@ export const useChat = (projectId: string) => {
   const loadRoomHistory = useCallback(
     async (roomId: number) => {
       await msgLoadRoom(roomId, hydrateReactions);
-      setRoomUnseenCounts(prev => ({ ...prev, [roomId]: 0 }));
+      clearRoomUnread(roomId);
       try {
         await chatApi.markRoomAsRead(projectId, roomId);
       } catch {
         // Keep UI responsive even if read-state sync fails.
       }
     },
-    [msgLoadRoom, hydrateReactions, setRoomUnseenCounts, projectId],
+    [msgLoadRoom, hydrateReactions, clearRoomUnread, projectId],
   );
 
   const loadPrivateHistory = useCallback(
     async (recipient: string) => {
       await msgLoadPrivate(recipient, currentUser, hydrateReactions);
-      setPrivateUnseenCounts(prev => ({ ...prev, [recipient]: 0 }));
+      clearPrivateUnread(recipient);
       try {
         await chatApi.markDirectConversationAsRead(projectId, recipient);
       } catch {
         // Keep UI responsive even if read-state sync fails.
       }
     },
-    [msgLoadPrivate, currentUser, hydrateReactions, setPrivateUnseenCounts, projectId],
+    [msgLoadPrivate, currentUser, hydrateReactions, clearPrivateUnread, projectId],
   );
 
   const sendTyping = useCallback(
@@ -770,8 +771,8 @@ export const useChat = (projectId: string) => {
   useEffect(() => {
     if (!selectedUser) { setPrivateTypingUsers([]); return; }
     setPrivateTypingUsers(prev => prev.filter(u => isSameIdentity(u, selectedUser)));
-    setPrivateUnseenCounts(prev => ({ ...prev, [selectedUser]: 0 }));
-  }, [selectedUser, setPrivateTypingUsers, setPrivateUnseenCounts]);
+    clearPrivateUnread(selectedUser);
+  }, [selectedUser, setPrivateTypingUsers, clearPrivateUnread]);
 
   useEffect(() => {
     if (selectedRoomId === null || !Number.isFinite(selectedRoomId)) {
@@ -779,9 +780,9 @@ export const useChat = (projectId: string) => {
       return;
     }
     setRoomTypingUsers(prev => ({ [selectedRoomId]: prev[selectedRoomId] || [] }));
-    setRoomUnseenCounts(prev => ({ ...prev, [selectedRoomId]: 0 }));
+    clearRoomUnread(selectedRoomId);
     setRoomMentionCounts(prev => ({ ...prev, [selectedRoomId]: 0 }));
-  }, [selectedRoomId, setRoomTypingUsers, setRoomUnseenCounts, setRoomMentionCounts]);
+  }, [selectedRoomId, setRoomTypingUsers, clearRoomUnread, setRoomMentionCounts]);
 
   useEffect(() => {
     if (!hasRestoredSelection) return;

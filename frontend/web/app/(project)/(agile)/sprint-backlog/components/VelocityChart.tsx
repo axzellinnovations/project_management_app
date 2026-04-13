@@ -25,7 +25,8 @@ export default function VelocityChart({ sprints }: VelocityChartProps) {
   }, []);
 
   const data = useMemo(() => {
-    return sprints.slice(-8).map((s) => ({
+    return sprints.slice(-8).map((s, index) => ({
+      key: `${s.sprintId}-${index}`,
       name: s.sprintName,
       committed: s.committedPoints,
       completed: s.completedPoints,
@@ -140,7 +141,7 @@ export default function VelocityChart({ sprints }: VelocityChartProps) {
             const committedH = (d.committed / maxVal) * chartH;
             const completedH = (d.completed / maxVal) * chartH;
             return (
-              <g key={d.name}>
+              <g key={d.key}>
                 {/* Committed bar */}
                 <rect
                   x={groupX}

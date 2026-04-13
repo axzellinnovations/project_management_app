@@ -305,6 +305,14 @@ function TaskRow({
   }, []);
 
   const getMemberName = (m: TaskRowTeamMember) => m.user.fullName || m.user.username;
+  const openDatePicker = useCallback(() => {
+    if (!dateRef.current) return;
+    if (typeof dateRef.current.showPicker === 'function') {
+      dateRef.current.showPicker();
+    } else {
+      dateRef.current.click();
+    }
+  }, []);
 
   // Responsive logic: check if screen is mobile size (< 768px)
   const [isMobile, setIsMobile] = useState(false);
@@ -365,7 +373,9 @@ function TaskRow({
                 onTouchStart={onTouchStartInternal}
                 onTouchEnd={onTouchEndInternal}
                 onTouchMove={onTouchMoveInternal}
-                className="text-[15px] font-bold text-[#101828] leading-tight truncate cursor-text select-none"
+                className={`text-[15px] font-bold leading-tight truncate cursor-text select-none ${
+                  task.status?.toUpperCase() === 'DONE' ? 'line-through text-[#98A2B3]' : 'text-[#101828]'
+                }`}
               >
                 {task.title}
               </h3>
@@ -455,7 +465,7 @@ function TaskRow({
               <div className="flex-shrink-0 flex items-center relative" onClick={(e) => e.stopPropagation()}>
                 <button
                   type="button"
-                  onClick={() => dateRef.current?.showPicker()}
+                  onClick={openDatePicker}
                   title={`Due Date: ${formatDate(task.dueDate)}`}
                   className={`text-[11px] font-bold leading-none whitespace-nowrap bg-[#F2F4F7] px-2 py-1.5 rounded-lg ${dueClass === 'overdue' ? 'text-red-600 bg-red-50' : 'text-[#475467]'}`}
                 >
@@ -466,7 +476,7 @@ function TaskRow({
                   type="date"
                   value={task.dueDate || ''}
                   onChange={(e) => onDueDateChange(task.id, e.target.value)}
-                  className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                  className="sr-only"
                 />
               </div>
             )}
@@ -755,7 +765,7 @@ function TaskRow({
         >
           <button
             type="button"
-            onClick={() => dateRef.current?.showPicker()}
+            onClick={openDatePicker}
             className={`flex h-6 w-full items-center justify-center gap-1 rounded-md px-2 text-[10px] font-bold transition-all border ${
               dueClass === 'none'
                 ? 'bg-white border-[#EAECF0] text-[#667085] hover:bg-gray-50'
@@ -770,7 +780,7 @@ function TaskRow({
             type="date"
             value={task.dueDate || ''}
             onChange={(e) => onDueDateChange(task.id, e.target.value)}
-            className="absolute inset-0 opacity-0 cursor-pointer z-10"
+            className="sr-only"
           />
         </div>
       )}

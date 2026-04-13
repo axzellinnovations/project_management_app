@@ -13,6 +13,8 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
     List<ChatRoomMember> findByChatRoomId(Long roomId);
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"chatRoom"})
     List<ChatRoomMember> findByUserUserId(Long userId);
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"chatRoom", "user"})
+    List<ChatRoomMember> findByUserUserIdIn(java.util.Collection<Long> userIds);
     Optional<ChatRoomMember> findByChatRoomIdAndUserUserId(Long roomId, Long userId);
     @Modifying
     @Transactional

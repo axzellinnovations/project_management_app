@@ -29,20 +29,35 @@ const subscribeToBrowserStorage = (onStoreChange: () => void) => {
   };
 };
 
+const getScopedProjectValue = (key: 'currentProjectName' | 'currentProjectId' | 'currentProjectType') => {
+  if (typeof window === 'undefined') return null;
+  return sessionStorage.getItem(key) || localStorage.getItem(key);
+};
+
+const setScopedProjectValue = (key: 'currentProjectName' | 'currentProjectId' | 'currentProjectType', value: string) => {
+  sessionStorage.setItem(key, value);
+  localStorage.setItem(key, value);
+};
+
+const removeScopedProjectValue = (key: 'currentProjectName' | 'currentProjectId' | 'currentProjectType') => {
+  sessionStorage.removeItem(key);
+  localStorage.removeItem(key);
+};
+
 function TopBarContent() {
   const projectName = useSyncExternalStore(
     subscribeToBrowserStorage,
-    () => localStorage.getItem('currentProjectName') || 'Project Name',
+    () => getScopedProjectValue('currentProjectName') || 'Project Name',
     () => 'Project Name'
   );
   const storedProjectId = useSyncExternalStore(
     subscribeToBrowserStorage,
-    () => localStorage.getItem('currentProjectId'),
+    () => getScopedProjectValue('currentProjectId'),
     () => null
   );
   const storedProjectType = useSyncExternalStore(
     subscribeToBrowserStorage,
-    () => localStorage.getItem('currentProjectType'),
+    () => getScopedProjectValue('currentProjectType'),
     () => null
   );
   const token = useSyncExternalStore<string | null>(
@@ -127,11 +142,11 @@ function TopBarContent() {
   }, [pathname]);
 
   useEffect(() => {
-    const storedId = localStorage.getItem('currentProjectId');
+    const storedId = getScopedProjectValue('currentProjectId');
     if (projectId && storedId !== projectId) {
       // Project changed — clear stale type immediately so tabs don't route wrong
-      localStorage.setItem('currentProjectId', projectId);
-      localStorage.removeItem('currentProjectType');
+      setScopedProjectValue('currentProjectId', projectId);
+      removeScopedProjectValue('currentProjectType');
       setProjectType(null);
     } else if (storedProjectType) {
       // Same project — safe to use the cached type
@@ -160,10 +175,10 @@ function TopBarContent() {
         const isFav = Boolean(projectData?.isFavorite);
         setIsFavorite(isFav);
         setProjectType(resolvedProjectType);
-        localStorage.setItem('currentProjectType', resolvedProjectType);
+        setScopedProjectValue('currentProjectType', resolvedProjectType);
 
-        if (projectData?.name && localStorage.getItem('currentProjectName') !== projectData.name) {
-          localStorage.setItem('currentProjectName', projectData.name);
+        if (projectData?.name && getScopedProjectValue('currentProjectName') !== projectData.name) {
+          setScopedProjectValue('currentProjectName', projectData.name);
           window.dispatchEvent(new Event('storage'));
         }
 
@@ -209,9 +224,9 @@ function TopBarContent() {
   };
 
   const handleSwitchProject = (proj: { id: number; name: string }) => {
-    localStorage.setItem('currentProjectName', proj.name);
-    localStorage.setItem('currentProjectId', proj.id.toString());
-    localStorage.removeItem('currentProjectType');
+    setScopedProjectValue('currentProjectName', proj.name);
+    setScopedProjectValue('currentProjectId', proj.id.toString());
+    removeScopedProjectValue('currentProjectType');
     setProjectType(null);
     window.dispatchEvent(new CustomEvent('planora:project-accessed'));
     window.dispatchEvent(new Event('storage'));
