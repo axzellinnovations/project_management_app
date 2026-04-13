@@ -13,6 +13,7 @@ jest.mock('@/lib/axios', () => ({
   default: {
     get: jest.fn(),
     post: jest.fn(),
+    patch: jest.fn(),
     put: jest.fn(),
     delete: jest.fn(),
   },
@@ -53,7 +54,7 @@ describe('kanban api', () => {
   });
 
   it('update and delete task call expected endpoints', async () => {
-    mockedAxios.put.mockResolvedValueOnce({ data: { id: 3, status: 'DONE' } });
+    mockedAxios.patch.mockResolvedValueOnce({ data: { id: 3, status: 'DONE' } });
     mockedAxios.put.mockResolvedValueOnce({ data: { id: 3, title: 'Updated' } });
     mockedAxios.delete.mockResolvedValueOnce({});
 
@@ -61,11 +62,22 @@ describe('kanban api', () => {
     const taskResult = await updateTask(3, { title: 'Updated' });
     await deleteTask(3);
 
-    expect(mockedAxios.put).toHaveBeenNthCalledWith(1, '/api/tasks/3', { status: 'DONE' });
-    expect(mockedAxios.put).toHaveBeenNthCalledWith(2, '/api/tasks/3', { title: 'Updated' });
+    expect(mockedAxios.patch).toHaveBeenCalledWith('/api/tasks/3/status', { status: 'DONE' });
+    expect(mockedAxios.put).toHaveBeenCalledWith('/api/tasks/3', { title: 'Updated' });
     expect(mockedAxios.delete).toHaveBeenCalledWith('/api/tasks/3');
     expect(statusResult).toEqual({ id: 3, status: 'DONE' });
     expect(taskResult).toEqual({ id: 3, title: 'Updated' });
+  });
+
+  it('updateTaskStatus falls back to PUT on 404 when title is provided', async () => {
+    mockedAxios.patch.mockRejectedValueOnce({ response: { status: 404 } });
+    mockedAxios.put.mockResolvedValueOnce({ data: { id: 3, status: 'DONE', title: 'Task 3' } });
+
+    const result = await updateTaskStatus(3, 'DONE', 'Task 3');
+
+    expect(mockedAxios.patch).toHaveBeenCalledWith('/api/tasks/3/status', { status: 'DONE' });
+    expect(mockedAxios.put).toHaveBeenCalledWith('/api/tasks/3', { title: 'Task 3', status: 'DONE' });
+    expect(result).toEqual({ id: 3, status: 'DONE', title: 'Task 3' });
   });
 
   it('fetchTeamMembers supports wrapped payload shape', async () => {

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useMemo, useSyncExternalStore, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { AUTH_TOKEN_CHANGED_EVENT, clearTokens, getUserFromToken, getValidToken, User } from '@/lib/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { fetchChatInbox, type ChatInboxResponse } from '@/services/chat-service';
@@ -14,9 +13,9 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { SidebarHeader, CollapseButton } from './sidebar/SidebarHeader';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { NavRow } from './sidebar/NavRows';
-import { InboxDropdown } from './sidebar/InboxDropdown';
-import { NotificationsDropdown } from './sidebar/NotificationsDropdown';
 import { ProjectDropdown } from './sidebar/ProjectDropdown';
+import { SidebarPanel } from './sidebar/SidebarPanel';
+import { NotificationsPanelContent } from './sidebar/NotificationsPanel';
 import ProjectList from '@/components/layout/sidebar/ProjectList';
 import InboxBadge from '@/components/layout/sidebar/InboxBadge';
 import { useGlobalNotifications } from '@/components/providers/GlobalNotificationProvider';
@@ -42,14 +41,19 @@ function InboxNavRow({ collapsed, active, badge, onClick }: NavRowProps) {
   return (
     <div data-sidebar-panel-trigger>
       <NavRow
-        icon={<InboxIcon />}
+        icon={
+          <div className="relative">
+            <InboxIcon />
+            <div className="absolute -top-1 -right-2">
+              <InboxBadge count={badge} size="overlay" cap={99} />
+            </div>
+          </div>
+        }
         label="Inbox"
         collapsed={collapsed}
         active={active}
-        badge={badge}
+        badge={0}
         onClick={onClick}
-        hasChevron
-        chevronOpen={active}
       />
     </div>
   );
@@ -65,8 +69,6 @@ function NotificationsNavRow({ collapsed, active, badge, onClick }: NavRowProps)
         active={active}
         badge={badge}
         onClick={onClick}
-        hasChevron
-        chevronOpen={active}
       />
     </div>
   );
@@ -84,6 +86,41 @@ const subscribeToBrowserStorage = (onChange: () => void) => {
     window.removeEventListener(AUTH_TOKEN_CHANGED_EVENT, onChange);
   };
 };
+
+/* Inbox Panel Items */
+import type { ChatInboxActivity } from '@/services/chat-service';
+
+function InboxPanelItem({ item, onClick }: { item: ChatInboxActivity; onClick: () => void }) {
+  const label = item.chatType === 'ROOM'
+    ? (item.roomName || 'Channel')
+    : item.chatType === 'DIRECT'
+      ? (item.username || 'Direct Message')
+      : 'Team Chat';
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left flex items-start gap-2.5 px-3 py-2.5 hover:bg-cu-hover transition-colors"
+    >
+      <div className="w-7 h-7 rounded-full bg-cu-primary/10 flex items-center justify-center text-cu-primary flex-shrink-0 mt-0.5">
+        <InboxIcon size={13} />
+      </div>
+      <div className="flex flex-col flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-semibold text-cu-text-muted uppercase tracking-wide truncate">
+            {item.projectName}
+          </span>
+          {item.unread && <InboxBadge count={item.unseenCount} size="inline" cap={99} />}
+        </div>
+        <span className="text-[12px] font-semibold text-cu-text-primary truncate">{label}</span>
+        <span className="text-[10.5px] text-cu-text-secondary truncate leading-normal mt-0.5">
+          {item.lastMessageSender && <span className="font-medium mr-1">{item.lastMessageSender}:</span>}
+          {item.lastMessage || 'No messages yet'}
+        </span>
+      </div>
+    </button>
+  );
+}
 
 /* --------------------------------------------
    Main Sidebar
@@ -118,8 +155,6 @@ export default function Sidebar() {
   const [chatInbox, setChatInbox] = useState<ChatInboxResponse | null>(null);
   const [inboxPanelOpen, setInboxPanelOpen] = useState(false);
   const [notifPanelOpen, setNotifPanelOpen] = useState(false);
-  const [inboxSearch, setInboxSearch] = useState('');
-  const [notifSearch, setNotifSearch] = useState('');
   const [loadingInbox, setLoadingInbox] = useState(false);
 
   const [collapsed, setCollapsed] = useState(true);
@@ -127,7 +162,6 @@ export default function Sidebar() {
   const [recentOpen, setRecentOpen] = useState(false);
   const [favSearch, setFavSearch] = useState('');
   const [recentSearch, setRecentSearch] = useState('');
-  const [sidebarWidth, setSidebarWidth] = useState(64);
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -150,25 +184,10 @@ export default function Sidebar() {
 
   const favRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
-  const inboxRef = useRef<HTMLDivElement>(null);
-  const notifRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const lastInboxFetchedAtRef = useRef(0);
   const latestSyncedNotificationRef = useRef<number | null>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-
-  /* Track sidebar right edge for panel positioning */
-  useEffect(() => {
-    const updateWidth = () => {
-      if (sidebarRef.current) {
-        const rect = sidebarRef.current.getBoundingClientRect();
-        setSidebarWidth(rect.right);
-      }
-    };
-    updateWidth();
-    window.addEventListener('resize', updateWidth);
-    return () => window.removeEventListener('resize', updateWidth);
-  }, [collapsed]);
 
   /* -- fetch inbox activity -- */
   const fetchInboxActivity = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
@@ -284,24 +303,14 @@ export default function Sidebar() {
     setRecentOpen(false);
     setNotifPanelOpen(false);
     void fetchInboxActivity();
-    if (inboxRef.current) {
-      const rect = inboxRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.top, left: rect.right + 8 });
-    }
     setInboxPanelOpen(p => !p);
-    setInboxSearch('');
   };
 
   const openNotifPanel = () => {
     setFavOpen(false);
     setRecentOpen(false);
     setInboxPanelOpen(false);
-    if (notifRef.current) {
-      const rect = notifRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.top, left: rect.right + 8 });
-    }
     setNotifPanelOpen(p => !p);
-    setNotifSearch('');
   };
 
   /* handlers */
@@ -334,6 +343,11 @@ export default function Sidebar() {
     (p.projectKey || '').toLowerCase().includes(recentSearch.toLowerCase())
   );
 
+  const inboxItems = useMemo(
+    () => chatInbox?.recentActivities?.slice(0, 5) || [],
+    [chatInbox],
+  );
+
   const inboxBadgeCount = useMemo(() => {
     if (!chatInbox) return 0;
     return Number(chatInbox.totalUnread) || 0;
@@ -351,23 +365,18 @@ export default function Sidebar() {
   /* -- render -- */
   return (
     <>
-      {isMobile && !collapsed && typeof document !== 'undefined' && createPortal(
+      {isMobile && !collapsed && (
         <div
-          role="button"
-          tabIndex={0}
-          className="fixed inset-0 w-[100vw] h-[100vh] bg-black/50 backdrop-blur-sm z-[9990] cursor-pointer touch-none"
+          className="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-[9998]"
           onClick={() => setCollapsed(true)}
-          onKeyDown={(e) => e.key === 'Escape' && setCollapsed(true)}
-          aria-label="Close Sidebar"
-        />,
-        document.body
+        />
       )}
 
       <div
         ref={sidebarRef}
-        className={`h-screen flex-shrink-0 ${isMobile ? 'fixed left-0 top-0 z-[9999]' : 'relative'} ${isMobile && collapsed ? 'pointer-events-none' : ''}`}
+        className={`h-screen flex-shrink-0 ${isMobile ? 'fixed left-0 top-0 z-[9999]' : 'relative'}`}
         style={{
-          width: isMobile ? (collapsed ? '0px' : '260px') : (collapsed ? '64px' : '240px'),
+          width: isMobile ? '260px' : (collapsed ? '64px' : '240px'),
         }}
       >
         <div
@@ -404,23 +413,19 @@ export default function Sidebar() {
                 onOpenRecent={openRecentDropdown}
               />
 
-              <div ref={inboxRef}>
-                <InboxNavRow
-                  collapsed={collapsed}
-                  active={inboxPanelOpen}
-                  badge={inboxBadgeCount}
-                  onClick={openInboxPanel}
-                />
-              </div>
+              <InboxNavRow
+                collapsed={collapsed}
+                active={inboxPanelOpen}
+                badge={inboxBadgeCount}
+                onClick={openInboxPanel}
+              />
 
-              <div ref={notifRef}>
-                <NotificationsNavRow
-                  collapsed={collapsed}
-                  active={notifPanelOpen}
-                  badge={globalUnreadCount}
-                  onClick={openNotifPanel}
-                />
-              </div>
+              <NotificationsNavRow
+                collapsed={collapsed}
+                active={notifPanelOpen}
+                badge={globalUnreadCount}
+                onClick={openNotifPanel}
+              />
 
               <NavRow
                 icon={<ProfileIcon />}
@@ -498,11 +503,9 @@ export default function Sidebar() {
             fixedTop={dropdownPos.top}
             fixedLeft={dropdownPos.left}
             notifications={notifications}
-            search={notifSearch}
-            onSearch={setNotifSearch}
             onClose={() => setNotifPanelOpen(false)}
           />
-        )}
+        </SidebarPanel>
       </div>
     </>
   );

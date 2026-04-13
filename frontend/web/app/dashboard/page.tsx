@@ -8,6 +8,7 @@ import api from '@/lib/axios';
 import { useRouter } from 'next/navigation';
 import RecentSpacesCarousel from './components/RecentSpacesCarousel';
 import DashboardTable from './components/DashboardTable';
+import MetricsGrid from './components/MetricsGrid';
 import WelcomeGreeting from '@/components/ui/WelcomeGreeting';
 import { NotificationBell } from '@/navBar/topbar/NotificationBell';
 import Image from 'next/image';
@@ -226,6 +227,9 @@ export default function DashboardPage() {
                     searchQuery={recentSpacesSearch}
                 />
             </div>
+
+            {/* Metrics Overview */}
+            <MetricsGrid />
 
             {/* Desktop View: Tabs */}
             <div className="hidden md:flex flex-col gap-4 md:gap-6 mt-2 md:mt-0">

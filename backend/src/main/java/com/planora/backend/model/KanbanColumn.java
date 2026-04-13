@@ -20,6 +20,15 @@ public class KanbanColumn {
 
     private Integer position; // Order position for sorting columns
 
+    @Column(name = "status")
+    private String status; // maps to the status string used in tasks (e.g. "TODO")
+
+    @Column(name = "color")
+    private String color; // hex string e.g. "#EFF6FF", nullable
+
+    @Column(name = "wip_limit")
+    private Integer wipLimit; // nullable, 0 = unlimited
+
     @ManyToOne
     @JoinColumn(name = "kanban_id")
     @JsonIgnore
