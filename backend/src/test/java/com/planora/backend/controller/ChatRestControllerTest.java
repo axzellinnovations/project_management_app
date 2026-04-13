@@ -23,7 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.mockito.Mock;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -49,31 +49,31 @@ class ChatRestControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @Mock
+    @MockBean
     private ChatService chatService;
-    @Mock
+    @MockBean
     private ProjectRepository projectRepository;
-    @Mock
+    @MockBean
     private TeamMemberRepository teamMemberRepository;
-    @Mock
+    @MockBean
     private UserRepository userRepository;
-    @Mock
+    @MockBean
     private ChatRoomRepository chatRoomRepository;
-    @Mock
+    @MockBean
     private ChatRoomMemberRepository chatRoomMemberRepository;
-    @Mock
+    @MockBean
     private SimpMessagingTemplate simpMessagingTemplate;
-    @Mock
+    @MockBean
     private ChatPresenceService chatPresenceService;
-    @Mock
+    @MockBean
     private ChatWebhookService chatWebhookService;
-    @Mock
+    @MockBean
     private ChatDocumentService chatDocumentService;
-    @Mock
+    @MockBean
     private NotificationService notificationService;
-    @Mock
+    @MockBean
     private JWTService jwtService;
-    @Mock
+    @MockBean
     private UserDetailsService userDetailsService;
 
     private User alice;

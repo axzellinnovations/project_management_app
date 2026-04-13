@@ -293,7 +293,7 @@ public class TaskService {
     //4. DELETE TASK
     @Transactional
     public Long deleteTask(Long taskId, Long currentUserId) {
-        Task task = taskRepository.findById(taskId)
+        Task task = taskRepository.findByIdWithDetails(taskId)
                 .orElseThrow(()-> new ResourceNotFoundException("Task not found"));
 
         //validate user - OWNER or ADMIN only
@@ -692,8 +692,12 @@ public class TaskService {
     //19. BULK UPDATE STATUS
     @Transactional
     public void bulkUpdateStatus(List<Long> taskIds, String status, Long currentUserId) {
-        List<Task> tasks = taskRepository.findAllById(taskIds);
+        if (taskIds == null || taskIds.isEmpty()) return;
+        List<Task> tasks = taskRepository.findByIdInWithDetails(taskIds);
         List<Task> doneTransitioned = new java.util.ArrayList<>();
+        User currentUser = userRepository.findById(currentUserId).orElseThrow();
+        String actorName = currentUser.getUsername();
+
         for (Task task : tasks) {
             requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
             String oldTaskStatus = task.getStatus();
@@ -704,14 +708,12 @@ public class TaskService {
             } else if (!"DONE".equalsIgnoreCase(status)) {
                 task.setCompletedAt(null);
             }
-            task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
+            task.setLastModifiedBy(currentUser);
         }
         taskRepository.saveAll(tasks);
 
         // NTH-2: notify stakeholders of tasks that just moved to DONE
         if (!doneTransitioned.isEmpty()) {
-            User actor = userRepository.findById(currentUserId).orElse(null);
-            String actorName = actor != null ? actor.getUsername() : "Unknown";
             for (Task doneTask : doneTransitioned) {
                 String message = actorName + " marked \"" + doneTask.getTitle() + "\" as Done";
                 String link = "/taskcard?taskId=" + doneTask.getId();
@@ -723,7 +725,8 @@ public class TaskService {
     //20. BULK DELETE
     @Transactional
     public void bulkDelete(List<Long> taskIds, Long currentUserId) {
-        List<Task> tasks = taskRepository.findAllById(taskIds);
+        if (taskIds == null || taskIds.isEmpty()) return;
+        List<Task> tasks = taskRepository.findByIdInWithDetails(taskIds);
         for (Task task : tasks) {
             TeamMember member = teamMemberRepository
                     .findByTeamIdAndUserUserId(task.getProject().getTeam().getId(), currentUserId)

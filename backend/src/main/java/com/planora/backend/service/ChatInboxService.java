@@ -89,6 +89,19 @@ public class ChatInboxService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
+        // Pre-fetch team members for all projects to avoid N+1 inside the loop
+        java.util.Set<Long> allTeamIds = projects.stream()
+                .map(ProjectResponseDTO::getTeamId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        java.util.Map<Long, List<String>> participantsByTeam = new java.util.HashMap<>();
+        for (Long tid : allTeamIds) {
+            participantsByTeam.put(tid, teamMemberRepository.findByTeamId(tid).stream()
+                    .map(tm -> tm.getUser() != null ? tm.getUser().getUsername() : null)
+                    .filter(name -> name != null && !name.isBlank())
+                    .toList());
+        }
+
         List<ChatInboxProjectGroup> grouped = new ArrayList<>();
         List<ChatInboxActivity> allActivities = new ArrayList<>();
 
@@ -99,21 +112,18 @@ public class ChatInboxService {
                 continue;
             }
 
-            List<String> participants = teamMemberRepository.findByTeamId(teamId).stream()
-                    .map(teamMember -> teamMember.getUser() != null ? teamMember.getUser().getUsername() : null)
-                    .filter(name -> name != null && !name.isBlank())
-                    .toList();
+            List<String> participants = participantsByTeam.getOrDefault(teamId, List.of());
 
             List<ChatRoom> visibleRooms = getVisibleRooms(projectId, currentUser, usernameOrEmail, memberRoomIds);
             List<ChatInboxActivity> projectActivities = new ArrayList<>();
 
-            var teamSummary = chatService.buildTeamSummary(projectId, usernameOrEmail);
+            var teamSummary = chatService.buildTeamSummary(projectId, currentUser, usernameOrEmail);
             ChatInboxActivity teamActivity = toTeamActivity(projectId, project.getName(), teamSummary);
             if (teamActivity != null) {
                 projectActivities.add(teamActivity);
             }
 
-            for (var roomSummary : chatService.buildRoomSummaries(projectId, usernameOrEmail, visibleRooms)) {
+            for (var roomSummary : chatService.buildRoomSummaries(projectId, currentUser, usernameOrEmail, visibleRooms)) {
                 if (roomSummary.lastMessageTimestamp() == null) {
                     continue;
                 }
@@ -136,7 +146,7 @@ public class ChatInboxService {
                 ));
             }
 
-            for (var directSummary : chatService.buildDirectSummaries(projectId, usernameOrEmail, participants)) {
+            for (var directSummary : chatService.buildDirectSummaries(projectId, currentUser, usernameOrEmail, participants)) {
                 if (directSummary.lastMessageTimestamp() == null) {
                     continue;
                 }

@@ -108,10 +108,33 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
             @Param("priority") String priority,
             @Param("sprintId") Long sprintId);
 
-    @Query("SELECT t FROM Task t WHERE LOWER(t.title) LIKE LOWER(CONCAT('%', :query, '%')) AND t.project.team.id IN (SELECT tm.team.id FROM TeamMember tm WHERE tm.user.userId = :userId)")
+    @Query("SELECT t FROM Task t " +
+           "LEFT JOIN FETCH t.project p " +
+           "WHERE LOWER(t.title) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "AND t.project.team.id IN (SELECT tm.team.id FROM TeamMember tm WHERE tm.user.userId = :userId)")
     List<Task> searchTasksByTitle(@Param("query") String query, @Param("userId") Long userId, Pageable pageable);
 
     /** Recurring tasks whose next spawn date is today or earlier and still active. */
-    @Query("SELECT t FROM Task t WHERE t.nextOccurrence IS NOT NULL AND t.nextOccurrence <= :today AND t.recurrenceRule IS NOT NULL")
-    List<Task> findByNextOccurrenceBeforeOrEqual(@Param("today") LocalDate today);
+    @Query("SELECT t FROM Task t " +
+           "LEFT JOIN FETCH t.project " +
+           "LEFT JOIN FETCH t.sprint " +
+           "LEFT JOIN FETCH t.kanbanColumn " +
+           "LEFT JOIN FETCH t.assignee a " +
+           "LEFT JOIN FETCH a.user " +
+           "LEFT JOIN FETCH t.reporter r " +
+           "LEFT JOIN FETCH r.user " +
+           "LEFT JOIN FETCH t.milestone " +
+           "WHERE t.nextOccurrence IS NOT NULL AND t.nextOccurrence <= :today AND t.recurrenceRule IS NOT NULL")
+    List<Task> findByNextOccurrenceBeforeOrEqualWithAssociations(@Param("today") LocalDate today);
+
+    @Query("SELECT DISTINCT t FROM Task t " +
+           "LEFT JOIN FETCH t.project p " +
+           "LEFT JOIN FETCH p.team pt " +
+           "LEFT JOIN FETCH t.sprint s " +
+           "LEFT JOIN FETCH t.assignee a " +
+           "LEFT JOIN FETCH a.user au " +
+           "LEFT JOIN FETCH t.reporter r " +
+           "LEFT JOIN FETCH r.user ru " +
+           "WHERE t.id IN :ids")
+    List<Task> findByIdInWithDetails(@Param("ids") List<Long> ids);
 }

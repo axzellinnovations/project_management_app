@@ -246,7 +246,7 @@ class TaskServiceTest {
         Task task = buildTask(60L);
         actorMember.setRole(TeamRole.OWNER);
 
-        when(taskRepository.findById(60L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdWithDetails(60L)).thenReturn(Optional.of(task));
         when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
         when(userRepository.findAllById(any())).thenReturn(List.of(creatorUser, assigneeUser));
@@ -412,7 +412,7 @@ class TaskServiceTest {
         Task task = buildTask(60L);
         actorMember.setRole(TeamRole.MEMBER);
 
-        when(taskRepository.findById(60L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdWithDetails(60L)).thenReturn(Optional.of(task));
         when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
 
         ForbiddenException exception = assertThrows(ForbiddenException.class,
@@ -448,7 +448,7 @@ class TaskServiceTest {
         task2.setProject(otherProject);
 
         // actorMember is member of team 20, but not team 99
-        when(taskRepository.findAllById(List.of(101L, 102L))).thenReturn(List.of(task1, task2));
+        when(taskRepository.findByIdInWithDetails(List.of(101L, 102L))).thenReturn(List.of(task1, task2));
         when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
         when(teamMemberRepository.findByTeamIdAndUserUserId(99L, 500L)).thenReturn(Optional.empty());
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
@@ -501,7 +501,7 @@ class TaskServiceTest {
         Task task1 = buildTask(10L);
         task1.setStatus("TODO");
 
-        when(taskRepository.findAllById(List.of(10L))).thenReturn(List.of(task1));
+        when(taskRepository.findByIdInWithDetails(List.of(10L))).thenReturn(List.of(task1));
         when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
         when(taskRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -516,7 +516,7 @@ class TaskServiceTest {
         Task task1 = buildTask(11L);
         task1.setStatus("TODO");
 
-        when(taskRepository.findAllById(List.of(11L))).thenReturn(List.of(task1));
+        when(taskRepository.findByIdInWithDetails(List.of(11L))).thenReturn(List.of(task1));
         when(teamMemberRepository.findByTeamIdAndUserUserId(20L, 500L)).thenReturn(Optional.of(actorMember));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
         when(userRepository.findAllById(any())).thenReturn(List.of(assigneeUser));

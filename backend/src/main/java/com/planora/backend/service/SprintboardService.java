@@ -179,9 +179,9 @@ public class SprintboardService {
                     dto.setStatus(t.getStatus() != null ? t.getStatus() : "TODO");
                     dto.setPriority(t.getPriority() != null ? t.getPriority().toString() : "MEDIUM");
                     dto.setDueDate(t.getDueDate());
-                    if (task.getAssignee() != null && task.getAssignee().getUser() != null) {
-                        dto.setAssigneeName(task.getAssignee().getUser().getFullName());
-                        dto.setAssigneePhotoUrl(task.getAssignee().getUser().getProfilePicUrl());
+                    if (t.getAssignee() != null && t.getAssignee().getUser() != null) {
+                        dto.setAssigneeName(t.getAssignee().getUser().getFullName());
+                        dto.setAssigneePhotoUrl(t.getAssignee().getUser().getProfilePicUrl());
                     }
                     if (t.getLabels() != null && !t.getLabels().isEmpty()) {
                         var label = t.getLabels().iterator().next();
@@ -200,7 +200,7 @@ public class SprintboardService {
 
         requireViewBoard(sprint.getProId(), currentUserId);
 
-        Task task = taskRepository.findById(taskId)
+        Task task = taskRepository.findByIdWithDetails(taskId)
                 .orElseThrow(() -> new RuntimeException("Task not found"));
 
         if (task.getSprint() == null || !task.getSprint().getId().equals(sprint.getId())) {

@@ -19,6 +19,7 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
     @EntityGraph(attributePaths = {"team.owner", "team", "user"})
     List<TeamMember> findByUserUserId(Long currentUserId);
     // Get all members of a team
+    @EntityGraph(attributePaths = {"user"})
     List<TeamMember> findByTeamId(Long teamId);
 
     List<TeamMember> findByTeamIdAndRoleIn(Long teamId, Set<com.planora.backend.model.TeamRole> roles);

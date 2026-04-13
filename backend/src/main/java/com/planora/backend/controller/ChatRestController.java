@@ -465,7 +465,7 @@ public class ChatRestController {
                 .map(tm -> tm.getUser().getUsername())
                 .toList();
 
-        var visibleRooms = getVisibleRooms(projectId, username, includeArchived);
+        var visibleRooms = getVisibleRooms(projectId, username, includeArchived, currentUser);
         var response = new ChatSidebarResponse(
                 chatService.buildTeamSummary(projectId, currentUser, username),
                 chatService.buildRoomSummaries(projectId, currentUser, username, visibleRooms),
@@ -487,7 +487,7 @@ public class ChatRestController {
         var participants = teamMemberRepository.findByTeamId(project.getTeam().getId()).stream()
             .map(tm -> tm.getUser().getUsername())
             .toList();
-        var visibleRooms = getVisibleRooms(projectId, username, includeArchived);
+        var visibleRooms = getVisibleRooms(projectId, username, includeArchived, currentUser);
         var badge = chatService.buildUnreadBadge(projectId, currentUser, username, visibleRooms, participants);
 
         return new ResponseEntity<>(
@@ -846,7 +846,10 @@ public class ChatRestController {
     }
 
     private List<ChatRoom> getVisibleRooms(Long projectId, String username, boolean includeArchived) {
-        var currentUser = resolveUserByEmailOrUsername(username);
+        return getVisibleRooms(projectId, username, includeArchived, resolveUserByEmailOrUsername(username));
+    }
+
+    private List<ChatRoom> getVisibleRooms(Long projectId, String username, boolean includeArchived, com.planora.backend.model.User currentUser) {
         if (currentUser == null) {
             return List.of();
         }

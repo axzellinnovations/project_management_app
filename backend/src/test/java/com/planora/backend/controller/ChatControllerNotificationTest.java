@@ -83,7 +83,7 @@ class ChatControllerNotificationTest {
     @BeforeEach
     void setUp() {
         // Ensure convertToEntity returns a valid ChatMessage for any DTO
-        when(chatService.convertToEntity(any(ChatMessageDTO.class))).thenAnswer(invocation -> {
+        lenient().when(chatService.convertToEntity(any(ChatMessageDTO.class))).thenAnswer(invocation -> {
             ChatMessageDTO dto = invocation.getArgument(0);
             ChatMessage entity = new ChatMessage();
             entity.setId(dto.getId());
@@ -137,7 +137,7 @@ class ChatControllerNotificationTest {
         lenient().when(teamMemberRepository.findByTeamId(99L)).thenReturn(List.of(aliceMember, bobMember));
 
         when(userRepository.findByUsernameIgnoreCase("alice")).thenReturn(Optional.of(alice));
-        when(userRepository.findByUsernameIgnoreCase("bob")).thenReturn(Optional.of(bob));
+        lenient().when(userRepository.findByUsernameIgnoreCase("bob")).thenReturn(Optional.of(bob));
 
         lenient().when(chatRoomMemberRepository.findByUserUserId(anyLong())).thenReturn(List.of());
         lenient().when(chatRoomRepository.findByProjectId(10L)).thenReturn(List.of());

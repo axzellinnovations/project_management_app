@@ -126,8 +126,8 @@ public class ProjectService {
     // ---------------- READ ALL (FOR AUTH USER) ----------------
     @Transactional(readOnly = true)
     public List<ProjectResponseDTO> getProjectsForUser(Long userId, String type, String sort, String order) {
-        List<Team> userTeams = teamMemberRepository.findByUserUserId(userId)
-                .stream()
+        List<TeamMember> memberships = teamMemberRepository.findByUserUserId(userId);
+        List<Team> userTeams = memberships.stream()
                 .map(TeamMember::getTeam)
                 .collect(Collectors.toList());
 
@@ -165,8 +165,8 @@ public class ProjectService {
         }
         // Pre-fetch data to avoid N+1 queries
         User userRef = userRepository.getReferenceById(userId);
-        
-        java.util.Map<Long, LocalDateTime> teamJoinedMap = teamMemberRepository.findByUserUserId(userId).stream()
+
+        java.util.Map<Long, LocalDateTime> teamJoinedMap = memberships.stream()
             .collect(Collectors.toMap(m -> m.getTeam().getId(), TeamMember::getJoinedAt, (a, b) -> a));
             
         java.util.Map<Long, LocalDateTime> accessMap = projectAccessRepository.findByUser_UserIdOrderByLastAccessedAtDesc(userId, Pageable.unpaged()).stream()
@@ -221,8 +221,8 @@ public class ProjectService {
     @Transactional(readOnly = true)
     public List<ProjectResponseDTO> getRecentProjectsForUser(Long userId, int limit) {
         // Get the teams the user currently belongs to
-        List<Team> userTeams = teamMemberRepository.findByUserUserId(userId)
-                .stream().map(TeamMember::getTeam).collect(Collectors.toList());
+        List<TeamMember> memberships = teamMemberRepository.findByUserUserId(userId);
+        List<Team> userTeams = memberships.stream().map(TeamMember::getTeam).collect(Collectors.toList());
 
         if (userTeams.isEmpty()) return java.util.Collections.emptyList();
 
@@ -231,8 +231,8 @@ public class ProjectService {
 
         // Pre-fetch data to avoid N+1 queries
         User userRef = userRepository.getReferenceById(userId);
-        
-        java.util.Map<Long, LocalDateTime> teamJoinedMap = teamMemberRepository.findByUserUserId(userId).stream()
+
+        java.util.Map<Long, LocalDateTime> teamJoinedMap = memberships.stream()
             .collect(Collectors.toMap(m -> m.getTeam().getId(), TeamMember::getJoinedAt, (a, b) -> a));
             
         java.util.Map<Long, LocalDateTime> accessMap = projectAccessRepository.findByUser_UserIdOrderByLastAccessedAtDesc(userId, Pageable.unpaged()).stream()
