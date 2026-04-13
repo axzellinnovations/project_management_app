@@ -99,7 +99,7 @@ export function ProjectDropdown({
       {/* Search bar */}
       <div className="px-3 pt-3 pb-2 border-b border-cu-border-light">
         <div className="relative">
-          <div className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none">
+          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
             <SearchIcon />
           </div>
           <input
@@ -108,7 +108,7 @@ export function ProjectDropdown({
             onChange={e => onSearch(e.target.value)}
             placeholder={placeholder}
             autoFocus
-            className="w-full pl-7 pr-3 py-1.5 text-[12px] bg-cu-bg-tertiary border border-cu-border rounded-lg placeholder-cu-text-muted text-cu-text-primary focus:outline-none focus:ring-1 focus:ring-cu-primary/30 focus:border-cu-primary/40 transition-all"
+            className="w-full pl-8 pr-3 py-1.5 text-[12px] bg-cu-bg-tertiary border border-cu-border rounded-lg placeholder-cu-text-muted text-cu-text-primary focus:outline-none focus:ring-1 focus:ring-cu-primary/30 focus:border-cu-primary/40 transition-all"
           />
         </div>
       </div>

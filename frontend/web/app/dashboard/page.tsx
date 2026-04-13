@@ -1,5 +1,4 @@
 'use client';
-export const dynamic = 'force-dynamic';
 
 import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,6 +12,9 @@ import MetricsGrid from './components/MetricsGrid';
 import WelcomeGreeting from '@/components/ui/WelcomeGreeting';
 import { NotificationBell } from '@/navBar/topbar/NotificationBell';
 import Image from 'next/image';
+import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
+
+const DASHBOARD_PROJECTS_CACHE_TTL = 2 * 60_000; // 2 min stale-while-revalidate
 
 interface ProjectSummary {
     id: number;
@@ -51,28 +53,50 @@ export default function DashboardPage() {
             return;
         }
 
-        const fetchProjects = async () => {
+        const fetchProjects = async (showLoadingIfEmpty = false) => {
             try {
-                // Fetch recent and favorites in parallel. Much faster than fetching ALL projects.
+                // Try cache first for instant display
+                const cacheKey = buildSessionCacheKey('dashboard-projects', ['v1']);
+                if (cacheKey) {
+                    const cached = getSessionCache<{ recent: ProjectSummary[]; favorites: ProjectSummary[] }>(cacheKey, { allowStale: true });
+                    if (cached.data) {
+                        setProjects(cached.data);
+                        if (!cached.isStale) {
+                            setLoading(false);
+                            return; // fresh cache — skip network
+                        }
+                        // stale — show cached but still background-refresh
+                        setLoading(false);
+                    } else if (showLoadingIfEmpty) {
+                        setLoading(true);
+                    }
+                }
+
+                // Network fetch
                 const [recentRes, favRes] = await Promise.all([
                     api.get('/api/projects/recent?limit=15'),
                     api.get('/api/projects/favorites')
                 ]);
-                setProjects({
+                const fresh = {
                     recent: recentRes.data || [],
                     favorites: favRes.data || []
-                });
+                };
+                setProjects(fresh);
+
+                if (cacheKey) {
+                    setSessionCache(cacheKey, fresh, DASHBOARD_PROJECTS_CACHE_TTL);
+                }
             } catch (error: unknown) {
                 const status = (error as { response?: { status?: number } })?.response?.status;
                 if (status !== 401 && status !== 403) {
-                    console.error("Failed to fetch projects:", error);
+                    // Non-auth error — silently ignore on dashboard to avoid disruptive errors
                 }
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchProjects();
+        fetchProjects(true);
 
         // Re-fetch when a project favourite is toggled from anywhere (e.g., TopBar)
         const handleFavToggled = () => { void fetchProjects(); };
@@ -109,7 +133,7 @@ export default function DashboardPage() {
     );
 
     return (
-        <div className="flex flex-col gap-4 w-full h-full max-w-[1200px] mx-auto pb-[calc(20px+env(safe-area-inset-bottom,0px))] md:pb-12 mt-0 px-4 sm:px-6">
+        <div className="flex flex-col gap-4 w-full h-full max-w-[1200px] mx-auto pb-6 mt-0 px-4 sm:px-6">
             {/* Page Header: Greeting + Actions */}
             <div className="w-full flex items-center justify-between gap-3 py-2 px-1">
                 {/* Left: mobile menu toggle + greeting */}

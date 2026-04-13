@@ -125,7 +125,7 @@ export default function BacklogPage() {
     }
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 mobile-page-padding max-w-[900px] mx-auto overflow-y-auto custom-scrollbar touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="flex flex-col h-full bg-slate-50 mobile-page-padding max-w-[900px] mx-auto overflow-y-auto custom-scrollbar touch-pan-y pb-6" style={{ WebkitOverflowScrolling: 'touch' }}>
             {/* ── Header ── */}
             <div className="sticky-section-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-4 flex items-center gap-3 flex-wrap flex-shrink-0 z-40">
                 <div>

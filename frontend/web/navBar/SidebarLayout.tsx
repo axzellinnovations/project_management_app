@@ -1,7 +1,6 @@
 'use client';
 
 import Sidebar from './Sidebar';
-import BottomNav from './BottomNav';
 import TopBar from './TopBar';
 import { Suspense } from 'react';
 import { usePathname } from 'next/navigation';
@@ -25,18 +24,17 @@ export default function SidebarLayout({ children, showTopBar = true }: SidebarLa
             >
                 <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden main-content-area">
                     {showTopBar && (
-                        <div className="transition-opacity duration-200 ease-out">
+                        <div className="shrink-0 transition-opacity duration-200 ease-out">
                             <Suspense fallback={null}>
                                 <TopBar />
                             </Suspense>
                         </div>
                     )}
-                    <div className={`flex-1 min-h-0 w-full flex flex-col ${isChatRoute ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+                    <div className={`flex-1 w-full flex flex-col min-h-0 relative ${isChatRoute ? 'overflow-hidden' : 'overflow-y-auto touch-pan-y'}`}>
                         {children}
                     </div>
                 </div>
             </div>
-            <BottomNav />
             <CommandPalette />
         </div>
     );

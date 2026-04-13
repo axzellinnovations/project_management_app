@@ -71,7 +71,7 @@ export default function PagesPage() {
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto pb-28 lg:pb-0">
+        <div className="flex-1 overflow-y-auto pb-0">
           <TemplateSelector 
             onSelect={handleTemplateSelect} 
           />
