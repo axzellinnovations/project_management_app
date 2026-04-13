@@ -28,6 +28,8 @@ import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
 import com.planora.backend.service.ChatWebhookService;
 import com.planora.backend.service.NotificationService;
+import com.planora.backend.service.ProjectMembershipService;
+import com.planora.backend.service.UserCacheService;
 
 import com.planora.backend.service.ChatDocumentService;
 
@@ -95,7 +97,10 @@ public class ChatRestController {
 
     private final TeamMemberRepository teamMemberRepository;
 
+    private final UserCacheService userCacheService;
     private final UserRepository userRepository;
+
+    private final ProjectMembershipService projectMembershipService;
 
     private final ChatRoomRepository chatRoomRepository;
 
@@ -584,7 +589,7 @@ public class ChatRestController {
                     .forEach(usersToAdd::add);
         }
 
-        var creator = resolveUserByEmailOrUsername(username);
+        var creator = userCacheService.resolveUserByEmailOrUsername(username);
         if (creator != null) {
             usersToAdd.add(creator);
         }
@@ -750,7 +755,7 @@ public class ChatRestController {
             return;
         }
 
-        var actor = resolveUserByEmailOrUsername(actorAlias);
+        var actor = userCacheService.resolveUserByEmailOrUsername(actorAlias);
         if (actor == null || actor.getUserId() == null) {
             return;
         }
@@ -796,7 +801,7 @@ public class ChatRestController {
             return;
         }
 
-        var actor = resolveUserByEmailOrUsername(actorAlias);
+        var actor = userCacheService.resolveUserByEmailOrUsername(actorAlias);
         if (actor == null || actor.getUserId() == null) {
             return;
         }
@@ -829,7 +834,7 @@ public class ChatRestController {
                 .filter(Objects::nonNull)
                 .forEach(recipientIds::add);
 
-        var creator = resolveUserByEmailOrUsername(room.getCreatedBy());
+        var creator = userCacheService.resolveUserByEmailOrUsername(room.getCreatedBy());
         if (creator != null && creator.getUserId() != null) {
             recipientIds.add(creator.getUserId());
         }
@@ -846,7 +851,7 @@ public class ChatRestController {
     }
 
     private List<ChatRoom> getVisibleRooms(Long projectId, String username, boolean includeArchived) {
-        return getVisibleRooms(projectId, username, includeArchived, resolveUserByEmailOrUsername(username));
+        return getVisibleRooms(projectId, username, includeArchived, userCacheService.resolveUserByEmailOrUsername(username));
     }
 
     private List<ChatRoom> getVisibleRooms(Long projectId, String username, boolean includeArchived, com.planora.backend.model.User currentUser) {
@@ -877,7 +882,7 @@ public class ChatRestController {
 
     private void requireRoomAdminOrOwner(Long projectId, ChatRoom room, String usernameOrEmail) {
         validateProjectMembership(projectId, usernameOrEmail);
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             throw new RuntimeException("User not found");
         }
@@ -898,7 +903,7 @@ public class ChatRestController {
     }
 
     private void validateRoomMembership(Long roomId, String usernameOrEmail) {
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             throw new RuntimeException("User is not found");
         }
@@ -918,33 +923,12 @@ public class ChatRestController {
         throw new RuntimeException("User is not a member of this room");
     }
 
-    private com.planora.backend.model.User resolveUserByEmailOrUsername(String usernameOrEmail) {
-        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
-            return null;
-        }
-        var normalized = usernameOrEmail.toLowerCase();
-        if (normalized.contains("@")) {
-            var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
-            if (byEmail != null) {
-                return byEmail;
-            }
-            return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        }
-
-        var byUsername = userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        if (byUsername != null) {
-            return byUsername;
-        }
-
-        return userRepository.findByEmailIgnoreCase(normalized).orElse(null);
-    }
-
     private String resolveCanonicalChatIdentifier(String usernameOrEmail) {
         if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
             return usernameOrEmail;
         }
 
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             return usernameOrEmail.toLowerCase();
         }
@@ -966,7 +950,7 @@ public class ChatRestController {
     }
 
     private void validateProjectMembership(Long projectId, String usernameOrEmail) {
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             throw new RuntimeException("User is not found");
         }
@@ -974,14 +958,10 @@ public class ChatRestController {
     }
 
     private void validateProjectMembership(Long projectId, com.planora.backend.model.User user) {
-        var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
-        boolean isMember = teamMemberRepository.findByTeamIdAndUserUserId(project.getTeam().getId(), user.getUserId()).isPresent();
-        if (!isMember) {
-            throw new RuntimeException("User is not a member of the project");
-        }
+        projectMembershipService.assertProjectMembership(projectId, user);
     }
 
     private com.planora.backend.model.User resolveAuthenticatedUser(Authentication authentication) {
-        return resolveUserByEmailOrUsername(authentication.getName());
+        return userCacheService.resolveUserByEmailOrUsername(authentication.getName());
     }
 }

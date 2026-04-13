@@ -133,4 +133,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
 
     @Query("SELECT m FROM ChatMessage m WHERE m.id IN (SELECT MAX(m2.id) FROM ChatMessage m2 WHERE m2.projectId = :projectId AND (LOWER(m2.sender) IN :userAliases OR LOWER(m2.recipient) IN :userAliases) AND m2.recipient IS NOT NULL GROUP BY m2.sender, m2.recipient)")
     List<ChatMessage> findLatestMessagesForSpecificDirects(@Param("projectId") Long projectId, @Param("userAliases") List<String> userAliases);
+
+    @Query("SELECT m FROM ChatMessage m WHERE m.id IN (SELECT MAX(m2.id) FROM ChatMessage m2 WHERE m2.projectId IN :projectIds AND m2.recipient IS NULL AND m2.roomId IS NULL AND m2.parentMessageId IS NULL GROUP BY m2.projectId)")
+    List<ChatMessage> findLatestTeamMessagesForProjects(@Param("projectIds") List<Long> projectIds);
 }

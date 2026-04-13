@@ -25,7 +25,6 @@ import com.planora.backend.repository.ChatReactionRepository;
 import com.planora.backend.repository.ChatReadStateRepository;
 import com.planora.backend.repository.ChatRoomRepository;
 import com.planora.backend.repository.ChatThreadRepository;
-import com.planora.backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -39,7 +38,7 @@ public class ChatService {
     private final ChatThreadRepository chatThreadRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatReactionRepository chatReactionRepository;
-    private final UserRepository userRepository;
+    private final UserCacheService userCacheService;
     private final ChatDocumentService chatDocumentService;
 
     public record RoomChatSummary(Long roomId, String roomName, String lastMessage, String lastMessageSender, String lastMessageTimestamp, long unseenCount) {}
@@ -217,7 +216,7 @@ public class ChatService {
 
         var message = chatMessageRepository.findByIdAndProjectId(messageId, projectId)
                 .orElseThrow(() -> new RuntimeException("Message not found"));
-        var actorUser = resolveUserByEmailOrUsername(actor);
+        var actorUser = userCacheService.resolveUserByEmailOrUsername(actor);
         if (actorUser == null) {
             throw new RuntimeException("User not found");
         }
@@ -270,7 +269,7 @@ public class ChatService {
     }
 
     public void markRoomAsRead(Long projectId, Long roomId, String usernameOrEmail) {
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             return;
         }
@@ -292,7 +291,7 @@ public class ChatService {
     }
 
     public void markPrivateConversationAsRead(Long projectId, String usernameOrEmail, String otherParticipant) {
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null || otherParticipant == null || otherParticipant.isBlank()) {
             return;
         }
@@ -316,7 +315,7 @@ public class ChatService {
     }
 
     public void markTeamAsRead(Long projectId, String usernameOrEmail) {
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             return;
         }
@@ -340,7 +339,7 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public TeamChatSummary buildTeamSummary(Long projectId, String currentUser) {
-        var user = resolveUserByEmailOrUsername(currentUser);
+        var user = userCacheService.resolveUserByEmailOrUsername(currentUser);
         return buildTeamSummary(projectId, user, currentUser);
     }
 
@@ -367,8 +366,30 @@ public class ChatService {
     }
 
     @Transactional(readOnly = true)
+    public TeamChatSummary buildTeamSummary(Long projectId,
+                                            com.planora.backend.model.User currentUserEntity,
+                                            String currentUserAlias,
+                                            ChatMessage latestTeamMessage,
+                                            Long lastReadMessageId) {
+        if (currentUserEntity == null) {
+            return new TeamChatSummary(null, null, null, 0);
+        }
+
+        var unseenCount = chatMessageRepository.countUnreadTeamMessagesByAliases(
+                projectId,
+                resolveUserAliases(currentUserEntity, currentUserAlias),
+                lastReadMessageId);
+
+        return new TeamChatSummary(
+                latestTeamMessage != null ? latestTeamMessage.getContent() : null,
+                latestTeamMessage != null ? latestTeamMessage.getSender() : null,
+                latestTeamMessage != null && latestTeamMessage.getTimestamp() != null ? latestTeamMessage.getTimestamp().toString() : null,
+                unseenCount);
+    }
+
+    @Transactional(readOnly = true)
     public UnreadBadgeSummary buildUnreadBadge(Long projectId, String currentUser, List<ChatRoom> rooms, List<String> participants) {
-        var user = resolveUserByEmailOrUsername(currentUser);
+        var user = userCacheService.resolveUserByEmailOrUsername(currentUser);
         return buildUnreadBadge(projectId, user, currentUser, rooms, participants);
     }
 
@@ -424,7 +445,7 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public List<RoomChatSummary> buildRoomSummaries(Long projectId, String currentUser, List<ChatRoom> rooms) {
-        var user = resolveUserByEmailOrUsername(currentUser);
+        var user = userCacheService.resolveUserByEmailOrUsername(currentUser);
         return buildRoomSummaries(projectId, user, currentUser, rooms);
     }
 
@@ -474,7 +495,7 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public List<DirectChatSummary> buildDirectSummaries(Long projectId, String currentUser, List<String> participants) {
-        var user = resolveUserByEmailOrUsername(currentUser);
+        var user = userCacheService.resolveUserByEmailOrUsername(currentUser);
         return buildDirectSummaries(projectId, user, currentUser, participants);
     }
 
@@ -600,7 +621,7 @@ public class ChatService {
     // TODO: Refactor sender/recipient resolution to use User ID instead of string aliases.
     // Current string-alias lookup can cause messages to disappear on mismatch.
     private List<String> resolveUserAliases(String usernameOrEmail) {
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         return resolveUserAliases(user, usernameOrEmail);
     }
 
@@ -617,7 +638,7 @@ public class ChatService {
     }
 
     private String resolveCanonicalChatUser(String usernameOrEmail) {
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             return usernameOrEmail.toLowerCase();
         }
@@ -627,28 +648,6 @@ public class ChatService {
         }
 
         return user.getEmail().toLowerCase();
-    }
-
-    private com.planora.backend.model.User resolveUserByEmailOrUsername(String usernameOrEmail) {
-        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
-            return null;
-        }
-
-        var normalized = usernameOrEmail.toLowerCase();
-        if (normalized.contains("@")) {
-            var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
-            if (byEmail != null) {
-                return byEmail;
-            }
-            return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        }
-
-        var byUsername = userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        if (byUsername != null) {
-            return byUsername;
-        }
-
-        return userRepository.findByEmailIgnoreCase(normalized).orElse(null);
     }
 
     private void ensureMessageOwnership(ChatMessage message, String actor) {

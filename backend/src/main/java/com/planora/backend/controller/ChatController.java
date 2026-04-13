@@ -29,6 +29,8 @@ import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
 import com.planora.backend.service.ChatWebhookService;
 import com.planora.backend.service.NotificationService;
+import com.planora.backend.service.ProjectMembershipService;
+import com.planora.backend.service.UserCacheService;
 
 @Controller
 public class ChatController {
@@ -67,10 +69,16 @@ public class ChatController {
     private TeamMemberRepository teamMemberRepository;
 
     @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
     private ProjectRepository projectRepository;
 
     @Autowired
-    private UserRepository userRepository;
+    private UserCacheService userCacheService;
+
+    @Autowired
+    private ProjectMembershipService projectMembershipService;
 
     @Autowired
     private ChatRoomRepository chatRoomRepository;
@@ -255,7 +263,7 @@ public class ChatController {
     }
 
     private void validateRoomMembership(Long roomId, String usernameOrEmail) {
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             throw new RuntimeException("User is not found");
         }
@@ -361,37 +369,12 @@ public class ChatController {
     }
 
     private void validateProjectMembership(Long projectId, String usernameOrEmail) {
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             throw new RuntimeException("User is not found");
         }
 
-        var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
-        boolean isMember = teamMemberRepository.findByTeamIdAndUserUserId(project.getTeam().getId(), user.getUserId()).isPresent();
-        if (!isMember) {
-            throw new RuntimeException("User is not a member of the project");
-        }
-    }
-
-    private com.planora.backend.model.User resolveUserByEmailOrUsername(String usernameOrEmail) {
-        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
-            return null;
-        }
-        var normalized = usernameOrEmail.toLowerCase();
-        if (normalized.contains("@")) {
-            var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
-            if (byEmail != null) {
-                return byEmail;
-            }
-            return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        }
-
-        var byUsername = userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        if (byUsername != null) {
-            return byUsername;
-        }
-
-        return userRepository.findByEmailIgnoreCase(normalized).orElse(null);
+        projectMembershipService.assertProjectMembership(projectId, user);
     }
 
     private String resolveCanonicalChatIdentifier(String usernameOrEmail) {
@@ -399,7 +382,7 @@ public class ChatController {
             return usernameOrEmail;
         }
 
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             return usernameOrEmail.toLowerCase();
         }
@@ -475,7 +458,7 @@ public class ChatController {
         participants.forEach(participant -> {
             var user = userMap.get(participant.toLowerCase());
             if (user == null) {
-                user = resolveUserByEmailOrUsername(participant);
+                user = userCacheService.resolveUserByEmailOrUsername(participant);
             }
 
             var userRoomIds = user != null ? userRoomsCache.getOrDefault(user.getUserId(), java.util.List.of()) : java.util.List.<Long>of();
@@ -501,7 +484,7 @@ public class ChatController {
     }
 
     private List<com.planora.backend.model.ChatRoom> getVisibleRooms(Long projectId, String username, boolean includeArchived) {
-        var currentUser = resolveUserByEmailOrUsername(username);
+        var currentUser = userCacheService.resolveUserByEmailOrUsername(username);
         if (currentUser == null) {
             return List.of();
         }
@@ -527,7 +510,7 @@ public class ChatController {
 
         aliases.stream()
                 .filter(alias -> alias != null && !alias.isBlank())
-                .map(this::resolveUserByEmailOrUsername)
+                .map(userCacheService::resolveUserByEmailOrUsername)
                 .filter(Objects::nonNull)
                 .forEach(user -> {
                     if (user.getUsername() != null && !user.getUsername().isBlank()) {
@@ -547,7 +530,7 @@ public class ChatController {
 
         aliases.stream()
                 .filter(alias -> alias != null && !alias.isBlank())
-                .map(this::resolveUserByEmailOrUsername)
+                .map(userCacheService::resolveUserByEmailOrUsername)
                 .filter(Objects::nonNull)
                 .forEach(user -> {
                     if (user.getUsername() != null && !user.getUsername().isBlank()) {
@@ -565,8 +548,8 @@ public class ChatController {
             return;
         }
 
-        var senderUser = resolveUserByEmailOrUsername(savedMessage.getSender());
-        var recipientUser = resolveUserByEmailOrUsername(savedMessage.getRecipient());
+        var senderUser = userCacheService.resolveUserByEmailOrUsername(savedMessage.getSender());
+        var recipientUser = userCacheService.resolveUserByEmailOrUsername(savedMessage.getRecipient());
         if (recipientUser == null || senderUser == null
                 || recipientUser.getUserId() == null
                 || senderUser.getUserId() == null
@@ -611,13 +594,13 @@ public class ChatController {
     }
 
     private void publishPrivateThreadReplyNotification(Long projectId, ChatMessage rootMessage, ChatMessageDTO savedReply) {
-        var senderUser = resolveUserByEmailOrUsername(savedReply.getSender());
+        var senderUser = userCacheService.resolveUserByEmailOrUsername(savedReply.getSender());
         if (senderUser == null || senderUser.getUserId() == null) {
             return;
         }
 
-        var rootSender = resolveUserByEmailOrUsername(rootMessage.getSender());
-        var rootRecipient = resolveUserByEmailOrUsername(rootMessage.getRecipient());
+        var rootSender = userCacheService.resolveUserByEmailOrUsername(rootMessage.getSender());
+        var rootRecipient = userCacheService.resolveUserByEmailOrUsername(rootMessage.getRecipient());
         com.planora.backend.model.User counterpart = null;
 
         if (rootSender != null && rootSender.getUserId() != null
@@ -649,8 +632,8 @@ public class ChatController {
             return;
         }
 
-        var actorUser = resolveUserByEmailOrUsername(actorAlias);
-        var messageSender = resolveUserByEmailOrUsername(message.getSender());
+        var actorUser = userCacheService.resolveUserByEmailOrUsername(actorAlias);
+        var messageSender = userCacheService.resolveUserByEmailOrUsername(message.getSender());
         if (actorUser == null || messageSender == null
                 || actorUser.getUserId() == null || messageSender.getUserId() == null
                 || actorUser.getUserId().equals(messageSender.getUserId())) {
@@ -697,7 +680,7 @@ public class ChatController {
             return;
         }
 
-        var senderAliases = resolveUserByEmailOrUsername(savedMessage.getSender());
+        var senderAliases = userCacheService.resolveUserByEmailOrUsername(savedMessage.getSender());
         var senderUsername = senderAliases != null && senderAliases.getUsername() != null
                 ? senderAliases.getUsername().toLowerCase()
                 : null;
@@ -715,7 +698,7 @@ public class ChatController {
                 : savedMessage.getContent();
 
         mentions.forEach(mentioned -> {
-            var user = resolveUserByEmailOrUsername(mentioned);
+            var user = userCacheService.resolveUserByEmailOrUsername(mentioned);
             if (user == null) {
                 return;
             }
@@ -726,9 +709,7 @@ public class ChatController {
                 return;
             }
 
-            var isProjectMember = projectRepository.findById(projectId)
-                    .flatMap(project -> teamMemberRepository.findByTeamIdAndUserUserId(project.getTeam().getId(), user.getUserId()))
-                    .isPresent();
+            var isProjectMember = projectMembershipService.isProjectMember(projectId, user.getUserId());
             if (!isProjectMember) {
                 return;
             }
@@ -776,7 +757,7 @@ public class ChatController {
             return;
         }
 
-        var senderUser = resolveUserByEmailOrUsername(savedMessage.getSender());
+        var senderUser = userCacheService.resolveUserByEmailOrUsername(savedMessage.getSender());
         var senderAlias = savedMessage.getSender();
         var senderDisplay = senderUser != null && senderUser.getFullName() != null && !senderUser.getFullName().isBlank()
                 ? senderUser.getFullName()
@@ -805,7 +786,7 @@ public class ChatController {
             return;
         }
 
-        var senderUser = resolveUserByEmailOrUsername(savedMessage.getSender());
+        var senderUser = userCacheService.resolveUserByEmailOrUsername(savedMessage.getSender());
         var senderAlias = savedMessage.getSender();
         var senderDisplay = senderUser != null && senderUser.getFullName() != null && !senderUser.getFullName().isBlank()
                 ? senderUser.getFullName()
@@ -823,7 +804,7 @@ public class ChatController {
                 .filter(Objects::nonNull)
                 .forEach(recipientIds::add);
 
-        var creatorUser = resolveUserByEmailOrUsername(room.getCreatedBy());
+        var creatorUser = userCacheService.resolveUserByEmailOrUsername(room.getCreatedBy());
         if (creatorUser != null && creatorUser.getUserId() != null) {
             recipientIds.add(creatorUser.getUserId());
         }

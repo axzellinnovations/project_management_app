@@ -14,10 +14,11 @@ import org.springframework.stereotype.Service;
 
 import com.planora.backend.dto.ProjectResponseDTO;
 import com.planora.backend.model.ChatRoom;
+import com.planora.backend.repository.ChatMessageRepository;
+import com.planora.backend.repository.ChatReadStateRepository;
 import com.planora.backend.repository.ChatRoomMemberRepository;
 import com.planora.backend.repository.ChatRoomRepository;
 import com.planora.backend.repository.TeamMemberRepository;
-import com.planora.backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -65,7 +66,9 @@ public class ChatInboxService {
     private final TeamMemberRepository teamMemberRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
-    private final UserRepository userRepository;
+    private final ChatMessageRepository chatMessageRepository;
+    private final ChatReadStateRepository chatReadStateRepository;
+    private final UserCacheService userCacheService;
 
     public ChatInboxResponse getInbox(
             Long userId,
@@ -74,7 +77,7 @@ public class ChatInboxService {
             int activityLimit,
             String status
     ) {
-        var currentUser = resolveUserByEmailOrUsername(usernameOrEmail);
+        var currentUser = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (currentUser == null) {
             return new ChatInboxResponse(List.of(), List.of(), 0, 0, 0);
         }
@@ -83,6 +86,10 @@ public class ChatInboxService {
         if (projectLimit > 0 && projects.size() > projectLimit) {
             projects = projects.subList(0, projectLimit);
         }
+        var projectIds = projects.stream()
+                .map(ProjectResponseDTO::getId)
+                .filter(Objects::nonNull)
+                .toList();
 
         Set<Long> memberRoomIds = chatRoomMemberRepository.findByUserUserId(currentUser.getUserId()).stream()
                 .map(roomMember -> roomMember.getChatRoom().getId())
@@ -102,6 +109,14 @@ public class ChatInboxService {
                     .toList());
         }
 
+        var latestTeamMessagesByProject = chatMessageRepository.findLatestTeamMessagesForProjects(projectIds).stream()
+                .collect(Collectors.toMap(message -> message.getProjectId(), message -> message, (m1, m2) -> m1));
+
+        var teamReadStateByProject = chatReadStateRepository
+                .findByUserUserIdAndProjectIdInAndOtherParticipantIgnoreCase(currentUser.getUserId(), projectIds, "__TEAM_CHAT__")
+                .stream()
+                .collect(Collectors.toMap(readState -> readState.getProjectId(), readState -> readState, (r1, r2) -> r1));
+
         List<ChatInboxProjectGroup> grouped = new ArrayList<>();
         List<ChatInboxActivity> allActivities = new ArrayList<>();
 
@@ -117,7 +132,13 @@ public class ChatInboxService {
             List<ChatRoom> visibleRooms = getVisibleRooms(projectId, currentUser, usernameOrEmail, memberRoomIds);
             List<ChatInboxActivity> projectActivities = new ArrayList<>();
 
-            var teamSummary = chatService.buildTeamSummary(projectId, currentUser, usernameOrEmail);
+            var readState = teamReadStateByProject.get(projectId);
+            var teamSummary = chatService.buildTeamSummary(
+                    projectId,
+                    currentUser,
+                    usernameOrEmail,
+                    latestTeamMessagesByProject.get(projectId),
+                    readState != null ? readState.getLastReadMessageId() : null);
             ChatInboxActivity teamActivity = toTeamActivity(projectId, project.getName(), teamSummary);
             if (teamActivity != null) {
                 projectActivities.add(teamActivity);
@@ -258,28 +279,6 @@ public class ChatInboxService {
                 })
                 .filter(room -> !Boolean.TRUE.equals(room.getArchived()))
                 .toList();
-    }
-
-    private com.planora.backend.model.User resolveUserByEmailOrUsername(String usernameOrEmail) {
-        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
-            return null;
-        }
-
-        String normalized = usernameOrEmail.toLowerCase();
-        if (normalized.contains("@")) {
-            var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
-            if (byEmail != null) {
-                return byEmail;
-            }
-            return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        }
-
-        var byUsername = userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        if (byUsername != null) {
-            return byUsername;
-        }
-
-        return userRepository.findByEmailIgnoreCase(normalized).orElse(null);
     }
 
     private static LocalDateTime parseTimestamp(String rawTimestamp) {
