@@ -58,7 +58,7 @@ export default function TimelineTaskRow({
   return (
     <div className="flex border-b border-slate-100 hover:bg-slate-50/40 transition-colors">
       <div
-        className="w-[300px] flex-shrink-0 p-3 border-r border-slate-200 bg-white sticky left-0 z-10 cursor-pointer"
+        className="w-[300px] flex-shrink-0 p-3 border-r border-slate-200 bg-white/95 backdrop-blur sticky left-0 z-10 cursor-pointer"
         onClick={() => onOpenTask?.(task.id)}
       >
         <p className="text-sm font-semibold text-slate-800 truncate hover:text-blue-600 transition-colors">{task.title}</p>
@@ -75,7 +75,7 @@ export default function TimelineTaskRow({
         </p>
       </div>
 
-      <div className="relative" style={{ width: `${timelineWidthPx}px`, height: '72px' }}>
+      <div className="relative" style={{ width: `${timelineWidthPx}px`, height: '76px' }}>
         {visibleDays.map((day, idx) => (
           <div
             key={`grid-${task.id}-${day.toISOString()}`}
@@ -106,13 +106,13 @@ export default function TimelineTaskRow({
         })}
 
         <div
-          className={`absolute top-1/2 -translate-y-1/2 h-9 rounded-lg text-white text-xs font-semibold shadow-sm transition-opacity select-none ${statusTheme.bar} ${priorityRing} ${isDragging ? 'opacity-80 shadow-lg' : ''}`}
+          className={`absolute top-1/2 -translate-y-1/2 h-10 rounded-lg text-white text-xs font-semibold shadow-sm transition-opacity select-none ${statusTheme.bar} ${priorityRing} ${isDragging ? 'opacity-80 shadow-lg' : ''}`}
           style={{ left: `${task.leftPx + 3}px`, width: `${task.widthPx}px`, cursor: 'grab' }}
           onMouseDown={(e) => onStartDragMove(e, task)}
           onClick={() => { if (!activeDragTaskId) onOpenTask?.(task.id); }}
           title={`${task.title} — drag to move`}
         >
-          <span className="px-2 truncate block leading-9">{task.title}</span>
+          <span className="px-2 truncate block leading-10">{task.title}</span>
           <div
             className="absolute right-0 top-0 h-full w-[6px] rounded-r-lg cursor-ew-resize hover:bg-white/20"
             onMouseDown={(e) => { e.stopPropagation(); onStartDragResize(e, task); }}

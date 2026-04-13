@@ -23,6 +23,11 @@ interface TimelineControlsProps {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   timelineStart: Date | null;
   timelineEnd: Date | null;
+  searchQuery: string;
+  setSearchQuery: (value: string) => void;
+  scheduledCount: number;
+  noDateCount: number;
+  overdueCount: number;
 }
 
 export default function TimelineControls({
@@ -30,7 +35,7 @@ export default function TimelineControls({
   hideWeekends, setHideWeekends,
   filterAssignee, setFilterAssignee,
   assigneeNames, todayOffset, dayColumnWidth, scrollContainerRef,
-  timelineStart, timelineEnd,
+  timelineStart, timelineEnd, searchQuery, setSearchQuery, scheduledCount, noDateCount, overdueCount,
 }: TimelineControlsProps) {
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
   const assigneeDropdownRef = useRef<HTMLDivElement>(null);
@@ -53,9 +58,23 @@ export default function TimelineControls({
               {format(timelineStart, 'MMM d, yyyy')} – {format(timelineEnd, 'MMM d, yyyy')}
             </p>
           )}
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+            <span className="rounded-full border border-[#D0D5DD] bg-white px-2 py-0.5 text-[#667085]">scheduled: {scheduledCount}</span>
+            <span className="rounded-full border border-[#FEDF89] bg-[#FFFAEB] px-2 py-0.5 text-[#B54708]">no date: {noDateCount}</span>
+            <span className="rounded-full border border-[#FDA29B] bg-[#FEF3F2] px-2 py-0.5 text-[#B42318]">overdue: {overdueCount}</span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-600 w-full sm:w-auto min-w-[220px]">
+            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search task title..."
+              className="bg-transparent outline-none text-[12px] w-full"
+            />
+          </div>
           <button
             onClick={() => {
               if (todayOffset >= 0 && scrollContainerRef.current) {
@@ -125,7 +144,7 @@ export default function TimelineControls({
             {groupBy === 'none' ? 'Group by' : `By ${groupBy}`}
           </button>
 
-          <div className="inline-flex items-center border border-slate-200 rounded-lg overflow-hidden">
+          <div className="inline-flex items-center border border-slate-200 rounded-lg overflow-hidden ml-auto sm:ml-0">
             <button
               onClick={() => { const i = ZOOM_LEVELS.indexOf(zoom); if (i > 0) setZoom(ZOOM_LEVELS[i - 1]); }}
               disabled={zoom === ZOOM_LEVELS[0]}

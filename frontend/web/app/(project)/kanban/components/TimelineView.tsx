@@ -58,6 +58,7 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
   const [groupBy, setGroupBy] = useState<GroupByType>('none');
   const [hideWeekends, setHideWeekends] = useState(false);
   const [filterAssignee, setFilterAssignee] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [localTasks, setLocalTasks] = useState<Task[]>([]);
   useEffect(() => { setLocalTasks(tasks); }, [tasks]);
@@ -73,9 +74,12 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
   }, [tasks]);
 
   const effectiveTasks = useMemo(() => {
-    if (!filterAssignee) return localTasks;
-    return localTasks.filter(t => t.assigneeName === filterAssignee);
-  }, [localTasks, filterAssignee]);
+    return localTasks.filter((task) => {
+      if (filterAssignee && task.assigneeName !== filterAssignee) return false;
+      if (searchQuery && !(task.title ?? '').toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      return true;
+    });
+  }, [localTasks, filterAssignee, searchQuery]);
 
   // ── Compute timeline data ─────────────────────────────────────────────────
   const { timelineTasks, noDatesToShow, visibleDays, monthGroups, timelineStart, timelineEnd, timelineWidthPx, todayOffset } = useMemo(() => {
@@ -168,6 +172,11 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
     return [...map.entries()].map(([label, tasks]) => ({ label, tasks }));
   }, [timelineTasks, groupBy]);
 
+  const overdueCount = useMemo(() => {
+    const today = startOfDay(new Date());
+    return timelineTasks.filter((task) => task.dueDateObj < today && (task.status ?? '').toUpperCase() !== 'DONE').length;
+  }, [timelineTasks]);
+
   if (timelineTasks.length === 0 && noDatesToShow.length === 0) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -195,19 +204,24 @@ export default function TimelineView({ tasks, onOpenTask, onTaskUpdated, milesto
         todayOffset={todayOffset} dayColumnWidth={dayColumnWidth}
         scrollContainerRef={scrollContainerRef}
         timelineStart={timelineStart} timelineEnd={timelineEnd}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        scheduledCount={timelineTasks.length}
+        noDateCount={noDatesToShow.length}
+        overdueCount={overdueCount}
       />
 
-      <div ref={scrollContainerRef} className="overflow-x-auto overflow-y-hidden" style={{ cursor: activeDrag ? 'grabbing' : undefined }}>
+      <div ref={scrollContainerRef} className="overflow-x-auto overflow-y-hidden custom-scrollbar touch-pan-x" style={{ cursor: activeDrag ? 'grabbing' : undefined }}>
         <div className="min-w-max" style={{ width: `${300 + timelineWidthPx}px` }}>
           {/* Column headers */}
-          <div className="sticky top-0 z-20 bg-white">
+          <div className="sticky top-0 z-20 bg-white/95 backdrop-blur">
             <div className="flex border-b border-slate-200">
               <div className="w-[300px] flex-shrink-0 px-4 py-3 bg-slate-50 border-r border-slate-200">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Task</p>
               </div>
               <div className="flex" style={{ width: `${timelineWidthPx}px` }}>
                 {monthGroups.map((group) => (
-                  <div key={group.label} className="px-2 py-3 border-r border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600" style={{ width: `${group.span * dayColumnWidth}px` }}>
+                  <div key={`${group.label}-${group.span}`} className="px-2 py-3 border-r border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600" style={{ width: `${group.span * dayColumnWidth}px` }}>
                     {group.label}
                   </div>
                 ))}
