@@ -61,16 +61,16 @@ export default function BacklogFilterBar({
     const activeCount = (filterPriority.length > 0 ? 1 : 0) + (filterStatus.length > 0 ? 1 : 0) + (filterAssignee ? 1 : 0) + (filterLabel !== null ? 1 : 0) + (filterDateRange.startDate || filterDateRange.endDate ? 1 : 0);
 
     return (
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 rounded-2xl border border-[#E5E7EB] bg-white p-3 sm:p-4 shadow-sm">
             {/* Search - always visible */}
-            <div className="relative flex-1 min-w-[160px] max-w-xs">
+            <div className="relative flex-1 min-w-[220px]">
                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
                 <input
                     type="text"
                     placeholder="Search tasks..."
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 text-[13px] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#155DFC]/40"
+                    className="w-full pl-8 pr-3 h-10 text-[13px] border border-[#E5E7EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#155DFC]/40"
                 />
                 {searchTerm && (
                     <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -83,7 +83,7 @@ export default function BacklogFilterBar({
             <div ref={panelRef} className="relative">
                 <button
                     onClick={() => setFilterOpen(o => !o)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] border rounded-lg transition-colors ${
+                    className={`flex items-center gap-1.5 px-3 h-10 text-[12px] border rounded-xl transition-colors ${
                         filterOpen || hasActiveFilters
                             ? 'bg-[#EFF6FF] border-[#155DFC] text-[#155DFC]'
                             : 'bg-white border-[#E5E7EB] text-[#374151] hover:border-[#155DFC]'
@@ -250,7 +250,7 @@ export default function BacklogFilterBar({
             {/* Group by - always visible */}
             <button
                 onClick={() => setGroupBy(g => g === 'none' ? 'status' : g === 'status' ? 'priority' : g === 'priority' ? 'assignee' : 'none')}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] border border-[#E5E7EB] rounded-lg bg-white text-[#374151] hover:border-[#155DFC] transition-colors"
+                className="flex items-center gap-1.5 px-3 h-10 text-[12px] border border-[#E5E7EB] rounded-xl bg-white text-[#374151] hover:border-[#155DFC] transition-colors"
                 title="Toggle group by"
             >
                 <Layers size={13} />

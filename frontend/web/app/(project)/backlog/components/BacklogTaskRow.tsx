@@ -48,13 +48,14 @@ export default function BacklogTaskRow({
     const PriorityIcon = task.priority ? (PRIORITY_CONFIG[task.priority]?.icon ?? Minus) : Minus;
     const priorityColor = task.priority ? (PRIORITY_CONFIG[task.priority]?.color ?? '#9CA3AF') : '#9CA3AF';
     const priorityLabel = task.priority ? (PRIORITY_CONFIG[task.priority]?.label ?? task.priority) : '—';
-    const statusClass = STATUS_COLOR[task.status] ?? 'bg-[#F3F4F6] text-[#6A7282]';
+    const normalizedStatus = (task.status ?? '').toUpperCase();
+    const statusClass = STATUS_COLOR[normalizedStatus] ?? 'bg-[#F3F4F6] text-[#6A7282]';
     const [statusOpen, setStatusOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const statusRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    const isOverdue = !!(task.dueDate && task.status !== 'DONE' &&
+    const isOverdue = !!(task.dueDate && normalizedStatus !== 'DONE' &&
         new Date(task.dueDate + 'T00:00:00') < new Date(new Date().toDateString()));
 
     useEffect(() => {
@@ -80,7 +81,7 @@ export default function BacklogTaskRow({
 
     return (
         <div
-            className={`grid grid-cols-[auto_1fr_120px_100px_120px_100px_100px_32px] sm:grid-cols-[auto_1fr_120px_100px_120px_100px_100px_32px] items-center gap-x-2 px-3 sm:px-4 min-h-[52px] rounded-lg border border-[#EAECF0] cursor-pointer select-none transition-colors ${
+            className={`grid grid-cols-[auto_1fr_120px_100px_120px_100px_100px_32px] sm:grid-cols-[auto_1.5fr_140px_110px_130px_110px_120px_32px] items-center gap-x-2 px-3 sm:px-4 min-h-[52px] rounded-lg border border-[#EAECF0] cursor-pointer select-none transition-colors ${
                 selected ? 'bg-[#EFF6FF] border-[#BFDBFE]' : isOverdue ? 'bg-[#FEE2E2] hover:bg-[#FEE2E2]' : 'bg-white hover:bg-[#F8FAFF]'
             }`}
             onClick={() => {
@@ -101,7 +102,9 @@ export default function BacklogTaskRow({
             {/* Title + ID */}
             <div className="min-w-0 flex items-center gap-2 py-2.5">
                 <span className="text-[11px] font-mono text-[#9CA3AF] shrink-0">#{task.id}</span>
-                <p className="text-[14px] font-medium text-[#101828] truncate">{task.title}</p>
+                <p className={`text-[14px] font-medium truncate ${normalizedStatus === 'DONE' ? 'line-through text-[#9CA3AF]' : 'text-[#101828]'}`}>
+                    {task.title}
+                </p>
             </div>
 
             {/* Label */}
@@ -127,7 +130,7 @@ export default function BacklogTaskRow({
                     onClick={(e) => { e.stopPropagation(); setStatusOpen(s => !s); }}
                     className={`text-[10px] sm:text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${statusClass} whitespace-nowrap`}
                 >
-                    <span className="max-w-[70px] truncate">{task.status?.replace(/_/g, ' ')}</span>
+                    <span className="max-w-[70px] truncate">{normalizedStatus.replace(/_/g, ' ')}</span>
                     <ChevronDown size={10} className="shrink-0" />
                 </button>
                 {statusOpen && (
@@ -136,7 +139,7 @@ export default function BacklogTaskRow({
                             <button
                                 key={s}
                                 onClick={(e) => { e.stopPropagation(); onStatusChange(task.id, s); setStatusOpen(false); }}
-                                className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-[#F9FAFB] transition-colors ${task.status === s ? 'font-semibold text-[#155DFC]' : 'text-[#374151]'}`}
+                                className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-[#F9FAFB] transition-colors ${normalizedStatus === s ? 'font-semibold text-[#155DFC]' : 'text-[#374151]'}`}
                             >
                                 {s.replace(/_/g, ' ')}
                             </button>

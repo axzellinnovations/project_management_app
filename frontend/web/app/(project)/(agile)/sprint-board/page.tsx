@@ -121,6 +121,14 @@ export default function SprintBoardPage() {
     return () => clearInterval(syncId);
   }, [projectIdStr, fetchProjectInfo, fetchData]);
 
+  useEffect(() => {
+    const onTaskUpdated = () => {
+      void fetchData({ showSpinner: false, forceNetwork: true });
+    };
+    window.addEventListener('planora:task-updated', onTaskUpdated);
+    return () => window.removeEventListener('planora:task-updated', onTaskUpdated);
+  }, [fetchData]);
+
   // Search filter
   const filteredColumns = useMemo(() => {
     if (!sprintboard) return [];
@@ -133,6 +141,14 @@ export default function SprintBoardPage() {
       )
     }));
   }, [sprintboard, searchTerm]);
+  const totalTasks = useMemo(
+    () => (sprintboard ? sprintboard.columns.reduce((sum, col) => sum + col.tasks.length, 0) : 0),
+    [sprintboard]
+  );
+  const doneTasks = useMemo(
+    () => (sprintboard ? sprintboard.columns.find((col) => col.columnStatus === 'DONE')?.tasks.length ?? 0 : 0),
+    [sprintboard]
+  );
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -172,6 +188,7 @@ export default function SprintBoardPage() {
       await moveTaskToColumn(taskId, sprintboard.id, newStatus);
       const cKey = buildSessionCacheKey('sprint-board', [projectIdStr]);
       if (cKey) removeSessionCache(cKey);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       forceRefresh();
     } catch (_err) {
       void fetchData({ showSpinner: false, forceNetwork: true });
@@ -211,6 +228,7 @@ export default function SprintBoardPage() {
       }));
       const cKey = buildSessionCacheKey('sprint-board', [projectIdStr]);
       if (cKey) removeSessionCache(cKey);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       forceRefresh();
     } catch (err: unknown) {
       const axiosErr = err as AxiosError<{ message?: string }>;
@@ -235,11 +253,13 @@ export default function SprintBoardPage() {
       setShowCompleteConfirm(false);
       setSuccessMsg('Sprint completed successfully!');
       setTimeout(() => setSuccessMsg(''), 2000);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       const cKey = buildSessionCacheKey('sprint-board', [projectIdStr]);
       if (cKey) removeSessionCache(cKey);
       forceRefresh();
-    } catch (_err) {
-      toast('Failed to complete sprint.', 'error');
+    } catch (err: unknown) {
+      const axiosErr = err as AxiosError<{ message?: string }>;
+      toast(axiosErr?.response?.data?.message || 'Failed to complete sprint.', 'error');
     } finally {
       setIsUpdating(false);
     }
@@ -258,6 +278,7 @@ export default function SprintBoardPage() {
       setNewColumnName('');
       const cKey = buildSessionCacheKey('sprint-board', [projectIdStr]);
       if (cKey) removeSessionCache(cKey);
+      window.dispatchEvent(new CustomEvent('planora:task-updated'));
       void fetchData({ showSpinner: false, forceNetwork: true });
     } catch (err: unknown) {
       const axiosErr = err as AxiosError<{ message?: string }>;
@@ -306,7 +327,7 @@ export default function SprintBoardPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 h-full bg-[#F9FAFB] overflow-hidden">
+    <div className="flex-1 flex flex-col min-w-0 h-full bg-[#F0F2F5] overflow-hidden">
 
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
@@ -357,9 +378,11 @@ export default function SprintBoardPage() {
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
               onCompleteSprint={() => {
-                  setSprintIdToComplete(activeSprint?.id || null);
+                  setSprintIdToComplete(activeSprint?.id || allActiveSprints[0]?.id || null);
                   setShowCompleteConfirm(true);
               }}
+              totalTasks={totalTasks}
+              doneTasks={doneTasks}
               isLoading={isUpdating}
             />
 
@@ -378,44 +401,32 @@ export default function SprintBoardPage() {
                   </div>
 
                   <div className="space-y-4 mb-8">
-                    <p className="text-sm text-[#344054]">
-                        {allActiveSprints.length > 1 
-                          ? "Select the active sprint you want to complete:" 
-                          : "Are you sure you want to complete this sprint?"}
-                    </p>
-                    
-                    {allActiveSprints.length > 1 ? (
-                        <div className="flex flex-col gap-2">
-                            {allActiveSprints.map(s => (
-                                <button
-                                    key={s.id}
-                                    onClick={() => setSprintIdToComplete(s.id)}
-                                    className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                                        sprintIdToComplete === s.id 
-                                        ? 'border-[#155DFC] bg-blue-50/50' 
-                                        : 'border-[#EAECF0] hover:border-gray-300'
-                                    }`}
-                                >
-                                    <div className="text-left">
-                                        <p className={`text-sm font-bold ${sprintIdToComplete === s.id ? 'text-[#155DFC]' : 'text-[#101828]'}`}>
-                                            {s.sprintName || `Sprint #${s.id}`}
-                                        </p>
-                                        <p className="text-[11px] text-[#667085] mt-0.5">Tasks will be moved out of board</p>
-                                    </div>
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                                        sprintIdToComplete === s.id ? 'border-[#155DFC] bg-[#155DFC]' : 'border-[#D0D5DD]'
-                                    }`}>
-                                        {sprintIdToComplete === s.id && <div className="w-2 h-2 rounded-full bg-white" />}
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="bg-[#F9FAFB] border border-[#EAECF0] rounded-2xl p-4">
-                            <p className="text-sm font-bold text-[#101828]">{activeSprint?.sprintName || `Sprint #${activeSprint?.id}`}</p>
-                            <p className="text-xs text-[#667085] mt-1">The sprint will be marked as complete and moved to history.</p>
-                        </div>
-                    )}
+                    <p className="text-sm text-[#344054]">Select the active sprint you want to complete:</p>
+                    <div className="flex flex-col gap-2">
+                      {allActiveSprints.map(s => (
+                        <button
+                          key={s.id}
+                          onClick={() => setSprintIdToComplete(s.id)}
+                          className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                            sprintIdToComplete === s.id
+                              ? 'border-[#155DFC] bg-blue-50/50'
+                              : 'border-[#EAECF0] hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="text-left">
+                            <p className={`text-sm font-bold ${sprintIdToComplete === s.id ? 'text-[#155DFC]' : 'text-[#101828]'}`}>
+                              {s.sprintName || `Sprint #${s.id}`}
+                            </p>
+                            <p className="text-[11px] text-[#667085] mt-0.5">Incomplete tasks are moved to the next sprint/backlog</p>
+                          </div>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                            sprintIdToComplete === s.id ? 'border-[#155DFC] bg-[#155DFC]' : 'border-[#D0D5DD]'
+                          }`}>
+                            {sprintIdToComplete === s.id && <div className="w-2 h-2 rounded-full bg-white" />}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="flex gap-3">
@@ -442,7 +453,7 @@ export default function SprintBoardPage() {
               </div>
             )}
 
-            <div className="flex-1 overflow-x-auto p-4 md:p-8 snap-x snap-mandatory hide-scrollbar">
+            <div className="flex-1 overflow-x-auto px-3 md:px-5 py-3 snap-x snap-mandatory hide-scrollbar">
               {successMsg && (
                 <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
                   <div className="px-6 py-3 bg-[#ECFDF3] border border-[#6CE9A6] text-[#027A48] rounded-xl shadow-lg flex items-center gap-3 font-semibold text-sm">
@@ -453,7 +464,7 @@ export default function SprintBoardPage() {
               )}
 
               <SprintDragDropProvider tasks={sprintboard.columns.flatMap(c => c.tasks)} onDragEnd={handleDragEnd}>
-                <div className="flex items-start gap-5 md:gap-8 h-full min-h-[calc(100vh-250px)] pb-10">
+                <div className="flex items-start gap-4 sm:gap-3 h-full min-h-[calc(100vh-250px)] pb-3">
                   {filteredColumns.map(column => (
                     <SprintColumn
                       key={column.id}
@@ -464,28 +475,21 @@ export default function SprintBoardPage() {
                   ))}
 
                   {/* Add Column Button / Inline Input */}
-                  <div className="flex flex-col flex-shrink-0 h-full min-h-[500px]">
+                  <div className="flex flex-col flex-shrink-0 h-full min-h-[500px] self-start snap-center md:snap-none" style={{ width: '280px' }}>
                     {!isAddingColumn ? (
                       <button
                         onClick={() => {
                           setIsAddingColumn(true);
                           setTimeout(() => document.getElementById('new-column-input')?.focus(), 50);
                         }}
-                        className="relative flex flex-col items-center pt-12 w-14 hover:w-20 h-full border-r-2 border-dashed border-[#EAECF0]/80 hover:bg-white/80 hover:border-[#155DFC]/30 transition-all duration-300 group active:scale-[0.98] cursor-pointer"
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/30 transition-all text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        aria-label="Add sprint board column"
                       >
-                        <div className="relative w-10 h-10 rounded-full bg-white border border-[#EAECF0] shadow-sm flex items-center justify-center group-hover:ring-8 group-hover:ring-[#155DFC]/5 group-hover:border-[#155DFC]/40 group-hover:shadow-md transition-all duration-500">
-                          <Plus size={22} className="text-[#98A2B3] group-hover:text-[#155DFC] transition-all duration-300 group-hover:rotate-90" />
-
-                          {/* Professional Horizontal Tooltip - Now centered vertically */}
-                          <div className="absolute top-1/2 right-[125%] -translate-y-1/2 z-50 opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-300 translate-x-2 group-hover:translate-x-0 whitespace-nowrap px-3 py-1.5 bg-[#1F2937] text-white text-[12px] font-medium rounded-lg shadow-xl shadow-[#1F2937]/20 border border-white/10">
-                            Add Column
-                            {/* Arrow pointer toward button */}
-                            <div className="absolute top-1/2 left-full -translate-y-1/2 border-[6px] border-transparent border-l-[#1F2937]" />
-                          </div>
-                        </div>
+                        <Plus size={16} />
+                        Add Column
                       </button>
                     ) : (
-                      <div className="flex flex-col w-[300px] bg-white rounded-2xl border-2 border-[#155DFC] p-4 shadow-xl animate-in fade-in zoom-in-95 duration-200">
+                      <div className="rounded-xl bg-[#F8F9FB] border border-gray-200/60 p-3 w-full">
                         <div className="flex items-center gap-2">
                           <input
                             id="new-column-input"
@@ -503,7 +507,7 @@ export default function SprintBoardPage() {
                                 setNewColumnName('');
                               }
                             }}
-                            className="flex-1 px-3 py-2 bg-[#F9FAFB] border border-[#EAECF0] rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#155DFC]/20 focus:border-[#155DFC]"
+                            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                           />
                           <div className="flex items-center gap-1">
                             <button
@@ -514,21 +518,21 @@ export default function SprintBoardPage() {
                                   setIsAddingColumn(false);
                                 }
                               }}
-                              className="p-2 bg-[#155DFC] text-white rounded-lg hover:bg-[#1149C9] transition-colors shadow-sm"
+                              className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                               title="Add Column"
                             >
                               <Check size={16} />
                             </button>
                             <button
                               onClick={() => setIsAddingColumn(false)}
-                              className="p-2 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors"
+                              className="p-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-200"
                               title="Cancel"
                             >
                               <X size={16} />
                             </button>
                           </div>
                         </div>
-                        <p className="mt-2 text-[10px] text-[#475467] font-medium italic">Type name & click checkmark</p>
+                        <p className="mt-2 text-[10px] text-[#475467] font-medium italic">Type name and press Enter</p>
                       </div>
                     )}
                   </div>
@@ -546,7 +550,13 @@ export default function SprintBoardPage() {
             {selectedTaskId !== null && (
               <TaskCardModal
                 taskId={selectedTaskId}
-                onClose={(_wasModified) => setSelectedTaskId(null)}
+                onClose={(wasModified) => {
+                  setSelectedTaskId(null);
+                  if (wasModified) {
+                    window.dispatchEvent(new CustomEvent('planora:task-updated'));
+                    void forceRefresh();
+                  }
+                }}
               />
             )}
           </>

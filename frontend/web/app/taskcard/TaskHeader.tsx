@@ -49,7 +49,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({ project, taskId, numericTaskId,
   };
 
   return (
-    <div className="px-4 py-3 flex items-center justify-between border-b border-[#EAECF0] bg-white sticky top-0 z-10 flex-shrink-0">
+    <div className="px-4 sm:px-5 py-3 flex items-center justify-between border-b border-[#EAECF0] bg-white/95 backdrop-blur sticky top-0 z-10 flex-shrink-0">
       <div className="flex items-center gap-2 text-sm min-w-0">
         <Layout size={15} className="text-[#155DFC] flex-shrink-0" />
         <span className="font-medium text-[#6A7282] truncate">{project}</span>
@@ -69,18 +69,18 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({ project, taskId, numericTaskId,
                 if (e.key === 'Escape') { setShowTemplateInput(false); setTemplateName(''); }
               }}
               placeholder="Template name…"
-              className="border border-gray-300 rounded px-2 py-1 text-xs w-40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="h-8 border border-[#D0D5DD] rounded-lg px-2 text-xs w-40 focus:outline-none focus:ring-2 focus:ring-[#155DFC]/20 focus:border-[#155DFC]"
             />
             <button
               onClick={handleSaveTemplate}
               disabled={savingTemplate || !templateName.trim()}
-              className="p-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="h-8 px-2 bg-[#155DFC] text-white rounded-lg text-xs hover:bg-[#0042A8] disabled:opacity-50 transition-colors"
             >
               {savingTemplate ? '…' : 'Save'}
             </button>
             <button
               onClick={() => { setShowTemplateInput(false); setTemplateName(''); }}
-              className="p-1.5 hover:bg-gray-100 rounded text-gray-500"
+              className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500"
             >
               <X size={14} />
             </button>

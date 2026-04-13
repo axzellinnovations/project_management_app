@@ -34,8 +34,9 @@ const PrioritySection: React.FC<PrioritySectionProps> = ({ priority, onUpdatePri
     <SidebarField label="Priority">
       <div className="relative">
         <div
+          aria-disabled={!onUpdatePriority}
           onClick={(e) => { e.stopPropagation(); setIsOpen((v) => !v); }}
-          className={`flex items-center gap-2 text-sm font-semibold px-2 py-1 min-h-[44px] sm:min-h-0 rounded w-fit cursor-pointer transition-colors ${cfg.text} ${cfg.bg} ${cfg.hover}`}
+          className={`flex items-center gap-2 text-sm font-semibold px-2 py-1 min-h-[44px] sm:min-h-0 rounded w-fit cursor-pointer transition-colors ${cfg.text} ${cfg.bg} ${cfg.hover} ${!onUpdatePriority ? 'opacity-70 cursor-not-allowed' : ''}`}
         >
           <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
           {priority}

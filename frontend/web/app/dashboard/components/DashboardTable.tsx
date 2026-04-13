@@ -170,6 +170,15 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
         return () => { isMounted = false; };
     }, [activeTab, setDashboardAssignedCount]);
 
+    useEffect(() => {
+        const onTaskUpdated = () => {
+            setLoading(true);
+            setTimeout(() => setLoading(false), 300);
+        };
+        window.addEventListener('planora:task-updated', onTaskUpdated);
+        return () => window.removeEventListener('planora:task-updated', onTaskUpdated);
+    }, []);
+
     const filteredItems = items.filter(item => {
         if (item.type === 'TASK' && item.status === 'DONE') return false;
         return item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -384,7 +393,12 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
                 {selectedTaskId && (
                     <TaskCardModal 
                         taskId={selectedTaskId} 
-                        onClose={(_wasModified) => setSelectedTaskId(null)} 
+                        onClose={(wasModified) => {
+                            setSelectedTaskId(null);
+                            if (wasModified) {
+                                window.dispatchEvent(new CustomEvent('planora:task-updated'));
+                            }
+                        }} 
                     />
                 )}
             </AnimatePresence>

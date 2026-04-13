@@ -83,7 +83,7 @@ export default function BacklogPage() {
 
     if (!typeChecked) {
         return (
-            <div className="mobile-page-padding max-w-[900px] mx-auto">
+            <div className="mobile-page-padding max-w-[1400px] mx-auto">
                 <div className="flex items-center justify-between mb-5">
                     <div className="skeleton h-7 w-40 rounded-lg" />
                 </div>
@@ -98,7 +98,7 @@ export default function BacklogPage() {
 
     if (loading) {
         return (
-            <div className="mobile-page-padding max-w-[900px] mx-auto">
+            <div className="mobile-page-padding max-w-[1400px] mx-auto">
                 <div className="flex items-center justify-between mb-5">
                     <div className="skeleton h-7 w-40 rounded-lg" />
                     <div className="skeleton h-9 w-28 rounded-lg hidden sm:block" />
@@ -125,18 +125,19 @@ export default function BacklogPage() {
     }
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 mobile-page-padding max-w-[900px] mx-auto overflow-y-auto custom-scrollbar touch-pan-y pb-6" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="flex flex-col h-full bg-slate-50 overflow-y-auto custom-scrollbar touch-pan-y px-4 sm:px-6 lg:px-8 pb-6" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div className="w-full max-w-[1400px] mx-auto">
             {/* ── Header ── */}
-            <div className="sticky-section-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-4 flex items-center gap-3 flex-wrap flex-shrink-0 z-40">
+            <div className="sticky-section-header glass-panel border border-[#E4E7EC] rounded-2xl px-4 sm:px-6 py-4 mb-4 flex items-center justify-between gap-3 flex-wrap flex-shrink-0 z-40">
                 <div>
-                    <h1 className="text-[18px] sm:text-xl font-bold text-[#101828]">Product Backlog</h1>
-                    <p className="text-[12px] text-[#6A7282] mt-0.5 hidden sm:block">
+                    <h1 className="text-[20px] sm:text-2xl font-bold text-[#101828]">Product Backlog</h1>
+                    <p className="text-[12px] sm:text-[13px] text-[#6A7282] mt-0.5">
                         {tasks.length} issue{tasks.length !== 1 ? 's' : ''}
                     </p>
                 </div>
                 <button
                     onClick={() => setShowCreateModal(true)}
-                    className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-[#155DFC] text-white text-[13px] font-medium rounded-lg hover:bg-[#0042A8] transition-colors"
+                    className="hidden sm:flex items-center gap-2 h-10 px-4 bg-[#155DFC] text-white text-[13px] font-semibold rounded-xl hover:bg-[#0042A8] transition-colors shadow-sm"
                 >
                     <Plus size={15} />
                     Create Task
@@ -168,7 +169,7 @@ export default function BacklogPage() {
 
             {/* ── Backlog section(s) ── */}
             {groupedTasks.map(group => (
-              <div key={group.label} className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden mb-4">
+              <div key={group.label} className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden mb-4 shadow-sm">
                 <button
                     onClick={() => toggleGroup(group.label)}
                     className="sticky-section-header w-full flex items-center gap-3 px-4 py-3 border-b border-[#E5E7EB] hover:bg-[#F9FAFB] transition-colors"
@@ -198,9 +199,9 @@ export default function BacklogPage() {
                                     subtitle="Create your first issue to get started."
                                 />
                             ) : (
-                                <div className="flex flex-col gap-[5px] p-3">
+                                <div className="flex flex-col gap-[5px] p-3 sm:p-4">
                                     {/* Table header */}
-                                    <div className="hidden sm:grid grid-cols-[auto_1fr_120px_100px_120px_100px_100px_32px] items-center gap-x-2 px-3 sm:px-4 text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF] mb-1">
+                                    <div className="hidden sm:grid grid-cols-[auto_1.5fr_140px_110px_130px_110px_120px_32px] items-center gap-x-2 px-3 sm:px-4 text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF] mb-1">
                                         <span className="w-3.5" />
                                         <span>Title</span>
                                         <span>Label</span>
@@ -343,6 +344,7 @@ export default function BacklogPage() {
                     onClose={(wasModified) => { setSelectedTaskIdForModal(null); if (wasModified) void loadTasks(); }}
                 />
             )}
+            </div>
         </div>
     );
 }
