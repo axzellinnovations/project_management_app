@@ -33,10 +33,8 @@ export function TabBar({
   useEffect(() => {
     const check = () => setIsSm(window.innerWidth < 768);
     check();
-    const frame = window.requestAnimationFrame(() => setMounted(true));
     window.addEventListener('resize', check);
     return () => {
-      window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', check);
     };
   }, []);
