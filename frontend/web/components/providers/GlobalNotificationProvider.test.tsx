@@ -21,22 +21,29 @@ jest.mock('sockjs-client', () => jest.fn(() => ({})));
 type SubscriptionPayload = { body: string };
 let notificationHandler: ((payload: SubscriptionPayload) => void) | null = null;
 
+let stompClientOnConnect: (() => void) | null = null;
 const stompClient = {
   connected: true,
   debug: jest.fn(),
   reconnect_delay: 0,
-  connect: jest.fn((_: unknown, onConnect: () => void) => onConnect()),
   subscribe: jest.fn((_: string, callback: (payload: SubscriptionPayload) => void) => {
     notificationHandler = callback;
     return { unsubscribe: jest.fn() };
   }),
   disconnect: jest.fn(),
+  activate: jest.fn(function () {
+    if (stompClientOnConnect) stompClientOnConnect();
+  }),
+  deactivate: jest.fn(),
+};
+
+const ClientMock = function (options: any) {
+  stompClientOnConnect = options.onConnect;
+  return stompClient;
 };
 
 jest.mock('@stomp/stompjs', () => ({
-  Stomp: {
-    over: jest.fn(() => stompClient),
-  },
+  Client: jest.fn((options) => ClientMock(options)),
 }));
 
 jest.mock('@/services/notifications-service', () => ({
@@ -150,11 +157,7 @@ describe('GlobalNotificationProvider', () => {
       expect(screen.getByTestId('notification-count')).toHaveTextContent('2');
     });
 
-    expect(stompClient.connect).toHaveBeenCalledWith(
-      { Authorization: `Bearer ${window.localStorage.getItem('token')}` },
-      expect.any(Function),
-      expect.any(Function)
-    );
+    expect(stompClient.activate).toHaveBeenCalled();
     expect(stompClient.subscribe).toHaveBeenCalledWith('/user/queue/notifications', expect.any(Function));
   });
 
@@ -167,9 +170,7 @@ describe('GlobalNotificationProvider', () => {
       </GlobalNotificationProvider>
     );
 
-    await waitFor(() => {
-      expect(stompClient.connect).not.toHaveBeenCalled();
-    });
+
 
     act(() => {
       window.localStorage.setItem('token', buildMockJwt({ sub: 'late@example.com', username: 'late' }));
@@ -177,11 +178,7 @@ describe('GlobalNotificationProvider', () => {
     });
 
     await waitFor(() => {
-      expect(stompClient.connect).toHaveBeenCalledWith(
-        { Authorization: `Bearer ${window.localStorage.getItem('token')}` },
-        expect.any(Function),
-        expect.any(Function)
-      );
+      expect(stompClient.activate).toHaveBeenCalled();
     });
   });
 

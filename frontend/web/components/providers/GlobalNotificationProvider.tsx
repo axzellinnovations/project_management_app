@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
-import { CompatClient, IMessage, Stomp } from '@stomp/stompjs';
+import { Client, IMessage } from '@stomp/stompjs';
 import * as notificationsApi from '@/services/notifications-service';
 import { Notification } from '@/services/notifications-service';
 import { toast } from '@/components/ui/Toast';
@@ -87,7 +87,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
   const searchRef = useRef('');
   const seenNotificationIdsRef = useRef<Set<number>>(new Set());
   const notificationsCacheKeyRef = useRef<string | null>(null);
-  const stompClientRef = useRef<CompatClient | null>(null);
+  const stompClientRef = useRef<Client | null>(null);
   const activeTokenRef = useRef<string | null>(null);
   const isConnectingRef = useRef(false);
   const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
@@ -128,9 +128,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     isConnectingRef.current = false;
     setRealtimeConnected(false);
     if (stompClientRef.current) {
-      if (stompClientRef.current.connected) {
-        stompClientRef.current.disconnect();
-      }
+      stompClientRef.current.deactivate();
       stompClientRef.current = null;
     }
   }, []);
@@ -148,15 +146,12 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     activeTokenRef.current = token;
 
     const wsUrl = backendUrl.replace(/^http/, 'ws');
-    const client = Stomp.client(`${wsUrl}/ws-native`);
-    client.debug = () => {};
-    client.reconnect_delay = 5000;
-
-    stompClientRef.current = client;
-
-    client.connect(
-      { Authorization: `Bearer ${token}` },
-      () => {
+    const client = new Client({
+      brokerURL: `${wsUrl}/ws-native`,
+      connectHeaders: { Authorization: `Bearer ${token}` },
+      debug: () => {},
+      reconnectDelay: 5000,
+      onConnect: () => {
         isConnectingRef.current = false;
         setRealtimeConnected(true);
 
@@ -199,11 +194,18 @@ export function GlobalNotificationProvider({ children }: { children: React.React
           }
         });
       },
-      () => {
+      onStompError: () => {
         isConnectingRef.current = false;
         setRealtimeConnected(false);
-      }
-    );
+      },
+      onWebSocketClose: () => {
+        isConnectingRef.current = false;
+        setRealtimeConnected(false);
+      },
+    });
+
+    stompClientRef.current = client;
+    client.activate();
   }, [backendUrl, disconnectClient]);
 
   const syncAuthAndConnection = useCallback(() => {
