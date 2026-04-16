@@ -24,9 +24,6 @@ public class Task {
     @Column(nullable = false)
     private String title;
 
-    @Column(name = "project_task_number")
-    private Long projectTaskNumber;
-
     @Column(length = 2000)
     private String description;
 
@@ -69,10 +66,6 @@ public class Task {
 
     private LocalDate startDate;
     private LocalDate dueDate;
-    @Column(name = "backlog_position")
-    private Integer backlogPosition;
-    @Column(name = "sprint_position")
-    private Integer sprintPosition;
     private LocalDateTime updatedAt;
     private LocalDateTime completedAt;
 

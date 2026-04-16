@@ -1,7 +1,6 @@
 package com.planora.backend.controller;
 
 import com.planora.backend.dto.DashboardBoardDTO;
-import com.planora.backend.dto.SprintboardFullResponseDTO;
 import com.planora.backend.dto.SprintboardResponseDTO;
 import com.planora.backend.dto.SprintboardTaskResponseDTO;
 import com.planora.backend.dto.SprintcolumnDTO;
@@ -13,7 +12,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -52,14 +50,6 @@ public class SprintboardController {
         return new ResponseEntity<>(sprintboard, HttpStatus.OK);
     }
 
-    @GetMapping("/sprint/{sprintId}/full")
-    public ResponseEntity<SprintboardFullResponseDTO> getFullSprintboardBySprintId(
-            @PathVariable Long sprintId,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        SprintboardFullResponseDTO sprintboard = sprintboardService.getFullSprintboardBySprintId(sprintId, currentUser.getUserId());
-        return new ResponseEntity<>(sprintboard, HttpStatus.OK);
-    }
-
     // GET sprintboard by ID
     @GetMapping("/{sprintboardId}")
     public ResponseEntity<SprintboardResponseDTO> getSprintboardById(
@@ -89,15 +79,6 @@ public class SprintboardController {
         String status = body.getOrDefault("status", "TODO");
         SprintcolumnDTO column = sprintboardService.addColumnToSprintboard(sprintboardId, name, status, currentUser.getUserId());
         return new ResponseEntity<>(column, HttpStatus.CREATED);
-    }
-
-    @PatchMapping("/{sprintboardId}/columns/reorder")
-    public ResponseEntity<Void> reorderColumns(
-            @PathVariable Long sprintboardId,
-            @RequestBody List<Map<String, Integer>> reorderRequest,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        sprintboardService.reorderColumns(sprintboardId, reorderRequest, currentUser.getUserId());
-        return new ResponseEntity<>(HttpStatus.OK);
     }
 
     // MOVE task to different column

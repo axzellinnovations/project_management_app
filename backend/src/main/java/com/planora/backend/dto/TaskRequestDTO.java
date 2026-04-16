@@ -49,14 +49,6 @@ public class TaskRequestDTO {
     private List<Long> assigneeIds;   // multiple assignees (V4)
 
     private Long sprintId;
-    @JsonIgnore
-    private boolean sprintIdProvided;
-
-    @JsonSetter("sprintId")
-    public void setSprintId(Long sprintId) {
-        this.sprintId = sprintId;
-        this.sprintIdProvided = true;
-    }
     private Long KanbanColumnId;
 
     private Long parentId;

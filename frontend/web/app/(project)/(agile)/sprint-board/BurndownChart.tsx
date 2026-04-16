@@ -52,7 +52,7 @@ export default function BurndownChart({ sprintId }: { sprintId: number }) {
     <div style={{ width: "100%", height: 400 }}>
       <h2 className="text-base font-semibold mb-2">Burndown Chart</h2>
 
-      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+      <ResponsiveContainer>
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="date" tick={{ fontSize: 11 }} />
