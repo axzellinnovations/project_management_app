@@ -12,9 +12,10 @@ interface SidebarPanelProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   anchorLeft: number; // left position = sidebar right edge
+  anchorTop?: number;
 }
 
-export function SidebarPanel({ open, onClose, title, badge, children, footer, anchorLeft }: SidebarPanelProps) {
+export function SidebarPanel({ open, onClose, title, badge, children, footer, anchorLeft, anchorTop }: SidebarPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   /* Close on Escape */
@@ -52,16 +53,17 @@ export function SidebarPanel({ open, onClose, title, badge, children, footer, an
           animate={{ opacity: 1, x: 0, scale: 1 }}
           exit={{ opacity: 0, x: -12, scale: 0.97 }}
           transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
-          className="fixed z-[10000] flex flex-col bg-white border border-cu-border rounded-xl shadow-2xl shadow-black/15 overflow-hidden"
+          className="fixed z-[9999] flex flex-col bg-white border border-cu-border rounded-xl shadow-2xl shadow-black/10 overflow-hidden"
           style={{
-            top: 8,
+            top: anchorTop !== undefined ? anchorTop : 8,
             left: anchorLeft + 8,
-            width: 280,
+            width: 248,
             maxHeight: 'calc(100dvh - 16px)',
           }}
+          data-sidebar-dropdown
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 pt-3.5 pb-2.5 border-b border-cu-border-light shrink-0">
+          <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-cu-border-light shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-bold text-cu-text-primary tracking-tight">{title}</span>
               {typeof badge === 'number' && badge > 0 && (
@@ -86,7 +88,7 @@ export function SidebarPanel({ open, onClose, title, badge, children, footer, an
 
           {/* Footer */}
           {footer && (
-            <div className="border-t border-cu-border-light px-4 py-2.5 bg-[#FAFBFC] shrink-0">
+            <div className="border-t border-cu-border-light px-3 py-2 shrink-0 bg-white">
               {footer}
             </div>
           )}

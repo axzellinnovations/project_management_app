@@ -257,8 +257,8 @@ function TopBarContent() {
   };
 
   const isProjectPage = useMemo(() => {
-    if (pathname.startsWith('/dashboard/notifications')) return true;
-    if (pathname.startsWith('/inbox')) return true;
+    if (pathname.startsWith('/dashboard/notifications')) return false;
+    if (pathname.startsWith('/inbox')) return false;
     if (pathname.startsWith('/project/') && pathname.includes('/chat')) return true;
 
     const hasProjectContext = Boolean(projectId);
