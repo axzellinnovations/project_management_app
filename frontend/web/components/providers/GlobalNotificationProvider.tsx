@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
-import SockJS from 'sockjs-client';
 import { CompatClient, IMessage, Stomp } from '@stomp/stompjs';
 import * as notificationsApi from '@/services/notifications-service';
 import { Notification } from '@/services/notifications-service';
@@ -148,7 +147,8 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     isConnectingRef.current = true;
     activeTokenRef.current = token;
 
-    const client = Stomp.over(() => new SockJS(`${backendUrl}/ws`));
+    const wsUrl = backendUrl.replace(/^http/, 'ws');
+    const client = Stomp.client(`${wsUrl}/ws-native`);
     client.debug = () => {};
     client.reconnect_delay = 5000;
 

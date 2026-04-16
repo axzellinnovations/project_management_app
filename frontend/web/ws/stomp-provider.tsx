@@ -1,7 +1,6 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import SockJS from 'sockjs-client';
 import { CompatClient, Stomp, IMessage } from '@stomp/stompjs';
 
 // ── Types ──
@@ -40,7 +39,7 @@ export function StompProvider({ token, children }: StompProviderProps) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const stompClient = Stomp.over(() => new SockJS('http://localhost:8080/ws'));
+    const stompClient = Stomp.client('ws://localhost:8080/ws-native');
     stompClient.debug = () => {};
     stompClient.reconnect_delay = 5000;
 
