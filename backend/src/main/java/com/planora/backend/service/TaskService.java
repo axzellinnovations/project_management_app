@@ -97,7 +97,6 @@ public class TaskService {
         task.setTitle(request.getTitle());
         task.setDescription(request.getDescription());
         task.setProject(project);
-        task.setProjectTaskNumber(taskRepository.findMaxProjectTaskNumberByProjectId(project.getId()) + 1L);
 
         task.setStoryPoint(request.getStoryPoint() != null ? request.getStoryPoint() : 0);
 
@@ -113,11 +112,6 @@ public class TaskService {
             Sprint sprint = sprintRepository.findById(request.getSprintId())
                     .orElseThrow(()-> new ResourceNotFoundException("Sprint not found"));
             task.setSprint(sprint);
-            task.setSprintPosition(taskRepository.findMaxSprintPositionBySprintId(sprint.getId()) + 1);
-            task.setBacklogPosition(null);
-        } else {
-            task.setBacklogPosition(taskRepository.findMaxBacklogPositionByProjectId(project.getId()) + 1);
-            task.setSprintPosition(null);
         }
 
         if (request.getMilestoneId() != null) {
@@ -143,9 +137,6 @@ public class TaskService {
         if (request.getAssigneeIds() != null && !request.getAssigneeIds().isEmpty()) {
             for (Long aid : request.getAssigneeIds()) {
                 task.getAssignees().add(validateTeamMember(teamId, aid));
-            }
-            if (task.getAssignee() == null && !task.getAssignees().isEmpty()) {
-                task.setAssignee(task.getAssignees().iterator().next());
             }
         }
 
@@ -224,18 +215,10 @@ public class TaskService {
 
 
         //update sprint(moving to different sprints)
-        if(request.isSprintIdProvided()){
-            if (request.getSprintId() == null) {
-                task.setSprint(null);
-                task.setSprintPosition(null);
-                task.setBacklogPosition(taskRepository.findMaxBacklogPositionByProjectId(task.getProject().getId()) + 1);
-            } else {
-                Sprint sprint = sprintRepository.findById(request.getSprintId())
-                        .orElseThrow(()->new ResourceNotFoundException("Sprint not found"));
-                task.setSprint(sprint);
-                task.setBacklogPosition(null);
-                task.setSprintPosition(taskRepository.findMaxSprintPositionBySprintId(sprint.getId()) + 1);
-            }
+        if(request.getSprintId() != null){
+            Sprint sprint = sprintRepository.findById(request.getSprintId())
+                    .orElseThrow(()->new ResourceNotFoundException("Sprint not found"));
+            task.setSprint(sprint);
         }
 
         // update milestone
@@ -259,7 +242,6 @@ public class TaskService {
             for (Long aid : request.getAssigneeIds()) {
                 task.getAssignees().add(validateTeamMember(teamId, aid));
             }
-            task.setAssignee(task.getAssignees().isEmpty() ? null : task.getAssignees().iterator().next());
         }
 
         // update recurrence (V7)
@@ -301,18 +283,11 @@ public class TaskService {
 
     /** Lightweight date-only update used by calendar drag-and-drop. */
     @Transactional
-    public void patchTaskDates(
-            Long taskId,
-            LocalDate startDate,
-            boolean startDateProvided,
-            LocalDate dueDate,
-            boolean dueDateProvided,
-            Long currentUserId
-    ) {
+    public void patchTaskDates(Long taskId, LocalDate startDate, LocalDate dueDate, Long currentUserId) {
         Task task = findTaskWithProjectTeam(taskId);
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
-        if (startDateProvided) task.setStartDate(startDate);
-        if (dueDateProvided) task.setDueDate(dueDate);
+        if (startDate != null) task.setStartDate(startDate);
+        if (dueDate != null) task.setDueDate(dueDate);
         task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
     }
@@ -559,8 +534,6 @@ public class TaskService {
 
         TeamMember assignee = validateTeamMember(task.getProject().getTeam().getId(), userId);
         task.setAssignee(assignee);
-        task.getAssignees().clear();
-        task.getAssignees().add(assignee);
         task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
 
@@ -588,7 +561,6 @@ public class TaskService {
         for (Long uid : userIds) {
             task.getAssignees().add(validateTeamMember(teamId, uid));
         }
-        task.setAssignee(task.getAssignees().isEmpty() ? null : task.getAssignees().iterator().next());
         task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         Task saved = taskRepository.save(task);
 
@@ -701,7 +673,6 @@ public class TaskService {
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
         task.setAssignee(null);
-        task.getAssignees().clear();
         task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
         taskRepository.save(task);
 
@@ -857,7 +828,6 @@ public class TaskService {
     private TaskResponseDTO mapToDTO(Task task, java.util.Map<Long, List<DependencyDTO>> dependencyMap){
         TaskResponseDTO dto = new TaskResponseDTO();
         dto.setId(task.getId());
-        dto.setProjectTaskNumber(task.getProjectTaskNumber());
         dto.setTitle(task.getTitle());
         dto.setDescription(task.getDescription());
         dto.setProjectId(task.getProject() != null ? task.getProject().getId() : null);
@@ -1003,47 +973,6 @@ public class TaskService {
                 })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
-    }
-
-    @Transactional
-    public void reorderTasks(Long projectId, Long sprintId, List<Long> orderedTaskIds, Long currentUserId) {
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
-        requireMinimumRole(project.getTeam().getId(), currentUserId, TeamRole.MEMBER);
-        if (orderedTaskIds == null || orderedTaskIds.isEmpty()) {
-            return;
-        }
-        List<Task> tasks = taskRepository.findByIdInWithScalars(orderedTaskIds).stream()
-                .filter(task -> task.getProject() != null && Objects.equals(task.getProject().getId(), projectId))
-                .toList();
-        Sprint targetSprint = sprintId == null
-                ? null
-                : sprintRepository.findById(sprintId)
-                .orElseThrow(() -> new ResourceNotFoundException("Sprint not found"));
-        if (targetSprint != null && !Objects.equals(targetSprint.getProId(), projectId)) {
-            throw new ForbiddenException("Sprint does not belong to project");
-        }
-        User actor = userRepository.findById(currentUserId).orElseThrow();
-        java.util.Map<Long, Task> taskById = tasks.stream()
-                .collect(Collectors.toMap(Task::getId, task -> task));
-        for (int index = 0; index < orderedTaskIds.size(); index++) {
-            Long taskId = orderedTaskIds.get(index);
-            Task task = taskById.get(taskId);
-            if (task == null) {
-                continue;
-            }
-            if (sprintId == null) {
-                task.setSprint(null);
-                task.setBacklogPosition(index);
-                task.setSprintPosition(null);
-            } else {
-                task.setSprint(targetSprint);
-                task.setBacklogPosition(null);
-                task.setSprintPosition(index);
-            }
-            task.setLastModifiedBy(actor);
-        }
-        taskRepository.saveAll(tasks);
     }
 
     /** Compute the next occurrence date after today based on recurrence rule. */

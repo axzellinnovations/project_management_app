@@ -19,7 +19,6 @@ import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
 import { type CreateTaskData } from '@/components/shared/CreateTaskModal';
 import { useTaskStore } from '@/stores/task-store';
 import { buildSessionCacheKey, getSessionCache, setSessionCache, removeSessionCache } from '@/lib/session-cache';
-import { motion, AnimatePresence } from 'framer-motion';
 
 const LABEL_PALETTE = ["#EF4444","#F97316","#F59E0B","#84CC16","#22C55E","#14B8A6","#06B6D4","#3B82F6","#6366F1","#8B5CF6","#EC4899","#6B7280"];
 
@@ -31,9 +30,6 @@ type CacheShape = {
 
 type RawTask = {
   id: number;
-  projectTaskNumber?: number;
-  backlogPosition?: number | null;
-  sprintPosition?: number | null;
   title: string;
   storyPoint: number;
   assigneeName?: string;
@@ -103,10 +99,9 @@ export default function SprintBacklogPage() {
       .map((s) => ({ ...s, tasks: applyFilters(s.tasks) }));
   }, [sprints, applyFilters]);
 
-  const mapRawTask = (raw: RawTask): TaskItem => ({
+  const mapRawTask = (raw: RawTask, index: number): TaskItem => ({
     id: raw.id,
-    taskNo: raw.projectTaskNumber ?? raw.id,
-    projectTaskNumber: raw.projectTaskNumber ?? raw.id,
+    taskNo: index + 1,
     title: raw.title,
     storyPoints: raw.storyPoint,
     selected: false,
@@ -118,15 +113,6 @@ export default function SprintBacklogPage() {
     dueDate: raw.dueDate ?? '',
     labels: raw.labels ?? [],
   });
-
-  const persistOrder = useCallback(async (targetSprintId: number | null, orderedTaskIds: number[]) => {
-    if (!projectId || orderedTaskIds.length === 0) return;
-    await api.patch('/api/tasks/reorder', {
-      projectId: Number(projectId),
-      sprintId: targetSprintId,
-      orderedTaskIds,
-    });
-  }, [projectId]);
 
   const fetchStaticData = useCallback(async () => {
     if (!projectId) return;
@@ -180,7 +166,7 @@ export default function SprintBacklogPage() {
       const rawSprints = sprintsRes.data as any[];
       const rawTasks = tasksRes.data as RawTask[];
       const uniqueRaw = Array.from(new Map(rawTasks.map(t => [t.id, t])).values());
-      const mappedTasks = uniqueRaw.map((t) => mapRawTask(t));
+      const mappedTasks = uniqueRaw.map((t, i) => mapRawTask(t, i));
 
       if (projectIdNum) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -320,8 +306,7 @@ export default function SprintBacklogPage() {
       const raw = response.data as RawTask;
       const newTask: TaskItem = {
         id: raw.id,
-        taskNo: raw.projectTaskNumber ?? raw.id,
-        projectTaskNumber: raw.projectTaskNumber ?? raw.id,
+        taskNo: productTasks.length + 1,
         title: raw.title,
         storyPoints: raw.storyPoint,
         selected: false,
@@ -337,7 +322,7 @@ export default function SprintBacklogPage() {
       const axiosErr = err as { response?: { data?: { message?: string } } };
       toast(axiosErr?.response?.data?.message || 'Failed to create task.', 'error');
     }
-  }, [projectId, fetchData]);
+  }, [projectId, productTasks.length, fetchData]);
 
   const createSprintTask = useCallback(async (title: string, sprintId: number) => {
     const trimmed = title.trim();
@@ -353,8 +338,7 @@ export default function SprintBacklogPage() {
       const raw = response.data as RawTask;
       const newTask: TaskItem = {
         id: raw.id,
-        taskNo: raw.projectTaskNumber ?? raw.id,
-        projectTaskNumber: raw.projectTaskNumber ?? raw.id,
+        taskNo: 0,
         title: raw.title,
         storyPoints: raw.storyPoint,
         selected: false,
@@ -364,7 +348,7 @@ export default function SprintBacklogPage() {
       setSprints((prev) =>
         prev.map((s) =>
           s.id === sprintId
-            ? { ...s, tasks: [...s.tasks.filter((x) => x.id !== newTask.id), newTask] }
+            ? { ...s, tasks: [...s.tasks.filter((x) => x.id !== newTask.id), { ...newTask, taskNo: s.tasks.length + 1 }] }
             : s
         )
       );
@@ -410,75 +394,51 @@ export default function SprintBacklogPage() {
       const next = [...arr];
       const bounded = Math.max(0, Math.min(idx, next.length));
       next.splice(bounded, 0, item);
-      return next;
+      return next.map((task, index) => ({ ...task, taskNo: index + 1 }));
     };
 
     const removeAt = (arr: TaskItem[], idx: number) => {
       const next = [...arr];
       next.splice(idx, 1);
-      return next;
+      return next.map((task, index) => ({ ...task, taskNo: index + 1 }));
     };
 
     if (isSameList) {
       if (fromSprintId === null) {
-        const without = removeAt(productTasks, fromIndex);
-        const adjusted = desiredIndex > fromIndex ? desiredIndex - 1 : desiredIndex;
-        const finalList = insertAt(without, { ...draggedTask, sprintId: null }, adjusted);
-        setProductTasks(finalList);
-        try {
-          await persistOrder(null, finalList.map((t) => t.id));
-        } catch {
-          void fetchData({ showSpinner: false, forceNetwork: true });
-        }
+        setProductTasks((prev) => {
+          const currentIndex = prev.findIndex((t) => t.id === taskId);
+          if (currentIndex < 0) return prev;
+          const without = removeAt(prev, currentIndex);
+          const adjusted = desiredIndex > currentIndex ? desiredIndex - 1 : desiredIndex;
+          return insertAt(without, { ...draggedTask!, sprintId: null }, adjusted);
+        });
       } else {
-        const sourceSprint = sprints.find((s) => s.id === fromSprintId);
-        if (!sourceSprint) return;
-        const without = removeAt(sourceSprint.tasks, fromIndex);
-        const adjusted = desiredIndex > fromIndex ? desiredIndex - 1 : desiredIndex;
-        const finalList = insertAt(without, { ...draggedTask, sprintId: fromSprintId }, adjusted);
-        setSprints((prev) => prev.map((sprint) => sprint.id === fromSprintId ? { ...sprint, tasks: finalList } : sprint));
-        try {
-          await persistOrder(fromSprintId, finalList.map((t) => t.id));
-        } catch {
-          void fetchData({ showSpinner: false, forceNetwork: true });
-        }
+        setSprints((prev) => prev.map((sprint) => {
+          if (sprint.id !== fromSprintId) return sprint;
+          const currentIndex = sprint.tasks.findIndex((t) => t.id === taskId);
+          if (currentIndex < 0) return sprint;
+          const without = removeAt(sprint.tasks, currentIndex);
+          const adjusted = desiredIndex > currentIndex ? desiredIndex - 1 : desiredIndex;
+          return { ...sprint, tasks: insertAt(without, { ...draggedTask!, sprintId: sprint.id }, adjusted) };
+        }));
       }
       return;
     }
 
-    let sourceRemainingIds: number[] = [];
     if (fromSprintId === null) {
-      const remaining = removeAt(productTasks, fromIndex);
-      sourceRemainingIds = remaining.map((t) => t.id);
-      setProductTasks(remaining);
+      setProductTasks((prev) => removeAt(prev, fromIndex));
     } else {
-      const sourceSprint = sprints.find((s) => s.id === fromSprintId);
-      if (sourceSprint) {
-        const remaining = removeAt(sourceSprint.tasks, fromIndex);
-        sourceRemainingIds = remaining.map((t) => t.id);
-        setSprints((prev) => prev.map((s) => s.id === fromSprintId ? { ...s, tasks: remaining } : s));
-      }
+      setSprints((prev) => prev.map((s) => s.id === fromSprintId ? { ...s, tasks: removeAt(s.tasks, fromIndex) } : s));
     }
 
-    let reorderedTargetIds: number[] = [];
     if (toSprintId === null) {
-      const finalBacklog = insertAt(productTasks.filter((t) => t.id !== taskId), { ...draggedTask, sprintId: null }, desiredIndex);
-      reorderedTargetIds = finalBacklog.map((t) => t.id);
-      setProductTasks(finalBacklog);
+      setProductTasks((prev) => insertAt(prev, { ...draggedTask!, sprintId: null }, desiredIndex));
     } else {
-      const targetSprint = sprints.find((s) => s.id === toSprintId);
-      if (!targetSprint) return;
-      const finalSprintTasks = insertAt(targetSprint.tasks.filter((t) => t.id !== taskId), { ...draggedTask, sprintId: toSprintId }, desiredIndex);
-      reorderedTargetIds = finalSprintTasks.map((t) => t.id);
-      setSprints((prev) => prev.map((s) => s.id === toSprintId ? { ...s, tasks: finalSprintTasks } : s));
+      setSprints((prev) => prev.map((s) => s.id === toSprintId ? { ...s, tasks: insertAt(prev.find(x => x.id === toSprintId)?.tasks ?? s.tasks, { ...draggedTask!, sprintId: toSprintId }, desiredIndex) } : s));
     }
 
     try {
       await api.put(`/api/tasks/${taskId}`, { sprintId: toSprintId });
-      if (fromSprintId !== toSprintId) {
-        await persistOrder(fromSprintId, sourceRemainingIds);
-      }
-      await persistOrder(toSprintId, reorderedTargetIds);
       const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
       if (cKey) removeSessionCache(cKey);
       window.dispatchEvent(new CustomEvent('planora:task-updated'));
@@ -487,7 +447,7 @@ export default function SprintBacklogPage() {
       toast(axiosErr?.response?.data?.message || 'Failed to move task.', 'error');
       void fetchData({ showSpinner: false, forceNetwork: true });
     }
-  }, [projectId, productTasks, sprints, fetchData, persistOrder]);
+  }, [projectId, productTasks, sprints, fetchData]);
 
   const moveTaskToSprint = useCallback((taskId: number, sprintId: number, targetIndex?: number) => {
     void moveTask(taskId, sprintId, targetIndex);
@@ -512,23 +472,6 @@ export default function SprintBacklogPage() {
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
       toast(axiosErr?.response?.data?.message || 'Failed to update status.', 'error');
-    }
-  }, [projectId, fetchData]);
-
-  const handleTaskDueDateChange = useCallback(async (taskId: number, dueDate: string) => {
-    const normalized = dueDate ? dueDate.slice(0, 10) : '';
-    setProductTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, dueDate: normalized } : t));
-    setSprints((prev) => prev.map((s) => ({
-      ...s,
-      tasks: s.tasks.map((t) => t.id === taskId ? { ...t, dueDate: normalized } : t),
-    })));
-    try {
-      await api.patch(`/api/tasks/${taskId}/dates`, { dueDate: normalized || null });
-      const cKey = buildSessionCacheKey('sprint-backlog', [projectId]);
-      if (cKey) removeSessionCache(cKey);
-    } catch {
-      toast('Failed to update due date.', 'error');
-      void fetchData({ showSpinner: false, forceNetwork: true });
     }
   }, [projectId, fetchData]);
 
@@ -658,8 +601,7 @@ export default function SprintBacklogPage() {
       const t = event.task;
       const newTask: TaskItem = {
         id: t.id,
-        taskNo: t.projectTaskNumber ?? t.id,
-        projectTaskNumber: t.projectTaskNumber ?? t.id,
+        taskNo: 0,
         title: t.title,
         storyPoints: t.storyPoint ?? 0,
         selected: false,
@@ -682,44 +624,31 @@ export default function SprintBacklogPage() {
       const t = event.task;
       const updated: Partial<TaskItem> = {
         title: t.title,
-        taskNo: t.projectTaskNumber ?? t.id,
-        projectTaskNumber: t.projectTaskNumber ?? t.id,
         storyPoints: t.storyPoint ?? 0,
         status: t.status ?? 'TODO',
         priority: t.priority ?? 'LOW',
         assigneeName: t.assigneeName ?? 'Unassigned',
         assigneePhotoUrl: t.assigneePhotoUrl ?? null,
         sprintId: t.sprintId ?? null,
-        dueDate: t.dueDate ?? '',
       };
 
       const updateList = (prev: TaskItem[], targetSprintId: number | null | undefined) => {
-        const existingIndex = prev.findIndex(x => x.id === t.id);
-        const existing = existingIndex >= 0 ? prev[existingIndex] : undefined;
+        const existing = prev.find(x => x.id === t.id);
         const filtered = prev.filter(x => x.id !== t.id);
         if (!t.sprintId && targetSprintId === null) {
           const taskToUse = existing || { id: t.id } as TaskItem;
-          if (existingIndex < 0) return [...filtered, { ...taskToUse, ...updated }];
-          const next = [...prev];
-          next[existingIndex] = { ...taskToUse, ...updated };
-          return next;
+          return [...filtered, { ...taskToUse, ...updated }];
         }
         return filtered;
       };
 
       setProductTasks(prev => updateList(prev, null));
       setSprints(prev => prev.map(s => {
-        const existingIndex = s.tasks.findIndex(x => x.id === t.id);
-        const existing = existingIndex >= 0 ? s.tasks[existingIndex] : undefined;
+        const existing = s.tasks.find(x => x.id === t.id);
         const filtered = s.tasks.filter(x => x.id !== t.id);
         if (s.id === t.sprintId) {
           const taskToUse = existing || { id: t.id } as TaskItem;
-          if (existingIndex < 0) {
-            return { ...s, tasks: [...filtered, { ...taskToUse, ...updated }] };
-          }
-          const next = [...s.tasks];
-          next[existingIndex] = { ...taskToUse, ...updated };
-          return { ...s, tasks: next };
+          return { ...s, tasks: [...filtered, { ...taskToUse, ...updated }] };
         }
         return { ...s, tasks: filtered };
       }));
@@ -817,113 +746,81 @@ export default function SprintBacklogPage() {
               <button onClick={() => window.location.reload()} className="h-12 px-8 bg-slate-900 text-white rounded-xl font-bold text-[14px] hover:bg-slate-800 transition-all active:scale-95">Try Again</button>
             </div>
           ) : (
-                        <>
-              <motion.div layout className="space-y-8">
-                <AnimatePresence initial={false}>
-                  {filteredSprints.length > 0 ? (
-                    filteredSprints.map((sprint) => (
-                      <motion.div
-                        key={sprint.id}
-                        layout
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                      >
-                        <BacklogCard
-                          sprint={sprint}
-                          projectId={projectId!}
-                          projectKey={projectKey}
-                          currentUserRole={currentUserRole}
-                          onDropTask={moveTaskToSprint}
-                          onCreateTask={createSprintTask}
-                          onToggleTask={toggleTaskSelection}
-                          onDeleteTask={(taskId, sprintId) => {
-                            setSprints((prev) => prev.map((s) => s.id === sprintId ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) } : s));
-                          }}
-                          onSprintDeleted={handleSprintDeleted}
-                          onStatusChange={handleTaskStatusChange}
-                          onStoryPointsChange={updateTaskStoryPoints}
-                          onAssignTask={(taskId, name, photo) => {
-                            setSprints(prev => prev.map(s => ({
-                              ...s,
-                              tasks: s.tasks.map(t => t.id === taskId ? { ...t, assigneeName: name, assigneePhotoUrl: photo } : t)
-                            })));
-                          }}
-                          onRenameTask={async (taskId, title) => {
-                            try {
-                              await api.put(`/api/tasks/${taskId}`, { title });
-                              setSprints(prev => prev.map(s => ({
-                                ...s,
-                                tasks: s.tasks.map(t => t.id === taskId ? { ...t, title } : t)
-                              })));
-                            } catch { toast('Failed to rename task', 'error'); }
-                          }}
-                          projectLabels={projectLabels}
-                          onCreateLabel={handleCreateLabel}
-                          onDueDateChange={handleTaskDueDateChange}
-                          extraStatuses={sprint.status === 'ACTIVE' ? activeBoardStatuses : []}
-                        />
-                      </motion.div>
-                    ))
-                  ) : !filters.search && (
-                    <motion.div 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="flex flex-col items-center justify-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200"
-                    >
-                      <div className="h-16 w-16 bg-slate-50 text-slate-400 rounded-3xl flex items-center justify-center mb-5"><Rocket size={32} /></div>
-                      <h3 className="text-lg font-bold text-slate-900 mb-1">No Active Sprints</h3>
-                      <p className="text-slate-500 text-[14px] mb-8">Create a sprint to start planning your development cycle.</p>
-                      <button onClick={() => { void createSprint(`${projectKey} Sprint ${sprints.length + 1}`); }} className="h-11 px-6 bg-[#155DFC] text-white rounded-xl font-bold text-[13px] hover:bg-[#1149C9] shadow-md shadow-blue-500/10 transition-all">Create First Sprint</button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-              
-              <motion.div layout className="mt-8">
-                <ProductBacklogSection
-                  tasks={filteredProductTasks}
-                  projectId={projectId!}
-                  projectKey={projectKey}
-                  sprintCount={sprints.length}
-                  currentUserRole={currentUserRole}
-                  onToggleTask={toggleTaskSelection}
-                  onStoryPointsChange={updateTaskStoryPoints}
-                  onCreateTask={createTask}
-                  onDeleteTask={(taskId) => { setProductTasks((prev) => prev.filter((t) => t.id !== taskId)); }}
-                  onCreateSprint={() => { void createSprint(`${projectKey} Sprint ${sprints.length + 1}`); }}
-                  onDropTask={moveTaskToBacklog}
-                  onStatusChange={handleTaskStatusChange}
-                  onDueDateChange={handleTaskDueDateChange}
-                  onAssignTask={(taskId, assigneeName, assigneePhotoUrl) => {
-                    setProductTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, assigneeName, assigneePhotoUrl } : t)));
-                  }}
-                  onRenameTask={async (taskId, title) => {
-                    try {
-                      await api.put(`/api/tasks/${taskId}`, { title });
-                      setProductTasks(prev => prev.map(t => t.id === taskId ? { ...t, title } : t));
-                    } catch { toast('Failed to rename task', 'error'); }
-                  }}
-                  externalShowCreateModal={showCreateTaskModal}
-                  onCloseCreateModal={() => setShowCreateTaskModal(false)}
-                  projectLabels={projectLabels}
-                  onCreateLabel={handleCreateLabel}
-                />
-              </motion.div>
-
-              <AnimatePresence>
-                {showVelocity && (
-                  <motion.div 
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="mt-8 overflow-hidden"
-                  >
-                    <VelocityChart sprints={velocityData} />
-                  </motion.div>
+            <>
+              <div className="space-y-8">
+                {filteredSprints.length > 0 ? (
+                  filteredSprints.map((sprint) => (
+                    <BacklogCard
+                      key={sprint.id}
+                      sprint={sprint}
+                      projectId={projectId!}
+                      currentUserRole={currentUserRole}
+                      onDropTask={moveTaskToSprint}
+                      onCreateTask={createSprintTask}
+                      onToggleTask={toggleTaskSelection}
+                      onDeleteTask={(taskId, sprintId) => {
+                        setSprints((prev) => prev.map((s) => s.id === sprintId ? { ...s, tasks: s.tasks.filter((t) => t.id !== taskId) } : s));
+                      }}
+                      onSprintDeleted={handleSprintDeleted}
+                      onStatusChange={handleTaskStatusChange}
+                      onStoryPointsChange={updateTaskStoryPoints}
+                      onAssignTask={(taskId, name, photo) => {
+                        setSprints(prev => prev.map(s => ({
+                          ...s,
+                          tasks: s.tasks.map(t => t.id === taskId ? { ...t, assigneeName: name, assigneePhotoUrl: photo } : t)
+                        })));
+                      }}
+                      onRenameTask={async (taskId, title) => {
+                        try {
+                          await api.put(`/api/tasks/${taskId}`, { title });
+                          setSprints(prev => prev.map(s => ({
+                            ...s,
+                            tasks: s.tasks.map(t => t.id === taskId ? { ...t, title } : t)
+                          })));
+                        } catch { toast('Failed to rename task', 'error'); }
+                      }}
+                      projectLabels={projectLabels}
+                      onCreateLabel={handleCreateLabel}
+                      extraStatuses={sprint.status === 'ACTIVE' ? activeBoardStatuses : []}
+                    />
+                  ))
+                ) : !filters.search && (
+                  <div className="flex flex-col items-center justify-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                    <div className="h-16 w-16 bg-slate-50 text-slate-400 rounded-3xl flex items-center justify-center mb-5"><Rocket size={32} /></div>
+                    <h3 className="text-lg font-bold text-slate-900 mb-1">No Active Sprints</h3>
+                    <p className="text-slate-500 text-[14px] mb-8">Create a sprint to start planning your development cycle.</p>
+                    <button onClick={() => { void createSprint(`${projectKey} Sprint ${sprints.length + 1}`); }} className="h-11 px-6 bg-[#155DFC] text-white rounded-xl font-bold text-[13px] hover:bg-[#1149C9] shadow-md shadow-blue-500/10 transition-all">Create First Sprint</button>
+                  </div>
                 )}
-              </AnimatePresence>
+              </div>
+              <ProductBacklogSection
+                tasks={filteredProductTasks}
+                projectId={projectId!}
+                projectKey={projectKey}
+                sprintCount={sprints.length}
+                currentUserRole={currentUserRole}
+                onToggleTask={toggleTaskSelection}
+                onStoryPointsChange={updateTaskStoryPoints}
+                onCreateTask={createTask}
+                onDeleteTask={(taskId) => { setProductTasks((prev) => prev.filter((t) => t.id !== taskId)); }}
+                onCreateSprint={() => { void createSprint(`${projectKey} Sprint ${sprints.length + 1}`); }}
+                      onDropTask={moveTaskToBacklog}
+                onStatusChange={handleTaskStatusChange}
+                onAssignTask={(taskId, assigneeName, assigneePhotoUrl) => {
+                  setProductTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, assigneeName, assigneePhotoUrl } : t)));
+                }}
+                onRenameTask={async (taskId, title) => {
+                  try {
+                    await api.put(`/api/tasks/${taskId}`, { title });
+                    setProductTasks(prev => prev.map(t => t.id === taskId ? { ...t, title } : t));
+                  } catch { toast('Failed to rename task', 'error'); }
+                }}
+                externalShowCreateModal={showCreateTaskModal}
+                onCloseCreateModal={() => setShowCreateTaskModal(false)}
+                projectLabels={projectLabels}
+                onCreateLabel={handleCreateLabel}
+              />
+              {showVelocity && <div className="mt-8"><VelocityChart sprints={velocityData} /></div>}
             </>
           )}
         </div>

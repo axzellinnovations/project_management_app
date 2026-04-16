@@ -9,11 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.planora.backend.dto.DashboardBoardDTO;
-import com.planora.backend.dto.SprintboardFullResponseDTO;
 import com.planora.backend.dto.SprintboardResponseDTO;
-import com.planora.backend.dto.SprintboardStatsDTO;
 import com.planora.backend.dto.SprintboardTaskResponseDTO;
-import com.planora.backend.dto.SprintcolumnFullDTO;
 import com.planora.backend.dto.SprintcolumnDTO;
 import com.planora.backend.model.Project;
 import com.planora.backend.model.Sprint;
@@ -145,77 +142,6 @@ public class SprintboardService {
         return response;
     }
 
-    @Transactional(readOnly = true)
-    public SprintboardFullResponseDTO getFullSprintboardBySprintId(Long sprintId, Long currentUserId) {
-        Sprint sprint = sprintRepository.findById(sprintId)
-                .orElseThrow(() -> new RuntimeException("Sprint not found"));
-        requireViewBoard(sprint.getProId(), currentUserId);
-
-        Sprintboard sprintboard = sprintboardRepository.findBySprintId(sprintId)
-                .orElseThrow(() -> new RuntimeException("Sprintboard not found for sprint"));
-
-        List<Sprintcolumn> columns = springcolumnRepository.findBySprintboardIdOrderByPosition(sprintboard.getId());
-        List<Task> scalarTasks = taskRepository.findBySprintIdWithScalars(sprintId);
-        List<Long> taskIds = scalarTasks.stream().map(Task::getId).toList();
-
-        java.util.Map<Long, Task> enrichedMap = taskIds.isEmpty()
-                ? java.util.Map.of()
-                : taskRepository.findByIdInWithCollections(taskIds).stream()
-                        .collect(Collectors.toMap(Task::getId, t -> t));
-
-        java.util.Map<String, List<SprintboardTaskResponseDTO>> tasksByStatus = new java.util.HashMap<>();
-        for (Task scalarTask : scalarTasks) {
-            Task task = enrichedMap.getOrDefault(scalarTask.getId(), scalarTask);
-            SprintboardTaskResponseDTO dto = mapTaskForBoard(task);
-            tasksByStatus.computeIfAbsent(dto.getStatus(), ignored -> new java.util.ArrayList<>()).add(dto);
-        }
-
-        List<SprintcolumnFullDTO> columnDTOs = columns.stream().map(col -> {
-            SprintcolumnFullDTO dto = new SprintcolumnFullDTO();
-            dto.setId(col.getId());
-            dto.setPosition(col.getPosition());
-            dto.setColumnName(col.getColumnName());
-            dto.setColumnStatus(col.getColumnStatus() != null ? col.getColumnStatus() : "TODO");
-            dto.setTasks(tasksByStatus.getOrDefault(dto.getColumnStatus(), List.of()));
-            return dto;
-        }).toList();
-
-        long totalTasks = scalarTasks.size();
-        long doneTasks = scalarTasks.stream()
-                .filter(task -> "DONE".equalsIgnoreCase(task.getStatus()))
-                .count();
-        long totalStoryPoints = scalarTasks.stream().mapToLong(Task::getStoryPoint).sum();
-        long doneStoryPoints = scalarTasks.stream()
-                .filter(task -> "DONE".equalsIgnoreCase(task.getStatus()))
-                .mapToLong(Task::getStoryPoint)
-                .sum();
-        long overdueTasks = scalarTasks.stream()
-                .filter(task -> task.getDueDate() != null
-                        && task.getDueDate().isBefore(java.time.LocalDate.now())
-                        && !"DONE".equalsIgnoreCase(task.getStatus()))
-                .count();
-        long unassignedTasks = scalarTasks.stream()
-                .filter(task -> task.getAssignee() == null || task.getAssignee().getUser() == null)
-                .count();
-
-        SprintboardFullResponseDTO response = new SprintboardFullResponseDTO();
-        response.setId(sprintboard.getId());
-        response.setSprintId(sprint.getId());
-        response.setSprintName(sprint.getName());
-        response.setSprintStatus(sprint.getStatus() != null ? sprint.getStatus().toString() : "NOT_STARTED");
-        response.setCreatedAt(sprintboard.getCreatedAt());
-        response.setUpdatedAt(sprintboard.getUpdatedAt());
-        response.setColumns(columnDTOs);
-        response.setStats(new SprintboardStatsDTO(
-                totalTasks,
-                doneTasks,
-                totalStoryPoints,
-                doneStoryPoints,
-                overdueTasks,
-                unassignedTasks));
-        return response;
-    }
-
     public Sprintboard getSprintboardById(Long sprintboardId) {
         return sprintboardRepository.findById(sprintboardId)
                 .orElseThrow(() -> new RuntimeException("Sprintboard not found"));
@@ -244,7 +170,26 @@ public class SprintboardService {
                 .collect(Collectors.toMap(Task::getId, t -> t));
 
         return scalarTasks.stream()
-                .map(task -> mapTaskForBoard(enrichedMap.getOrDefault(task.getId(), task)))
+                .map(task -> {
+                    Task t = enrichedMap.getOrDefault(task.getId(), task);
+                    SprintboardTaskResponseDTO dto = new SprintboardTaskResponseDTO();
+                    dto.setTaskId(t.getId());
+                    dto.setTitle(t.getTitle());
+                    dto.setStoryPoint(t.getStoryPoint());
+                    dto.setStatus(t.getStatus() != null ? t.getStatus() : "TODO");
+                    dto.setPriority(t.getPriority() != null ? t.getPriority().toString() : "MEDIUM");
+                    dto.setDueDate(t.getDueDate());
+                    if (t.getAssignee() != null && t.getAssignee().getUser() != null) {
+                        dto.setAssigneeName(t.getAssignee().getUser().getFullName());
+                        dto.setAssigneePhotoUrl(t.getAssignee().getUser().getProfilePicUrl());
+                    }
+                    if (t.getLabels() != null && !t.getLabels().isEmpty()) {
+                        var label = t.getLabels().iterator().next();
+                        dto.setLabelName(label.getName());
+                        dto.setLabelColor(label.getColor());
+                    }
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
 
@@ -342,25 +287,6 @@ public class SprintboardService {
         return dto;
     }
 
-    @Transactional
-    public void reorderColumns(Long sprintboardId, List<java.util.Map<String, Integer>> reorderRequest, Long currentUserId) {
-        Sprintboard sprintboard = getSprintboardById(sprintboardId);
-        Sprint sprint = sprintboard.getSprint();
-        requireViewBoard(sprint.getProId(), currentUserId);
-        java.util.Set<Long> validIds = springcolumnRepository.findBySprintboardIdOrderByPosition(sprintboardId)
-                .stream()
-                .map(Sprintcolumn::getId)
-                .collect(java.util.stream.Collectors.toSet());
-        for (java.util.Map<String, Integer> entry : reorderRequest) {
-            Long id = entry.get("id") != null ? entry.get("id").longValue() : null;
-            Integer position = entry.get("position");
-            if (id == null || position == null || !validIds.contains(id)) {
-                throw new RuntimeException("Invalid sprint column reorder payload");
-            }
-            springcolumnRepository.updatePosition(id, position);
-        }
-    }
-
     public SprintboardResponseDTO getSprintboardBySprintboardId(Long sprintboardId, Long currentUserId) {
         Sprintboard sprintboard = getSprintboardById(sprintboardId);
         Sprint sprint = sprintboard.getSprint();
@@ -389,36 +315,5 @@ public class SprintboardService {
 
         response.setColumns(columnDTOs);
         return response;
-    }
-
-    private SprintboardTaskResponseDTO mapTaskForBoard(Task task) {
-        SprintboardTaskResponseDTO dto = new SprintboardTaskResponseDTO();
-        dto.setTaskId(task.getId());
-        dto.setProjectTaskNumber(task.getProjectTaskNumber());
-        dto.setTitle(task.getTitle());
-        dto.setStoryPoint(task.getStoryPoint());
-        dto.setStatus(task.getStatus() != null ? task.getStatus() : "TODO");
-        dto.setPriority(task.getPriority() != null ? task.getPriority().toString() : "MEDIUM");
-        dto.setDueDate(task.getDueDate());
-        dto.setUpdatedAt(task.getUpdatedAt());
-        dto.setAttachmentCount(task.getAttachments() != null ? task.getAttachments().size() : 0);
-        dto.setCommentCount(task.getComments() != null ? task.getComments().size() : 0);
-        TeamMember displayAssignee = task.getAssignee();
-        if ((displayAssignee == null || displayAssignee.getUser() == null) && task.getAssignees() != null && !task.getAssignees().isEmpty()) {
-            displayAssignee = task.getAssignees().iterator().next();
-        }
-        if (displayAssignee != null && displayAssignee.getUser() != null) {
-            String fullName = displayAssignee.getUser().getFullName();
-            dto.setAssigneeName((fullName != null && !fullName.isBlank())
-                    ? fullName
-                    : displayAssignee.getUser().getUsername());
-            dto.setAssigneePhotoUrl(displayAssignee.getUser().getProfilePicUrl());
-        }
-        if (task.getLabels() != null && !task.getLabels().isEmpty()) {
-            var label = task.getLabels().iterator().next();
-            dto.setLabelName(label.getName());
-            dto.setLabelColor(label.getColor());
-        }
-        return dto;
     }
 }
