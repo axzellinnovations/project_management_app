@@ -34,9 +34,7 @@ export function TabBar({
     const check = () => setIsSm(window.innerWidth < 768);
     check();
     window.addEventListener('resize', check);
-    return () => {
-      window.removeEventListener('resize', check);
-    };
+    return () => window.removeEventListener('resize', check);
   }, []);
 
   useEffect(() => {
