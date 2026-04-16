@@ -13,6 +13,7 @@ interface ProjectListProps {
   recentRef: React.RefObject<HTMLDivElement | null>;
   onOpenFav: () => void;
   onOpenRecent: () => void;
+  isMobile?: boolean;
 }
 
 export default function ProjectList({
@@ -26,6 +27,7 @@ export default function ProjectList({
   recentRef,
   onOpenFav,
   onOpenRecent,
+  isMobile = false,
 }: ProjectListProps) {
   return (
     <>
@@ -35,7 +37,7 @@ export default function ProjectList({
           label="Favourites"
           collapsed={collapsed}
           active={favOpen}
-          hasChevron
+          hasChevron={!isMobile}
           chevronOpen={favOpen}
           onClick={onOpenFav}
         />
@@ -47,7 +49,7 @@ export default function ProjectList({
           label="Recent Spaces"
           collapsed={collapsed}
           active={recentOpen}
-          hasChevron
+          hasChevron={!isMobile}
           chevronOpen={recentOpen}
           onClick={onOpenRecent}
         />

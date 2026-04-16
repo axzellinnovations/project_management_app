@@ -86,7 +86,7 @@ export default function DashboardNotificationsPage() {
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] md:pb-10 space-y-5 sm:space-y-6">
+    <div className="mobile-page-padding max-w-[1200px] mx-auto pb-6 space-y-5 sm:space-y-6 w-full">
       <NotificationHeader
         unreadCount={unreadCount}
         totalCount={notifications.length}

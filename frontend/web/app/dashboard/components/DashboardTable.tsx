@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '@/lib/axios';
 import { useRouter } from 'next/navigation';
+import useSWR from 'swr';
 import { motion, AnimatePresence } from 'framer-motion';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
 import CoffeeLoader from '@/components/ui/CoffeeLoader';
@@ -96,88 +97,90 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 export default function DashboardTable({ activeTab, searchQuery, setDashboardAssignedCount }: DashboardTableProps) {
     const router = useRouter();
-    const [items, setItems] = useState<DashboardItem[]>([]);
-    const [loading, setLoading] = useState(true);
     const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
     const [hoveredSlice, setHoveredSlice] = useState<string | null>(null);
-    const [visibleCount, setVisibleCount] = useState(5);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const paginationKey = `${activeTab}::${searchQuery}`;
+    const [paginationState, setPaginationState] = useState(() => ({ key: paginationKey, visibleCount: 5 }));
+    const visibleCount = paginationState.key === paginationKey ? paginationState.visibleCount : 5;
 
-    // Reset pagination to 5 whenever tab or search changes
-    useEffect(() => {
-        setVisibleCount(5);
-    }, [activeTab, searchQuery]);
-
-    // Independent effect to universally fetch the assigned count regardless of the active tab
-    useEffect(() => {
-        let isMounted = true;
-        if (setDashboardAssignedCount) {
-            api.get('/api/tasks/assigned?limit=100').then(res => {
-                if (isMounted && res.data) {
-                    const pendingCount = res.data.filter((task: { status?: string }) => task.status !== 'DONE').length;
-                    setDashboardAssignedCount(pendingCount);
-                }
-            }).catch(() => {});
+    // Independent fetch for assigned count
+    const { data: assignedData } = useSWR(
+        setDashboardAssignedCount ? '/api/tasks/assigned?limit=100' : null,
+        (url) => api.get(url).then(res => res.data),
+        {
+            revalidateOnFocus: false,
+            dedupingInterval: 60000
         }
-        return () => { isMounted = false; };
-    }, [setDashboardAssignedCount]);
+    );
 
     useEffect(() => {
-        let isMounted = true;
-        
-        const fetchTab = async () => {
-            setLoading(true);
-            try {
-                if (activeTab === 'boards') {
-                    const res = await api.get('/api/sprintboards/user/recent?limit=20');
-                    if(isMounted) setItems(res.data.map(mapBoardToDashboard));
-                } else if (activeTab === 'favorites') {
-                    const res = await api.get('/api/projects/favorites');
-                    if(isMounted) setItems(res.data.map(mapProjectToDashboard));
-                } else if (activeTab === 'assigned-to-me') {
-                    const res = await api.get('/api/tasks/assigned');
-                    const taskItems = res.data.map(mapTaskToDashboard);
-                    if(isMounted) {
-                        setItems(taskItems);
-                        if(setDashboardAssignedCount) {
-                            setDashboardAssignedCount(taskItems.filter((t: { status?: string }) => t.status !== 'DONE').length);
-                        }
-                    }
-                } else if (activeTab === 'worked-on') {
-                    const res = await api.get('/api/tasks/worked-on');
-                    if(isMounted) setItems(res.data.map(mapTaskToDashboard));
-                } else if (activeTab === 'viewed') {
-                    const [pRes, tRes] = await Promise.all([
-                        api.get('/api/projects/recent?limit=20').catch(() => ({ data: [] })),
-                        api.get('/api/tasks/recent?limit=20').catch(() => ({ data: [] }))
-                    ]);
-                    
-                    const merged = [
-                        ...(pRes.data || []).map(mapProjectToDashboard),
-                        ...(tRes.data || []).map(mapTaskToDashboard)
-                    ].sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-                    
-                    if(isMounted) setItems(merged);
-                }
-            } catch (e) {
-                console.error("Failed to fetch dashboard tab:", e);
-                if(isMounted) setItems([]);
-            } finally {
-                if(isMounted) setLoading(false);
+        if (assignedData && setDashboardAssignedCount) {
+            const pendingCount = assignedData.filter((task: { status?: string }) => task.status !== 'DONE').length;
+            setDashboardAssignedCount(pendingCount);
+        }
+    }, [assignedData, setDashboardAssignedCount]);
+
+    // Use SWR for active tab data
+    const { data: tabData, isLoading, mutate } = useSWR<DashboardItem[]>(
+        activeTab ? `dashboardTab:${activeTab}` : null,
+        async () => {
+            if (activeTab === 'boards') {
+                const res = await api.get('/api/sprintboards/user/recent?limit=20');
+                return res.data.map(mapBoardToDashboard);
+            } else if (activeTab === 'favorites') {
+                const res = await api.get('/api/projects/favorites');
+                return res.data.map(mapProjectToDashboard);
+            } else if (activeTab === 'assigned-to-me') {
+                const res = await api.get('/api/tasks/assigned');
+                return res.data.map(mapTaskToDashboard);
+            } else if (activeTab === 'worked-on') {
+                const res = await api.get('/api/tasks/worked-on');
+                return res.data.map(mapTaskToDashboard);
+            } else if (activeTab === 'viewed') {
+                const [pRes, tRes] = await Promise.all([
+                    api.get('/api/projects/recent?limit=20').catch(() => ({ data: [] })),
+                    api.get('/api/tasks/recent?limit=20').catch(() => ({ data: [] }))
+                ]);
+
+                const merged = [
+                    ...(pRes.data || []).map(mapProjectToDashboard),
+                    ...(tRes.data || []).map(mapTaskToDashboard)
+                ].sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+                return merged;
+            }
+            return [];
+        },
+        {
+            revalidateOnFocus: false,
+            dedupingInterval: 30000,
+            keepPreviousData: true
+        }
+    );
+
+    const items: DashboardItem[] = tabData || [];
+    const loading = (isLoading && !tabData) || isRefreshing;
+
+    useEffect(() => {
+        let refreshTimeout: number | undefined;
+
+        const onTaskUpdated = () => {
+            setIsRefreshing(true);
+            void mutate();
+            if (refreshTimeout !== undefined) {
+                window.clearTimeout(refreshTimeout);
+            }
+            refreshTimeout = window.setTimeout(() => setIsRefreshing(false), 300);
+        };
+
+        window.addEventListener('planora:task-updated', onTaskUpdated);
+        return () => {
+            window.removeEventListener('planora:task-updated', onTaskUpdated);
+            if (refreshTimeout !== undefined) {
+                window.clearTimeout(refreshTimeout);
             }
         };
-        fetchTab();
-        
-        return () => { isMounted = false; };
-    }, [activeTab, setDashboardAssignedCount]);
-
-    useEffect(() => {
-        const onTaskUpdated = () => {
-            setLoading(true);
-            setTimeout(() => setLoading(false), 300);
-        };
-        window.addEventListener('planora:task-updated', onTaskUpdated);
-        return () => window.removeEventListener('planora:task-updated', onTaskUpdated);
-    }, []);
+    }, [mutate]);
 
     const filteredItems = items.filter(item => {
         if (item.type === 'TASK' && item.status === 'DONE') return false;
@@ -186,6 +189,16 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
     });
 
     const visibleData = filteredItems.slice(0, visibleCount);
+
+    const updateVisibleCount = (delta: number) => {
+        setPaginationState(prev => {
+            const currentCount = prev.key === paginationKey ? prev.visibleCount : 5;
+            return {
+                key: paginationKey,
+                visibleCount: Math.max(5, currentCount + delta)
+            };
+        });
+    };
 
     const handleRowClick = (item: DashboardItem) => {
         if(item.type === 'TASK') {
@@ -355,7 +368,7 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
                 <div className="w-full flex items-center justify-center gap-3 mt-4 mb-2 pt-4 border-t border-gray-100/80">
                     {visibleCount < filteredItems.length && (
                         <button 
-                            onClick={() => setVisibleCount(prev => prev + 5)}
+                            onClick={() => updateVisibleCount(5)}
                             className="group flex items-center gap-1.5 px-4 py-1.5 font-arimo text-[13px] font-semibold text-[#4B5563] bg-white border border-[#E5E7EB] rounded-full shadow-sm hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50 transition-all active:scale-95"
                         >
                             <span>Show More</span>
@@ -364,7 +377,7 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
                     )}
                     {visibleCount > 5 && (
                         <button 
-                            onClick={() => setVisibleCount(prev => Math.max(5, prev - 5))}
+                            onClick={() => updateVisibleCount(-5)}
                             className="group flex items-center gap-1.5 px-4 py-1.5 font-arimo text-[13px] font-semibold text-[#4B5563] bg-white border border-[#E5E7EB] rounded-full shadow-sm hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50 transition-all active:scale-95"
                         >
                             <span>Show Less</span>
