@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import SockJS from 'sockjs-client';
 import { CompatClient, Stomp } from '@stomp/stompjs';
 import { getValidToken } from '@/lib/auth';
 
@@ -9,6 +8,7 @@ interface TaskEvent {
   type: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_DELETED';
   task?: {
     id: number;
+    projectTaskNumber?: number;
     title: string;
     storyPoint: number;
     status: string;
@@ -16,6 +16,7 @@ interface TaskEvent {
     sprintId: number | null;
     assigneeName: string | null;
     assigneePhotoUrl: string | null;
+    assignees?: Array<{ id?: number; userId?: number; name?: string; username?: string; photoUrl?: string | null; avatar?: string | null }>;
     startDate: string | null;
     dueDate: string | null;
   };
@@ -40,7 +41,8 @@ export function useTaskWebSocket(
     if (!token) return;
 
     const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
-    const stompClient = Stomp.over(() => new SockJS(`${backendUrl}/ws`));
+    const wsUrl = backendUrl.replace(/^http/, 'ws');
+    const stompClient = Stomp.client(`${wsUrl}/ws-native`);
     stompClient.debug = () => {};
     stompClient.reconnect_delay = 5000;
 

@@ -21,7 +21,7 @@ import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.TeamRepository;
 import com.planora.backend.repository.UserRepository;
 
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TeamService {
@@ -35,6 +35,7 @@ public class TeamService {
         @Autowired
         private TeamMemberRepository teamMemberRepository;
 
+        @Transactional(readOnly = true)
         public java.util.Map<String, Boolean> checkTeamName(String name, Long currentUserId) {
                 java.util.Map<String, Boolean> result = new java.util.HashMap<>();
                 java.util.Optional<Team> teamOpt = teamRepository.findByName(name.trim());
@@ -75,6 +76,7 @@ public class TeamService {
         }
 
         // 2. GET MY TEAMS
+        @Transactional(readOnly = true)
         public List<TeamSummaryDTO> getAllTeams(Long currentUserId) {
                 List<TeamMember> memberships = teamMemberRepository.findByUserUserId(currentUserId);
 
@@ -88,6 +90,7 @@ public class TeamService {
         }
 
         // 3. GET SINGLE TEAM DASHBOARD
+        @Transactional(readOnly = true)
         public TeamDetailDTO getTeam(Long id, Long currentUserId) {
                 Team team = teamRepository.findById(id)
                                 .orElseThrow(() -> new RuntimeException("Team not found"));

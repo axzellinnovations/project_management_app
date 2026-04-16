@@ -29,7 +29,7 @@ public class RecurringTaskScheduler {
     @Transactional
     public void spawnDueRecurrences() {
         LocalDate today = LocalDate.now();
-        List<Task> due = taskRepository.findByNextOccurrenceBeforeOrEqual(today);
+        List<Task> due = taskRepository.findByNextOccurrenceBeforeOrEqualWithAssociations(today);
 
         for (Task template : due) {
             try {

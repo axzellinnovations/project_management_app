@@ -2,12 +2,37 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { useChat } from './useChat';
 
 const pushMock = jest.fn();
+const mockSubscriptions: Record<string, (payload: { body: string }) => void> = {};
+const mockSendRealtime = jest.fn();
+const mockSubscribeRealtime = jest.fn((destination: string, callback: (payload: { body: string }) => void) => {
+  mockSubscriptions[destination] = callback;
+  return {
+    unsubscribe: jest.fn(() => {
+      delete mockSubscriptions[destination];
+    }),
+  };
+});
+let mockRealtimeConnected = true;
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock }),
 }));
 
 jest.mock('sockjs-client', () => jest.fn(() => ({})));
+
+jest.mock('@/components/providers/GlobalNotificationProvider', () => ({
+  useGlobalNotifications: () => ({
+    notifications: [],
+    unreadCount: 0,
+    realtimeConnected: mockRealtimeConnected,
+    subscribeRealtime: mockSubscribeRealtime,
+    sendRealtime: mockSendRealtime,
+    markAsRead: jest.fn(),
+    markAllAsRead: jest.fn(),
+    deleteNotificationById: jest.fn(),
+    deleteAllNotifications: jest.fn(),
+  }),
+}));
 
 // Override the service functions that use axios so they fall through
 // to the native-fetch mock that the tests set up via `global.fetch = fetchMock`.
@@ -35,27 +60,6 @@ jest.mock('@/services/chat-service', () => ({
       },
     );
     return res.json();
-  },
-}));
-
-const subscriptions: Record<string, (payload: { body: string }) => void> = {};
-
-const stompClient = {
-  connected: true,
-  debug: jest.fn(),
-  reconnect_delay: 0,
-  connect: jest.fn((_: unknown, onConnect: () => void) => onConnect()),
-  subscribe: jest.fn((destination: string, callback: (payload: { body: string }) => void) => {
-    subscriptions[destination] = callback;
-    return { unsubscribe: jest.fn() };
-  }),
-  send: jest.fn(),
-  disconnect: jest.fn(),
-};
-
-jest.mock('@stomp/stompjs', () => ({
-  Stomp: {
-    over: jest.fn(() => stompClient),
   },
 }));
 
@@ -156,7 +160,7 @@ describe('useChat hook', () => {
   };
 
   const publish = (destination: string, body: unknown) => {
-    const handler = subscriptions[destination];
+    const handler = mockSubscriptions[destination];
     expect(handler).toBeDefined();
     act(() => {
       handler({ body: JSON.stringify(body) });
@@ -169,20 +173,20 @@ describe('useChat hook', () => {
       expect(hook.result.current.isLoading).toBe(false);
     }, { timeout: 10000 });
     await waitFor(() => {
-      expect(stompClient.connect).toHaveBeenCalled();
+      expect(mockSubscribeRealtime).toHaveBeenCalled();
     }, { timeout: 10000 });
     await waitFor(() => {
-      expect(subscriptions['/topic/project/42/public']).toBeDefined();
-      expect(subscriptions['/user/queue/project/42/messages']).toBeDefined();
-      expect(subscriptions['/user/queue/project/42/mentions']).toBeDefined();
+      expect(mockSubscriptions['/topic/project/42/public']).toBeDefined();
+      expect(mockSubscriptions['/user/queue/project/42/messages']).toBeDefined();
+      expect(mockSubscriptions['/user/queue/project/42/mentions']).toBeDefined();
     }, { timeout: 10000 });
     return hook;
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    Object.keys(subscriptions).forEach((key) => delete subscriptions[key]);
-    stompClient.connected = true;
+    Object.keys(mockSubscriptions).forEach((key) => delete mockSubscriptions[key]);
+    mockRealtimeConnected = true;
     phaseDEnabled = true;
 
     fetchMock.mockImplementation(defaultFetchImplementation);
@@ -212,7 +216,7 @@ describe('useChat hook', () => {
   it('sends team, private, and room messages to expected realtime endpoints', async () => {
     const { result } = await renderInitializedHook();
 
-    stompClient.send.mockClear();
+    mockSendRealtime.mockClear();
 
     act(() => {
       result.current.sendMessage('  hello team  ');
@@ -220,11 +224,10 @@ describe('useChat hook', () => {
       result.current.sendRoomMessage('room update', 1);
     });
 
-    expect(stompClient.send).toHaveBeenCalledTimes(3);
+    expect(mockSendRealtime).toHaveBeenCalledTimes(3);
 
-    const [teamDestination, teamHeaders, teamBody] = stompClient.send.mock.calls[0];
+    const [teamDestination, teamBody] = mockSendRealtime.mock.calls[0];
     expect(teamDestination).toBe('/app/project/42/chat.sendMessage');
-    expect(teamHeaders).toEqual({});
     expect(JSON.parse(teamBody)).toMatchObject({
       sender: 'alice',
       content: 'hello team',
@@ -233,9 +236,8 @@ describe('useChat hook', () => {
     });
     expect(JSON.parse(teamBody).timestamp).toBeTruthy();
 
-    const [privateDestination, privateHeaders, privateBody] = stompClient.send.mock.calls[1];
+    const [privateDestination, privateBody] = mockSendRealtime.mock.calls[1];
     expect(privateDestination).toBe('/app/project/42/chat.sendPrivateMessage');
-    expect(privateHeaders).toEqual({});
     expect(JSON.parse(privateBody)).toMatchObject({
       sender: 'alice',
       content: 'ping bob',
@@ -245,9 +247,8 @@ describe('useChat hook', () => {
     });
     expect(JSON.parse(privateBody).timestamp).toBeTruthy();
 
-    const [roomDestination, roomHeaders, roomBody] = stompClient.send.mock.calls[2];
+    const [roomDestination, roomBody] = mockSendRealtime.mock.calls[2];
     expect(roomDestination).toBe('/app/project/42/room/1/send');
-    expect(roomHeaders).toEqual({});
     expect(JSON.parse(roomBody)).toMatchObject({
       sender: 'alice',
       content: 'room update',
@@ -259,23 +260,27 @@ describe('useChat hook', () => {
   });
 
   it('rejects blank messages and sets reconnect error when socket is unavailable', async () => {
-    const { result } = await renderInitializedHook();
+    const hook = await renderInitializedHook();
+    const { result, rerender } = hook;
 
-    stompClient.send.mockClear();
+    mockSendRealtime.mockClear();
 
     act(() => {
       result.current.sendMessage('   ');
     });
-    expect(stompClient.send).not.toHaveBeenCalled();
+    expect(mockSendRealtime).not.toHaveBeenCalled();
 
-    stompClient.connected = false;
+    act(() => {
+      mockRealtimeConnected = false;
+      rerender();
+    });
 
     act(() => {
       result.current.sendMessage('message while reconnecting');
     });
 
     expect(result.current.error).toBe('Realtime chat is reconnecting. Please wait a moment and try again.');
-    expect(stompClient.send).not.toHaveBeenCalled();
+    expect(mockSendRealtime).not.toHaveBeenCalled();
   });
 
   it('receives realtime team and private messages and updates local collections', async () => {
@@ -383,14 +388,18 @@ describe('useChat hook', () => {
   });
 
   it('falls back to HTTP thread reply when realtime socket is disconnected', async () => {
-    const { result } = await renderInitializedHook();
+    const hook = await renderInitializedHook();
+    const { result, rerender } = hook;
 
     await result.current.openThread({ id: 1, sender: 'bob', content: 'root message', type: 'CHAT' });
     await waitFor(() => {
       expect(result.current.activeThreadRoot?.id).toBe(1);
     });
 
-    stompClient.connected = false;
+    act(() => {
+      mockRealtimeConnected = false;
+      rerender();
+    });
 
     await result.current.sendThreadReply('  fallback reply  ');
 

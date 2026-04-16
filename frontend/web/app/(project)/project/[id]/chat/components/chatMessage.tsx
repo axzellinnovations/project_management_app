@@ -2,9 +2,10 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Pencil, Trash2, MessageSquare, Pin, PinOff, FileText, Loader2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ChatMessage, ChatReactionSummary } from './chat';
 import { EditMessageModal, ConfirmDeleteModal } from './chatModals';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import api from '@/lib/axios';
 
 interface ChatMessagesProps {
@@ -145,6 +146,13 @@ function TypingIndicator({ user, userProfilePics = {} }: { user: string; userPro
   );
 }
 
+const ClockIcon = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1 mt-[1px] inline-block opacity-80">
+    <circle cx="12" cy="12" r="10"></circle>
+    <polyline points="12 6 12 12 16 14"></polyline>
+  </svg>
+);
+
 export const ChatMessages = ({
   projectId,
   messages,
@@ -167,11 +175,28 @@ export const ChatMessages = ({
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
   const [messageToDelete, setMessageToDelete] = useState<number | null>(null);
 
+  const aliasSet = new Set([
+    currentUser.toLowerCase(),
+    ...currentUserAliases.map((a) => a.toLowerCase()),
+  ]);
+
+  const visibleMessages = messages.filter((msg) => msg.type !== 'JOIN');
+
+  const rowVirtualizer = useVirtualizer({
+    count: visibleMessages.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 80,
+    overscan: 10,
+  });
+
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (visibleMessages.length > 0) {
+      // Wrap in setTimeout to avoid flushSync error during lifecycle methods
+      setTimeout(() => {
+        rowVirtualizer.scrollToIndex(visibleMessages.length - 1, { align: 'end' });
+      }, 0);
     }
-  }, [messages, typingUser, activeRoomId, isPrivateChat]);
+  }, [visibleMessages.length, rowVirtualizer, typingUser, activeRoomId, isPrivateChat]);
 
   const handleDocumentClick = async (
     e: React.MouseEvent<HTMLAnchorElement>,
@@ -193,13 +218,6 @@ export const ChatMessages = ({
     }
   };
 
-  const aliasSet = new Set([
-    currentUser.toLowerCase(),
-    ...currentUserAliases.map((a) => a.toLowerCase()),
-  ]);
-
-  const visibleMessages = messages.filter((msg) => msg.type !== 'JOIN');
-
   if (visibleMessages.length === 0 && !typingUser) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
@@ -215,24 +233,50 @@ export const ChatMessages = ({
   return (
     <div
       ref={scrollRef}
-      className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-3 sm:py-4 space-y-0.5 scroll-smooth overscroll-y-contain"
+      className="flex-1 min-h-0 overflow-y-auto px-2 sm:px-4 py-2.5 sm:py-4 space-y-0.5 scroll-smooth overscroll-y-contain touch-pan-y"
+      style={{ WebkitOverflowScrolling: 'touch' }}
     >
-      <AnimatePresence initial={false}>
-        {visibleMessages.map((msg, idx) => {
-          const prevMsg = idx > 0 ? visibleMessages[idx - 1] : undefined;
-          const isMe = aliasSet.has((msg.sender || '').toLowerCase());
-          const hasAvatar = !isMe && !isPrivateChat;
-          const grouped = isGrouped(msg, prevMsg);
-          const showSeparator = shouldShowDateSeparator(msg, prevMsg);
-          const msgReactions = msg.id ? (reactionsByMessageId[msg.id] || []) : [];
-          const isPinned = pinnedMessageId === msg.id;
-          const fileDoc = !msg.deleted && isFileDocument(msg.content);
-          const isLoadingFile = loadingFileId === msg.id;
-          const isMentioned = !isMe && !msg.deleted && !fileDoc && messageIsMentioned(msg.content, aliasSet);
+      <div
+        style={{
+          height: `${rowVirtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+          {rowVirtualizer.getVirtualItems().map((row) => {
+            const idx = row.index;
+            const msg = visibleMessages[idx];
+            const prevMsg = idx > 0 ? visibleMessages[idx - 1] : undefined;
+            const isMe = aliasSet.has((msg.sender || '').toLowerCase());
+            const hasAvatar = !isMe && !isPrivateChat;
+            const grouped = isGrouped(msg, prevMsg);
+            const showSeparator = shouldShowDateSeparator(msg, prevMsg);
+            const msgReactions = msg.id ? (reactionsByMessageId[msg.id] || []) : [];
+            const isPinned = pinnedMessageId === msg.id;
+            const fileDoc = !msg.deleted && isFileDocument(msg.content);
+            const isLoadingFile = loadingFileId === msg.id;
+            const isMentioned = !isMe && !msg.deleted && !fileDoc && messageIsMentioned(msg.content, aliasSet);
 
-          return (
-            <React.Fragment key={msg.id ?? idx}>
-              {/* Date separator */}
+            return (
+              <div
+                key={msg.id ?? `local-msg-${idx}`}
+                data-index={idx}
+                ref={(el) => {
+                  if (el) {
+                    requestAnimationFrame(() => {
+                      rowVirtualizer.measureElement(el);
+                    });
+                  }
+                }}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${row.start}px)`,
+                }}
+              >
+                {/* Date separator */}
               {showSeparator && (
                 <div className="flex items-center gap-3 my-4">
                   <div className="flex-1 h-px bg-gray-100" />
@@ -243,10 +287,7 @@ export const ChatMessages = ({
                 </div>
               )}
 
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
+              <div
                 className={`flex items-end ${hasAvatar ? 'gap-2.5' : 'gap-1.5'} group relative ${grouped ? 'mt-0.5' : 'mt-3'} ${isMe ? 'flex-row-reverse' : 'flex-row'} ${isMentioned ? 'pl-1.5 border-l-2 border-amber-400 rounded-l' : ''}`}
               >
                 {/* Avatar */}
@@ -264,7 +305,7 @@ export const ChatMessages = ({
                 )}
 
                 {/* Bubble column */}
-                <div className={`flex flex-col max-w-[90%] sm:max-w-[74%] ${isMe ? 'items-end' : 'items-start'}`}>
+                <div className={`flex flex-col max-w-[82%] sm:max-w-[74%] ${isMe ? 'items-end' : 'items-start'}`}>
                   {/* Sender name (others, no group) */}
                   {!isMe && !grouped && !isPrivateChat && (
                     <span className="text-[11.5px] font-semibold text-gray-500 mb-1 ml-1">{msg.sender}</span>
@@ -281,13 +322,13 @@ export const ChatMessages = ({
                   <div className="relative">
                     {/* Hover action bar */}
                     {!!msg.id && (
-                      <div className={`absolute bottom-full mb-1 ${isMe ? 'right-0' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center gap-1 bg-white border border-gray-100 shadow-lg rounded-xl px-2 py-1.5`}>
+                      <div className={`absolute bottom-full mb-1 ${isMe ? 'right-0' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center gap-1 bg-white border border-gray-100 shadow-lg rounded-xl px-2 py-2`}>
                         {/* Quick reactions */}
                         {QUICK_REACTIONS.map((emoji) => (
                           <button
                             key={emoji}
                             onClick={() => onToggleReaction(msg.id as number, emoji)}
-                            className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-sm transition-all hover:scale-110 active:scale-95"
+                            className="w-9 h-9 rounded-lg hover:bg-gray-100 flex items-center justify-center text-sm transition-all hover:scale-110 active:scale-95"
                             title={`React ${emoji}`}
                           >
                             {emoji}
@@ -299,7 +340,7 @@ export const ChatMessages = ({
                         {/* Thread */}
                         <button
                           onClick={() => onOpenThread(msg)}
-                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-medium transition-colors"
+                          className="flex items-center gap-1 px-2 py-1.5 min-h-[36px] rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 text-[11px] font-medium transition-colors"
                           title="Reply in thread"
                         >
                           <MessageSquare size={12} strokeWidth={2} />
@@ -309,7 +350,7 @@ export const ChatMessages = ({
                         {!!activeRoomId && onPinRoomMessage && (
                           <button
                             onClick={() => onPinRoomMessage(isPinned ? null : (msg.id as number))}
-                            className="p-1 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                            className="w-9 h-9 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors flex items-center justify-center"
                             title={isPinned ? 'Unpin' : 'Pin message'}
                           >
                             {isPinned ? <PinOff size={12} strokeWidth={2} /> : <Pin size={12} strokeWidth={2} />}
@@ -322,7 +363,7 @@ export const ChatMessages = ({
                             {!fileDoc && (
                               <button
                                 onClick={() => setEditingMessage(msg)}
-                                className="p-1 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-colors"
+                                className="w-9 h-9 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-colors flex items-center justify-center"
                                 title="Edit"
                               >
                                 <Pencil size={12} strokeWidth={2} />
@@ -330,7 +371,7 @@ export const ChatMessages = ({
                             )}
                             <button
                               onClick={() => setMessageToDelete(msg.id as number)}
-                              className="w-7 h-7 rounded-lg hover:bg-red-50 hover:text-red-500 flex items-center justify-center text-gray-500 transition-colors"
+                              className="w-9 h-9 rounded-lg hover:bg-red-50 hover:text-red-500 flex items-center justify-center text-gray-500 transition-colors"
                               title="Delete message"
                             >
                               <Trash2 size={12} strokeWidth={2} />
@@ -345,9 +386,11 @@ export const ChatMessages = ({
                       relative px-4 py-2.5 pr-14 pb-4 text-[13.5px] leading-relaxed shadow-sm
                       ${msg.deleted
                         ? 'bg-gray-100 text-gray-400 italic rounded-2xl'
-                        : isMe
-                          ? 'bg-cu-primary text-white rounded-2xl rounded-br-sm'
-                          : 'bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-bl-sm'
+                        : !msg.id
+                          ? 'bg-cu-primary/70 text-white opacity-80 rounded-2xl rounded-br-sm'
+                          : isMe
+                            ? 'bg-cu-primary text-white rounded-2xl rounded-br-sm'
+                            : 'bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-bl-sm'
                       }
                     `}>
                       {msg.deleted ? (
@@ -373,10 +416,14 @@ export const ChatMessages = ({
                       )}
 
                       {/* Time + edited inside bubble */}
-                      {!msg.deleted && msg.timestamp && (
-                        <span className={`absolute bottom-1.5 right-3 text-[10px] leading-none ${isMe ? 'text-blue-100/80' : 'text-gray-400'}`}>
+                      {!msg.deleted && (
+                        <span className={`absolute bottom-1.5 right-3 text-[10px] flex items-center leading-none ${isMe ? 'text-blue-100/80' : 'text-gray-400'}`}>
                           {msg.editedAt && <span className="mr-1 italic">edited</span>}
-                          {formatTime(msg.timestamp)}
+                          {!msg.id ? (
+                            <><ClockIcon /> Sending…</>
+                          ) : msg.timestamp ? (
+                            formatTime(msg.timestamp)
+                          ) : null}
                         </span>
                       )}
                     </div>
@@ -401,16 +448,14 @@ export const ChatMessages = ({
                     </div>
                   )}
                 </div>
-              </motion.div>
-            </React.Fragment>
-          );
-        })}
-      </AnimatePresence>
+              </div>
+              </div>
+            );
+          })}
+      </div>
 
       {/* Typing indicator */}
-      <AnimatePresence>
-        {typingUser && <TypingIndicator key="typing" user={typingUser} userProfilePics={userProfilePics} />}
-      </AnimatePresence>
+      {typingUser && <TypingIndicator key="typing" user={typingUser} userProfilePics={userProfilePics} />}
 
       {/* Modals */}
       <EditMessageModal

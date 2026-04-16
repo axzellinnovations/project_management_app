@@ -7,9 +7,25 @@ export interface Project {
   name: string;
   description?: string;
   projectKey?: string;
-  isFavorite?: boolean;
   type?: ProjectType;
+  createdAt?: string;
+  updatedAt?: string;
+  ownerId?: number;
+  ownerName?: string;
   teamId?: number;
+  teamName?: string;
+  isFavorite?: boolean;
+  favoriteMarkedAt?: string | null;
+  lastAccessedAt?: string | null;
+}
+
+export interface ProjectMetrics {
+  totalTasks: number;
+  completedTasks: number;
+  overdueTasks: number;
+  memberCount: number;
+  sprintHealth: number;
+  activeSprintId: number | null;
 }
 
 export interface TeamMemberOption {

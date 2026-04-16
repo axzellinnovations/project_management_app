@@ -20,6 +20,40 @@ export interface ChatSummaries {
   teamSummary: TeamChatSummary | null;
 }
 
+export type InboxChatType = 'TEAM' | 'ROOM' | 'DIRECT';
+
+export interface ChatInboxActivity {
+  projectId: number;
+  projectName: string;
+  chatType: InboxChatType;
+  roomId?: number | null;
+  roomName?: string | null;
+  username?: string | null;
+  participantLabel?: string | null;
+  lastMessage?: string | null;
+  lastMessageSender?: string | null;
+  lastMessageTimestamp?: string | null;
+  unseenCount: number;
+  unread: boolean;
+  activityStatus: 'UNREAD' | 'READ';
+}
+
+export interface ChatInboxProjectGroup {
+  projectId: number;
+  projectName: string;
+  unreadCount: number;
+  totalItems: number;
+  activities: ChatInboxActivity[];
+}
+
+export interface ChatInboxResponse {
+  recentActivities: ChatInboxActivity[];
+  projects: ChatInboxProjectGroup[];
+  totalProjects: number;
+  totalActivities: number;
+  totalUnread: number;
+}
+
 export interface AuthUserSummary {
   email?: string;
   username?: string;
@@ -28,7 +62,17 @@ export interface AuthUserSummary {
 // â”€â”€ Team / General â”€â”€
 
 export async function markTeamAsRead(projectId: string): Promise<void> {
-  await api.post(`/api/projects/${projectId}/chat/mark-read`);
+  await api.post(`/api/projects/${projectId}/chat/team/read`);
+}
+
+export async function markRoomAsRead(projectId: string, roomId: number): Promise<void> {
+  await api.post(`/api/projects/${projectId}/chat/rooms/${roomId}/read`);
+}
+
+export async function markDirectConversationAsRead(projectId: string, withUser: string): Promise<void> {
+  await api.post(`/api/projects/${projectId}/chat/direct/read`, null, {
+    params: { with: withUser },
+  });
 }
 
 export async function fetchPresence(projectId: string): Promise<PresenceResponse> {
@@ -89,10 +133,32 @@ export async function fetchCurrentUser(): Promise<{ username: string }> {
 
 export async function fetchChatSummaries(projectId: string): Promise<ChatSummaries> {
   const { data } = await api.get(`/api/projects/${projectId}/chat/summaries`);
-  const directSummaries: DirectChatSummary[] = data.directSummaries || [];
-  const roomSummaries: RoomChatSummary[] = data.roomSummaries || [];
-  const teamSummary: TeamChatSummary | null = data.teamSummary || null;
+  const directSummaries: DirectChatSummary[] = data.directSummaries || data.directMessages || [];
+  const roomSummaries: RoomChatSummary[] = data.roomSummaries || data.rooms || [];
+  const teamSummary: TeamChatSummary | null = data.teamSummary || data.team || null;
   return { directSummaries, roomSummaries, teamSummary };
+}
+
+export async function fetchChatInbox(params?: {
+  projectLimit?: number;
+  activityLimit?: number;
+  status?: 'all' | 'unread';
+}): Promise<ChatInboxResponse> {
+  const { data } = await api.get<ChatInboxResponse>('/api/chat/inbox', {
+    params: {
+      projectLimit: params?.projectLimit,
+      activityLimit: params?.activityLimit,
+      status: params?.status,
+    },
+  });
+
+  return {
+    recentActivities: data.recentActivities || [],
+    projects: data.projects || [],
+    totalProjects: Number(data.totalProjects) || 0,
+    totalActivities: Number(data.totalActivities) || 0,
+    totalUnread: Number(data.totalUnread) || 0,
+  };
 }
 
 // â”€â”€ Messages â”€â”€

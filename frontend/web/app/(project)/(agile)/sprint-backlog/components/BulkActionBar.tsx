@@ -34,22 +34,26 @@ export default function BulkActionBar({
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: Event) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpenMenu(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
   if (selectedCount === 0) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200">
+    <div className="fixed left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}>
       <div
         ref={menuRef}
-        className="flex items-center gap-2 rounded-2xl border border-[#D0D5DD] bg-white px-4 py-2.5 shadow-xl"
+        className="flex max-w-[calc(100vw-16px)] items-center gap-1.5 sm:gap-2 rounded-2xl border border-[#D0D5DD] bg-white px-2.5 sm:px-4 py-2.5 shadow-xl"
       >
         {/* Count badge */}
         <div className="flex items-center gap-2 pr-3 border-r border-[#EAECF0]">
@@ -63,7 +67,7 @@ export default function BulkActionBar({
         <div className="relative">
           <button
             onClick={() => setOpenMenu(openMenu === 'move' ? null : 'move')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all"
+            className="flex min-h-[42px] items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all"
           >
             <MoveRight size={14} />
             <span className="hidden sm:inline">Move</span>
@@ -95,7 +99,7 @@ export default function BulkActionBar({
         <div className="relative">
           <button
             onClick={() => setOpenMenu(openMenu === 'status' ? null : 'status')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all"
+            className="flex min-h-[42px] items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[12px] font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all"
           >
             Status
             <ChevronDown size={12} />
@@ -118,7 +122,7 @@ export default function BulkActionBar({
         {/* Delete */}
         <button
           onClick={onDelete}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold text-[#F04438] hover:bg-[#FEF3F2] transition-all"
+          className="flex min-h-[42px] items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[12px] font-bold text-[#F04438] hover:bg-[#FEF3F2] transition-all"
         >
           <Trash2 size={14} />
           <span className="hidden sm:inline">Delete</span>
@@ -128,7 +132,7 @@ export default function BulkActionBar({
         <div className="pl-2 border-l border-[#EAECF0]">
           <button
             onClick={onClear}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-[#667085] hover:bg-[#F2F4F7] hover:text-[#344054] transition-all"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-[#667085] hover:bg-[#F2F4F7] hover:text-[#344054] transition-all"
           >
             <X size={16} />
           </button>

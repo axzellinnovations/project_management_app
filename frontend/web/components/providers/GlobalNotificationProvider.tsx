@@ -2,16 +2,26 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
-import SockJS from 'sockjs-client';
-import { CompatClient, Stomp } from '@stomp/stompjs';
+import { Client, IMessage } from '@stomp/stompjs';
 import * as notificationsApi from '@/services/notifications-service';
 import { Notification } from '@/services/notifications-service';
 import { toast } from '@/components/ui/Toast';
 import { AUTH_TOKEN_CHANGED_EVENT, getValidToken } from '@/lib/auth';
+import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
 
 interface GlobalNotificationContextType {
   notifications: Notification[];
   unreadCount: number;
+  realtimeConnected: boolean;
+  subscribeRealtime: (
+    destination: string,
+    callback: (message: IMessage) => void,
+  ) => { unsubscribe: () => void } | null;
+  sendRealtime: (
+    destination: string,
+    body: string,
+    headers?: Record<string, string>,
+  ) => void;
   markAsRead: (id: number) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   deleteNotificationById: (id: number) => Promise<void>;
@@ -20,19 +30,73 @@ interface GlobalNotificationContextType {
 
 const GlobalNotificationContext = createContext<GlobalNotificationContextType | undefined>(undefined);
 
+const CHAT_PATH_PATTERN = /^\/project\/\d+\/chat\/?$/i;
+const NOTIFICATIONS_CACHE_TTL_MS = 45_000;
+
+type NotificationsCachePayload = {
+  notifications: Notification[];
+  unreadCount: number;
+};
+
+function normalizePath(path: string): string {
+  if (!path) return '';
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return normalized.endsWith('/') && normalized !== '/' ? normalized.slice(0, -1) : normalized;
+}
+
+function isOnRelevantRoute(currentPath: string | null, currentQuery: string, targetLink: string): boolean {
+  if (!currentPath || !targetLink) return false;
+
+  let targetPath = '';
+  let targetParams = new URLSearchParams();
+
+  try {
+    const parsed = new URL(targetLink, 'http://localhost');
+    targetPath = normalizePath(parsed.pathname);
+    targetParams = parsed.searchParams;
+  } catch {
+    return false;
+  }
+
+  const currentNormalized = normalizePath(currentPath);
+
+  if (CHAT_PATH_PATTERN.test(targetPath)) {
+    if (currentNormalized !== targetPath) return false;
+
+    const currentParams = new URLSearchParams(currentQuery || '');
+    const targetEntries = Array.from(targetParams.entries());
+
+    if (targetEntries.length === 0) {
+      // Generic /chat links are only "active" when user is on the base chat route.
+      return currentParams.toString().length === 0;
+    }
+
+    return targetEntries.every(([key, value]) => currentParams.get(key) === value);
+  }
+
+  return currentNormalized.includes(targetPath);
+}
+
 export function GlobalNotificationProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const pathname = usePathname();
   // We use refs to avoid re-triggering stomp effects on route path transitions
   const pathnameRef = useRef(pathname);
-  const stompClientRef = useRef<CompatClient | null>(null);
+  const searchRef = useRef('');
+  const seenNotificationIdsRef = useRef<Set<number>>(new Set());
+  const notificationsCacheKeyRef = useRef<string | null>(null);
+  const stompClientRef = useRef<Client | null>(null);
   const activeTokenRef = useRef<string | null>(null);
   const isConnectingRef = useRef(false);
   const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
   useEffect(() => {
     pathnameRef.current = pathname;
+    if (typeof window !== 'undefined') {
+      searchRef.current = window.location.search.replace(/^\?/, '');
+    }
   }, [pathname]);
 
   const loadInitialData = useCallback(async () => {
@@ -43,6 +107,18 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       ]);
       setNotifications(notifs);
       setUnreadCount(count);
+      seenNotificationIdsRef.current = new Set(notifs.map((notif) => notif.id));
+      const cacheKey = notificationsCacheKeyRef.current;
+      if (cacheKey) {
+        setSessionCache<NotificationsCachePayload>(
+          cacheKey,
+          {
+            notifications: notifs,
+            unreadCount: count,
+          },
+          NOTIFICATIONS_CACHE_TTL_MS,
+        );
+      }
     } catch (e) {
       console.error('Failed to load initial notifications', e);
     }
@@ -50,10 +126,9 @@ export function GlobalNotificationProvider({ children }: { children: React.React
 
   const disconnectClient = useCallback(() => {
     isConnectingRef.current = false;
+    setRealtimeConnected(false);
     if (stompClientRef.current) {
-      if (stompClientRef.current.connected) {
-        stompClientRef.current.disconnect();
-      }
+      stompClientRef.current.deactivate();
       stompClientRef.current = null;
     }
   }, []);
@@ -70,16 +145,15 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     isConnectingRef.current = true;
     activeTokenRef.current = token;
 
-    const client = Stomp.over(() => new SockJS(`${backendUrl}/ws`));
-    client.debug = () => {};
-    client.reconnect_delay = 5000;
-
-    stompClientRef.current = client;
-
-    client.connect(
-      { Authorization: `Bearer ${token}` },
-      () => {
+    const wsUrl = backendUrl.replace(/^http/, 'ws');
+    const client = new Client({
+      brokerURL: `${wsUrl}/ws-native`,
+      connectHeaders: { Authorization: `Bearer ${token}` },
+      debug: () => {},
+      reconnectDelay: 5000,
+      onConnect: () => {
         isConnectingRef.current = false;
+        setRealtimeConnected(true);
 
         if (stompClientRef.current !== client) {
           return;
@@ -87,22 +161,26 @@ export function GlobalNotificationProvider({ children }: { children: React.React
 
         client.subscribe('/user/queue/notifications', (payload) => {
           const newNotif: Notification = JSON.parse(payload.body);
+          if (seenNotificationIdsRef.current.has(newNotif.id)) {
+            return;
+          }
+
+          seenNotificationIdsRef.current.add(newNotif.id);
 
           // Add to state
           setNotifications((prev) => {
-            // Prevent duplicates in case of reconnects
-            if (prev.some((n) => n.id === newNotif.id)) return prev;
             return [newNotif, ...prev];
           });
 
+          // Keep chat inbox badges synchronized with realtime notifications.
+          window.dispatchEvent(new CustomEvent('planora:chat-inbox-updated'));
+
           // Current navigation path check
           const currentPath = pathnameRef.current;
+          const currentQuery = searchRef.current;
           const targetPath = (newNotif.link as string) || '';
 
-          // Conditional toast display:
-          // Example: If link is /project/123/chat and we are ON /project/123/chat, suppress toast.
-          // We do a loose match (starts with or exactly equal) depending on route structure.
-          const isOnRelevantPage = currentPath && targetPath && currentPath.includes(targetPath);
+          const isOnRelevantPage = isOnRelevantRoute(currentPath, currentQuery, targetPath);
 
           if (!isOnRelevantPage) {
             setUnreadCount((prev) => prev + 1);
@@ -116,10 +194,18 @@ export function GlobalNotificationProvider({ children }: { children: React.React
           }
         });
       },
-      () => {
+      onStompError: () => {
         isConnectingRef.current = false;
-      }
-    );
+        setRealtimeConnected(false);
+      },
+      onWebSocketClose: () => {
+        isConnectingRef.current = false;
+        setRealtimeConnected(false);
+      },
+    });
+
+    stompClientRef.current = client;
+    client.activate();
   }, [backendUrl, disconnectClient]);
 
   const syncAuthAndConnection = useCallback(() => {
@@ -127,15 +213,39 @@ export function GlobalNotificationProvider({ children }: { children: React.React
 
     if (!token) {
       activeTokenRef.current = null;
+      notificationsCacheKeyRef.current = null;
       disconnectClient();
       setNotifications([]);
       setUnreadCount(0);
+      seenNotificationIdsRef.current.clear();
       return;
     }
+
+    const nextCacheKey = buildSessionCacheKey('notifications', ['global'], token);
+    notificationsCacheKeyRef.current = nextCacheKey;
 
     const tokenChanged = activeTokenRef.current !== token;
 
     if (tokenChanged) {
+      setNotifications([]);
+      setUnreadCount(0);
+      seenNotificationIdsRef.current.clear();
+    }
+
+    let shouldLoadInitialData = tokenChanged;
+    if (nextCacheKey) {
+      const cached = getSessionCache<NotificationsCachePayload>(nextCacheKey, { allowStale: true });
+      if (cached.data) {
+        setNotifications(cached.data.notifications || []);
+        setUnreadCount(Number(cached.data.unreadCount) || 0);
+        seenNotificationIdsRef.current = new Set((cached.data.notifications || []).map((notif) => notif.id));
+        if (!cached.isStale) {
+          shouldLoadInitialData = false;
+        }
+      }
+    }
+
+    if (shouldLoadInitialData) {
       void loadInitialData();
     }
 
@@ -143,6 +253,20 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       connectRealtime(token);
     }
   }, [connectRealtime, disconnectClient, loadInitialData]);
+
+  useEffect(() => {
+    const cacheKey = notificationsCacheKeyRef.current;
+    if (!cacheKey) return;
+
+    setSessionCache<NotificationsCachePayload>(
+      cacheKey,
+      {
+        notifications,
+        unreadCount,
+      },
+      NOTIFICATIONS_CACHE_TTL_MS,
+    );
+  }, [notifications, unreadCount]);
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
@@ -186,6 +310,27 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     };
   }, [syncAuthAndConnection, disconnectClient]);
 
+  const subscribeRealtime = useCallback(
+    (
+      destination: string,
+      callback: (message: IMessage) => void,
+    ): { unsubscribe: () => void } | null => {
+      const client = stompClientRef.current;
+      if (!client?.connected) return null;
+      return client.subscribe(destination, callback);
+    },
+    [],
+  );
+
+  const sendRealtime = useCallback(
+    (destination: string, body: string, headers?: Record<string, string>) => {
+      const client = stompClientRef.current;
+      if (!client?.connected) return;
+      client.publish({ destination, body, headers });
+    },
+    [],
+  );
+
   const markAsRead = async (id: number) => {
     try {
       await notificationsApi.markNotificationRead(id);
@@ -195,6 +340,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (e) {
       console.error(e);
+      throw e;
     }
   };
 
@@ -205,6 +351,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       setUnreadCount(0);
     } catch (e) {
       console.error(e);
+      throw e;
     }
   };
 
@@ -249,6 +396,9 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       value={{
         notifications,
         unreadCount,
+        realtimeConnected,
+        subscribeRealtime,
+        sendRealtime,
         markAsRead,
         markAllAsRead,
         deleteNotificationById,

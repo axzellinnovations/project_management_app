@@ -103,7 +103,8 @@ class ProjectMemberControllerTest {
         memberUser.setLastActive(LocalDateTime.parse("2026-03-01T10:00:00"));
 
         when(teamMemberService.getTeamMembers(50L)).thenReturn(List.of(member));
-        when(taskRepository.countByAssigneeAndProject_TeamId(member, 50L)).thenReturn(3L);
+        when(taskRepository.countTasksByAssigneeUserIdsAndTeamId(List.of(20L), 50L))
+                .thenReturn(java.util.Collections.singletonList(new Object[] {20L, 3L}));
 
         mockMvc.perform(get("/api/projects/8/members")
                         .with(SecurityMockMvcRequestPostProcessors.user(principal)))

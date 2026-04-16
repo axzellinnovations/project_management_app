@@ -2,12 +2,14 @@ package com.planora.backend.model;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-@Data
+@Getter
+@Setter
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
@@ -30,4 +32,17 @@ public class Comment {
     private User author;
 
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Comment comment = (Comment) o;
+        return java.util.Objects.equals(id, comment.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(id);
+    }
 }

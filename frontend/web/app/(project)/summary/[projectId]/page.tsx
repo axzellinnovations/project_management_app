@@ -1,14 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import api from '@/lib/axios';
-import { Task, Sprint, TeamMemberInfo, PageItem } from '@/types';
+import { Task, Sprint, ProjectMetrics } from '@/types';
+import useSWR from 'swr';
 
 import MetricsGrid from "../components/MetricsGrid";
 import { CurrentSprint } from "../components/ProjectTimeline";
-import RecentActivity from "../components/RecentActivity";
-import ProjectTeam from "../components/ProjectTeam";
 import SummaryPageSkeleton from "../components/SummarySkeleton";
 import dynamic from 'next/dynamic';
 
@@ -17,62 +15,49 @@ const DashboardCharts = dynamic(() => import('../components/DashboardCharts'), {
     loading: () => <div className="h-[250px] bg-gray-50 animate-pulse rounded-xl" />
 });
 
+// Lazy load secondary components
+const RecentActivity = dynamic(() => import('../components/RecentActivity'), {
+    ssr: false,
+    loading: () => <div className="h-[200px] bg-gray-50 animate-pulse rounded-xl" />
+});
+
+const ProjectTeam = dynamic(() => import('../components/ProjectTeam'), {
+    ssr: false,
+    loading: () => <div className="h-[200px] bg-gray-50 animate-pulse rounded-xl" />
+});
+
+const fetcher = (url: string) => api.get(url).then(res => res.data);
+
 export default function SummaryPage() {
     const params = useParams();
     const projectId = Number(params.projectId);
 
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [sprints, setSprints] = useState<Sprint[]>([]);
-    const [members, setMembers] = useState<TeamMemberInfo[]>([]);
-    const [pages, setPages] = useState<PageItem[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    // Fetch primary data points using SWR for caching and non-blocking background updates
+    const { data: tasks, isLoading: tasksLoading } = useSWR<Task[]>(
+        projectId ? `/api/tasks/project/${projectId}` : null, 
+        fetcher
+    );
+    const { data: sprints, isLoading: sprintsLoading } = useSWR<Sprint[]>(
+        projectId ? `/api/sprints/project/${projectId}` : null, 
+        fetcher
+    );
+    const { data: metrics, isLoading: metricsLoading } = useSWR<ProjectMetrics>(
+        projectId ? `/api/projects/${projectId}/metrics` : null,
+        fetcher
+    );
 
-    useEffect(() => {
-        if (!projectId) return;
-
-        const fetchData = async () => {
-            try {
-                // Fetch all data points concurrently
-                const [
-                    _projRes,
-                    tasksRes,
-                    sprintsRes,
-                    membersRes,
-                    pagesRes
-                ] = await Promise.all([
-                    api.get(`/api/projects/${projectId}`),
-                    api.get(`/api/tasks/project/${projectId}`),
-                    api.get(`/api/sprints/project/${projectId}`),
-                    api.get(`/api/projects/${projectId}/members`),
-                    api.get(`/api/projects/${projectId}/pages`),
-                ]);
-
-                setTasks(tasksRes.data);
-                setSprints(sprintsRes.data);
-                setMembers(membersRes.data);
-                setPages(pagesRes.data);
-            } catch (error) {
-                console.error("Error fetching summary data:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchData();
-    }, [projectId]);
-
-    if (isLoading) {
+    // Show full-page skeleton only for critical primary data (sprints/tasks/metrics)
+    // SWR will skip this if data is cached!
+    if (tasksLoading || sprintsLoading || metricsLoading || !tasks || !sprints || !metrics) {
         return <SummaryPageSkeleton />;
     }
 
     return (
-        <div className="mobile-page-padding max-w-[1200px] mx-auto pb-28 sm:pb-8">
-            
-            {/* Sub Header Content Removed */}
+        <div className="mobile-page-padding max-w-[1200px] mx-auto pb-6">
 
             {/* Metrics Section */}
             <div className="mb-6">
-                <MetricsGrid tasks={tasks} />
+                <MetricsGrid metrics={metrics} />
             </div>
 
             {/* Main Grid: 2 Columns */}
@@ -86,8 +71,8 @@ export default function SummaryPage() {
 
                 {/* Right Column (Activity & Team) - Spans 1 col */}
                 <div className="flex flex-col gap-6">
-                    <RecentActivity tasks={tasks} pages={pages} />
-                    <ProjectTeam projectId={projectId} tasks={tasks} members={members} />
+                    <RecentActivity projectId={projectId} tasks={tasks} />
+                    <ProjectTeam projectId={projectId} tasks={tasks} />
                 </div>
 
             </div>

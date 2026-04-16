@@ -7,11 +7,12 @@ import type { CustomField } from '@/types';
 interface CustomFieldsSectionProps {
   taskId: number;
   projectId: number;
+  readOnly?: boolean;
 }
 
 const inputClass = 'w-full text-sm border border-[#E5E7EB] rounded-lg px-2.5 h-11 sm:h-9 focus:outline-none focus:ring-2 focus:ring-[#155DFC]/30 focus:border-[#155DFC] bg-white';
 
-const CustomFieldsSection: React.FC<CustomFieldsSectionProps> = ({ taskId, projectId }) => {
+const CustomFieldsSection: React.FC<CustomFieldsSectionProps> = ({ taskId, projectId, readOnly = false }) => {
   const [fields, setFields] = useState<CustomField[]>([]);
   const [values, setValues] = useState<Record<number, string>>({});
 
@@ -42,6 +43,7 @@ const CustomFieldsSection: React.FC<CustomFieldsSectionProps> = ({ taskId, proje
             <select
               value={values[field.id] ?? ''}
               onChange={(e) => void saveValue(field.id, e.target.value)}
+              disabled={readOnly}
               className={inputClass}
             >
               <option value="">— none —</option>
@@ -54,6 +56,7 @@ const CustomFieldsSection: React.FC<CustomFieldsSectionProps> = ({ taskId, proje
               type="date"
               value={values[field.id] ?? ''}
               onChange={(e) => void saveValue(field.id, e.target.value)}
+              disabled={readOnly}
               className={inputClass}
             />
           ) : (
@@ -65,6 +68,7 @@ const CustomFieldsSection: React.FC<CustomFieldsSectionProps> = ({ taskId, proje
                 const next = e.target.value;
                 if (next !== (values[field.id] ?? '')) void saveValue(field.id, next);
               }}
+              disabled={readOnly}
               placeholder="—"
               className={inputClass}
             />

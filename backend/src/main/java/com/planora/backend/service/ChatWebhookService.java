@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.planora.backend.dto.ChatMessageDTO;
 import com.planora.backend.model.ChatMessage;
 
 import lombok.extern.slf4j.Slf4j;
@@ -89,6 +90,29 @@ public class ChatWebhookService {
                 LocalDateTime.now().toString());
         hooks.forEach(hook -> dispatchToWebhook(hook, payload));
         return hooks.size();
+    }
+
+    public void dispatchMessageEvent(Long projectId, String eventType, String scope, ChatMessageDTO message) {
+        var hooks = listWebhooks(projectId);
+        if (hooks.isEmpty() || message == null) {
+            return;
+        }
+
+        var payload = new WebhookDispatchPayload(
+                eventType,
+                projectId,
+                scope,
+                message.getId(),
+                message.getSender(),
+                message.getRecipient(),
+                message.getRoomId(),
+                message.getContent(),
+                message.getTimestamp() != null ? message.getTimestamp().toString() : null);
+
+        hooks.stream()
+                .filter(ChatWebhook::active)
+                .filter(hook -> hook.events().stream().anyMatch(event -> event.equalsIgnoreCase(eventType)))
+                .forEach(hook -> dispatchToWebhook(hook, payload));
     }
 
     public void dispatchMessageEvent(Long projectId, String eventType, String scope, ChatMessage message) {

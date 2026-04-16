@@ -1,6 +1,7 @@
 package com.planora.backend.controller;
 
 import com.planora.backend.dto.KanbanColumnRequestDTO;
+import com.planora.backend.dto.KanbanColumnSettingsDTO;
 import com.planora.backend.model.KanbanColumn;
 import com.planora.backend.service.KanbanColumnService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/kanban-columns")
@@ -42,5 +44,28 @@ public class KanbanColumnController {
     public ResponseEntity<Void> deleteKanbanColumn(@PathVariable Long id) {
         kanbanColumnService.deleteKanbanColumn(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // Body: [{ "id": 3, "position": 0 }, { "id": 1, "position": 1 }, ...]
+    @PatchMapping("/reorder")
+    public ResponseEntity<Void> reorderColumns(@RequestBody List<Map<String, Integer>> reorderRequest) {
+        kanbanColumnService.reorderColumns(reorderRequest);
+        return ResponseEntity.noContent().build();
+    }
+
+    // Rename a column
+    @PatchMapping("/{id}/rename")
+    public ResponseEntity<KanbanColumn> renameColumn(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(kanbanColumnService.renameColumn(id, body.get("name")));
+    }
+
+    // Update WIP limit and color
+    @PatchMapping("/{id}/settings")
+    public ResponseEntity<KanbanColumn> updateColumnSettings(
+            @PathVariable Long id,
+            @RequestBody KanbanColumnSettingsDTO dto) {
+        return ResponseEntity.ok(kanbanColumnService.updateColumnSettings(id, dto));
     }
 }

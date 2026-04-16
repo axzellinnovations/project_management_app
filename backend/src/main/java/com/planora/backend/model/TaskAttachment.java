@@ -41,4 +41,17 @@ public class TaskAttachment {
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        TaskAttachment that = (TaskAttachment) o;
+        return java.util.Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(id);
+    }
 }

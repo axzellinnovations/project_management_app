@@ -1,5 +1,12 @@
 import axios from '@/lib/axios';
-import { Task } from './types';
+import { Task, Label, KanbanColumnConfig } from './types';
+
+export interface KanbanBoardResponse {
+  kanbanId: number;
+  name: string;
+  projectId: number;
+  columns: KanbanColumnConfig[];
+}
 
 export interface TeamMemberOption {
   id: number;
@@ -11,9 +18,16 @@ export interface TeamMemberOption {
  * @param projectId - The project ID to fetch tasks for
  * @returns Promise with array of tasks
  */
-export async function fetchTasksByProject(projectId: number): Promise<Task[]> {
+export async function fetchTasksByProject(
+  projectId: number,
+  filters?: { milestoneId?: number | null }
+): Promise<Task[]> {
   try {
-    const response = await axios.get(`/api/tasks/project/${projectId}`);
+    const params: Record<string, number> = {};
+    if (filters?.milestoneId != null) {
+      params.milestoneId = filters.milestoneId;
+    }
+    const response = await axios.get(`/api/tasks/project/${projectId}`, { params });
     return response.data || [];
   } catch (error) {
     console.error('Error fetching tasks:', error);
@@ -29,16 +43,28 @@ export async function fetchTasksByProject(projectId: number): Promise<Task[]> {
  */
 export async function updateTaskStatus(
   taskId: number,
-  newStatus: string
+  newStatus: string,
+  taskTitle?: string
 ): Promise<Task> {
   try {
-    const response = await axios.put(`/api/tasks/${taskId}`, {
+    // Try the lightweight PATCH endpoint first (no @NotBlank title required).
+    const response = await axios.patch(`/api/tasks/${taskId}/status`, {
       status: newStatus,
     });
     return response.data;
-  } catch (error) {
-    console.error(`Error updating task ${taskId} status:`, error);
-    throw error;
+  } catch (patchError: unknown) {
+    // Fallback: if PATCH endpoint doesn't exist yet (404/401), use PUT with title
+    const status = (patchError as { response?: { status?: number } })?.response?.status;
+    if ((status === 404 || status === 401) && taskTitle) {
+      console.warn(`PATCH /api/tasks/${taskId}/status unavailable (${status}), falling back to PUT`);
+      const response = await axios.put(`/api/tasks/${taskId}`, {
+        title: taskTitle,
+        status: newStatus,
+      });
+      return response.data;
+    }
+    console.error(`Error updating task ${taskId} status:`, patchError);
+    throw patchError;
   }
 }
 
@@ -53,10 +79,50 @@ export async function updateTask(
   updates: Partial<Task>
 ): Promise<Task> {
   try {
-    const response = await axios.put(`/api/tasks/${taskId}`, updates);
+    // Transform frontend Task fields → backend TaskRequestDTO fields
+    const requestData: Record<string, unknown> = {};
+
+    if (updates.title !== undefined) requestData.title = updates.title;
+    if (updates.description !== undefined) requestData.description = updates.description;
+    if (updates.priority !== undefined) requestData.priority = updates.priority;
+    if (updates.status !== undefined) requestData.status = updates.status;
+    if (updates.storyPoint !== undefined) requestData.storyPoint = updates.storyPoint;
+    if (updates.dueDate !== undefined) requestData.dueDate = updates.dueDate || null;
+    if (updates.startDate !== undefined) requestData.startDate = updates.startDate || null;
+    if (updates.assigneeId !== undefined) requestData.assigneeId = updates.assigneeId;
+
+    // Backend expects labelIds (List<Long>), not labelId
+    if (updates.labelId !== undefined) {
+      requestData.labelIds = updates.labelId ? [updates.labelId] : [];
+    }
+
+    const response = await axios.put(`/api/tasks/${taskId}`, requestData);
     return response.data;
   } catch (error) {
     console.error(`Error updating task ${taskId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Update task dates using specialized PATCH endpoint
+ * @param taskId - The task ID to update
+ * @param startDate - Date string (YYYY-MM-DD) or null
+ * @param dueDate - Date string (YYYY-MM-DD) or null
+ */
+export async function updateTaskDates(
+  taskId: number,
+  startDate?: string | null,
+  dueDate?: string | null
+): Promise<void> {
+  try {
+    const data: Record<string, string | null> = {};
+    if (startDate !== undefined) data.startDate = startDate;
+    if (dueDate !== undefined) data.dueDate = dueDate;
+
+    await axios.patch(`/api/tasks/${taskId}/dates`, data);
+  } catch (error) {
+    console.error(`Error updating task ${taskId} dates:`, error);
     throw error;
   }
 }
@@ -80,8 +146,7 @@ export async function deleteTask(taskId: number): Promise<void> {
  * @param taskData - Object with task details (title, description, status, etc.)
  * @returns Promise with newly created task
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function createTask(taskData: any): Promise<Task> {
+export async function createTask(taskData: Partial<Task> & { projectId: number; title: string; status: string }): Promise<Task> {
   try {
     // Validate required fields
     if (!taskData.title || !taskData.title.trim()) {
@@ -100,20 +165,18 @@ export async function createTask(taskData: any): Promise<Task> {
       description: taskData.description || '',
       status: taskData.status,
       priority: taskData.priority || 'MEDIUM',
-      storyPoint: taskData.storyPoint || 0,
       projectId: taskData.projectId,
       dueDate: taskData.dueDate || null,
       startDate: taskData.startDate || null,
       assigneeId: taskData.assigneeId ? Number(taskData.assigneeId) : null,
     };
 
-    console.log('Creating task with data:', requestData);
+    if (process.env.NODE_ENV === 'development') console.log('Creating task with data:', requestData);
     const response = await axios.post(`/api/tasks`, requestData);
     return response.data;
   } catch (error) {
     console.error('Error creating task:', error);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const axiosError = error as any;
+    const axiosError = error as { response?: { data?: { message?: string }; status?: number } };
     
     // Provide more detailed error messages
     let errorMessage = 'Failed to create task';
@@ -134,10 +197,91 @@ export async function createTask(taskData: any): Promise<Task> {
 }
 
 /**
+ * Fetch project labels
+ */
+export async function fetchProjectLabels(projectId: number): Promise<Label[]> {
+  try {
+    const response = await axios.get(`/api/labels/project/${projectId}`);
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching project labels:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch Kanban board definition (columns with color, wipLimit, position)
+ */
+export async function fetchKanbanBoard(projectId: number): Promise<KanbanBoardResponse | null> {
+  try {
+    const response = await axios.get(`/api/kanbans/project/${projectId}/board`);
+    const data = response.data;
+    if (!data) return null;
+
+    // Map backend column DTO fields → frontend KanbanColumnConfig fields
+    // Backend: { id, name, status, position, color, wipLimit }
+    // Frontend: { id, title, status, color, wipLimit }
+    return {
+      kanbanId: data.kanbanId,
+      name: data.name,
+      projectId: data.projectId,
+      columns: (data.columns || []).map((col: Record<string, unknown>) => ({
+        id: col.id as number,
+        status: (col.status as string) || (col.name as string || '').toUpperCase().replace(/\s+/g, '_'),
+        title: (col.name as string) || '',
+        color: (col.color as string) || '',
+        wipLimit: (col.wipLimit as number) || 0,
+      })),
+    };
+  } catch (error) {
+    console.error('Error fetching kanban board:', error);
+    return null;
+  }
+}
+
+/**
+ * Reorder kanban columns
+ */
+export async function reorderKanbanColumns(reorderRequest: Array<{ id: number; position: number }>): Promise<void> {
+  try {
+    await axios.patch('/api/kanban-columns/reorder', reorderRequest);
+  } catch (error) {
+    console.error('Error reordering kanban columns:', error);
+    throw error;
+  }
+}
+
+/**
+ * Rename a kanban column
+ */
+export async function renameKanbanColumn(columnId: number, name: string): Promise<void> {
+  try {
+    await axios.patch(`/api/kanban-columns/${columnId}/rename`, { name });
+  } catch (error) {
+    console.error('Error renaming kanban column:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update kanban column settings (color, wipLimit)
+ */
+export async function updateKanbanColumnSettings(
+  columnId: number,
+  settings: { color?: string; wipLimit?: number }
+): Promise<void> {
+  try {
+    await axios.patch(`/api/kanban-columns/${columnId}/settings`, settings);
+  } catch (error) {
+    console.error('Error updating kanban column settings:', error);
+    throw error;
+  }
+}
+
+/**
  * Fetch project details by ID
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function fetchProject(projectId: number): Promise<any> {
+export async function fetchProject(projectId: number): Promise<{ teamId?: number; type?: string; [key: string]: unknown }> {
   try {
     const response = await axios.get(`/api/projects/${projectId}`);
     return response.data;
@@ -167,16 +311,15 @@ export async function fetchTeamMembers(teamId: number): Promise<TeamMemberOption
             : [];
 
     return rawMembers
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((member: any) => {
+      .map((member: Record<string, unknown> & { user?: Record<string, unknown> }) => {
         const id = Number(member?.id);
         const name =
-          member?.name ??
-          member?.username ??
-          member?.fullName ??
-          member?.user?.username ??
-          member?.user?.fullName ??
-          member?.user?.email ??
+          (member?.name as string) ??
+          (member?.username as string) ??
+          (member?.fullName as string) ??
+          (member?.user?.username as string) ??
+          (member?.user?.fullName as string) ??
+          (member?.user?.email as string) ??
           '';
 
         if (!Number.isFinite(id) || !name) {
@@ -191,3 +334,49 @@ export async function fetchTeamMembers(teamId: number): Promise<TeamMemberOption
     throw error;
   }
 }
+
+/**
+ * Create a new kanban column (adds a new status to the project board)
+ */
+export async function createKanbanColumn(kanbanId: number, name: string, position: number): Promise<KanbanColumnConfig> {
+  try {
+    const response = await axios.post('/api/kanban-columns', {
+      kanbanId,
+      name,
+      position,
+    });
+    const col = response.data;
+    return {
+      id: col.id,
+      status: col.status || col.name?.toUpperCase().replace(/\s+/g, '_') || name.toUpperCase().replace(/\s+/g, '_'),
+      title: col.name || name,
+      color: col.color || '',
+      wipLimit: col.wipLimit || 0,
+    };
+  } catch (error) {
+    console.error('Error creating kanban column:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create a new project label
+ */
+export async function createProjectLabel(
+  projectId: number,
+  name: string,
+  color: string
+): Promise<Label> {
+  try {
+    const response = await axios.post('/api/labels', {
+      projectId,
+      name,
+      color,
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error creating project label:', error);
+    throw error;
+  }
+}
+

@@ -3,26 +3,19 @@ package com.planora.backend.controller;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Objects;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.planora.backend.dto.ChatMessageDTO;
 import com.planora.backend.model.ChatMessage;
 import com.planora.backend.model.ChatRoom;
 import com.planora.backend.model.ChatRoomMember;
@@ -34,16 +27,17 @@ import com.planora.backend.repository.UserRepository;
 import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
 import com.planora.backend.service.ChatWebhookService;
+import com.planora.backend.service.NotificationService;
+import com.planora.backend.service.ProjectMembershipService;
+import com.planora.backend.service.UserCacheService;
 
 import com.planora.backend.service.ChatDocumentService;
-
-import lombok.RequiredArgsConstructor;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:3000")
 @RequestMapping("/api/projects/{projectId}/chat")
-@RequiredArgsConstructor
 public class ChatRestController {
+    private record ProjectMeta(Long teamId, String projectName) {}
 
     public static record ChatRoomResponse(Long id,
                                           String name,
@@ -101,7 +95,10 @@ public class ChatRestController {
 
     private final TeamMemberRepository teamMemberRepository;
 
+    private final UserCacheService userCacheService;
     private final UserRepository userRepository;
+
+    private final ProjectMembershipService projectMembershipService;
 
     private final ChatRoomRepository chatRoomRepository;
 
@@ -114,6 +111,36 @@ public class ChatRestController {
     private final ChatWebhookService chatWebhookService;
 
     private final ChatDocumentService chatDocumentService;
+
+    private final NotificationService notificationService;
+
+    public ChatRestController(ChatService chatService,
+                              ProjectRepository projectRepository,
+                              TeamMemberRepository teamMemberRepository,
+                              UserCacheService userCacheService,
+                              UserRepository userRepository,
+                              ProjectMembershipService projectMembershipService,
+                              ChatRoomRepository chatRoomRepository,
+                              ChatRoomMemberRepository chatRoomMemberRepository,
+                              SimpMessagingTemplate simpMessagingTemplate,
+                              ChatPresenceService chatPresenceService,
+                              ChatWebhookService chatWebhookService,
+                              ChatDocumentService chatDocumentService,
+                              NotificationService notificationService) {
+        this.chatService = chatService;
+        this.projectRepository = projectRepository;
+        this.teamMemberRepository = teamMemberRepository;
+        this.userCacheService = userCacheService;
+        this.userRepository = userRepository;
+        this.projectMembershipService = projectMembershipService;
+        this.chatRoomRepository = chatRoomRepository;
+        this.chatRoomMemberRepository = chatRoomMemberRepository;
+        this.simpMessagingTemplate = simpMessagingTemplate;
+        this.chatPresenceService = chatPresenceService;
+        this.chatWebhookService = chatWebhookService;
+        this.chatDocumentService = chatDocumentService;
+        this.notificationService = notificationService;
+    }
     /**
      * Upload a document to chat (S3-backed, like WhatsApp)
      */
@@ -124,7 +151,7 @@ public class ChatRestController {
             Authentication authentication
     ) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body("File is required");
         }
@@ -144,7 +171,7 @@ public class ChatRestController {
             Authentication authentication
     ) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
         
         if (expiredUrl == null || expiredUrl.isBlank()) {
             return ResponseEntity.badRequest().body("URL is required");
@@ -188,7 +215,7 @@ public class ChatRestController {
      * Get group or private chat history for a project.
      */
     @GetMapping("/messages")
-    public ResponseEntity<List<ChatMessage>> getMessages(
+    public ResponseEntity<List<ChatMessageDTO>> getMessages(
             @PathVariable Long projectId,
             @RequestParam(value = "roomId", required = false) Long roomId,
             @RequestParam(value = "recipient", required = false) String recipient,
@@ -196,7 +223,8 @@ public class ChatRestController {
             Authentication authentication
     ) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        Long teamId = projectMembershipService.resolveProjectTeamId(projectId);
+        validateTeamMembership(teamId, username);
         if (roomId != null) {
             validateRoomMembership(roomId, username);
             var roomMessages = chatService.getRoomMessages(projectId, roomId);
@@ -207,29 +235,29 @@ public class ChatRestController {
             return new ResponseEntity<>(chatService.getGroupMessages(projectId), HttpStatus.OK);
         }
 
-        // private conversation between recipient (current user usually) and withUser
-        validateProjectMembership(projectId, withUser);
-        var privateConversation = chatService.getPrivateConversation(projectId, recipient, withUser);
+        // Private conversation should always be resolved for the authenticated user.
+        validateTeamMembership(teamId, withUser);
+        var privateConversation = chatService.getPrivateConversation(projectId, username, withUser);
         chatService.markPrivateConversationAsRead(projectId, username, withUser);
         return new ResponseEntity<>(privateConversation, HttpStatus.OK);
     }
 
     @GetMapping("/messages/{messageId}/thread")
-    public ResponseEntity<List<ChatMessage>> getThreadMessages(@PathVariable Long projectId,
-                                                               @PathVariable Long messageId,
-                                                               Authentication authentication) {
+    public ResponseEntity<List<ChatMessageDTO>> getThreadMessages(@PathVariable Long projectId,
+                                                                @PathVariable Long messageId,
+                                                                Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
         return new ResponseEntity<>(chatService.getThreadMessages(projectId, messageId), HttpStatus.OK);
     }
 
     @PostMapping("/messages/{messageId}/thread/replies")
-    public ResponseEntity<ChatMessage> createThreadReply(@PathVariable Long projectId,
+    public ResponseEntity<ChatMessageDTO> createThreadReply(@PathVariable Long projectId,
                                                          @PathVariable Long messageId,
                                                          @RequestBody ThreadReplyRequest request,
                                                          Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
 
         if (request.content() == null || request.content().trim().isEmpty()) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
@@ -246,12 +274,12 @@ public class ChatRestController {
     }
 
     @PatchMapping("/messages/{messageId}")
-    public ResponseEntity<ChatMessage> editMessage(@PathVariable Long projectId,
+    public ResponseEntity<ChatMessageDTO> editMessage(@PathVariable Long projectId,
                                                    @PathVariable Long messageId,
                                                    @RequestBody EditMessageRequest request,
                                                    Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
 
         if (request.content() == null || request.content().trim().isEmpty()) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
@@ -268,11 +296,11 @@ public class ChatRestController {
     }
 
     @DeleteMapping("/messages/{messageId}")
-    public ResponseEntity<ChatMessage> deleteMessage(@PathVariable Long projectId,
+    public ResponseEntity<ChatMessageDTO> deleteMessage(@PathVariable Long projectId,
                                                      @PathVariable Long messageId,
                                                      Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
 
         var deleted = chatService.softDeleteMessage(projectId, messageId, username);
         return new ResponseEntity<>(deleted, HttpStatus.OK);
@@ -283,7 +311,7 @@ public class ChatRestController {
                                                                                       @PathVariable Long messageId,
                                                                                       Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
         return new ResponseEntity<>(chatService.getMessageReactions(projectId, messageId, username), HttpStatus.OK);
     }
 
@@ -293,7 +321,7 @@ public class ChatRestController {
                                                                                         @RequestBody ReactionToggleRequest request,
                                                                                         Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
 
         if (request.emoji() == null || request.emoji().isBlank()) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
@@ -307,19 +335,36 @@ public class ChatRestController {
      * Get list of project members' usernames for chat.
      */
     @GetMapping("/members")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<String>> getProjectMembers(@PathVariable Long projectId, Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
-        var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
-        var members = teamMemberRepository.findByTeamId(project.getTeam().getId());
-        var usernames = members.stream().map(tm -> tm.getUser().getUsername()).toList();
+        var currentUser = userCacheService.resolveUserByEmailOrUsername(username);
+        ProjectMeta projectMeta = resolveProjectMeta(projectId);
+        validateTeamMembership(projectMeta.teamId(), username);
+        var members = teamMemberRepository.findByTeamId(projectMeta.teamId());
+        var currentAliases = new LinkedHashSet<String>();
+        if (currentUser != null) {
+            if (currentUser.getUsername() != null && !currentUser.getUsername().isBlank()) {
+                currentAliases.add(currentUser.getUsername().toLowerCase());
+            }
+            if (currentUser.getEmail() != null && !currentUser.getEmail().isBlank()) {
+                currentAliases.add(currentUser.getEmail().toLowerCase());
+            }
+        }
+        currentAliases.add(username.toLowerCase());
+
+        var usernames = members.stream()
+                .map(tm -> tm.getUser() != null ? tm.getUser().getUsername() : null)
+                .filter(Objects::nonNull)
+                .filter(memberUsername -> !currentAliases.contains(memberUsername.toLowerCase()))
+                .toList();
         return new ResponseEntity<>(usernames, HttpStatus.OK);
     }
 
     @GetMapping("/presence")
     public ResponseEntity<PresenceResponse> getPresence(@PathVariable Long projectId, Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
         var onlineUsers = chatPresenceService.getOnlineUsers(projectId);
         return new ResponseEntity<>(new PresenceResponse(onlineUsers, onlineUsers.size()), HttpStatus.OK);
     }
@@ -327,7 +372,7 @@ public class ChatRestController {
     @GetMapping("/features")
     public ResponseEntity<FeatureFlagsResponse> getFeatureFlags(@PathVariable Long projectId, Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
         return new ResponseEntity<>(
                 new FeatureFlagsResponse(
                         phaseDEnabled,
@@ -338,12 +383,13 @@ public class ChatRestController {
     }
 
     @GetMapping("/search")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<SearchResultResponse>> searchMessages(@PathVariable Long projectId,
                                                                      @RequestParam("query") String query,
                                                                      @RequestParam(value = "limit", required = false, defaultValue = "20") int limit,
                                                                      Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
 
         var visibleRoomIds = getVisibleRooms(projectId, username, false).stream().map(ChatRoom::getId).collect(java.util.stream.Collectors.toSet());
         var matches = chatService.searchMessages(projectId, username, query, visibleRoomIds, limit);
@@ -370,7 +416,7 @@ public class ChatRestController {
     public ResponseEntity<List<ChatWebhookResponse>> listWebhooks(@PathVariable Long projectId,
                                                                    Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
         if (!webhooksEnabled) {
             return new ResponseEntity<>(List.of(), HttpStatus.OK);
         }
@@ -386,7 +432,7 @@ public class ChatRestController {
                                                               @RequestBody ChatWebhookRequest request,
                                                               Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
         if (!webhooksEnabled || request.url() == null || request.url().isBlank()) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
@@ -400,7 +446,7 @@ public class ChatRestController {
                                               @PathVariable String webhookId,
                                               Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
         if (!webhooksEnabled) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
@@ -413,7 +459,7 @@ public class ChatRestController {
     public ResponseEntity<String> testWebhooks(@PathVariable Long projectId,
                                                Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
         if (!webhooksEnabled) {
             return new ResponseEntity<>("Webhooks disabled", HttpStatus.BAD_REQUEST);
         }
@@ -427,7 +473,7 @@ public class ChatRestController {
                                                 @RequestBody TelemetryEventRequest request,
                                                 Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
         if (!telemetryEnabled) {
             return new ResponseEntity<>(HttpStatus.ACCEPTED);
         }
@@ -445,7 +491,7 @@ public class ChatRestController {
                                                            @RequestParam(value = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
                                                            Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
         var visibleRooms = getVisibleRooms(projectId, username, includeArchived).stream()
             .map(this::toRoomResponse)
             .toList();
@@ -454,39 +500,43 @@ public class ChatRestController {
     }
 
     @GetMapping("/summaries")
+    @Transactional(readOnly = true)
     public ResponseEntity<ChatSidebarResponse> getChatSummaries(@PathVariable Long projectId,
                                                                 @RequestParam(value = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
                                                                 Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        com.planora.backend.model.User currentUser = resolveAuthenticatedUser(authentication);
+        Long teamId = projectMembershipService.resolveProjectTeamId(projectId);
+        validateTeamMembership(teamId, currentUser);
 
-        var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
-        var participants = teamMemberRepository.findByTeamId(project.getTeam().getId()).stream()
+        var participants = teamMemberRepository.findByTeamId(teamId).stream()
                 .map(tm -> tm.getUser().getUsername())
                 .toList();
 
-        var visibleRooms = getVisibleRooms(projectId, username, includeArchived);
+        var visibleRooms = getVisibleRooms(projectId, username, includeArchived, currentUser);
         var response = new ChatSidebarResponse(
-                chatService.buildTeamSummary(projectId, username),
-                chatService.buildRoomSummaries(projectId, username, visibleRooms),
-                chatService.buildDirectSummaries(projectId, username, participants));
+                chatService.buildTeamSummary(projectId, currentUser, username),
+                chatService.buildRoomSummaries(projectId, currentUser, username, visibleRooms),
+                chatService.buildDirectSummaries(projectId, currentUser, username, participants));
 
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
         @GetMapping("/unread-badge")
+        @Transactional(readOnly = true)
         public ResponseEntity<UnreadBadgeResponse> getUnreadBadge(@PathVariable Long projectId,
                                        @RequestParam(value = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
                                        Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        com.planora.backend.model.User currentUser = resolveAuthenticatedUser(authentication);
+        Long teamId = projectMembershipService.resolveProjectTeamId(projectId);
+        validateTeamMembership(teamId, currentUser);
 
-        var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
-        var participants = teamMemberRepository.findByTeamId(project.getTeam().getId()).stream()
+        var participants = teamMemberRepository.findByTeamId(teamId).stream()
             .map(tm -> tm.getUser().getUsername())
             .toList();
-        var visibleRooms = getVisibleRooms(projectId, username, includeArchived);
-        var badge = chatService.buildUnreadBadge(projectId, username, visibleRooms, participants);
+        var visibleRooms = getVisibleRooms(projectId, username, includeArchived, currentUser);
+        var badge = chatService.buildUnreadBadge(projectId, currentUser, username, visibleRooms, participants);
 
         return new ResponseEntity<>(
             new UnreadBadgeResponse(
@@ -501,8 +551,30 @@ public class ChatRestController {
     public ResponseEntity<Void> markTeamChatAsRead(@PathVariable Long projectId,
                                                    Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
         chatService.markTeamAsRead(projectId, username);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @PostMapping("/rooms/{roomId}/read")
+    public ResponseEntity<Void> markRoomChatAsRead(@PathVariable Long projectId,
+                                                   @PathVariable Long roomId,
+                                                   Authentication authentication) {
+        String username = authentication.getName();
+        resolveValidatedTeamId(projectId, username);
+        validateRoomMembership(roomId, username);
+        chatService.markRoomAsRead(projectId, roomId, username);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @PostMapping("/direct/read")
+    public ResponseEntity<Void> markDirectChatAsRead(@PathVariable Long projectId,
+                                                     @RequestParam("with") String withUser,
+                                                     Authentication authentication) {
+        String username = authentication.getName();
+        Long teamId = resolveValidatedTeamId(projectId, username);
+        validateTeamMembership(teamId, withUser);
+        chatService.markPrivateConversationAsRead(projectId, username, withUser);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
@@ -514,7 +586,8 @@ public class ChatRestController {
                                                        @RequestBody ChatRoomRequest roomRequest,
                                                        Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        ProjectMeta projectMeta = resolveProjectMeta(projectId);
+        validateTeamMembership(projectMeta.teamId(), username);
 
         if (roomRequest.name() == null || roomRequest.name().trim().isEmpty()) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
@@ -527,8 +600,7 @@ public class ChatRestController {
         newRoom.setArchived(false);
         var savedRoom = chatRoomRepository.save(newRoom);
 
-        var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
-        var teamMembers = teamMemberRepository.findByTeamId(project.getTeam().getId());
+        var teamMembers = teamMemberRepository.findByTeamId(projectMeta.teamId());
         var teamUsersByIdentifier = new LinkedHashMap<String, com.planora.backend.model.User>();
         teamMembers.stream()
                 .map(tm -> tm.getUser())
@@ -547,20 +619,12 @@ public class ChatRestController {
             roomRequest.members().stream()
                     .map(String::toLowerCase)
                     .distinct()
-                    .filter(member -> {
-                        try {
-                            validateProjectMembership(projectId, member);
-                            return true;
-                        } catch (RuntimeException ex) {
-                            return false;
-                        }
-                    })
                     .map(teamUsersByIdentifier::get)
                     .filter(user -> user != null)
                     .forEach(usersToAdd::add);
         }
 
-        var creator = resolveUserByEmailOrUsername(username);
+        var creator = userCacheService.resolveUserByEmailOrUsername(username);
         if (creator != null) {
             usersToAdd.add(creator);
         }
@@ -578,6 +642,8 @@ public class ChatRestController {
             }
         });
 
+        publishRoomCreatedNotifications(projectId, savedRoom, username, usersToAdd);
+
         simpMessagingTemplate.convertAndSend(
                 "/topic/project/" + projectId + "/rooms",
             new RoomEvent("CREATED", savedRoom.getId(), toRoomResponse(savedRoom)));
@@ -592,11 +658,11 @@ public class ChatRestController {
                                    @RequestBody RoomMetaUpdateRequest request,
                                    Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        Long teamId = resolveValidatedTeamId(projectId, username);
 
         var room = chatRoomRepository.findByIdAndProjectId(roomId, projectId)
             .orElseThrow(() -> new RuntimeException("Chat room not found"));
-        requireRoomAdminOrOwner(projectId, room, username);
+        requireRoomAdminOrOwner(teamId, room, username);
 
         if (request.name() != null && !request.name().trim().isEmpty()) {
             room.setName(request.name().trim());
@@ -605,6 +671,7 @@ public class ChatRestController {
         room.setDescription(request.description() != null ? request.description().trim() : null);
 
         var saved = chatRoomRepository.save(room);
+        publishRoomUpdatedNotifications(projectId, saved, username);
         simpMessagingTemplate.convertAndSend(
             "/topic/project/" + projectId + "/rooms",
             new RoomEvent("UPDATED", saved.getId(), toRoomResponse(saved)));
@@ -619,11 +686,11 @@ public class ChatRestController {
                                    @RequestBody RoomPinRequest request,
                                    Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        Long teamId = resolveValidatedTeamId(projectId, username);
 
         var room = chatRoomRepository.findByIdAndProjectId(roomId, projectId)
             .orElseThrow(() -> new RuntimeException("Chat room not found"));
-        requireRoomAdminOrOwner(projectId, room, username);
+        requireRoomAdminOrOwner(teamId, room, username);
 
         if (request.messageId() != null) {
             chatService.getRoomMessages(projectId, roomId).stream()
@@ -650,11 +717,11 @@ public class ChatRestController {
                                  @RequestBody RoomRoleUpdateRequest request,
                                  Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        Long teamId = resolveValidatedTeamId(projectId, username);
 
         var room = chatRoomRepository.findByIdAndProjectId(roomId, projectId)
             .orElseThrow(() -> new RuntimeException("Chat room not found"));
-        requireRoomAdminOrOwner(projectId, room, username);
+        requireRoomAdminOrOwner(teamId, room, username);
 
         if (request.role() == null || request.role().isBlank()) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
@@ -680,7 +747,7 @@ public class ChatRestController {
                                            @PathVariable Long roomId,
                                            Authentication authentication) {
         String username = authentication.getName();
-        validateProjectMembership(projectId, username);
+        Long teamId = resolveValidatedTeamId(projectId, username);
 
         var roomOptional = chatRoomRepository.findByIdAndProjectId(roomId, projectId);
         if (roomOptional.isEmpty()) {
@@ -688,7 +755,11 @@ public class ChatRestController {
         }
 
         var room = roomOptional.get();
-        requireRoomAdminOrOwner(projectId, room, username);
+        requireRoomAdminOrOwner(teamId, room, username);
+
+        // Snapshot recipients before members are deleted.
+        publishRoomDeletedNotifications(projectId, room, username);
+
         chatRoomMemberRepository.deleteByChatRoomId(roomId);
         chatRoomRepository.delete(room);
         simpMessagingTemplate.convertAndSend(
@@ -711,16 +782,119 @@ public class ChatRestController {
                 room.getUpdatedAt() != null ? room.getUpdatedAt().toString() : null);
     }
 
+    private void publishRoomCreatedNotifications(Long projectId,
+                                                 ChatRoom room,
+                                                 String actorAlias,
+                                                 Set<com.planora.backend.model.User> addedUsers) {
+        if (room == null || addedUsers == null || addedUsers.isEmpty()) {
+            return;
+        }
+
+        var actor = userCacheService.resolveUserByEmailOrUsername(actorAlias);
+        if (actor == null || actor.getUserId() == null) {
+            return;
+        }
+
+        String actorDisplay = actor.getFullName() != null && !actor.getFullName().isBlank()
+                ? actor.getFullName()
+                : actor.getUsername();
+        String roomName = room.getName() != null && !room.getName().isBlank() ? room.getName() : "channel";
+        String projectName = resolveProjectMeta(projectId).projectName();
+        String link = "/project/" + projectId + "/chat?roomId=" + room.getId();
+        String message = actorDisplay + " added you to #" + roomName + " in \"" + projectName + "\" chat";
+
+        addedUsers.stream()
+                .filter(Objects::nonNull)
+                .filter(user -> user.getUserId() != null && !user.getUserId().equals(actor.getUserId()))
+                .forEach(user -> notificationService.createNotification(user, message, link));
+    }
+
+    private void publishRoomUpdatedNotifications(Long projectId, ChatRoom room, String actorAlias) {
+        publishRoomLifecycleNotifications(
+                projectId,
+                room,
+                actorAlias,
+                "updated",
+                "/project/" + projectId + "/chat?roomId=" + room.getId());
+    }
+
+    private void publishRoomDeletedNotifications(Long projectId, ChatRoom room, String actorAlias) {
+        publishRoomLifecycleNotifications(
+                projectId,
+                room,
+                actorAlias,
+                "deleted",
+                "/project/" + projectId + "/chat?view=team");
+    }
+
+    private void publishRoomLifecycleNotifications(Long projectId,
+                                                   ChatRoom room,
+                                                   String actorAlias,
+                                                   String action,
+                                                   String link) {
+        if (room == null) {
+            return;
+        }
+
+        var actor = userCacheService.resolveUserByEmailOrUsername(actorAlias);
+        if (actor == null || actor.getUserId() == null) {
+            return;
+        }
+
+        var recipients = resolveRoomRecipients(room, actor.getUserId());
+        if (recipients.isEmpty()) {
+            return;
+        }
+
+        String actorDisplay = actor.getFullName() != null && !actor.getFullName().isBlank()
+                ? actor.getFullName()
+                : actor.getUsername();
+        String roomName = room.getName() != null && !room.getName().isBlank() ? room.getName() : "channel";
+        String projectName = resolveProjectMeta(projectId).projectName();
+        String message = actorDisplay + " " + action + " #" + roomName + " in \"" + projectName + "\" chat";
+
+        recipients.forEach(recipient -> notificationService.createNotification(recipient, message, link));
+    }
+
+    private List<com.planora.backend.model.User> resolveRoomRecipients(ChatRoom room, Long excludedUserId) {
+        if (room == null || room.getId() == null) {
+            return List.of();
+        }
+
+        Set<Long> recipientIds = new LinkedHashSet<>();
+        chatRoomMemberRepository.findByChatRoomId(room.getId()).stream()
+                .map(ChatRoomMember::getUser)
+                .filter(Objects::nonNull)
+                .map(com.planora.backend.model.User::getUserId)
+                .filter(Objects::nonNull)
+                .forEach(recipientIds::add);
+
+        var creator = userCacheService.resolveUserByEmailOrUsername(room.getCreatedBy());
+        if (creator != null && creator.getUserId() != null) {
+            recipientIds.add(creator.getUserId());
+        }
+
+        if (excludedUserId != null) {
+            recipientIds.remove(excludedUserId);
+        }
+
+        if (recipientIds.isEmpty()) {
+            return List.of();
+        }
+
+        return userRepository.findAllById(recipientIds);
+    }
+
     private List<ChatRoom> getVisibleRooms(Long projectId, String username, boolean includeArchived) {
-        var currentUser = resolveUserByEmailOrUsername(username);
+        return getVisibleRooms(projectId, username, includeArchived, userCacheService.resolveUserByEmailOrUsername(username));
+    }
+
+    private List<ChatRoom> getVisibleRooms(Long projectId, String username, boolean includeArchived, com.planora.backend.model.User currentUser) {
         if (currentUser == null) {
             return List.of();
         }
 
-        var memberRoomIds = chatRoomMemberRepository.findByUserUserId(currentUser.getUserId()).stream()
-            .map(roomMember -> roomMember.getChatRoom().getId())
-            .distinct()
-            .toList();
+        var memberRoomIds = chatRoomMemberRepository.findRoomIdsByUserId(currentUser.getUserId());
 
         return chatRoomRepository.findByProjectId(projectId).stream()
             .filter(room -> room.getCreatedBy() != null && room.getCreatedBy().equalsIgnoreCase(username)
@@ -738,9 +912,9 @@ public class ChatRestController {
                 webhook.createdAt());
     }
 
-    private void requireRoomAdminOrOwner(Long projectId, ChatRoom room, String usernameOrEmail) {
-        validateProjectMembership(projectId, usernameOrEmail);
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+    private void requireRoomAdminOrOwner(Long teamId, ChatRoom room, String usernameOrEmail) {
+        validateTeamMembership(teamId, usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             throw new RuntimeException("User not found");
         }
@@ -761,7 +935,7 @@ public class ChatRestController {
     }
 
     private void validateRoomMembership(Long roomId, String usernameOrEmail) {
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             throw new RuntimeException("User is not found");
         }
@@ -781,33 +955,12 @@ public class ChatRestController {
         throw new RuntimeException("User is not a member of this room");
     }
 
-    private com.planora.backend.model.User resolveUserByEmailOrUsername(String usernameOrEmail) {
-        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
-            return null;
-        }
-        var normalized = usernameOrEmail.toLowerCase();
-        if (normalized.contains("@")) {
-            var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
-            if (byEmail != null) {
-                return byEmail;
-            }
-            return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        }
-
-        var byUsername = userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        if (byUsername != null) {
-            return byUsername;
-        }
-
-        return userRepository.findByEmailIgnoreCase(normalized).orElse(null);
-    }
-
     private String resolveCanonicalChatIdentifier(String usernameOrEmail) {
         if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
             return usernameOrEmail;
         }
 
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             return usernameOrEmail.toLowerCase();
         }
@@ -829,15 +982,41 @@ public class ChatRestController {
     }
 
     private void validateProjectMembership(Long projectId, String usernameOrEmail) {
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        validateTeamMembership(projectMembershipService.resolveProjectTeamId(projectId), usernameOrEmail);
+    }
+
+    private Long resolveValidatedTeamId(Long projectId, String usernameOrEmail) {
+        Long teamId = projectMembershipService.resolveProjectTeamId(projectId);
+        validateTeamMembership(teamId, usernameOrEmail);
+        return teamId;
+    }
+
+    private void validateTeamMembership(Long teamId, String usernameOrEmail) {
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             throw new RuntimeException("User is not found");
         }
+        validateTeamMembership(teamId, user);
+    }
 
-        var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
-        boolean isMember = teamMemberRepository.findByTeamIdAndUserUserId(project.getTeam().getId(), user.getUserId()).isPresent();
-        if (!isMember) {
-            throw new RuntimeException("User is not a member of the project");
-        }
+    private void validateProjectMembership(Long projectId, com.planora.backend.model.User user) {
+        validateTeamMembership(projectMembershipService.resolveProjectTeamId(projectId), user);
+    }
+
+    private void validateTeamMembership(Long teamId, com.planora.backend.model.User user) {
+        projectMembershipService.assertTeamMembership(teamId, user);
+    }
+
+    private com.planora.backend.model.User resolveAuthenticatedUser(Authentication authentication) {
+        return userCacheService.resolveUserByEmailOrUsername(authentication.getName());
+    }
+
+    private ProjectMeta resolveProjectMeta(Long projectId) {
+        Long teamId = projectMembershipService.resolveProjectTeamId(projectId);
+        String projectName = projectRepository.findById(projectId)
+                .map(p -> p.getName())
+                .filter(name -> !name.isBlank())
+                .orElse("the project");
+        return new ProjectMeta(teamId, projectName);
     }
 }

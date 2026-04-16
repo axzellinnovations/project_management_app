@@ -3,13 +3,15 @@ package com.planora.backend.model;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Data
+@Getter
+@Setter
 @Entity
 @Table(name = "sprintboards")
 @AllArgsConstructor
@@ -44,5 +46,18 @@ public class Sprintboard {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Sprintboard that = (Sprintboard) o;
+        return java.util.Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(id);
     }
 }

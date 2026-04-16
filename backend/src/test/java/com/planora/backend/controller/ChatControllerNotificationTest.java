@@ -1,6 +1,7 @@
 package com.planora.backend.controller;
 
 import com.planora.backend.model.ChatMessage;
+import com.planora.backend.dto.ChatMessageDTO;
 import com.planora.backend.model.ChatRoom;
 import com.planora.backend.model.ChatRoomMember;
 import com.planora.backend.model.Project;
@@ -9,6 +10,7 @@ import com.planora.backend.model.TeamMember;
 import com.planora.backend.model.User;
 import com.planora.backend.repository.ChatRoomMemberRepository;
 import com.planora.backend.repository.ChatRoomRepository;
+import com.planora.backend.repository.ChatMessageRepository;
 import com.planora.backend.repository.ProjectRepository;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.UserRepository;
@@ -16,6 +18,8 @@ import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
 import com.planora.backend.service.ChatWebhookService;
 import com.planora.backend.service.NotificationService;
+import com.planora.backend.service.ProjectMembershipService;
+import com.planora.backend.service.UserCacheService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,8 +36,10 @@ import java.util.concurrent.Executor;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -53,11 +59,17 @@ class ChatControllerNotificationTest {
     @Mock
     private ProjectRepository projectRepository;
     @Mock
+    private UserCacheService userCacheService;
+    @Mock
+    private ProjectMembershipService projectMembershipService;
+    @Mock
     private UserRepository userRepository;
     @Mock
     private ChatRoomRepository chatRoomRepository;
     @Mock
     private ChatRoomMemberRepository chatRoomMemberRepository;
+    @Mock
+    private ChatMessageRepository chatMessageRepository;
     @Mock
     private ChatPresenceService chatPresenceService;
     @Mock
@@ -76,6 +88,24 @@ class ChatControllerNotificationTest {
 
     @BeforeEach
     void setUp() {
+        // Ensure convertToEntity returns a valid ChatMessage for any DTO
+        lenient().when(chatService.convertToEntity(any(ChatMessageDTO.class))).thenAnswer(invocation -> {
+            ChatMessageDTO dto = invocation.getArgument(0);
+            ChatMessage entity = new ChatMessage();
+            entity.setId(dto.getId());
+            entity.setContent(dto.getContent());
+            entity.setSender(dto.getSender());
+            entity.setRecipient(dto.getRecipient());
+            entity.setProjectId(dto.getProjectId());
+            entity.setRoomId(dto.getRoomId());
+            entity.setChatType(dto.getChatType());
+            entity.setParentMessageId(dto.getParentMessageId());
+            entity.setFormatType(dto.getFormatType());
+            entity.setDeleted(dto.getDeleted());
+            entity.setDeletedAt(dto.getDeletedAt());
+            entity.setEditedAt(dto.getEditedAt());
+            return entity;
+        });
         team = new Team();
         team.setId(99L);
 
@@ -107,16 +137,16 @@ class ChatControllerNotificationTest {
         bobMember.setUser(bob);
         bobMember.setTeam(team);
 
-        when(projectRepository.findById(10L)).thenReturn(Optional.of(project));
-        when(teamMemberRepository.findByTeamIdAndUserUserId(99L, 1L)).thenReturn(Optional.of(aliceMember));
-        when(teamMemberRepository.findByTeamId(99L)).thenReturn(List.of(aliceMember, bobMember));
+        lenient().when(projectRepository.findById(10L)).thenReturn(Optional.of(project));
+        lenient().when(teamMemberRepository.findByTeamId(99L)).thenReturn(List.of(aliceMember, bobMember));
 
-        when(userRepository.findByUsernameIgnoreCase("alice")).thenReturn(Optional.of(alice));
-        when(userRepository.findByUsernameIgnoreCase("bob")).thenReturn(Optional.of(bob));
+        when(userCacheService.resolveUserByEmailOrUsername("alice")).thenReturn(alice);
+        lenient().when(userCacheService.resolveUserByEmailOrUsername("bob")).thenReturn(bob);
+        lenient().when(userCacheService.resolveUserByEmailOrUsername("carol")).thenReturn(carol);
 
-        when(chatRoomMemberRepository.findByUserUserId(anyLong())).thenReturn(List.of());
-        when(chatRoomRepository.findByProjectId(10L)).thenReturn(List.of());
-        when(chatService.buildUnreadBadge(eq(10L), any(), any(), any())).thenReturn(
+        lenient().when(chatRoomMemberRepository.findByUserUserId(anyLong())).thenReturn(List.of());
+        lenient().when(chatRoomRepository.findByProjectId(10L)).thenReturn(List.of());
+        lenient().when(chatService.buildUnreadBadge(eq(10L), any(), any(), any())).thenReturn(
                 new ChatService.UnreadBadgeSummary(0, 0, 0, 0));
 
         doAnswer(invocation -> {
@@ -128,24 +158,74 @@ class ChatControllerNotificationTest {
 
     @Test
     void sendMessage_teamChatCreatesNotificationForOtherMembersOnly() {
-        ChatMessage incoming = new ChatMessage();
-        incoming.setContent("Team update");
+		ChatMessageDTO incomingDto = new ChatMessageDTO();
+		incomingDto.setContent("Team update");
 
-        ChatMessage saved = new ChatMessage();
-        saved.setId(100L);
-        saved.setContent("Team update");
-        saved.setSender("alice");
-        saved.setProjectId(10L);
+		ChatMessageDTO saved = new ChatMessageDTO();
+		saved.setId(100L);
+		saved.setContent("Team update");
+		saved.setSender("alice");
+		saved.setProjectId(10L);
 
-        when(chatService.saveMessage(any(ChatMessage.class))).thenReturn(saved);
+		when(chatService.saveMessage(any(ChatMessage.class))).thenReturn(saved);
+
+		SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create();
+		headers.setUser((Principal) () -> "alice");
+
+		chatController.sendMessage(10L, incomingDto, headers);
+
+        verify(notificationService, times(1)).createNotification(eq(bob), any(), eq("/project/10/chat"));
+        verify(notificationService, never()).createNotification(eq(alice), any(), any());
+    }
+
+    @Test
+    void sendPrivateMessage_createsNotificationForRecipientWithScopedChatLink() {
+		ChatMessageDTO incomingDto = new ChatMessageDTO();
+		incomingDto.setContent("Hello Bob");
+		incomingDto.setRecipient("bob");
+
+		ChatMessageDTO saved = new ChatMessageDTO();
+		saved.setId(300L);
+		saved.setContent("Hello Bob");
+		saved.setSender("alice");
+		saved.setRecipient("bob");
+		saved.setProjectId(10L);
+
+		when(chatService.saveMessage(any(ChatMessage.class))).thenReturn(saved);
+
+		SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create();
+		headers.setUser((Principal) () -> "alice");
+
+		chatController.sendPrivateMessage(10L, incomingDto, headers);
+
+        verify(notificationService).createNotification(
+                eq(bob),
+                contains("sent you a message"),
+                eq("/project/10/chat?with=alice"));
+        verify(notificationService, never()).createNotificationIfNotDuplicate(any(), any(), any());
+    }
+
+    @Test
+    void toggleReaction_notifiesOriginalMessageSenderExceptActor() {
+        ChatMessage targetMessage = new ChatMessage();
+        targetMessage.setId(501L);
+        targetMessage.setProjectId(10L);
+        targetMessage.setSender("bob");
+        targetMessage.setContent("Need review");
+
+        when(chatService.toggleReaction(10L, 501L, "alice", "👍"))
+                .thenReturn(List.of(new ChatService.ChatReactionSummary("👍", 1L, true)));
+        when(chatMessageRepository.findByIdAndProjectId(501L, 10L)).thenReturn(Optional.of(targetMessage));
 
         SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create();
         headers.setUser((Principal) () -> "alice");
 
-        chatController.sendMessage(10L, incoming, headers);
+        chatController.toggleReaction(10L, 501L, new ChatController.ReactionTogglePayload("👍"), headers);
 
-        verify(notificationService, times(1)).createNotification(eq(bob), any(), eq("/project/10/chat"));
-        verify(notificationService, never()).createNotification(eq(alice), any(), any());
+        verify(notificationService).createNotification(
+                eq(bob),
+                contains("reacted"),
+                eq("/project/10/chat?view=team"));
     }
 
     @Test
@@ -166,27 +246,28 @@ class ChatControllerNotificationTest {
         bobMembership.setUser(bob);
 
         when(chatRoomRepository.findById(7L)).thenReturn(Optional.of(room));
-        when(userRepository.findByUsernameIgnoreCase("carol")).thenReturn(Optional.of(carol));
         when(chatRoomMemberRepository.findByChatRoomIdAndUserUserId(7L, 1L)).thenReturn(Optional.of(senderMembership));
         when(chatRoomMemberRepository.findByChatRoomId(7L)).thenReturn(List.of(senderMembership, bobMembership));
-        when(userRepository.findAllById(any())).thenReturn(List.of(bob, carol));
+        @SuppressWarnings("null")
+        List<User> users = List.of(bob, carol);
+        when(userRepository.findAllById((Iterable<Long>) any())).thenReturn(users);
 
-        ChatMessage incoming = new ChatMessage();
-        incoming.setContent("Group update");
+		ChatMessageDTO incomingDto = new ChatMessageDTO();
+		incomingDto.setContent("Group update");
 
-        ChatMessage saved = new ChatMessage();
-        saved.setId(200L);
-        saved.setContent("Group update");
-        saved.setSender("alice");
-        saved.setProjectId(10L);
-        saved.setRoomId(7L);
+		ChatMessageDTO saved = new ChatMessageDTO();
+		saved.setId(200L);
+		saved.setContent("Group update");
+		saved.setSender("alice");
+		saved.setProjectId(10L);
+		saved.setRoomId(7L);
 
-        when(chatService.saveMessage(any(ChatMessage.class))).thenReturn(saved);
+		when(chatService.saveMessage(any(ChatMessage.class))).thenReturn(saved);
 
-        SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create();
-        headers.setUser((Principal) () -> "alice");
+		SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create();
+		headers.setUser((Principal) () -> "alice");
 
-        chatController.sendRoomMessage(10L, 7L, incoming, headers);
+		chatController.sendRoomMessage(10L, 7L, incomingDto, headers);
 
         verify(notificationService, times(2)).createNotification(any(User.class), any(), eq("/project/10/chat"));
         verify(notificationService).createNotification(eq(bob), any(), eq("/project/10/chat"));

@@ -29,6 +29,13 @@ export interface Label {
   color?: string;
 }
 
+// Dependency link between tasks
+export interface Dependency {
+  id: number;
+  title: string;
+  relation: string; // BLOCKED_BY | BLOCKS | RELATES_TO
+}
+
 // Task interface matching backend response
 export interface Task {
   id: number;
@@ -51,7 +58,14 @@ export interface Task {
   projectId?: number;
   sprintId?: number;
   labels?: Label[];
+  labelId?: number;        // single label ID (one label per task per SRS)
+  milestoneId?: number;    // milestone ID (new feature — may be null)
+  milestoneName?: string;  // milestone name for display (backend DTO)
+  milestoneTitle?: string; // legacy alias for older mapped surfaces
+  dependencies?: Dependency[];
   subtasks?: Subtask[];
+  commentCount?: number;     // number of comments on this task
+  attachmentCount?: number;  // number of attachments on this task
 }
 
 // Subtask interface
@@ -61,11 +75,20 @@ export interface Subtask {
   status: string;
 }
 
-// Kanban column definition
+// Kanban column definition (runtime/display)
 export interface KanbanColumn {
   status: string;
   title: string;
   tasks: Task[];
+}
+
+// Kanban column config (from backend, includes DB id, color, wipLimit)
+export interface KanbanColumnConfig {
+  id: number;
+  status: string;
+  title: string;
+  color: string;
+  wipLimit: number; // 0 = unlimited
 }
 
 // Drag item payload
@@ -80,3 +103,4 @@ export interface DateFilter {
   startDate: Date | null;
   endDate: Date | null;
 }
+

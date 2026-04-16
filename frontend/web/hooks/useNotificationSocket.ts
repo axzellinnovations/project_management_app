@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import SockJS from 'sockjs-client';
 import { CompatClient, Stomp } from '@stomp/stompjs';
 
 interface UseNotificationSocketOptions {
@@ -17,7 +16,8 @@ export default function useNotificationSocket({
     if (!enabled || !token) return;
 
     const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
-    const client: CompatClient = Stomp.over(() => new SockJS(`${backendUrl}/ws`));
+    const wsUrl = backendUrl.replace(/^http/, 'ws');
+    const client: CompatClient = Stomp.client(`${wsUrl}/ws-native`);
     client.debug = () => {};
 
     client.connect(

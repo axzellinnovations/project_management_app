@@ -8,6 +8,7 @@ import { useParams, usePathname, useSearchParams, useRouter } from 'next/navigat
 import { useNavigation } from '@/lib/navigation-context';
 import { Menu, Plus } from 'lucide-react';
 import * as projectsApi from '@/services/projects-service';
+import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
 
 import { NotificationBell } from './topbar/NotificationBell';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -28,20 +29,35 @@ const subscribeToBrowserStorage = (onStoreChange: () => void) => {
   };
 };
 
+const getScopedProjectValue = (key: 'currentProjectName' | 'currentProjectId' | 'currentProjectType') => {
+  if (typeof window === 'undefined') return null;
+  return sessionStorage.getItem(key) || localStorage.getItem(key);
+};
+
+const setScopedProjectValue = (key: 'currentProjectName' | 'currentProjectId' | 'currentProjectType', value: string) => {
+  sessionStorage.setItem(key, value);
+  localStorage.setItem(key, value);
+};
+
+const removeScopedProjectValue = (key: 'currentProjectName' | 'currentProjectId' | 'currentProjectType') => {
+  sessionStorage.removeItem(key);
+  localStorage.removeItem(key);
+};
+
 function TopBarContent() {
   const projectName = useSyncExternalStore(
     subscribeToBrowserStorage,
-    () => localStorage.getItem('currentProjectName') || 'Project Name',
+    () => getScopedProjectValue('currentProjectName') || 'Project Name',
     () => 'Project Name'
   );
   const storedProjectId = useSyncExternalStore(
     subscribeToBrowserStorage,
-    () => localStorage.getItem('currentProjectId'),
+    () => getScopedProjectValue('currentProjectId'),
     () => null
   );
   const storedProjectType = useSyncExternalStore(
     subscribeToBrowserStorage,
-    () => localStorage.getItem('currentProjectType'),
+    () => getScopedProjectValue('currentProjectType'),
     () => null
   );
   const token = useSyncExternalStore<string | null>(
@@ -100,10 +116,9 @@ function TopBarContent() {
 
     base.push(
       { id: 'chats', label: 'Chats' },
-      { id: 'notifications', label: 'Notifications' },
       { id: 'milestones', label: 'Milestones' },
       { id: 'members', label: 'Members' },
-      { id: 'pages', label: 'Pages' },
+      { id: 'dms', label: 'DMS' },
       { id: 'list', label: 'List' }
     );
 
@@ -122,35 +137,58 @@ function TopBarContent() {
     if (pathname.startsWith('/workload')) return 'workload';
     if (pathname.startsWith('/project/') && pathname.includes('/chat')) return 'chats';
     if (pathname.startsWith('/members')) return 'members';
-    if (pathname.startsWith('/pages')) return 'pages';
+    if (pathname.startsWith('/pages')) return 'dms';
     return 'summary';
   }, [pathname]);
 
   useEffect(() => {
-    if (projectId && localStorage.getItem('currentProjectId') !== projectId) {
-      localStorage.setItem('currentProjectId', projectId);
-    }
-
-    if (storedProjectType) {
+    const storedId = getScopedProjectValue('currentProjectId');
+    if (projectId && storedId !== projectId) {
+      // Project changed — clear stale type immediately so tabs don't route wrong
+      setScopedProjectValue('currentProjectId', projectId);
+      removeScopedProjectValue('currentProjectType');
+      setProjectType(null);
+    } else if (storedProjectType) {
+      // Same project — safe to use the cached type
       setProjectType(storedProjectType);
     }
 
+    let cancelled = false;
     const fetchProjectStatus = async () => {
       if (!projectId) { setIsFavorite(false); return; }
+
+      // Check localStorage cache first (TTL: 2 min) to avoid re-fetches on tab switches
+      const cacheKey = buildSessionCacheKey('topbar-project', [projectId]);
+      if (cacheKey) {
+        const cached = getSessionCache<{ isFavorite: boolean; type: string; name: string }>(cacheKey);
+        if (cached.data) {
+          setIsFavorite(cached.data.isFavorite);
+          setProjectType(cached.data.type);
+          return;
+        }
+      }
+
       try {
         const projectData = await projectsApi.fetchProjectDetails(projectId);
+        if (cancelled) return;
         const resolvedProjectType = projectData?.type || 'KANBAN';
-        setIsFavorite(Boolean(projectData?.isFavorite));
+        const isFav = Boolean(projectData?.isFavorite);
+        setIsFavorite(isFav);
         setProjectType(resolvedProjectType);
-        localStorage.setItem('currentProjectType', resolvedProjectType);
+        setScopedProjectValue('currentProjectType', resolvedProjectType);
 
-        if (projectData?.name && localStorage.getItem('currentProjectName') !== projectData.name) {
-          localStorage.setItem('currentProjectName', projectData.name);
+        if (projectData?.name && getScopedProjectValue('currentProjectName') !== projectData.name) {
+          setScopedProjectValue('currentProjectName', projectData.name);
           window.dispatchEvent(new Event('storage'));
+        }
+
+        if (cacheKey && projectData?.name) {
+          setSessionCache(cacheKey, { isFavorite: isFav, type: resolvedProjectType, name: projectData.name }, 2 * 60_000);
         }
       } catch { setIsFavorite(false); }
     };
     void fetchProjectStatus();
+    return () => { cancelled = true; };
   }, [projectId, storedProjectType]);
 
   // Close project dropdown on outside click
@@ -186,8 +224,10 @@ function TopBarContent() {
   };
 
   const handleSwitchProject = (proj: { id: number; name: string }) => {
-    localStorage.setItem('currentProjectName', proj.name);
-    localStorage.setItem('currentProjectId', proj.id.toString());
+    setScopedProjectValue('currentProjectName', proj.name);
+    setScopedProjectValue('currentProjectId', proj.id.toString());
+    removeScopedProjectValue('currentProjectType');
+    setProjectType(null);
     window.dispatchEvent(new CustomEvent('planora:project-accessed'));
     window.dispatchEvent(new Event('storage'));
     setProjectsOpen(false);
@@ -208,20 +248,20 @@ function TopBarContent() {
       case 'calendar': return withProjectId('/calendar');
       case 'burndown': return withProjectId('/burndown');
       case 'chats': return projectId ? `/project/${projectId}/chat` : '/dashboard';
-      case 'notifications': return projectId ? `/notifications?projectId=${projectId}` : '/notifications';
       case 'milestones': return withProjectId('/milestones');
       case 'workload': return withProjectId('/workload');
       case 'members': return projectId ? `/members/${projectId}` : '/members';
-      case 'pages': return withProjectId('/pages');
+      case 'dms': return withProjectId('/pages');
       default: return projectId ? `/summary/${projectId}` : '/dashboard';
     }
   };
 
   const isProjectPage = useMemo(() => {
+    if (pathname.startsWith('/dashboard/notifications')) return false;
+    if (pathname.startsWith('/inbox')) return false;
+    if (pathname.startsWith('/project/') && pathname.includes('/chat')) return true;
+
     const hasProjectContext = Boolean(projectId);
-    if (pathname.startsWith('/project/') && pathname.includes('/chat')) {
-      return true;
-    }
     const projectScopedPaths = [
       '/summary',
       '/timeline',
@@ -264,7 +304,7 @@ function TopBarContent() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('planora:sidebar:toggle'))}
-            className="lg:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors"
+            className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors"
             aria-label="Toggle Sidebar"
           >
             <Menu size={20} />
@@ -419,7 +459,7 @@ function TopBarContent() {
 
           <div className="flex items-center gap-4 max-sm:gap-3 shrink-0">
             <NotificationBell />
-            <div className="flex">
+            <div className="flex items-center">
               {profileAvatar}
             </div>
           </div>

@@ -10,7 +10,7 @@ export default function ProfileLayout({
 }) {
     return (
         <SidebarLayout>
-            <main className="flex-1 overflow-y-auto bg-[#F7F8FA]">
+            <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-[#F7F8FA]">
                 {children}
             </main>
         </SidebarLayout>

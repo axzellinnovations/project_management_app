@@ -170,14 +170,18 @@ describe('MembersPageClient', () => {
 
     await screen.findByText('Bob Member');
 
-    const roleSelect = screen.getAllByDisplayValue('MEMBER')[0];
+    const roleSelect = screen
+      .getAllByRole('combobox')
+      .find((element) => (element as HTMLSelectElement).value === 'MEMBER');
 
-    expect(within(roleSelect).queryByRole('option', { name: 'OWNER' })).not.toBeInTheDocument();
-    expect(within(roleSelect).queryByRole('option', { name: 'ADMIN' })).not.toBeInTheDocument();
-    expect(within(roleSelect).getByRole('option', { name: 'MEMBER' })).toBeInTheDocument();
-    expect(within(roleSelect).getByRole('option', { name: 'VIEWER' })).toBeInTheDocument();
+    expect(roleSelect).toBeDefined();
 
-    fireEvent.change(roleSelect, { target: { value: 'VIEWER' } });
+    expect(within(roleSelect as HTMLElement).queryByRole('option', { name: 'Owner' })).not.toBeInTheDocument();
+    expect(within(roleSelect as HTMLElement).queryByRole('option', { name: 'Admin' })).not.toBeInTheDocument();
+    expect(within(roleSelect as HTMLElement).getByRole('option', { name: 'Member' })).toBeInTheDocument();
+    expect(within(roleSelect as HTMLElement).getByRole('option', { name: 'Viewer' })).toBeInTheDocument();
+
+    fireEvent.change(roleSelect as HTMLElement, { target: { value: 'VIEWER' } });
 
     await waitFor(() => {
       expect(mockedAxios.patch).toHaveBeenCalledWith('/api/projects/7/members/202/role', {

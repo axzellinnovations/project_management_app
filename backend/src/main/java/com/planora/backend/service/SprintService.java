@@ -91,6 +91,18 @@ public class SprintService {
                 .build();
     }
 
+    private SprintResponseDTO toDTO(Object[] row) {
+        return SprintResponseDTO.builder()
+                .id((Long) row[0])
+                .projectId((Long) row[1])
+                .name((String) row[2])
+                .startDate((LocalDate) row[3])
+                .endDate((LocalDate) row[4])
+                .status(row[5] != null ? ((SprintStatus) row[5]).name() : null)
+                .goal((String) row[6])
+                .build();
+    }
+
     // ---------- Sprint APIs ----------
 
     @Transactional
@@ -119,8 +131,10 @@ public class SprintService {
     @Transactional(readOnly = true)
     public List<SprintResponseDTO> getSprintsByProject(Long projectId, Long currentUserId) {
         requireViewBoard(projectId, currentUserId);
-        return sprintRepository.findByProject_Id(projectId)
-                .stream().map(this::toDTO).collect(Collectors.toList());
+        return sprintRepository.findSprintRowsByProjectId(projectId)
+                .stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)

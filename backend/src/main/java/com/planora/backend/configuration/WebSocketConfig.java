@@ -17,8 +17,8 @@ import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
 import com.planora.backend.model.User;
-import com.planora.backend.repository.UserRepository;
 import com.planora.backend.service.JWTService;
+import com.planora.backend.service.UserCacheService;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -27,11 +27,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private static final Logger log = LoggerFactory.getLogger(WebSocketConfig.class);
 
     private final JWTService jwtService;
-    private final UserRepository userRepository;
+    private final UserCacheService userCacheService;
 
-    public WebSocketConfig(JWTService jwtService, UserRepository userRepository) {
+    public WebSocketConfig(JWTService jwtService, UserCacheService userCacheService) {
         this.jwtService = jwtService;
-        this.userRepository = userRepository;
+        this.userCacheService = userCacheService;
     }
 
     @Override
@@ -39,6 +39,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
+                
+        registry.addEndpoint("/ws-native")
+                .setAllowedOriginPatterns("*");
     }
 
     @Override
@@ -85,7 +88,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         log.info("[WebSocket] Extracted email from token: {}", email);
 
                         // Find user by email
-                        User user = userRepository.findByEmail(email);
+                        User user = userCacheService.resolveUserByEmailOrUsername(email);
                         
                         if (user == null) {
                             log.error("[WebSocket] User not found in database for email: {}", email);

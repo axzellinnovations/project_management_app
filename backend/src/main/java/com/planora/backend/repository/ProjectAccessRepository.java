@@ -13,5 +13,6 @@ public interface ProjectAccessRepository extends JpaRepository<ProjectAccess, Lo
     Optional<ProjectAccess> findByProject_IdAndUser_UserId(Long projectId, Long userId);
 
     // Returns the N most recently accessed projects for a user, newest first
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"project.team"})
     List<ProjectAccess> findByUser_UserIdOrderByLastAccessedAtDesc(Long userId, Pageable pageable);
 }

@@ -1,18 +1,30 @@
-﻿import { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import * as chatApi from '@/services/chat-service';
 import type { ChatRoom } from '@/app/(project)/project/[id]/chat/components/chat';
 import { normalizeRoom } from './chat-utils';
+import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
 
 export function useChatRooms(projectId: string) {
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
 
   const loadRooms = useCallback(async (): Promise<ChatRoom[]> => {
+    // Serve from cache immediately then revalidate
+    const cKey = buildSessionCacheKey('chat-rooms', [projectId]);
+    if (cKey) {
+      const cached = getSessionCache<ChatRoom[]>(cKey, { allowStale: true });
+      if (cached.data && cached.data.length > 0) {
+        setRooms(cached.data);
+        if (!cached.isStale) return cached.data;
+      }
+    }
     try {
       const raw = await chatApi.fetchRooms(projectId);
       const normalized = raw
         .map((r) => normalizeRoom(r as unknown as Record<string, unknown>))
         .filter(r => Number.isFinite(r.id));
       setRooms(normalized);
+      const cKey2 = buildSessionCacheKey('chat-rooms', [projectId]);
+      if (cKey2) setSessionCache(cKey2, normalized, 30 * 60_000);
       return normalized;
     } catch (err) {
       console.error('Failed to load rooms', err);
@@ -54,7 +66,6 @@ export function useChatRooms(projectId: string) {
 
   const deleteRoom = useCallback(
     async (roomId: number) => {
-      if (!window.confirm('Delete this group chat?')) return;
       try {
         await chatApi.deleteRoomRest(projectId, roomId);
         await loadRooms();

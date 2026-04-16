@@ -130,12 +130,12 @@ export const ChatInput = ({
 
   return (
     <div
-      className="relative flex-shrink-0 border-t border-gray-100/80 bg-white/95 px-3 sm:px-4 py-3 z-30 shadow-[0_-6px_18px_rgba(0,0,0,0.04)] supports-[backdrop-filter]:backdrop-blur"
+      className="relative flex-shrink-0 border-t border-gray-100/80 bg-white/95 px-2 sm:px-4 py-3 mb-[calc(3.75rem+env(safe-area-inset-bottom,0px))] md:mb-0 z-30 shadow-[0_-6px_18px_rgba(0,0,0,0.04)] supports-[backdrop-filter]:backdrop-blur"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       {/* Mention dropdown */}
       {showMentionList && filteredMentionCandidates.length > 0 && (
-        <div className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-gray-100 rounded-2xl shadow-lg overflow-hidden z-20">
+        <div className="absolute bottom-full left-2 right-2 sm:left-4 sm:right-4 mb-2 bg-white border border-gray-100 rounded-2xl shadow-lg overflow-hidden z-20">
           <div className="px-3 pt-2.5 pb-1 text-[10.5px] font-bold text-gray-400 uppercase tracking-wider">
             Mention a teammate
           </div>
@@ -145,7 +145,7 @@ export const ChatInput = ({
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => applyMention(candidate)}
-              className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 transition-colors text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 min-h-[44px] hover:bg-gray-50 transition-colors text-left"
               aria-label={`Mention ${candidate}`}
             >
               <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
@@ -237,7 +237,7 @@ export const ChatInput = ({
           placeholder={placeholder || 'Type a message…'}
           disabled={disabled}
           rows={1}
-          className="flex-1 bg-transparent text-[14px] sm:text-[13.5px] text-gray-800 placeholder:text-gray-400 outline-none resize-none leading-relaxed py-1 max-h-32 overflow-y-auto"
+          className="flex-1 bg-transparent text-[16px] sm:text-[14px] text-gray-800 placeholder:text-gray-400 outline-none resize-none leading-relaxed py-1 max-h-32 overflow-y-auto"
           aria-label="Message input"
           aria-multiline="true"
           aria-autocomplete="list"
@@ -262,7 +262,7 @@ export const ChatInput = ({
 
       {/* Hint */}
       {!disabled && (
-        <p className="text-[10px] text-gray-400 text-center mt-1.5">
+        <p className="hidden sm:block text-[10px] text-gray-400 text-center mt-1.5">
           <span className="font-medium">Enter</span> to send · <span className="font-medium">Shift+Enter</span> for new line
         </p>
       )}

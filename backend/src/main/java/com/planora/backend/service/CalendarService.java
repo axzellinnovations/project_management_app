@@ -57,8 +57,8 @@ public class CalendarService {
 
         List<CalendarEventDTO> events = new ArrayList<>();
 
-        // --- TASKS ---
-        List<Task> tasks = taskRepository.findByProjectId(projectId);
+        // --- TASKS --- (use WithScalars to eagerly load assignee.user / reporter.user)
+        List<Task> tasks = taskRepository.findByProjectIdWithScalars(projectId);
         for (Task task : tasks) {
             if (task.getDueDate() == null && task.getStartDate() == null) {
                 continue;
@@ -74,8 +74,9 @@ public class CalendarService {
             event.setStartDate(task.getStartDate());
             event.setEndDate(task.getDueDate());
             event.setDueDate(task.getDueDate());
-            event.setHasComment(!task.getComments().isEmpty());
-            event.setHasAttachment(task.getAttachments() != null && !task.getAttachments().isEmpty());
+            // Avoid lazy-loading comments/attachments collections - not critical for calendar view
+            event.setHasComment(false);
+            event.setHasAttachment(false);
 
             if (task.getAssignee() != null && task.getAssignee().getUser() != null) {
                 event.setAssignee(task.getAssignee().getUser().getFullName());
