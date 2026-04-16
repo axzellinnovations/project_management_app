@@ -283,16 +283,16 @@ export default function ProductBacklogSection({
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ type: "spring", stiffness: 500, damping: 30, mass: 1 }}
                     draggable
-                    onDragStart={(e) => {
+                    onDragStart={(e: any) => {
                       e.dataTransfer.setData('text/plain', String(task.id));
                       (e.target as HTMLElement).style.opacity = '0.5';
                     }}
-                    onDragEnd={(e) => {
+                    onDragEnd={(e: any) => {
                       (e.target as HTMLElement).style.opacity = '1';
                       setDropIndex(null);
                     }}
-                    onDragOver={(e) => { e.preventDefault(); setDropIndex(index); }}
-                    onDrop={(e) => handleDropAtIndex(e, index)}
+                    onDragOver={(e: any) => { e.preventDefault(); setDropIndex(index); }}
+                    onDrop={(e: any) => handleDropAtIndex(e, index)}
                     className="rounded-lg overflow-hidden border border-[#EAECF0]"
                   >
                     <TaskRow

@@ -160,19 +160,19 @@ function BacklogCard({ sprint, projectId, projectKey, currentUserRole, onDropTas
                       exit={{ opacity: 0, scale: 0.95 }}
                       transition={{ type: "spring", stiffness: 500, damping: 30, mass: 1 }}
                       draggable
-                      onDragStart={(e) => {
+                      onDragStart={(e: any) => {
                         e.dataTransfer.setData('text/plain', String(task.id));
                         (e.target as HTMLElement).style.opacity = '0.5';
                       }}
-                      onDragEnd={(e) => {
+                      onDragEnd={(e: any) => {
                         (e.target as HTMLElement).style.opacity = '1';
                         setDropIndex(null);
                       }}
-                      onDragOver={(e) => { 
+                      onDragOver={(e: any) => { 
                         e.preventDefault(); 
                         setDropIndex(index); 
                       }}
-                      onDrop={(e) => handleRowDrop(e, index)}
+                      onDrop={(e: any) => handleRowDrop(e, index)}
                       className="rounded-lg overflow-hidden border border-[#EAECF0]"
                     >
                       <TaskRow
