@@ -14,6 +14,7 @@ import com.planora.backend.model.TeamMember;
 public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
 
     // Find a specific user in a team (used for permission checks)
+    @EntityGraph(attributePaths = {"user", "team"})
     Optional<TeamMember> findByTeamIdAndUserUserId(Long teamId, Long userId);
 
     @EntityGraph(attributePaths = {"team.owner", "team", "user"})

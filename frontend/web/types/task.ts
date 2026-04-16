@@ -49,6 +49,7 @@ export interface TaskAttachmentSummary {
 
 export interface Task {
   id: number;
+  projectTaskNumber?: number;
   title: string;
   description?: string;
   status: string;
@@ -123,6 +124,7 @@ export interface TaskData {
 export interface TaskItem {
   id: number;
   taskNo: number;
+  projectTaskNumber?: number;
   title: string;
   storyPoints: number;
   selected: boolean;

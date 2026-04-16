@@ -44,6 +44,7 @@ public class SecurityConfig {
             "/api/auth/reset",
             "/api/auth/refresh",
             "/ws/**",
+            "/ws-native/**",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html"

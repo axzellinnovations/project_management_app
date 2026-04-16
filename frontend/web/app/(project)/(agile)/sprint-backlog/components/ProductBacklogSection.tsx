@@ -5,7 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   CornerDownLeft,
-  Rocket, Trash2,
+  Rocket,
 } from 'lucide-react';
 import CreateTaskModal, { type CreateTaskData } from '@/components/shared/CreateTaskModal';
 import type { TaskItem } from '@/types';
@@ -13,6 +13,8 @@ import api from '@/lib/axios';
 import { toast } from '@/components/ui';
 import TaskRow from './TaskRow';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
+import ConfirmModal from './backlog-card/ConfirmModal';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface TeamMemberInfo {
   id: number;
@@ -33,6 +35,7 @@ interface ProductBacklogSectionProps {
   onDropTask: (taskId: number, targetIndex?: number) => void;
   onAssignTask: (taskId: number, assigneeName: string, assigneePhotoUrl: string | null) => void;
   onStatusChange: (taskId: number, status: string) => void;
+  onDueDateChange?: (taskId: number, dueDate: string) => Promise<void>;
   onRenameTask?: (taskId: number, title: string) => void;
   externalShowCreateModal?: boolean;
   onCloseCreateModal?: () => void;
@@ -45,7 +48,7 @@ interface ProductBacklogSectionProps {
 export default function ProductBacklogSection({
   tasks,
   projectId,
-  projectKey: _projectKey,
+  projectKey,
   sprintCount: _sprintCount,
   currentUserRole,
   onToggleTask: _onToggleTask,
@@ -56,6 +59,7 @@ export default function ProductBacklogSection({
   onDropTask,
   onAssignTask,
   onStatusChange,
+  onDueDateChange,
   onRenameTask,
   externalShowCreateModal,
   onCloseCreateModal,
@@ -190,6 +194,7 @@ export default function ProductBacklogSection({
 
   const handleDropAtIndex = (e: React.DragEvent, index: number) => {
     e.preventDefault();
+    e.stopPropagation();
     setDropIndex(null);
     const taskId = Number(e.dataTransfer.getData('text/plain'));
     if (taskId) {
@@ -258,38 +263,76 @@ export default function ProductBacklogSection({
 
       {isOpen && (
         <div>
-<div className="flex flex-col gap-[5px]" onDragOver={(e) => { e.preventDefault(); setDropIndex(tasks.length); }} onDrop={handleDrop}>
-            {tasks.map((task, index) => (
-              <div
-                key={task.id}
-                draggable
-                onDragStart={(e) => e.dataTransfer.setData('text/plain', String(task.id))}
-                onDragOver={(e) => { e.preventDefault(); setDropIndex(index); }}
-                onDrop={(e) => handleDropAtIndex(e, index)}
-                className={`rounded-lg overflow-hidden border ${dropIndex === index ? 'border-[#155DFC]' : 'border-[#EAECF0]'}`}
-              >
-                <TaskRow
-                  task={{ ...task, status: task.status ?? 'TODO', labels: labelCache[task.id] ?? task.labels ?? [] }}
-                  teamMembers={teamMembers}
-                  loadingMembers={loadingMembers}
-                  canDelete={canDeleteTask}
-                  showCheckbox={false}
-                  onStatusChange={(id, status) => onStatusChange(id, status)}
-                  onStoryPointsChange={onStoryPointsChange}
-                  onRenameTask={handleRenameTask}
-                  onAssignTask={handleAssignTask}
-                  onDeleteTask={(id) => setTaskToDeleteId(id)}
-                  onOpenTask={(id) => setSelectedTaskId(id)}
-                  projectLabels={projectLabels}
-                  onAddLabel={handleAddLabel}
-                  onRemoveLabel={handleRemoveLabel}
-                  onCreateLabel={onCreateLabel}
-                  onMoveUp={() => onDropTask(task.id, Math.max(0, index - 1))}
-                  onMoveDown={() => onDropTask(task.id, Math.min(tasks.length, index + 1))}
-                />
-              </div>
-            ))}
-          </div>
+          <motion.div layout className="flex flex-col gap-[5px]" onDragOver={(e) => { e.preventDefault(); setDropIndex(tasks.length); }} onDrop={handleDrop}>
+            <AnimatePresence initial={false}>
+              {tasks.map((task, index) => (
+                <div key={task.id}>
+                  {dropIndex === index && (
+                    <motion.div
+                      layout
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 44, opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="rounded-lg border-2 border-dashed border-[#155DFC] bg-[#155DFC]/5 mb-[5px]"
+                    />
+                  )}
+                  <motion.div
+                    layout
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 30, mass: 1 }}
+                    className="rounded-lg overflow-hidden border border-[#EAECF0]"
+                  >
+                    <div
+                      draggable
+                      onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
+                        e.dataTransfer.setData('text/plain', String(task.id));
+                        (e.target as HTMLElement).style.opacity = '0.5';
+                      }}
+                      onDragEnd={(e: React.DragEvent<HTMLDivElement>) => {
+                        (e.target as HTMLElement).style.opacity = '1';
+                        setDropIndex(null);
+                      }}
+                      onDragOver={(e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); setDropIndex(index); }}
+                      onDrop={(e: React.DragEvent<HTMLDivElement>) => handleDropAtIndex(e, index)}
+                    >
+                      <TaskRow
+                        task={{ ...task, status: task.status ?? 'TODO', labels: labelCache[task.id] ?? task.labels ?? [] }}
+                        teamMembers={teamMembers}
+                        loadingMembers={loadingMembers}
+                        canDelete={canDeleteTask}
+                        showCheckbox={false}
+                        onStatusChange={(id, status) => onStatusChange(id, status)}
+                        onStoryPointsChange={onStoryPointsChange}
+                        onRenameTask={handleRenameTask}
+                        onAssignTask={handleAssignTask}
+                        onDueDateChange={(taskId, dueDate) => { void onDueDateChange?.(taskId, dueDate); }}
+                        onDeleteTask={(id) => setTaskToDeleteId(id)}
+                        onOpenTask={(id) => setSelectedTaskId(id)}
+                      projectLabels={projectLabels}
+                      onAddLabel={handleAddLabel}
+                      onRemoveLabel={handleRemoveLabel}
+                      onCreateLabel={onCreateLabel}
+                      onMoveUp={() => onDropTask(task.id, Math.max(0, index - 1))}
+                      onMoveDown={() => onDropTask(task.id, Math.min(tasks.length, index + 2))}
+                      projectKey={projectKey}
+                    />
+                  </div>
+                </motion.div>
+                </div>
+              ))}
+            </AnimatePresence>
+            {dropIndex === tasks.length && tasks.length > 0 && (
+              <motion.div
+                layout
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 44, opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="rounded-lg border-2 border-dashed border-[#155DFC] bg-[#155DFC]/5"
+              />
+            )}
+          </motion.div>
 
 
            {/* ── Inline Create Task ── */}
@@ -368,70 +411,4 @@ export default function ProductBacklogSection({
   );
 }
 
-// ── Reusable Confirmation Modal ──────────────────────────────────────────────
-interface ConfirmModalProps {
-  open: boolean;
-  variant: 'danger' | 'warning' | 'success';
-  title: string;
-  message: string;
-  confirmLabel: string;
-  cancelLabel?: string;
-  loading?: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-}
-
-function ConfirmModal({
-  open,
-  variant,
-  title,
-  message,
-  confirmLabel,
-  cancelLabel = 'Cancel',
-  loading = false,
-  onConfirm,
-  onCancel,
-}: ConfirmModalProps) {
-  if (!open) return null;
-
-  const iconColor =
-    variant === 'danger' ? 'bg-red-50 text-red-600' :
-      variant === 'warning' ? 'bg-amber-50 text-amber-600' :
-        'bg-emerald-50 text-emerald-600';
-
-  const confirmBtnColor =
-    variant === 'danger' ? 'bg-[#D92D20] hover:bg-[#B42318]' :
-      variant === 'warning' ? 'bg-amber-600 hover:bg-amber-700' :
-        'bg-emerald-600 hover:bg-emerald-700';
-
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-[400px] rounded-2xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
-        <div className="mb-4 flex flex-col items-center text-center">
-          <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-full ${iconColor}`}>
-            <Trash2 size={28} />
-          </div>
-          <h3 className="text-xl font-bold text-[#101828]">{title}</h3>
-          <p className="mt-2 text-sm text-[#667085]">{message}</p>
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            disabled={loading}
-            className="flex-1 rounded-xl border border-[#D0D5DD] bg-white px-4 py-2.5 text-sm font-bold text-[#344054] hover:bg-[#F9FAFB] transition-all disabled:opacity-50"
-          >
-            {cancelLabel}
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition-all shadow-sm disabled:opacity-50 ${confirmBtnColor}`}
-          >
-            {loading ? 'Processing...' : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ConfirmModal imported from shared module
