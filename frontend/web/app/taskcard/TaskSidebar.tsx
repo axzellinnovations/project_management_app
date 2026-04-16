@@ -78,7 +78,12 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
   const labelMenuRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-    setSelectedLabelIds(labelIds);
+    setSelectedLabelIds((prev) => {
+      if (prev.length === labelIds.length && prev.every((id, idx) => id === labelIds[idx])) {
+        return prev;
+      }
+      return labelIds;
+    });
   }, [labelIds]);
 
   React.useEffect(() => {
