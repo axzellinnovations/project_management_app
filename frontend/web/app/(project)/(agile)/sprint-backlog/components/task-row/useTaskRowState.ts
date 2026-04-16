@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect } from 'react';
 import type { TaskRowTask, TaskRowProps } from '../TaskRow';
 import { classifyDue, STATUS_LABELS, STATUS_COLORS, STATUS_BORDER, PRIORITY_STYLES, type TaskStatus } from './TaskRowConstants';
 
@@ -7,7 +7,7 @@ import { classifyDue, STATUS_LABELS, STATUS_COLORS, STATUS_BORDER, PRIORITY_STYL
 export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'canDelete' | 'onDeleteTask' | 'onRenameTask' | 'onAddLabel' | 'onRemoveLabel' | 'onCreateLabel' | 'extraStatuses' | 'projectLabels'>) {
   const { 
     canDelete, onDeleteTask, onRenameTask, onAddLabel, 
-    onRemoveLabel, onCreateLabel, extraStatuses, projectLabels 
+    onRemoveLabel, onCreateLabel, extraStatuses, projectLabels: _projectLabels 
   } = props;
 
   const [statusOpen, setStatusOpen] = useState(false);
@@ -17,10 +17,12 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
   const [renameValue, setRenameValue] = useState('');
   const [labelInput, setLabelInput] = useState('');
   const [creatingLabel, setCreatingLabel] = useState(false);
-  const [statusRect, setStatusRect] = useState<DOMRect | null>(null);
-  const [assignRect, setAssignRect] = useState<DOMRect | null>(null);
-  const [labelRect, setLabelRect] = useState<DOMRect | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+
+  // Layout positions to avoid ref access during render
+  const [statusPosition, setStatusPosition] = useState({ top: 0, left: 0 });
+  const [assignPosition, setAssignPosition] = useState({ top: 0, left: 0 });
+  const [labelPosition, setLabelPosition] = useState({ top: 0, left: 0 });
 
   const statusRef = useRef<HTMLDivElement>(null);
   const assignRef = useRef<HTMLDivElement>(null);
@@ -29,6 +31,37 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
   const statusPortalRef = useRef<HTMLDivElement>(null);
   const assignPortalRef = useRef<HTMLDivElement>(null);
   const labelPortalRef = useRef<HTMLDivElement>(null);
+
+  // Update layout positions when dropdowns open
+  useLayoutEffect(() => {
+    if (statusOpen && statusRef.current) {
+      const rect = statusRef.current.getBoundingClientRect();
+      setStatusPosition({
+        top: rect.bottom + (isMobile ? 8 : 4),
+        left: isMobile ? Math.min(rect.left, window.innerWidth - 180) : rect.left
+      });
+    }
+  }, [statusOpen, isMobile]);
+
+  useLayoutEffect(() => {
+    if (assignOpen && assignRef.current) {
+      const rect = assignRef.current.getBoundingClientRect();
+      setAssignPosition({
+        top: rect.bottom + 8,
+        left: isMobile ? Math.min(rect.left, window.innerWidth - 220) : Math.max(4, rect.right - 208)
+      });
+    }
+  }, [assignOpen, isMobile]);
+
+  useLayoutEffect(() => {
+    if (labelOpen && labelRef.current) {
+      const rect = labelRef.current.getBoundingClientRect();
+      setLabelPosition({
+        top: rect.bottom + 4,
+        left: Math.max(4, rect.right - 224)
+      });
+    }
+  }, [labelOpen]);
 
   // Touch logic
   const lastTapRef = useRef<number>(0);
@@ -105,7 +138,6 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
   const taskLabelIds = useMemo(() => new Set((task.labels ?? []).map((l) => l.id)), [task.labels]);
 
   const openLabel = useCallback(() => {
-    setLabelRect(labelRef.current?.getBoundingClientRect() ?? null);
     setLabelOpen(true);
   }, []);
 
@@ -133,12 +165,10 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
   }, [labelInput, creatingLabel, onCreateLabel, onAddLabel, task.id]);
 
   const openStatus = useCallback(() => {
-    if (statusRef.current) setStatusRect(statusRef.current.getBoundingClientRect());
     setStatusOpen((p) => !p);
   }, []);
 
   const openAssign = useCallback(() => {
-    if (assignRef.current) setAssignRect(assignRef.current.getBoundingClientRect());
     setAssignOpen((p) => !p);
   }, []);
 
@@ -168,7 +198,7 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
     renameValue, setRenameValue,
     labelInput, setLabelInput,
     creatingLabel,
-    statusRect, assignRect, labelRect,
+    statusPosition, assignPosition, labelPosition,
     isMobile,
     // Refs
     statusRef, assignRef, labelRef, dateRef,

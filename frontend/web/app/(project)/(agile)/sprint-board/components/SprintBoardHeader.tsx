@@ -44,7 +44,7 @@ export default function SprintBoardHeader({
   totalStoryPoints,
   overdueTasks,
   selectedCount,
-  onOpenShortcuts,
+  onOpenShortcuts: _onOpenShortcuts,
   isLoading
 }: SprintBoardHeaderProps) {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
