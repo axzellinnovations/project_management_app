@@ -4,7 +4,7 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SprintboardTask } from '../types';
-import { Calendar, GripVertical, MessageSquareText, Paperclip } from 'lucide-react';
+import { Calendar, GripVertical } from 'lucide-react';
 import AssigneeAvatar from '../../sprint-backlog/components/AssigneeAvatar';
 import { hexToLabelStyle } from '@/components/shared/LabelPicker';
 import { SprintTeamMemberOption } from '../api';

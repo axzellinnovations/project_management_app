@@ -88,9 +88,9 @@ export default function DesktopTaskRow(props: TaskRowProps) {
                 const now = Date.now();
                 if (state.lastTapRef.current > 0 && now - state.lastTapRef.current < 300) {
                   state.startRename(e);
-                  state.lastTapRef.current = 0;
+                  state.updateLastTap(0);
                 } else {
-                  state.lastTapRef.current = now;
+                  state.updateLastTap(now);
                   onOpenTask?.(task.id);
                 }
               }}

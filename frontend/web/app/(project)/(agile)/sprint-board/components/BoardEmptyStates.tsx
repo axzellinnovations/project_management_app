@@ -7,14 +7,13 @@ import { AlertCircle, CheckCircle2, Loader } from 'lucide-react';
 interface BoardEmptyStatesProps {
   type: 'missing-project' | 'loading-agile' | 'not-agile' | 'loading' | 'error' | 'no-sprint';
   error?: string | null;
-  projectIdStr?: string | null;
   onRetry?: () => void;
   onGoToBacklog?: () => void;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function BoardEmptyStates({ type, error, projectIdStr, onRetry, onGoToBacklog }: BoardEmptyStatesProps) {
+export default function BoardEmptyStates({ type, error, onRetry, onGoToBacklog }: BoardEmptyStatesProps) {
   if (type === 'missing-project') {
     return (
       <div className="flex h-screen bg-gray-50 items-center justify-center">

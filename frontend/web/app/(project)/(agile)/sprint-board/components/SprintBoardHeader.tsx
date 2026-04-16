@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, CheckCircle2, LayoutGrid, X, SlidersHorizontal, Sparkles, Keyboard, Users, ListChecks, ChevronDown } from 'lucide-react';
+import { Search, CheckCircle2, LayoutGrid, X, SlidersHorizontal, Users, ListChecks, ChevronDown } from 'lucide-react';
 import { SprintBoardFilters } from '../types';
 
 interface SprintSummary {

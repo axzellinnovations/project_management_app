@@ -13,7 +13,7 @@ import EditSprintModal from './backlog-card/EditSprintModal';
 import StartSprintModal from './backlog-card/StartSprintModal';
 import SprintHeader from './backlog-card/SprintHeader';
 import SprintGoalEditor from './backlog-card/SprintGoalEditor';
-import { useBacklogCardHandlers, type LocalSprintTask } from './backlog-card/useBacklogCardHandlers';
+import { useBacklogCardHandlers } from './backlog-card/useBacklogCardHandlers';
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -128,7 +128,6 @@ function BacklogCard({ sprint, projectId, projectKey, currentUserRole, onDropTas
           goalText={handlers.goalText}
           editingGoal={handlers.editingGoal}
           savingGoal={handlers.savingGoal}
-          sprintGoal={sprint.goal ?? ''}
           onGoalTextChange={handlers.setGoalText}
           onStartEditing={() => handlers.setEditingGoal(true)}
           onSave={handlers.saveGoal}
@@ -159,31 +158,33 @@ function BacklogCard({ sprint, projectId, projectKey, currentUserRole, onDropTas
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95 }}
                       transition={{ type: "spring", stiffness: 500, damping: 30, mass: 1 }}
-                      draggable
-                      onDragStart={(e: any) => {
-                        e.dataTransfer.setData('text/plain', String(task.id));
-                        (e.target as HTMLElement).style.opacity = '0.5';
-                      }}
-                      onDragEnd={(e: any) => {
-                        (e.target as HTMLElement).style.opacity = '1';
-                        setDropIndex(null);
-                      }}
-                      onDragOver={(e: any) => { 
-                        e.preventDefault(); 
-                        setDropIndex(index); 
-                      }}
-                      onDrop={(e: any) => handleRowDrop(e, index)}
                       className="rounded-lg overflow-hidden border border-[#EAECF0]"
                     >
-                      <TaskRow
-                        task={task}
-                        teamMembers={handlers.teamMembers}
-                        loadingMembers={handlers.loadingMembers}
-                        canDelete={canDeleteTask}
-                        showCheckbox
-                        onToggle={onToggleTask}
-                        onStatusChange={(id, status) => handlers.handleStatusChange(id, status as SprintStatus)}
-                        onStoryPointsChange={handlers.handleStoryPointChange}
+                      <div
+                        draggable
+                        onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
+                          e.dataTransfer.setData('text/plain', String(task.id));
+                          (e.target as HTMLElement).style.opacity = '0.5';
+                        }}
+                        onDragEnd={(e: React.DragEvent<HTMLDivElement>) => {
+                          (e.target as HTMLElement).style.opacity = '1';
+                          setDropIndex(null);
+                        }}
+                        onDragOver={(e: React.DragEvent<HTMLDivElement>) => { 
+                          e.preventDefault(); 
+                          setDropIndex(index); 
+                        }}
+                        onDrop={(e: React.DragEvent<HTMLDivElement>) => handleRowDrop(e, index)}
+                      >
+                        <TaskRow
+                          task={task}
+                          teamMembers={handlers.teamMembers}
+                          loadingMembers={handlers.loadingMembers}
+                          canDelete={canDeleteTask}
+                          showCheckbox
+                          onToggle={onToggleTask}
+                          onStatusChange={(id, status) => handlers.handleStatusChange(id, status as SprintStatus)}
+                          onStoryPointsChange={handlers.handleStoryPointChange}
                         onRenameTask={handlers.handleRenameTask}
                         onAssignTask={handlers.handleAssignTask}
                         onDueDateChange={handlers.handleDueDateChange}
@@ -198,9 +199,10 @@ function BacklogCard({ sprint, projectId, projectKey, currentUserRole, onDropTas
                         onMoveDown={() => onDropTask(task.id, sprint.id, Math.min(handlers.localTasks.length, index + 2))}
                         projectKey={projectKey}
                       />
-                    </motion.div>
-                  </React.Fragment>
-                ))
+                    </div>
+                  </motion.div>
+                </React.Fragment>
+              ))
               ) : (
                 <motion.div 
                   layout

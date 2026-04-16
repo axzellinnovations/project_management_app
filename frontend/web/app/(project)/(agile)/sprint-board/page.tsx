@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import axios from '@/lib/axios';
-import { toast } from '@/components/ui';
 import TaskCardModal from '@/app/taskcard/TaskCardModal';
 import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
 import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
@@ -150,7 +149,7 @@ export default function SprintBoardPage() {
     <div className="flex-1 flex flex-col min-w-0 h-full bg-[#F0F2F5] overflow-hidden">
       {loading ? <BoardEmptyStates type="loading" /> :
        error ? <BoardEmptyStates type="error" error={error} onRetry={forceRefresh} /> :
-       !sprintboard || !board ? <BoardEmptyStates type="no-sprint" projectIdStr={projectIdStr} onGoToBacklog={() => router.push(`/sprint-backlog?projectId=${projectIdStr}`)} /> : (
+       !sprintboard || !board ? <BoardEmptyStates type="no-sprint" onGoToBacklog={() => router.push(`/sprint-backlog?projectId=${projectIdStr}`)} /> : (
         <>
           <SprintBoardHeader
             sprintName={activeSprint?.sprintName || sprintboard.sprintName}

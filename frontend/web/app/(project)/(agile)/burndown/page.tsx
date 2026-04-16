@@ -7,7 +7,7 @@ import { TrendingDown, BarChart2 } from 'lucide-react';
 import api from '@/lib/axios';
 import { toast } from '@/components/ui';
 import BurndownChart, { type BurndownPoint } from './components/BurndownChart';
-import SprintSelector, { type BurndownSprint, getSprintStatus } from './components/SprintSelector';
+import SprintSelector, { type BurndownSprint } from './components/SprintSelector';
 import BurndownStatsGrid from './components/BurndownStatsGrid';
 import DateSetterPrompt from './components/DateSetterPrompt';
 

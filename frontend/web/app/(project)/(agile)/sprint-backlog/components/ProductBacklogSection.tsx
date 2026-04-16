@@ -282,32 +282,34 @@ export default function ProductBacklogSection({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ type: "spring", stiffness: 500, damping: 30, mass: 1 }}
-                    draggable
-                    onDragStart={(e: any) => {
-                      e.dataTransfer.setData('text/plain', String(task.id));
-                      (e.target as HTMLElement).style.opacity = '0.5';
-                    }}
-                    onDragEnd={(e: any) => {
-                      (e.target as HTMLElement).style.opacity = '1';
-                      setDropIndex(null);
-                    }}
-                    onDragOver={(e: any) => { e.preventDefault(); setDropIndex(index); }}
-                    onDrop={(e: any) => handleDropAtIndex(e, index)}
                     className="rounded-lg overflow-hidden border border-[#EAECF0]"
                   >
-                    <TaskRow
-                      task={{ ...task, status: task.status ?? 'TODO', labels: labelCache[task.id] ?? task.labels ?? [] }}
-                      teamMembers={teamMembers}
-                      loadingMembers={loadingMembers}
-                      canDelete={canDeleteTask}
-                      showCheckbox={false}
-                      onStatusChange={(id, status) => onStatusChange(id, status)}
-                      onStoryPointsChange={onStoryPointsChange}
-                      onRenameTask={handleRenameTask}
-                      onAssignTask={handleAssignTask}
-                      onDueDateChange={(taskId, dueDate) => { void onDueDateChange?.(taskId, dueDate); }}
-                      onDeleteTask={(id) => setTaskToDeleteId(id)}
-                      onOpenTask={(id) => setSelectedTaskId(id)}
+                    <div
+                      draggable
+                      onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
+                        e.dataTransfer.setData('text/plain', String(task.id));
+                        (e.target as HTMLElement).style.opacity = '0.5';
+                      }}
+                      onDragEnd={(e: React.DragEvent<HTMLDivElement>) => {
+                        (e.target as HTMLElement).style.opacity = '1';
+                        setDropIndex(null);
+                      }}
+                      onDragOver={(e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); setDropIndex(index); }}
+                      onDrop={(e: React.DragEvent<HTMLDivElement>) => handleDropAtIndex(e, index)}
+                    >
+                      <TaskRow
+                        task={{ ...task, status: task.status ?? 'TODO', labels: labelCache[task.id] ?? task.labels ?? [] }}
+                        teamMembers={teamMembers}
+                        loadingMembers={loadingMembers}
+                        canDelete={canDeleteTask}
+                        showCheckbox={false}
+                        onStatusChange={(id, status) => onStatusChange(id, status)}
+                        onStoryPointsChange={onStoryPointsChange}
+                        onRenameTask={handleRenameTask}
+                        onAssignTask={handleAssignTask}
+                        onDueDateChange={(taskId, dueDate) => { void onDueDateChange?.(taskId, dueDate); }}
+                        onDeleteTask={(id) => setTaskToDeleteId(id)}
+                        onOpenTask={(id) => setSelectedTaskId(id)}
                       projectLabels={projectLabels}
                       onAddLabel={handleAddLabel}
                       onRemoveLabel={handleRemoveLabel}
@@ -316,7 +318,8 @@ export default function ProductBacklogSection({
                       onMoveDown={() => onDropTask(task.id, Math.min(tasks.length, index + 2))}
                       projectKey={projectKey}
                     />
-                  </motion.div>
+                  </div>
+                </motion.div>
                 </div>
               ))}
             </AnimatePresence>

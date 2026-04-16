@@ -8,7 +8,6 @@ interface SprintGoalEditorProps {
   goalText: string;
   editingGoal: boolean;
   savingGoal: boolean;
-  sprintGoal: string;
   onGoalTextChange: (text: string) => void;
   onStartEditing: () => void;
   onSave: () => void;
@@ -21,7 +20,6 @@ export default function SprintGoalEditor({
   goalText,
   editingGoal,
   savingGoal,
-  sprintGoal,
   onGoalTextChange,
   onStartEditing,
   onSave,

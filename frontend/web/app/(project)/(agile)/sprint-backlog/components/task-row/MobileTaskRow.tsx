@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, Pencil, Trash2, UserPlus } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, Pencil, Trash2, UserPlus } from 'lucide-react';
 import AssigneeAvatar from '../AssigneeAvatar';
 import { hexToLabelStyle } from '@/components/shared/LabelPicker';
 import { STATUS_LABELS, type TaskStatus } from './TaskRowConstants';
@@ -14,7 +14,7 @@ import { formatDate } from './TaskRowConstants';
 
 export default function MobileTaskRow(props: TaskRowProps) {
   const {
-    task, teamMembers = [], onToggle, onStatusChange, onStoryPointsChange,
+    task, teamMembers = [], onStatusChange, onStoryPointsChange,
     onAssignTask, onDueDateChange, onDeleteTask, onMoveUp, onMoveDown, projectKey,
     canDelete = true, projectLabels = [], onAddLabel, onRemoveLabel, onCreateLabel, extraStatuses = [],
   } = props;
@@ -61,7 +61,7 @@ export default function MobileTaskRow(props: TaskRowProps) {
                 e.stopPropagation();
                 const now = Date.now();
                 if (now - state.lastTapRef.current < 300) state.startRename(e as unknown as React.MouseEvent);
-                state.lastTapRef.current = now;
+                state.updateLastTap(now);
               }}
               onDoubleClick={(e) => { e.stopPropagation(); state.startRename(e as unknown as React.MouseEvent); }}
               onTouchStart={state.onTouchStartInternal}

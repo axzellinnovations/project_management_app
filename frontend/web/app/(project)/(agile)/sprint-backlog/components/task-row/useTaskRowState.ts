@@ -5,6 +5,11 @@ import { classifyDue, STATUS_LABELS, STATUS_COLORS, STATUS_BORDER, PRIORITY_STYL
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'canDelete' | 'onDeleteTask' | 'onRenameTask' | 'onAddLabel' | 'onRemoveLabel' | 'onCreateLabel' | 'extraStatuses' | 'projectLabels'>) {
+  const { 
+    canDelete, onDeleteTask, onRenameTask, onAddLabel, 
+    onRemoveLabel, onCreateLabel, extraStatuses, projectLabels 
+  } = props;
+
   const [statusOpen, setStatusOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [labelOpen, setLabelOpen] = useState(false);
@@ -68,9 +73,9 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
     lastTapRef.current = now;
     if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
     longPressTimerRef.current = setTimeout(() => {
-      if (props.canDelete) props.onDeleteTask(task.id);
+      if (canDelete) onDeleteTask(task.id);
     }, 600);
-  }, [task.id, task.title, props.canDelete, props.onDeleteTask]);
+  }, [task.id, task.title, canDelete, onDeleteTask]);
 
   const onTouchEndInternal = useCallback(() => {
     if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
@@ -86,12 +91,16 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
     setRenaming(true);
   }, [task.title]);
 
+  const updateLastTap = useCallback((time: number) => {
+    lastTapRef.current = time;
+  }, []);
+
   const commitRename = useCallback(async () => {
     const trimmed = renameValue.trim();
     if (!trimmed || trimmed === task.title) { setRenaming(false); return; }
     setRenaming(false);
-    try { await props.onRenameTask(task.id, trimmed); } catch (error) { console.error('Failed to rename task:', error); }
-  }, [renameValue, task.id, task.title, props.onRenameTask]);
+    try { await onRenameTask(task.id, trimmed); } catch (error) { console.error('Failed to rename task:', error); }
+  }, [renameValue, task.id, task.title, onRenameTask]);
 
   const taskLabelIds = useMemo(() => new Set((task.labels ?? []).map((l) => l.id)), [task.labels]);
 
@@ -102,26 +111,26 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
 
   const handleLabelToggle = useCallback(async (label: { id: number; name: string; color?: string }) => {
     if (taskLabelIds.has(label.id)) {
-      await props.onRemoveLabel?.(task.id, label.id);
+      await onRemoveLabel?.(task.id, label.id);
     } else {
       if (taskLabelIds.size > 0) {
-        const existingId = task.labels![0].id;
-        await props.onRemoveLabel?.(task.id, existingId);
+        const existingId = (task.labels ?? [])[0].id;
+        await onRemoveLabel?.(task.id, existingId);
       }
-      await props.onAddLabel?.(task.id, label.id);
+      await onAddLabel?.(task.id, label.id);
     }
-  }, [task.id, task.labels, taskLabelIds, props.onAddLabel, props.onRemoveLabel]);
+  }, [task.id, task.labels, taskLabelIds, onAddLabel, onRemoveLabel]);
 
   const handleCreateLabelFromInput = useCallback(async () => {
     const trimmed = labelInput.trim();
-    if (!trimmed || creatingLabel || !props.onCreateLabel) return;
+    if (!trimmed || creatingLabel || !onCreateLabel) return;
     setCreatingLabel(true);
     try {
-      const newLabel = await props.onCreateLabel(trimmed);
-      await props.onAddLabel?.(task.id, newLabel.id);
+      const newLabel = await onCreateLabel(trimmed);
+      await onAddLabel?.(task.id, newLabel.id);
       setLabelInput('');
     } finally { setCreatingLabel(false); }
-  }, [labelInput, creatingLabel, props.onCreateLabel, props.onAddLabel, task.id]);
+  }, [labelInput, creatingLabel, onCreateLabel, onAddLabel, task.id]);
 
   const openStatus = useCallback(() => {
     if (statusRef.current) setStatusRect(statusRef.current.getBoundingClientRect());
@@ -143,7 +152,7 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
   const canonicalStatus = (task.status ?? 'TODO').toUpperCase() as TaskStatus;
   const isKnownStatus = canonicalStatus in STATUS_LABELS;
   const validStatus: TaskStatus = isKnownStatus ? canonicalStatus : 'TODO';
-  const displayLabel = isKnownStatus ? STATUS_LABELS[validStatus] : (props.extraStatuses?.find(s => s.value === canonicalStatus)?.label ?? task.status ?? 'TODO');
+  const displayLabel = isKnownStatus ? STATUS_LABELS[validStatus] : (extraStatuses?.find(s => s.value === canonicalStatus)?.label ?? task.status ?? 'TODO');
   const displayStyle = isKnownStatus ? STATUS_COLORS[validStatus] : 'bg-[#F2F4F7] text-[#344054]';
   const dueClass = classifyDue(task.dueDate, validStatus);
   const statusBorderColor = STATUS_BORDER[validStatus];
@@ -167,7 +176,7 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
     lastTapRef,
     // Handlers
     onTouchStartInternal, onTouchEndInternal, onTouchMoveInternal,
-    startRename, commitRename,
+    startRename, updateLastTap, commitRename,
     taskLabelIds, openLabel, handleLabelToggle, handleCreateLabelFromInput,
     openStatus, openAssign, openDatePicker,
     // Derived

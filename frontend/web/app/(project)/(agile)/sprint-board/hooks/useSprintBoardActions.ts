@@ -42,7 +42,6 @@ interface UseSprintBoardActionsArgs {
 
 export function useSprintBoardActions({
   projectIdStr,
-  allBoards,
   setAllBoards,
   selectedIdx,
   activeSprint,
