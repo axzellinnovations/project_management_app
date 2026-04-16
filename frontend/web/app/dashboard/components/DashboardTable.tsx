@@ -99,6 +99,7 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
     const router = useRouter();
     const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
     const [hoveredSlice, setHoveredSlice] = useState<string | null>(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const paginationKey = `${activeTab}::${searchQuery}`;
     const [paginationState, setPaginationState] = useState(() => ({ key: paginationKey, visibleCount: 5 }));
     const visibleCount = paginationState.key === paginationKey ? paginationState.visibleCount : 5;
@@ -121,7 +122,7 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
     }, [assignedData, setDashboardAssignedCount]);
 
     // Use SWR for active tab data
-    const { data: tabData, isLoading } = useSWR<DashboardItem[]>(
+    const { data: tabData, isLoading, mutate } = useSWR<DashboardItem[]>(
         activeTab ? `dashboardTab:${activeTab}` : null,
         async () => {
             if (activeTab === 'boards') {
@@ -158,16 +159,28 @@ export default function DashboardTable({ activeTab, searchQuery, setDashboardAss
     );
 
     const items: DashboardItem[] = tabData || [];
-    const loading = isLoading && !tabData;
+    const loading = (isLoading && !tabData) || isRefreshing;
 
     useEffect(() => {
+        let refreshTimeout: number | undefined;
+
         const onTaskUpdated = () => {
-            setLoading(true);
-            setTimeout(() => setLoading(false), 300);
+            setIsRefreshing(true);
+            void mutate();
+            if (refreshTimeout !== undefined) {
+                window.clearTimeout(refreshTimeout);
+            }
+            refreshTimeout = window.setTimeout(() => setIsRefreshing(false), 300);
         };
+
         window.addEventListener('planora:task-updated', onTaskUpdated);
-        return () => window.removeEventListener('planora:task-updated', onTaskUpdated);
-    }, []);
+        return () => {
+            window.removeEventListener('planora:task-updated', onTaskUpdated);
+            if (refreshTimeout !== undefined) {
+                window.clearTimeout(refreshTimeout);
+            }
+        };
+    }, [mutate]);
 
     const filteredItems = items.filter(item => {
         if (item.type === 'TASK' && item.status === 'DONE') return false;
