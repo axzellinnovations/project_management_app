@@ -11,6 +11,7 @@ import java.util.List;
 @Data
 public class TaskResponseDTO {
     private Long id;
+    private Long projectTaskNumber;
     private String title;
     private String description;
     private String priority;

@@ -14,7 +14,7 @@ import com.planora.backend.model.Task;
 
 @Repository
 public interface TaskRepository extends JpaRepository<Task, Long> {
-    @Query("SELECT DISTINCT t FROM Task t " +
+    @Query("SELECT t FROM Task t " +
            "LEFT JOIN FETCH t.project p " +
            "LEFT JOIN FETCH p.team pt " +
            "LEFT JOIN FETCH t.sprint " +
@@ -24,7 +24,11 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
            "LEFT JOIN FETCH r.user " +
            "LEFT JOIN FETCH t.milestone " +
            "LEFT JOIN FETCH t.lastModifiedBy " +
-           "WHERE t.project.id = :projectId")
+           "WHERE t.project.id = :projectId " +
+           "ORDER BY " +
+           "CASE WHEN t.sprint IS NULL THEN 0 ELSE 1 END, " +
+           "CASE WHEN t.sprint IS NULL THEN t.backlogPosition ELSE t.sprintPosition END, " +
+           "t.id")
     List<Task> findByProjectIdWithScalars(@Param("projectId") Long projectId);
 
     @EntityGraph(attributePaths = {"labels", "assignees", "assignees.user", "subTasks", "attachments"})
@@ -116,7 +120,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     java.util.Optional<Task> findByIdWithDetails(@Param("taskId") Long taskId);
 
     // Server-side filtered tasks for a project
-    @Query("SELECT DISTINCT t FROM Task t " +
+    @Query("SELECT t FROM Task t " +
            "LEFT JOIN FETCH t.project p " +
            "LEFT JOIN FETCH p.team pt " +
            "LEFT JOIN FETCH t.sprint s " +
@@ -126,15 +130,16 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
            "LEFT JOIN FETCH r.user ru " +
            "LEFT JOIN FETCH t.milestone m " +
            "LEFT JOIN FETCH t.kanbanColumn kc " +
-           "LEFT JOIN FETCH t.assignees " +
-           "LEFT JOIN FETCH t.labels " +
            "WHERE p.id = :projectId " +
            "AND (:status IS NULL OR t.status = :status) " +
            "AND (:assigneeId IS NULL OR au.userId = :assigneeId) " +
            "AND (:priority IS NULL OR CAST(t.priority AS string) = :priority) " +
            "AND (:sprintId IS NULL OR s.id = :sprintId) " +
            "AND (:milestoneId IS NULL OR m.id = :milestoneId) " +
-           "ORDER BY t.createdAt DESC")
+           "ORDER BY " +
+           "CASE WHEN t.sprint IS NULL THEN 0 ELSE 1 END, " +
+           "CASE WHEN t.sprint IS NULL THEN t.backlogPosition ELSE t.sprintPosition END, " +
+           "t.id")
     List<Task> findByProjectIdFiltered(
             @Param("projectId") Long projectId,
             @Param("status") String status,
@@ -205,4 +210,13 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     @Query("SELECT t.id, d.id, d.title FROM Task t LEFT JOIN t.dependencies d WHERE t.id IN :taskIds")
     List<Object[]> findDependencyRowsByTaskIds(@Param("taskIds") List<Long> taskIds);
+
+    @Query("SELECT COALESCE(MAX(t.projectTaskNumber), 0) FROM Task t WHERE t.project.id = :projectId")
+    Long findMaxProjectTaskNumberByProjectId(@Param("projectId") Long projectId);
+
+    @Query("SELECT COALESCE(MAX(t.backlogPosition), -1) FROM Task t WHERE t.project.id = :projectId AND t.sprint IS NULL")
+    Integer findMaxBacklogPositionByProjectId(@Param("projectId") Long projectId);
+
+    @Query("SELECT COALESCE(MAX(t.sprintPosition), -1) FROM Task t WHERE t.sprint.id = :sprintId")
+    Integer findMaxSprintPositionBySprintId(@Param("sprintId") Long sprintId);
 }
