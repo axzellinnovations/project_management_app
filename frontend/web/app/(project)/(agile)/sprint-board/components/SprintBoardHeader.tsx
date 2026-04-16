@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
-import { Search, CheckCircle2, LayoutGrid, X, SlidersHorizontal, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { Search, CheckCircle2, LayoutGrid, X, SlidersHorizontal, Users, ListChecks, ChevronDown } from 'lucide-react';
+import { SprintBoardFilters } from '../types';
 
 interface SprintSummary {
   id: number;
@@ -14,12 +15,18 @@ interface SprintBoardHeaderProps {
   allActiveSprints?: SprintSummary[];
   selectedIdx?: number;
   onSelectSprint?: (idx: number) => void;
-  searchTerm: string;
+  filters: SprintBoardFilters;
   onSearchChange: (val: string) => void;
+  onFilterChange: (patch: Partial<SprintBoardFilters>) => void;
   onCompleteSprint: () => void;
   totalTasks: number;
   doneTasks: number;
+  doneStoryPoints: number;
+  totalStoryPoints: number;
+  overdueTasks: number;
+  selectedCount: number;
   isLoading?: boolean;
+  onOpenShortcuts?: () => void;
 }
 
 export default function SprintBoardHeader({
@@ -27,13 +34,20 @@ export default function SprintBoardHeader({
   allActiveSprints = [],
   selectedIdx = 0,
   onSelectSprint,
-  searchTerm,
+  filters,
   onSearchChange,
+  onFilterChange,
   onCompleteSprint,
   totalTasks,
   doneTasks,
+  doneStoryPoints,
+  totalStoryPoints,
+  overdueTasks,
+  selectedCount,
+  onOpenShortcuts: _onOpenShortcuts,
   isLoading
 }: SprintBoardHeaderProps) {
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const showTabs = allActiveSprints.length > 1;
   const progressPercent = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
@@ -50,6 +64,14 @@ export default function SprintBoardHeader({
               <span className="text-[11px] text-gray-500 truncate">{sprintName}</span>
               <span className="text-gray-300">·</span>
               <span className="text-[11px] text-gray-500">{totalTasks} tasks</span>
+              <span className="text-gray-300">·</span>
+              <span className="text-[11px] text-gray-500">{doneStoryPoints}/{totalStoryPoints} pts</span>
+              {overdueTasks > 0 && (
+                <>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-[11px] font-semibold text-[#B42318]">{overdueTasks} overdue</span>
+                </>
+              )}
               {totalTasks > 0 && (
                 <>
                   <span className="text-gray-300">·</span>
@@ -66,28 +88,100 @@ export default function SprintBoardHeader({
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="hidden lg:flex items-center rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
-            <Sparkles size={12} className="mr-1.5" />
-            Sprint Space
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors w-fit"
+              aria-label="Filters"
+            >
+              <SlidersHorizontal size={13} />
+              <span>Filters</span>
+              <ChevronDown size={12} className={`transition-transform duration-200 ${isFilterOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isFilterOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setIsFilterOpen(false)}
+                />
+                <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 z-20 p-4 space-y-4 animate-in fade-in zoom-in duration-200">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Priority</label>
+                    <select
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-blue-500"
+                      value={filters.priority}
+                      onChange={(e) => onFilterChange({ priority: e.target.value })}
+                    >
+                      <option value="ALL">All priorities</option>
+                      <option value="HIGH">High</option>
+                      <option value="MEDIUM">Medium</option>
+                      <option value="LOW">Low</option>
+                      <option value="URGENT">Urgent</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</label>
+                    <select
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-blue-500"
+                      value={filters.status}
+                      onChange={(e) => onFilterChange({ status: e.target.value })}
+                    >
+                      <option value="ALL">All statuses</option>
+                      <option value="TODO">To do</option>
+                      <option value="IN_PROGRESS">In progress</option>
+                      <option value="IN_REVIEW">In review</option>
+                      <option value="DONE">Done</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Swimlane</label>
+                    <select
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-blue-500"
+                      value={filters.swimlane}
+                      onChange={(e) => onFilterChange({ swimlane: e.target.value as SprintBoardFilters['swimlane'] })}
+                    >
+                      <option value="none">No swimlanes</option>
+                      <option value="assignee">Swimlane by assignee</option>
+                      <option value="priority">Swimlane by priority</option>
+                    </select>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => onFilterChange({ showOnlyMine: !filters.showOnlyMine })}
+                      className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                        filters.showOnlyMine
+                          ? 'border-blue-200 bg-blue-50 text-blue-600'
+                          : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Users size={12} className="inline mr-1.5 mb-0.5" />
+                      {filters.showOnlyMine ? 'Showing mine' : 'Show only mine'}
+                    </button>
+                    <div className="rounded-lg border border-gray-100 bg-gray-50/50 px-3 py-2 text-xs text-gray-500 font-medium">
+                      <ListChecks size={12} className="inline mr-1.5 mb-0.5" />
+                      {selectedCount} selected
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-          <button
-            type="button"
-            className="hidden sm:flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-            aria-label="Filters"
-          >
-            <SlidersHorizontal size={13} />
-            Filters
-          </button>
           <div className="hidden sm:flex items-center bg-gray-100 rounded-lg px-3 py-1.5 border border-transparent focus-within:border-blue-300 focus-within:bg-white transition-all">
             <Search size={14} className="text-[#98A2B3]" />
             <input
               type="text"
               placeholder="Search tasks..."
-              value={searchTerm}
+              value={filters.search}
               onChange={(e) => onSearchChange(e.target.value)}
               className="bg-transparent border-0 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none ml-2 w-40 lg:w-56"
             />
-            {searchTerm && (
+            {filters.search && (
               <button onClick={() => onSearchChange('')} className="text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-200 rounded-sm" aria-label="Clear search">
                 <X size={12} />
               </button>
@@ -108,6 +202,10 @@ export default function SprintBoardHeader({
         </div>
       </div>
 
+      <div className="hidden">
+        {/* Previous filter row removed as it's now in a dropdown */}
+      </div>
+
       <div className="sm:hidden px-4 pb-3 flex items-center gap-2">
         <div className="relative flex-1">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -116,7 +214,7 @@ export default function SprintBoardHeader({
           <input
             type="text"
             placeholder="Search tasks..."
-            value={searchTerm}
+            value={filters.search}
             onChange={(e) => onSearchChange(e.target.value)}
             className="block w-full pl-10 pr-4 py-2 bg-[#F9FAFB] border border-[#EAECF0] rounded-xl text-[14px] placeholder-[#667085] focus:outline-none focus:ring-2 focus:ring-[#155DFC]/10 focus:border-[#155DFC] transition-all"
           />
