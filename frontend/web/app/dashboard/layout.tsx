@@ -36,7 +36,7 @@ export default function DashboardLayout({
 
     return (
         <SidebarLayout>
-            <main className="flex-1 h-full min-h-0 overflow-x-hidden overflow-y-auto bg-white px-4 md:px-8 pt-4 pb-0 md:pb-8 flex flex-col">
+            <main className="flex-1 flex flex-col min-h-full bg-white px-4 md:px-8 pt-4 pb-0 md:pb-8">
                 {children}
             </main>
         </SidebarLayout>

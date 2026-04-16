@@ -6,14 +6,21 @@ import lombok.*;
 import java.time.LocalDate;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonSetter;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Setter
 @Getter
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class TaskRequestDTO {
 
-    @NotBlank(message = "Task title is required")
+    public interface OnCreate {}
+
+    @NotBlank(message = "Task title is required", groups = OnCreate.class)
     @Size(max = 500, message = "Task title must not exceed 500 characters")
     private String title;
 
@@ -42,6 +49,14 @@ public class TaskRequestDTO {
     private List<Long> assigneeIds;   // multiple assignees (V4)
 
     private Long sprintId;
+    @JsonIgnore
+    private boolean sprintIdProvided;
+
+    @JsonSetter("sprintId")
+    public void setSprintId(Long sprintId) {
+        this.sprintId = sprintId;
+        this.sprintIdProvided = true;
+    }
     private Long KanbanColumnId;
 
     private Long parentId;
@@ -49,6 +64,14 @@ public class TaskRequestDTO {
     private List<Long> labelIds;
 
     private Long milestoneId;
+    @JsonIgnore
+    private boolean milestoneIdProvided;
+
+    @JsonSetter("milestoneId")
+    public void setMilestoneId(Long milestoneId) {
+        this.milestoneId = milestoneId;
+        this.milestoneIdProvided = true;
+    }
 
     // Recurring task fields (V7)
     private String recurrenceRule;    // DAILY | WEEKLY | MONTHLY | YEARLY

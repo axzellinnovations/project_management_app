@@ -31,6 +31,8 @@ export default function ProjectLayout({
   const params = useParams();
   const searchParams = useSearchParams();
   const isChatRoute = pathname?.includes('/chat');
+  const isInboxRoute = pathname?.startsWith('/inbox');
+  const isMembersRoute = pathname?.startsWith('/members');
 
   // Try to resolve projectId from path params or query params
   const projectId = (params?.projectId || params?.id || searchParams.get('projectId')) as string | undefined;
@@ -50,16 +52,19 @@ export default function ProjectLayout({
     if (syncedProjectIdRef.current === projectId) return;
     syncedProjectIdRef.current = projectId;
 
-    // Keep localStorage in sync so TopBar, Sidebar, etc. work correctly
+    // Keep project context scoped to this tab while preserving global fallback.
+    sessionStorage.setItem('currentProjectId', projectId);
     localStorage.setItem('currentProjectId', projectId);
 
     const syncProjectContext = async () => {
       try {
         const projectRes = await api.get(`/api/projects/${projectId}`);
         if (projectRes?.data?.name) {
+          sessionStorage.setItem('currentProjectName', projectRes.data.name);
           localStorage.setItem('currentProjectName', projectRes.data.name);
           // Update project type for TopBar logic
           if (projectRes.data.type) {
+            sessionStorage.setItem('currentProjectType', projectRes.data.type);
             localStorage.setItem('currentProjectType', projectRes.data.type);
           }
         }
@@ -80,7 +85,15 @@ export default function ProjectLayout({
 
   return (
     <SidebarLayout>
-      <main className={isChatRoute ? 'h-full min-h-0 flex flex-col overflow-hidden' : 'flex-1 min-h-0 overflow-hidden'}>
+      <main
+        className={
+          isChatRoute
+            ? 'h-full min-h-0 flex flex-col overflow-hidden'
+            : isInboxRoute || isMembersRoute
+              ? 'flex flex-col min-h-full'
+              : 'flex flex-col min-h-full'
+        }
+      >
         {children}
       </main>
     </SidebarLayout>

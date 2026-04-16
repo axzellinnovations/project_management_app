@@ -8,6 +8,8 @@ import CreateTaskModal from '@/components/shared/CreateTaskModal';
 import TaskTableHeader from './components/TaskTableHeader';
 import TaskRow from './components/TaskRow';
 import { useListTasks } from './hooks/useListTasks';
+import ListFilterBar, { type ListFilters } from './components/ListFilterBar';
+import ListBulkActionBar from './components/ListBulkActionBar';
 
 // ── Main Page ─────────────────────────────────────────────────────────────
 
@@ -21,25 +23,98 @@ export default function ListPage() {
     () => searchParams.get('action') === 'add-task',
   );
   const [currentPage, setCurrentPage] = useState(1);
+  const [groupBy, setGroupBy] = useState<'none' | 'status' | 'priority' | 'assignee'>('none');
+  const [filters, setFilters] = useState<ListFilters>({
+    search: '',
+    statuses: [],
+    priorities: [],
+    assignee: '',
+  });
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const {
     projectId,
     loading,
     error,
-    search,
-    setSearch,
     sortedTasks,
     handleStatusChange,
     handleDelete,
     handleAddTask,
     loadTasks,
+    handleBulkStatusChange,
+    handleBulkDelete,
+    members,
+    labels,
+    milestones,
+    handleDueDateChange,
+    handleAssigneesChange,
+    handleToggleTaskLabel,
+    handleMilestoneChange,
   } = useListTasks();
 
-  const totalPages = Math.max(1, Math.ceil(sortedTasks.length / TASKS_PER_PAGE));
+  const allAssigneeNames = useMemo(() => {
+    const set = new Set<string>();
+    sortedTasks.forEach((task) => {
+      if (task.assignees && task.assignees.length > 0) {
+        task.assignees.forEach((person) => {
+          if (person.name && person.name !== 'Unassigned') set.add(person.name);
+        });
+      } else if (task.assigneeName && task.assigneeName !== 'Unassigned') {
+        set.add(task.assigneeName);
+      }
+    });
+    return Array.from(set).sort();
+  }, [sortedTasks]);
+
+  const filteredTasks = useMemo(() => (
+    sortedTasks.filter((task) => {
+      if (filters.search) {
+        const q = filters.search.toLowerCase();
+        const inTitle = task.title.toLowerCase().includes(q);
+        const inAssignee =
+          (task.assigneeName ?? '').toLowerCase().includes(q) ||
+          (task.assignees ?? []).some((person) => person.name.toLowerCase().includes(q));
+        if (!inTitle && !inAssignee) return false;
+      }
+      if (filters.statuses.length > 0 && !filters.statuses.includes(task.status)) return false;
+      if (filters.priorities.length > 0 && !filters.priorities.includes((task.priority ?? '').toUpperCase())) return false;
+      if (filters.assignee) {
+        const hasAssignee =
+          task.assigneeName === filters.assignee ||
+          (task.assignees ?? []).some((person) => person.name === filters.assignee);
+        if (!hasAssignee) return false;
+      }
+      return true;
+    })
+  ), [sortedTasks, filters]);
+
+  const groupedEntries = useMemo(() => {
+    if (groupBy === 'none') return [{ label: 'All Tasks', items: filteredTasks }];
+    const groups = new Map<string, typeof filteredTasks>();
+    filteredTasks.forEach((task) => {
+      const key =
+        groupBy === 'status'
+          ? (task.status || 'TODO').replace(/_/g, ' ')
+          : groupBy === 'priority'
+            ? (task.priority || 'LOW')
+            : ((task.assignees && task.assignees.length > 0 ? task.assignees.map((person) => person.name).join(', ') : task.assigneeName) || 'Unassigned');
+      const arr = groups.get(key) ?? [];
+      arr.push(task);
+      groups.set(key, arr);
+    });
+    return Array.from(groups.entries()).map(([label, items]) => ({ label, items }));
+  }, [filteredTasks, groupBy]);
+
+  const flatGroupedTasks = useMemo(
+    () => groupedEntries.flatMap((entry) => entry.items),
+    [groupedEntries]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(flatGroupedTasks.length / TASKS_PER_PAGE));
   const paginatedTasks = useMemo(() => {
     const startIndex = (currentPage - 1) * TASKS_PER_PAGE;
-    return sortedTasks.slice(startIndex, startIndex + TASKS_PER_PAGE);
-  }, [currentPage, sortedTasks]);
+    return flatGroupedTasks.slice(startIndex, startIndex + TASKS_PER_PAGE);
+  }, [currentPage, flatGroupedTasks]);
 
   // Clean ?action= query param from URL on mount — no setState here
   useEffect(() => {
@@ -52,13 +127,37 @@ export default function ListPage() {
 
   useEffect(() => {
     setCurrentPage(1); // eslint-disable-line react-hooks/set-state-in-effect
-  }, [search, projectId]);
+  }, [filters, groupBy, projectId]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(totalPages); // eslint-disable-line react-hooks/set-state-in-effect
     }
   }, [currentPage, totalPages]);
+
+  const selectedCount = selectedIds.size;
+
+  const toggleSelect = (taskId: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  };
+
+  const toggleSelectAllVisible = () => {
+    const visible = paginatedTasks.map((task) => task.id);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allVisibleSelected = visible.every((id) => next.has(id));
+      if (allVisibleSelected) visible.forEach((id) => next.delete(id));
+      else visible.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const allVisibleSelected = paginatedTasks.length > 0 && paginatedTasks.every((task) => selectedIds.has(task.id));
 
   // ── No project selected ──
   if (!projectId) {
@@ -75,14 +174,14 @@ export default function ListPage() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full bg-gray-50 overflow-y-auto">
-      <div className="mobile-page-padding max-w-[1100px] mx-auto w-full py-6">
+      <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto w-full">
 
         {/* Header */}
-        <div className="sticky-section-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-4 flex items-center gap-3 flex-wrap">
+        <div className="sticky-section-header glass-panel border border-[#E4E7EC] rounded-2xl px-4 sm:px-6 py-4 mb-4 flex items-center gap-3 flex-wrap">
           <div>
-            <h1 className="text-[18px] sm:text-xl font-bold text-[#101828]">Task List</h1>
-            <p className="text-[12px] text-[#6A7282] mt-0.5 hidden sm:block">
-              {sortedTasks.length} task{sortedTasks.length !== 1 ? 's' : ''}
+            <h1 className="text-[20px] sm:text-2xl font-bold text-[#101828]">Task List</h1>
+            <p className="text-[12px] sm:text-[13px] text-[#6A7282] mt-0.5">
+              {filteredTasks.length} visible of {sortedTasks.length} task{sortedTasks.length !== 1 ? 's' : ''}
             </p>
           </div>
           <div className="flex items-center gap-2 ml-auto">
@@ -91,8 +190,8 @@ export default function ListPage() {
               <input
                 type="text"
                 placeholder="Search tasks…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={filters.search}
+                onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
                 className="text-[13px] text-[#101828] bg-transparent focus:outline-none placeholder:text-[#9CA3AF] w-44"
               />
             </div>
@@ -105,6 +204,14 @@ export default function ListPage() {
             </button>
           </div>
         </div>
+
+        <ListFilterBar
+          filters={filters}
+          onChange={setFilters}
+          assigneeNames={allAssigneeNames}
+          groupBy={groupBy}
+          onGroupByChange={setGroupBy}
+        />
 
         {/* Error */}
         {error && (
@@ -126,15 +233,26 @@ export default function ListPage() {
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
+            <div className="hidden md:flex items-center px-4 py-2 border-b border-[#EAECF0] bg-[#FCFCFD]">
+              <label className="inline-flex items-center gap-2 text-[12px] text-[#667085] font-medium">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAllVisible}
+                  className="h-4 w-4 rounded border-[#D0D5DD] text-[#155DFC] focus:ring-[#155DFC]/20 cursor-pointer"
+                />
+                Select visible
+              </label>
+            </div>
             <TaskTableHeader />
-            {sortedTasks.length === 0 ? (
+            {flatGroupedTasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Search size={32} className="text-[#D1D5DB] mb-3" />
                 <p className="text-[14px] font-medium text-[#374151]">
-                  {search ? 'No tasks match your search' : 'No tasks yet'}
+                  {filters.search ? 'No tasks match your search' : 'No tasks yet'}
                 </p>
                 <p className="text-[12px] text-[#9CA3AF] mt-1">
-                  {search ? 'Try a different search term' : 'Create a task to get started'}
+                  {filters.search ? 'Try a different search term' : 'Create a task to get started'}
                 </p>
               </div>
             ) : (
@@ -142,6 +260,15 @@ export default function ListPage() {
                 <TaskRow
                   key={task.id}
                   task={task}
+                  members={members}
+                  availableLabels={labels}
+                  milestones={milestones}
+                  onDueDateChange={handleDueDateChange}
+                  onAssigneesChange={handleAssigneesChange}
+                  onToggleLabel={handleToggleTaskLabel}
+                  onMilestoneChange={handleMilestoneChange}
+                  selected={selectedIds.has(task.id)}
+                  onToggleSelect={toggleSelect}
                   onOpenModal={setSelectedTaskId}
                   onStatusChange={handleStatusChange}
                   onDelete={handleDelete}
@@ -190,6 +317,19 @@ export default function ListPage() {
           </div>
         )}
       </div>
+
+      <ListBulkActionBar
+        selectedCount={selectedCount}
+        onStatusChange={(status) => {
+          void handleBulkStatusChange(Array.from(selectedIds), status);
+          setSelectedIds(new Set());
+        }}
+        onDelete={() => {
+          void handleBulkDelete(Array.from(selectedIds));
+          setSelectedIds(new Set());
+        }}
+        onClear={() => setSelectedIds(new Set())}
+      />
 
       {/* Modals */}
       {selectedTaskId !== null && (

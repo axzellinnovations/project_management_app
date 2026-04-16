@@ -135,6 +135,7 @@ export const ChatSidebar = ({
     currentUser.toLowerCase(),
     ...currentUserAliases.map((a) => a.toLowerCase()),
   ]);
+  const dmUsers = users.filter((user) => !currentUserIdentitySet.has(user.toLowerCase()));
   const isTeamSelected = !selectedUser && !hasSelectedRoom;
 
   const getMessagePreview = (content?: string | null): string => {
@@ -156,7 +157,7 @@ export const ChatSidebar = ({
         </div>
         <button
           onClick={() => setIsCreateOpen(true)}
-          className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+          className="w-10 h-10 md:w-7 md:h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
           aria-label="Create channel"
           title="New channel"
         >
@@ -166,7 +167,7 @@ export const ChatSidebar = ({
 
       {/* Search */}
       <div className="px-3 pt-3 pb-2">
-        <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 transition-all focus-within:bg-white focus-within:border-blue-200 focus-within:ring-2 focus-within:ring-blue-50">
+        <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5 transition-all focus-within:bg-white focus-within:border-blue-200 focus-within:ring-2 focus-within:ring-blue-50">
           <Search size={14} className="text-gray-400 flex-shrink-0" strokeWidth={2.5} />
           <input
             type="text"
@@ -185,7 +186,7 @@ export const ChatSidebar = ({
       </div>
 
       {/* Scrollable list */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin pb-4">
+      <div className="flex-1 overflow-y-auto scrollbar-thin pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-4">
         {isLoading ? (
           <SidebarSkeleton />
         ) : (
@@ -194,7 +195,7 @@ export const ChatSidebar = ({
             <div className="px-3 mt-1">
               <button
                 onClick={() => { onSelectUser(null); onSelectRoom(null); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 group
+                className={`w-full flex items-center gap-3 px-3 py-3.5 rounded-xl transition-all duration-150 group
                   ${isTeamSelected
                     ? 'bg-blue-50 border border-blue-100'
                     : 'hover:bg-gray-50 border border-transparent'}`}
@@ -257,7 +258,7 @@ export const ChatSidebar = ({
                     <button
                       key={room.id}
                       onClick={() => onSelectRoom(room.id)}
-                      className={`group/room w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 text-left
+                      className={`group/room w-full flex items-center gap-3 px-3 py-3.5 rounded-xl transition-all duration-150 text-left
                         ${isRoomSelected
                           ? 'bg-blue-50 border border-blue-100'
                           : 'hover:bg-gray-50 border border-transparent'}`}
@@ -333,26 +334,24 @@ export const ChatSidebar = ({
                 Direct Messages
               </p>
 
-              {users.length === 0 && (
+              {dmUsers.length === 0 && (
                 <p className="text-[12px] text-gray-400 italic px-1 py-1.5">
                   No team members found
                 </p>
               )}
 
               <div className="space-y-0.5">
-                {users.map((user) => {
+                {dmUsers.map((user) => {
                   const lastMsg = privateLastMessages[user];
                   const unseen = privateUnseenCounts[user] || 0;
                   const isTyping = privateTypingUsers.includes(user.toLowerCase());
                   const isSelectedDm = selectedUser === user;
                   const showTyping = isTyping && !isSelectedDm;
-                  const isSelf = currentUserIdentitySet.has(user.toLowerCase());
-
                   return (
                     <button
                       key={user}
                       onClick={() => onSelectUser(user)}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150
+                      className={`w-full flex items-center gap-3 px-3 py-3.5 rounded-xl transition-all duration-150
                         ${isSelectedDm
                           ? 'bg-blue-50 border border-blue-100'
                           : 'hover:bg-gray-50 border border-transparent'}`}
@@ -376,7 +375,7 @@ export const ChatSidebar = ({
                       <div className="flex-1 min-w-0 text-left">
                         <div className="flex items-center justify-between gap-1">
                           <span className={`text-[13.5px] font-medium truncate ${isSelectedDm ? 'text-blue-700 font-semibold' : 'text-gray-800'}`}>
-                            {user}{isSelf ? ' (you)' : ''}
+                            {user}
                           </span>
                           {lastMsg?.timestamp && (
                             <span className="text-[10px] text-gray-400 flex-shrink-0">

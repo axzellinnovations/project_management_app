@@ -2,6 +2,7 @@ package com.planora.backend.model;
 
 import java.time.LocalDate;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,7 +17,11 @@ import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-@Data
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
+@Getter
+@Setter
 @Entity
 @Table(name = "sprints")
 @AllArgsConstructor
@@ -29,6 +34,7 @@ public class Sprint {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
+    @JsonIgnore
     private Project project;
 
     /** Convenience getter — preserves all existing callers of sprint.getProId() */
@@ -52,4 +58,16 @@ public class Sprint {
     @Column(nullable = true, length = 500)
     private String goal;
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Sprint sprint = (Sprint) o;
+        return java.util.Objects.equals(id, sprint.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(id);
+    }
 }

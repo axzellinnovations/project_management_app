@@ -24,7 +24,7 @@ const DescriptionEditor: React.FC<DescriptionEditorProps> = ({ description, onUp
 
   return (
     <div className="mb-8 group">
-      <h3 className="text-sm font-bold text-gray-800 mb-2">Description</h3>
+      <h3 className="text-sm font-bold text-[#344054] mb-2">Description</h3>
       {isEditing ? (
         <div>
           <textarea
@@ -39,19 +39,19 @@ const DescriptionEditor: React.FC<DescriptionEditorProps> = ({ description, onUp
             }}
             autoFocus
             rows={6}
-            className="w-full p-4 rounded-md border-2 border-blue-500 text-gray-600 text-sm leading-relaxed focus:outline-none resize-y"
+            className="w-full p-4 rounded-xl border-2 border-[#155DFC] text-[#475467] text-sm leading-relaxed focus:outline-none resize-y bg-white shadow-sm"
             placeholder="Add a description..."
           />
           <div className="flex gap-2 mt-2">
             <button
               onClick={handleSave}
-              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+              className="px-3 py-1.5 bg-[#155DFC] text-white text-sm font-semibold rounded-xl hover:bg-[#0042A8] transition-colors"
             >
               Save
             </button>
             <button
               onClick={() => { setEdited(description); setIsEditing(false); }}
-              className="px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300 transition-colors"
+              className="px-3 py-1.5 bg-[#F2F4F7] text-[#344054] text-sm font-semibold rounded-xl hover:bg-[#EAECF0] transition-colors"
             >
               Cancel
             </button>
@@ -60,9 +60,9 @@ const DescriptionEditor: React.FC<DescriptionEditorProps> = ({ description, onUp
       ) : (
         <div
           onClick={() => setIsEditing(true)}
-          className="p-4 rounded-md hover:bg-gray-50 border border-transparent hover:border-gray-200 cursor-text transition-all min-h-[100px] text-gray-600 text-sm leading-relaxed relative"
+          className="p-4 rounded-xl hover:bg-[#F8FAFF] border border-[#EAECF0] hover:border-[#D0D5DD] cursor-text transition-all min-h-[100px] text-[#475467] text-sm leading-relaxed relative"
         >
-          {description || <span className="text-gray-400 italic">No description provided</span>}
+          {description || <span className="text-[#98A2B3] italic">No description provided</span>}
           <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
             <Edit2 size={14} className="text-gray-400" />
           </div>

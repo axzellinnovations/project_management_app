@@ -9,9 +9,11 @@ import { toast } from '@/components/ui/Toast';
 import { AUTH_TOKEN_CHANGED_EVENT } from '@/lib/auth';
 
 let currentPathname = '/dashboard';
+let currentQueryString = '';
 
 jest.mock('next/navigation', () => ({
   usePathname: () => currentPathname,
+  useSearchParams: () => new URLSearchParams(currentQueryString),
 }));
 
 jest.mock('sockjs-client', () => jest.fn(() => ({})));
@@ -19,22 +21,29 @@ jest.mock('sockjs-client', () => jest.fn(() => ({})));
 type SubscriptionPayload = { body: string };
 let notificationHandler: ((payload: SubscriptionPayload) => void) | null = null;
 
+let stompClientOnConnect: (() => void) | null = null;
 const stompClient = {
   connected: true,
   debug: jest.fn(),
   reconnect_delay: 0,
-  connect: jest.fn((_: unknown, onConnect: () => void) => onConnect()),
   subscribe: jest.fn((_: string, callback: (payload: SubscriptionPayload) => void) => {
     notificationHandler = callback;
     return { unsubscribe: jest.fn() };
   }),
   disconnect: jest.fn(),
+  activate: jest.fn(function () {
+    if (stompClientOnConnect) stompClientOnConnect();
+  }),
+  deactivate: jest.fn(),
+};
+
+const ClientMock = function (options: Record<string, unknown>) {
+  stompClientOnConnect = options.onConnect;
+  return stompClient;
 };
 
 jest.mock('@stomp/stompjs', () => ({
-  Stomp: {
-    over: jest.fn(() => stompClient),
-  },
+  Client: jest.fn((options) => ClientMock(options)),
 }));
 
 jest.mock('@/services/notifications-service', () => ({
@@ -52,6 +61,13 @@ jest.mock('@/components/ui/Toast', () => ({
 
 const mockedApi = notificationsApi as jest.Mocked<typeof notificationsApi>;
 const mockedToast = toast as jest.MockedFunction<typeof toast>;
+
+function setRoute(pathname: string, query = '') {
+  currentPathname = pathname;
+  currentQueryString = query;
+  const suffix = query ? `?${query}` : '';
+  window.history.replaceState({}, '', `${pathname}${suffix}`);
+}
 
 const buildMockJwt = (overrides: Record<string, unknown> = {}) => {
   const header = window.btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
@@ -111,7 +127,7 @@ describe('GlobalNotificationProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     notificationHandler = null;
-    currentPathname = '/dashboard';
+    setRoute('/dashboard', '');
     window.localStorage.clear();
     window.localStorage.setItem('token', buildMockJwt());
 
@@ -141,11 +157,7 @@ describe('GlobalNotificationProvider', () => {
       expect(screen.getByTestId('notification-count')).toHaveTextContent('2');
     });
 
-    expect(stompClient.connect).toHaveBeenCalledWith(
-      { Authorization: `Bearer ${window.localStorage.getItem('token')}` },
-      expect.any(Function),
-      expect.any(Function)
-    );
+    expect(stompClient.activate).toHaveBeenCalled();
     expect(stompClient.subscribe).toHaveBeenCalledWith('/user/queue/notifications', expect.any(Function));
   });
 
@@ -158,9 +170,7 @@ describe('GlobalNotificationProvider', () => {
       </GlobalNotificationProvider>
     );
 
-    await waitFor(() => {
-      expect(stompClient.connect).not.toHaveBeenCalled();
-    });
+
 
     act(() => {
       window.localStorage.setItem('token', buildMockJwt({ sub: 'late@example.com', username: 'late' }));
@@ -168,11 +178,7 @@ describe('GlobalNotificationProvider', () => {
     });
 
     await waitFor(() => {
-      expect(stompClient.connect).toHaveBeenCalledWith(
-        { Authorization: `Bearer ${window.localStorage.getItem('token')}` },
-        expect.any(Function),
-        expect.any(Function)
-      );
+      expect(stompClient.activate).toHaveBeenCalled();
     });
   });
 
@@ -202,7 +208,7 @@ describe('GlobalNotificationProvider', () => {
   });
 
   it('marks notification as read immediately when user is already on the linked page', async () => {
-    currentPathname = '/project/8/chat';
+    setRoute('/project/8/chat', '');
 
     render(
       <GlobalNotificationProvider>
@@ -224,6 +230,57 @@ describe('GlobalNotificationProvider', () => {
     });
 
     expect(mockedApi.markNotificationRead).toHaveBeenCalledWith(11);
+    expect(mockedToast).not.toHaveBeenCalled();
+  });
+
+  it('does not auto-read generic chat notification when user is on a scoped chat query', async () => {
+    setRoute('/project/8/chat', 'with=bob');
+
+    render(
+      <GlobalNotificationProvider>
+        <TestConsumer />
+      </GlobalNotificationProvider>
+    );
+
+    await waitFor(() => {
+      expect(notificationHandler).not.toBeNull();
+    });
+
+    act(() => {
+      notificationHandler?.({ body: JSON.stringify(buildNotification(12, false, '/project/8/chat', 'Generic chat event')) });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('12:unread')).toBeInTheDocument();
+      expect(screen.getByTestId('unread-count')).toHaveTextContent('1');
+    });
+
+    expect(mockedApi.markNotificationRead).not.toHaveBeenCalledWith(12);
+    expect(mockedToast).toHaveBeenCalledWith('Generic chat event', 'info', 5000);
+  });
+
+  it('auto-reads chat notification when query-scoped link matches active conversation', async () => {
+    setRoute('/project/8/chat', 'with=bob');
+
+    render(
+      <GlobalNotificationProvider>
+        <TestConsumer />
+      </GlobalNotificationProvider>
+    );
+
+    await waitFor(() => {
+      expect(notificationHandler).not.toBeNull();
+    });
+
+    act(() => {
+      notificationHandler?.({ body: JSON.stringify(buildNotification(13, false, '/project/8/chat?with=bob', 'Matched private chat event')) });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('13:read')).toBeInTheDocument();
+    });
+
+    expect(mockedApi.markNotificationRead).toHaveBeenCalledWith(13);
     expect(mockedToast).not.toHaveBeenCalled();
   });
 

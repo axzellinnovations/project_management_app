@@ -152,11 +152,11 @@ button, a {
 
 /* ── Mobile page padding — consistent content inset on all pages ── */
 .mobile-page-padding {
-  padding: 1.25rem 1rem 1.25rem 1rem;
+  padding: 1.25rem 1rem 1.5rem 1rem;
 }
 @media (min-width: 640px) {
   .mobile-page-padding {
-    padding: 1.5rem;
+    padding: 1.5rem 1.5rem 2rem 1.5rem;
   }
 }
 
@@ -173,7 +173,7 @@ button, a {
 /* ── Section sticky header ── */
 .sticky-section-header {
   position: sticky;
-  top: 0;
+  top: env(safe-area-inset-top, 0px);
   z-index: 20;
   background: rgba(255,255,255,0.92);
   backdrop-filter: blur(8px);
@@ -203,7 +203,7 @@ button, a {
 }
 
 .safe-bottom {
-  padding-bottom: calc(env(safe-area-inset-bottom) + 4rem);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 @media (max-width: 640px) {

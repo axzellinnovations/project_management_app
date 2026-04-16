@@ -47,4 +47,17 @@ public class Milestone {
 
     @OneToMany(mappedBy = "milestone", fetch = FetchType.LAZY)
     private List<Task> tasks = new ArrayList<>();
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Milestone milestone = (Milestone) o;
+        return java.util.Objects.equals(id, milestone.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(id);
+    }
 }

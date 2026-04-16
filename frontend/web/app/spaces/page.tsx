@@ -110,7 +110,7 @@ export default function SpacesPage() {
         });
 
     return (
-        <div className="mobile-page-padding max-w-[1200px] mx-auto pb-28 sm:pb-8">
+        <div className="mobile-page-padding max-w-[1200px] mx-auto pb-6">
             {/* Mobile Top Header */}
             <div className="flex items-center gap-3 py-4 md:hidden">
                 <button

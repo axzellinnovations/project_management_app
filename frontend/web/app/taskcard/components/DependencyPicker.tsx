@@ -55,18 +55,18 @@ const DependencyPicker: React.FC<DependencyPickerProps> = ({
   };
 
   return (
-    <div className="border border-blue-200 rounded-lg p-3 bg-blue-50">
+    <div className="border border-[#BFDBFE] rounded-xl p-3 bg-[#EFF6FF]">
       <input
         autoFocus
         type="text"
         placeholder="Search tasks to link..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500 bg-white mb-2"
+        className="w-full border border-[#D0D5DD] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#155DFC] focus:ring-2 focus:ring-[#155DFC]/20 bg-white mb-2"
       />
-      {loading && <p className="text-xs text-gray-400 px-1">Loading...</p>}
+      {loading && <p className="text-xs text-[#98A2B3] px-1">Loading...</p>}
       {!loading && filtered.length === 0 && (
-        <p className="text-xs text-gray-400 px-1">No matching tasks found</p>
+        <p className="text-xs text-[#98A2B3] px-1">No matching tasks found</p>
       )}
       <div className="max-h-40 overflow-y-auto space-y-1">
         {filtered.map((t) => (
@@ -74,16 +74,16 @@ const DependencyPicker: React.FC<DependencyPickerProps> = ({
             key={t.id}
             onClick={() => !linking && void handleSelect(t)}
             disabled={linking}
-            className="w-full text-left px-3 py-2 rounded hover:bg-white text-sm text-gray-700 transition-colors flex items-center gap-2"
+            className="w-full text-left px-3 py-2 rounded-xl hover:bg-white text-sm text-[#344054] transition-colors flex items-center gap-2 border border-transparent hover:border-[#D0D5DD]"
           >
-            <span className="text-xs text-gray-400 shrink-0">TASK-{t.id}</span>
+            <span className="text-xs text-[#98A2B3] shrink-0">TASK-{t.id}</span>
             <span className="truncate">{t.title}</span>
           </button>
         ))}
       </div>
       <button
         onClick={onCancel}
-        className="mt-2 text-xs text-gray-500 hover:text-gray-700 underline"
+        className="mt-2 text-xs text-[#667085] hover:text-[#344054] underline"
       >
         Cancel
       </button>

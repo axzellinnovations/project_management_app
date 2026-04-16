@@ -16,6 +16,32 @@ const PRIORITY_COLORS = {
   LOW: '#00875A',    // Green
 };
 
+function SafeChartFrame({ children }: { children: React.ReactNode }) {
+  const hostRef = React.useRef<HTMLDivElement | null>(null);
+  const [ready, setReady] = React.useState(false);
+
+  React.useEffect(() => {
+    const element = hostRef.current;
+    if (!element) return;
+
+    const evaluateSize = () => {
+      const rect = element.getBoundingClientRect();
+      setReady(rect.width > 0 && rect.height > 0);
+    };
+
+    evaluateSize();
+    const observer = new ResizeObserver(evaluateSize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={hostRef} className="h-[250px] w-full">
+      {ready ? children : null}
+    </div>
+  );
+}
+
 export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: Task[], sprints?: Sprint[] }) {
   
   // 1. Task Distribution (Pie Chart) by Priority
@@ -131,8 +157,8 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
       <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Sprint Burndown</h3>
           {burndownData.length > 0 ? (
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+              <SafeChartFrame>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <LineChart data={burndownData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="date" tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
@@ -143,7 +169,7 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
                         <Line type="stepAfter" dataKey="remaining" name="Actual Remaining" stroke="#0052CC" strokeWidth={3} activeDot={{ r: 6 }}/>
                     </LineChart>
                 </ResponsiveContainer>
-              </div>
+              </SafeChartFrame>
           ) : (
               <div className="h-[250px] flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
                   <p className="text-sm text-gray-400 font-arimo">No active sprint data available</p>
@@ -155,8 +181,8 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
       <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Task Priority Distribution</h3>
           {taskDistribution.length > 0 ? (
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+              <SafeChartFrame>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <PieChart>
                         <Pie
                             data={taskDistribution}
@@ -175,7 +201,7 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
                         <Legend wrapperStyle={{ fontSize: '12px' }}/>
                     </PieChart>
                 </ResponsiveContainer>
-              </div>
+              </SafeChartFrame>
           ) : (
               <div className="h-[250px] flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
                   <p className="text-sm text-gray-400 font-arimo">No tasks to distribute</p>
@@ -187,8 +213,8 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
       <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Velocity (Completed Story Points)</h3>
           {velocityData.length > 0 ? (
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+              <SafeChartFrame>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart data={velocityData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="name" tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
@@ -197,7 +223,7 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
                         <Bar dataKey="points" fill="#00875A" radius={[4, 4, 0, 0]} maxBarSize={50} />
                     </BarChart>
                 </ResponsiveContainer>
-              </div>
+              </SafeChartFrame>
           ) : (
               <div className="h-[250px] flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
                   <p className="text-sm text-gray-400 font-arimo">Complete sprints to unlock velocity tracking</p>
@@ -209,8 +235,8 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
       <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Lead Time (Average Days to Complete)</h3>
           {leadTimeData.length > 0 ? (
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+              <SafeChartFrame>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <LineChart data={leadTimeData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="date" tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
@@ -219,7 +245,7 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
                         <Line type="monotone" dataKey="avgDays" name="Avg Days" stroke="#FF8B00" strokeWidth={3} dot={{r: 4}} activeDot={{ r: 6 }}/>
                     </LineChart>
                 </ResponsiveContainer>
-              </div>
+              </SafeChartFrame>
           ) : (
               <div className="h-[250px] flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
                   <p className="text-sm text-gray-400 font-arimo">Not enough completed tasks for data</p>

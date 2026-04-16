@@ -17,6 +17,7 @@ interface MultiAssigneeSectionProps {
   projectId?: number;
   assignees: AssigneeRow[];
   onChanged: () => void;
+  readOnly?: boolean;
 }
 
 const MultiAssigneeSection: React.FC<MultiAssigneeSectionProps> = ({
@@ -24,6 +25,7 @@ const MultiAssigneeSection: React.FC<MultiAssigneeSectionProps> = ({
   projectId,
   assignees,
   onChanged,
+  readOnly = false,
 }) => {
   const [members, setMembers] = useState<{ memberId: number; userId: number; name: string; photoUrl: string | null }[]>([]);
   const [open, setOpen] = useState(false);
@@ -54,6 +56,7 @@ const MultiAssigneeSection: React.FC<MultiAssigneeSectionProps> = ({
   const currentIds = new Set(assignees.map((a) => a.memberId));
 
   const addAssignee = async (memberId: number) => {
+    if (readOnly) return;
     const member = members.find((m) => m.memberId === memberId);
     if (!member) return;
     const updated = [...assignees.map((a) => a.userId), member.userId];
@@ -63,6 +66,7 @@ const MultiAssigneeSection: React.FC<MultiAssigneeSectionProps> = ({
   };
 
   const removeAssignee = async (memberId: number) => {
+    if (readOnly) return;
     const updated = assignees.filter((a) => a.memberId !== memberId).map((a) => a.userId);
     await api.patch(`/api/tasks/${taskId}/assignees`, { assigneeIds: updated });
     onChanged();
@@ -101,6 +105,7 @@ const MultiAssigneeSection: React.FC<MultiAssigneeSectionProps> = ({
         <div className="relative">
           <button
             onClick={() => setOpen((o) => !o)}
+            disabled={readOnly}
             className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 mt-1 px-1 py-0.5 rounded hover:bg-gray-50 min-h-[44px] sm:min-h-0"
           >
             <Plus size={13} />

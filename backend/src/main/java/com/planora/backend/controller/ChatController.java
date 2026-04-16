@@ -2,8 +2,14 @@ package com.planora.backend.controller;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,8 +22,10 @@ import org.springframework.stereotype.Controller;
 import org.springframework.beans.factory.annotation.Qualifier;
 import java.util.concurrent.Executor;
 
+import com.planora.backend.dto.ChatMessageDTO;
 import com.planora.backend.model.ChatMessage;
 import com.planora.backend.model.ChatMessage.ChatType;
+import com.planora.backend.repository.ChatMessageRepository;
 import com.planora.backend.repository.ChatRoomMemberRepository;
 import com.planora.backend.repository.ChatRoomRepository;
 import com.planora.backend.repository.ProjectRepository;
@@ -27,11 +35,15 @@ import com.planora.backend.service.ChatPresenceService;
 import com.planora.backend.service.ChatService;
 import com.planora.backend.service.ChatWebhookService;
 import com.planora.backend.service.NotificationService;
+import com.planora.backend.service.ProjectMembershipService;
+import com.planora.backend.service.UserCacheService;
 
 @Controller
 public class ChatController {
 
     private static final Pattern MENTION_PATTERN = Pattern.compile("(?<!\\S)@([A-Za-z0-9._-]+)");
+    private static final String TEAM_CHAT_READ_KEY = "__TEAM_CHAT__";
+    private static final long UNREAD_BADGE_DEBOUNCE_MS = 200L;
 
     public static record EditMessagePayload(String content, ChatMessage.FormatType formatType) {}
 
@@ -50,6 +62,7 @@ public class ChatController {
                                       String scope,
                                       Long roomId,
                                       String preview) {}
+    private record ProjectContext(Long teamId, String projectName) {}
 
     @Autowired
     private SimpMessagingTemplate simpMessagingTemplate;
@@ -65,10 +78,16 @@ public class ChatController {
     private TeamMemberRepository teamMemberRepository;
 
     @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
     private ProjectRepository projectRepository;
 
     @Autowired
-    private UserRepository userRepository;
+    private UserCacheService userCacheService;
+
+    @Autowired
+    private ProjectMembershipService projectMembershipService;
 
     @Autowired
     private ChatRoomRepository chatRoomRepository;
@@ -82,84 +101,82 @@ public class ChatController {
     @Autowired
     private ChatWebhookService chatWebhookService;
 
+    @Autowired
+    private ChatMessageRepository chatMessageRepository;
+
     // ── Added for persistent chat notifications ───────────────────────────────
     // Injects NotificationService so that DMs and @mentions create bell
     // notifications visible in the TopBar, not just transient WebSocket events.
     @Autowired
     private NotificationService notificationService;
     // ─────────────────────────────────────────────────────────────────────────
+    private final ScheduledExecutorService unreadBadgeScheduler = Executors.newSingleThreadScheduledExecutor();
+    private final ConcurrentHashMap<Long, Long> unreadBadgeVersionByProject = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, ScheduledFuture<?>> unreadBadgeTasks = new ConcurrentHashMap<>();
 
     @MessageMapping("/project/{projectId}/chat.sendMessage")
     public void sendMessage(@DestinationVariable Long projectId,
-                                   @Payload ChatMessage chatMessage,
+                                   @Payload ChatMessageDTO chatMessageDto,
                                    SimpMessageHeaderAccessor headerAccessor) {
         String username = requireAuthenticatedUsername(headerAccessor);
-        validateProjectMembership(projectId, username);
+        ProjectContext projectContext = resolveProjectContext(projectId);
+        validateProjectMembership(projectContext.teamId(), username);
 
+        ChatMessage chatMessage = chatService.convertToEntity(chatMessageDto);
         chatMessage.setSender(resolveCanonicalChatIdentifier(username));
-
         chatMessage.setProjectId(projectId);
         chatMessage.setChatType(ChatType.GROUP);
 
-        ChatMessage saved = chatService.saveMessage(chatMessage);
+        ChatMessageDTO saved = chatService.saveMessage(chatMessage);
+        saved.setLocalId(chatMessageDto.getLocalId());
         
         simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/public", saved);
 
         chatTaskExecutor.execute(() -> {
-            publishMentionNotifications(projectId, saved, "TEAM");
-            publishTeamChatNotifications(projectId, saved);
+            publishMentionNotifications(projectId, projectContext.teamId(), projectContext.projectName(), saved, "TEAM");
+            publishTeamChatNotifications(projectId, projectContext, saved);
             chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "TEAM", saved);
-            publishUnreadBadgesForProject(projectId);
+            scheduleUnreadBadgePublish(projectId);
         });
     }
     @MessageMapping("/project/{projectId}/chat.sendPrivateMessage")
-    public void sendPrivateMessage(@DestinationVariable Long projectId, @Payload ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
+    public void sendPrivateMessage(@DestinationVariable Long projectId, @Payload ChatMessageDTO chatMessageDto, SimpMessageHeaderAccessor headerAccessor) {
         String username = requireAuthenticatedUsername(headerAccessor);
-        validateProjectMembership(projectId, username);
+        ProjectContext projectContext = resolveProjectContext(projectId);
+        validateProjectMembership(projectContext.teamId(), username);
 
+        ChatMessage chatMessage = chatService.convertToEntity(chatMessageDto);
         var canonicalSender = resolveCanonicalChatIdentifier(username);
         var canonicalRecipient = resolveCanonicalChatIdentifier(chatMessage.getRecipient());
         chatMessage.setSender(canonicalSender);
         chatMessage.setRecipient(canonicalRecipient);
 
         // Validate recipient is also a member
-        validateProjectMembership(projectId, chatMessage.getRecipient());
-        System.out.println(
-                "Private message received from: " + chatMessage.getSender() + " to: " + chatMessage.getRecipient());
+        validateProjectMembership(projectContext.teamId(), chatMessage.getRecipient());
+        
         chatMessage.setProjectId(projectId);
         chatMessage.setChatType(ChatType.PRIVATE);
-        // persist private message as well
-        ChatMessage saved = chatService.saveMessage(chatMessage);
+
+        ChatMessageDTO saved = chatService.saveMessage(chatMessage);
+        saved.setLocalId(chatMessageDto.getLocalId());
         sendPrivateMessageToConversationParticipants(projectId, Objects.requireNonNull(saved));
         
         chatTaskExecutor.execute(() -> {
-            publishMentionNotifications(projectId, saved, "PRIVATE");
+            publishMentionNotifications(projectId, projectContext.teamId(), projectContext.projectName(), saved, "PRIVATE");
             chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "PRIVATE", saved);
-            publishUnreadBadgesForProject(projectId);
-
-            // ── NOTIFICATION: persistent bell alert for the DM recipient ──────────
-            var senderUser = resolveUserByEmailOrUsername(canonicalSender);
-            var recipientUser = resolveUserByEmailOrUsername(canonicalRecipient);
-            if (recipientUser != null && senderUser != null
-                    && !recipientUser.getUserId().equals(senderUser.getUserId())) {
-                String senderDisplay = (senderUser.getFullName() != null && !senderUser.getFullName().isBlank())
-                        ? senderUser.getFullName() : senderUser.getUsername();
-                String project = projectRepository.findById(projectId)
-                        .map(p -> p.getName()).orElse("the project");
-                String notifMessage = senderDisplay + " sent you a message in \"" + project + "\"";
-                String notifLink = "/project/" + projectId + "/chat";
-                notificationService.createNotificationIfNotDuplicate(recipientUser, notifMessage, notifLink);
-            }
+            scheduleUnreadBadgePublish(projectId);
+            publishPrivateMessageNotification(projectId, projectContext.projectName(), saved);
         });
     }
 
     @MessageMapping("/project/{projectId}/room/{roomId}/send")
     public void sendRoomMessage(@DestinationVariable Long projectId,
                                        @DestinationVariable Long roomId,
-                                       @Payload ChatMessage chatMessage,
+                                       @Payload ChatMessageDTO chatMessageDto,
                                        SimpMessageHeaderAccessor headerAccessor) {
         String username = requireAuthenticatedUsername(headerAccessor);
-        validateProjectMembership(projectId, username);
+        ProjectContext projectContext = resolveProjectContext(projectId);
+        validateProjectMembership(projectContext.teamId(), username);
         validateRoomMembership(roomId, username);
 
         var room = chatRoomRepository.findById(roomId).orElseThrow(() -> new RuntimeException("Chat room not found"));
@@ -167,31 +184,35 @@ public class ChatController {
             throw new RuntimeException("Channel is archived and read-only");
         }
 
+        ChatMessage chatMessage = chatService.convertToEntity(chatMessageDto);
         chatMessage.setSender(resolveCanonicalChatIdentifier(username));
-
         chatMessage.setProjectId(projectId);
         chatMessage.setRoomId(roomId);
         chatMessage.setChatType(ChatType.GROUP);
 
-        ChatMessage saved = chatService.saveMessage(chatMessage);
+        ChatMessageDTO saved = chatService.saveMessage(chatMessage);
+        saved.setLocalId(chatMessageDto.getLocalId());
+        
         simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/room/" + roomId, saved);
         
         chatTaskExecutor.execute(() -> {
-            publishMentionNotifications(projectId, saved, "ROOM");
+            publishMentionNotifications(projectId, projectContext.teamId(), projectContext.projectName(), saved, "ROOM");
             publishRoomChatNotifications(projectId, roomId, saved);
             chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "ROOM", saved);
-            publishUnreadBadgesForProject(projectId);
+            scheduleUnreadBadgePublish(projectId);
         });
     }
 
     @MessageMapping("/project/{projectId}/thread/{rootMessageId}/send")
     public void sendThreadReply(@DestinationVariable Long projectId,
                                        @DestinationVariable Long rootMessageId,
-                                       @Payload ChatMessage chatMessage,
+                                       @Payload ChatMessageDTO chatMessageDto,
                                        SimpMessageHeaderAccessor headerAccessor) {
         String username = requireAuthenticatedUsername(headerAccessor);
-        validateProjectMembership(projectId, username);
+        ProjectContext projectContext = resolveProjectContext(projectId);
+        validateProjectMembership(projectContext.teamId(), username);
 
+        ChatMessage chatMessage = chatService.convertToEntity(chatMessageDto);
         chatMessage.setSender(resolveCanonicalChatIdentifier(username));
         chatMessage.setType(ChatMessage.MessageType.CHAT);
         if (chatMessage.getFormatType() == null) {
@@ -199,10 +220,13 @@ public class ChatController {
         }
 
         var saved = chatService.saveThreadReply(projectId, rootMessageId, chatMessage);
+        saved.setLocalId(chatMessageDto.getLocalId());
+        
         simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/thread/" + rootMessageId, saved);
         
         chatTaskExecutor.execute(() -> {
-            publishMentionNotifications(projectId, saved, "THREAD");
+            publishMentionNotifications(projectId, projectContext.teamId(), projectContext.projectName(), saved, "THREAD");
+            publishThreadReplyNotifications(projectId, rootMessageId, saved);
             chatWebhookService.dispatchMessageEvent(projectId, "MESSAGE_CREATED", "THREAD", saved);
         });
     }
@@ -213,7 +237,7 @@ public class ChatController {
                             @Payload EditMessagePayload payload,
                             SimpMessageHeaderAccessor headerAccessor) {
         String username = requireAuthenticatedUsername(headerAccessor);
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
 
         var updated = chatService.editMessage(
                 projectId,
@@ -230,7 +254,7 @@ public class ChatController {
                               @DestinationVariable Long messageId,
                               SimpMessageHeaderAccessor headerAccessor) {
         String username = requireAuthenticatedUsername(headerAccessor);
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
 
         var deleted = chatService.softDeleteMessage(projectId, messageId, username);
         publishMessageEvent(projectId, deleted);
@@ -243,17 +267,19 @@ public class ChatController {
                                @Payload ReactionTogglePayload payload,
                                SimpMessageHeaderAccessor headerAccessor) {
         String username = requireAuthenticatedUsername(headerAccessor);
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
 
         var reactions = chatService.toggleReaction(projectId, messageId, username, payload.emoji());
 
         simpMessagingTemplate.convertAndSend(
                 "/topic/project/" + projectId + "/messages/" + messageId + "/reactions",
             Objects.requireNonNull(reactions));
+
+        chatTaskExecutor.execute(() -> publishReactionNotification(projectId, messageId, username, payload.emoji()));
     }
 
     private void validateRoomMembership(Long roomId, String usernameOrEmail) {
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             throw new RuntimeException("User is not found");
         }
@@ -277,10 +303,12 @@ public class ChatController {
     // It adds the username to the WebSocket session and broadcasts the join
     // message.
     @MessageMapping("/project/{projectId}/chat.addUser")
-    public void addUser(@DestinationVariable Long projectId, @Payload ChatMessage chatMessage,
+    public void addUser(@DestinationVariable Long projectId, @Payload ChatMessageDTO chatMessageDto,
                                SimpMessageHeaderAccessor headerAccessor) {
         String username = requireAuthenticatedUsername(headerAccessor);
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
+        
+        ChatMessage chatMessage = chatService.convertToEntity(chatMessageDto);
         chatMessage.setSender(resolveCanonicalChatIdentifier(username));
         chatMessage.setProjectId(projectId);
         chatMessage.setChatType(ChatType.GROUP);
@@ -300,14 +328,17 @@ public class ChatController {
         if (chatMessage.getType() == null) {
             chatMessage.setType(ChatMessage.MessageType.JOIN);
         }
-        simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/public", chatMessage);
+        
+        ChatMessageDTO result = chatService.convertToDTO(chatMessage);
+        result.setLocalId(chatMessageDto.getLocalId());
+        simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/public", result);
     }
 
     @MessageMapping("/project/{projectId}/presence.ping")
     public void pingPresence(@DestinationVariable Long projectId,
                              SimpMessageHeaderAccessor headerAccessor) {
         String username = requireAuthenticatedUsername(headerAccessor);
-        validateProjectMembership(projectId, username);
+        resolveValidatedTeamId(projectId, username);
 
         var onlineUsers = chatPresenceService.markOnline(projectId, resolveCanonicalChatIdentifier(username), headerAccessor.getSessionId());
         simpMessagingTemplate.convertAndSend(
@@ -320,7 +351,8 @@ public class ChatController {
                             @Payload TypingPayload payload,
                             SimpMessageHeaderAccessor headerAccessor) {
         String username = requireAuthenticatedUsername(headerAccessor);
-        validateProjectMembership(projectId, username);
+        Long teamId = projectMembershipService.resolveProjectTeamId(projectId);
+        validateProjectMembership(teamId, username);
 
         var canonicalSender = resolveCanonicalChatIdentifier(username);
         var scope = payload.scope() != null ? payload.scope().trim().toUpperCase() : "TEAM";
@@ -341,7 +373,7 @@ public class ChatController {
             if (payload.recipient() == null || payload.recipient().isBlank()) {
                 return;
             }
-            validateProjectMembership(projectId, payload.recipient());
+            validateProjectMembership(teamId, payload.recipient());
             var canonicalRecipient = resolveCanonicalChatIdentifier(payload.recipient());
             var event = new TypingEvent(canonicalSender, "PRIVATE", null, canonicalRecipient, typing);
             sendPrivateTypingEventToConversationParticipants(projectId, canonicalSender, canonicalRecipient, event);
@@ -353,38 +385,18 @@ public class ChatController {
                 new TypingEvent(canonicalSender, "TEAM", null, null, typing));
     }
 
-    private void validateProjectMembership(Long projectId, String usernameOrEmail) {
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+    private void validateProjectMembership(Long teamId, String usernameOrEmail) {
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             throw new RuntimeException("User is not found");
         }
-
-        var project = projectRepository.findById(projectId).orElseThrow(() -> new RuntimeException("Project not found"));
-        boolean isMember = teamMemberRepository.findByTeamIdAndUserUserId(project.getTeam().getId(), user.getUserId()).isPresent();
-        if (!isMember) {
-            throw new RuntimeException("User is not a member of the project");
-        }
+        projectMembershipService.assertTeamMembership(teamId, user);
     }
 
-    private com.planora.backend.model.User resolveUserByEmailOrUsername(String usernameOrEmail) {
-        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
-            return null;
-        }
-        var normalized = usernameOrEmail.toLowerCase();
-        if (normalized.contains("@")) {
-            var byEmail = userRepository.findByEmailIgnoreCase(normalized).orElse(null);
-            if (byEmail != null) {
-                return byEmail;
-            }
-            return userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        }
-
-        var byUsername = userRepository.findByUsernameIgnoreCase(normalized).orElse(null);
-        if (byUsername != null) {
-            return byUsername;
-        }
-
-        return userRepository.findByEmailIgnoreCase(normalized).orElse(null);
+    private Long resolveValidatedTeamId(Long projectId, String usernameOrEmail) {
+        Long teamId = projectMembershipService.resolveProjectTeamId(projectId);
+        validateProjectMembership(teamId, usernameOrEmail);
+        return teamId;
     }
 
     private String resolveCanonicalChatIdentifier(String usernameOrEmail) {
@@ -392,7 +404,7 @@ public class ChatController {
             return usernameOrEmail;
         }
 
-        var user = resolveUserByEmailOrUsername(usernameOrEmail);
+        var user = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (user == null) {
             return usernameOrEmail.toLowerCase();
         }
@@ -404,7 +416,7 @@ public class ChatController {
         return user.getEmail() != null ? user.getEmail().toLowerCase() : usernameOrEmail.toLowerCase();
     }
 
-    private void publishMessageEvent(Long projectId, ChatMessage message) {
+    private void publishMessageEvent(Long projectId, ChatMessageDTO message) {
         var eventType = Boolean.TRUE.equals(message.getDeleted()) ? "MESSAGE_DELETED" : "MESSAGE_UPDATED";
 
         if (message.getRecipient() != null && !message.getRecipient().isBlank()) {
@@ -431,8 +443,25 @@ public class ChatController {
         simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/public", message);
         chatTaskExecutor.execute(() -> {
             chatWebhookService.dispatchMessageEvent(projectId, eventType, "TEAM", message);
-            publishUnreadBadgesForProject(projectId);
+            scheduleUnreadBadgePublish(projectId);
         });
+    }
+
+    private void scheduleUnreadBadgePublish(Long projectId) {
+        long version = unreadBadgeVersionByProject.merge(projectId, 1L, Long::sum);
+        var prior = unreadBadgeTasks.remove(projectId);
+        if (prior != null) {
+            prior.cancel(false);
+        }
+
+        ScheduledFuture<?> task = unreadBadgeScheduler.schedule(() -> {
+            Long latestVersion = unreadBadgeVersionByProject.get(projectId);
+            if (latestVersion != null && latestVersion.equals(version)) {
+                publishUnreadBadgesForProject(projectId);
+                unreadBadgeTasks.remove(projectId);
+            }
+        }, UNREAD_BADGE_DEBOUNCE_MS, TimeUnit.MILLISECONDS);
+        unreadBadgeTasks.put(projectId, task);
     }
 
     private void publishUnreadBadgesForProject(Long projectId) {
@@ -441,39 +470,60 @@ public class ChatController {
             return;
         }
 
-        var participants = teamMemberRepository.findByTeamId(project.getTeam().getId()).stream()
-                .map(tm -> tm.getUser().getUsername())
+        var teamMembers = teamMemberRepository.findByTeamId(project.getTeam().getId());
+        var users = teamMembers.stream()
+                .map(com.planora.backend.model.TeamMember::getUser)
                 .filter(Objects::nonNull)
+                .filter(user -> user.getUserId() != null)
                 .toList();
+        if (users.isEmpty()) {
+            return;
+        }
 
-        participants.forEach(participant -> {
-            var visibleRooms = getVisibleRooms(projectId, participant, false);
-            var badge = chatService.buildUnreadBadge(projectId, participant, visibleRooms, participants);
-            simpMessagingTemplate.convertAndSendToUser(
-                    participant.toLowerCase(),
-                    "/queue/project/" + projectId + "/unread-badge",
-                    badge);
+        var userIds = users.stream().map(com.planora.backend.model.User::getUserId).toList();
+        Map<Long, Long> teamUnreadByUserId = chatMessageRepository
+                .countUnreadTeamMessagesForUsers(projectId, userIds, TEAM_CHAT_READ_KEY)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> ((Number) row[1]).longValue()));
+        Map<Long, Long> roomUnreadByUserId = chatMessageRepository
+                .countUnreadRoomMessagesForUsers(projectId, userIds)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> ((Number) row[1]).longValue()));
+        Map<Long, Long> directUnreadByUserId = chatMessageRepository
+                .countUnreadDirectMessagesForUsers(projectId, userIds)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> ((Number) row[1]).longValue()));
 
-            var user = resolveUserByEmailOrUsername(participant);
-            if (user != null && user.getEmail() != null && !user.getEmail().isBlank()) {
-                simpMessagingTemplate.convertAndSendToUser(
-                        user.getEmail().toLowerCase(),
-                        "/queue/project/" + projectId + "/unread-badge",
-                        badge);
+        users.forEach(user -> {
+            String participant = user.getUsername();
+            if (participant == null || participant.isBlank()) {
+                return;
             }
+            long teamUnread = teamUnreadByUserId.getOrDefault(user.getUserId(), 0L);
+            long roomsUnread = roomUnreadByUserId.getOrDefault(user.getUserId(), 0L);
+            long directsUnread = directUnreadByUserId.getOrDefault(user.getUserId(), 0L);
+            var badge = new ChatService.UnreadBadgeSummary(
+                    teamUnread,
+                    roomsUnread,
+                    directsUnread,
+                    teamUnread + roomsUnread + directsUnread);
+            sendToUserDestinations(user, "/queue/project/" + projectId + "/unread-badge", badge);
         });
     }
 
     private List<com.planora.backend.model.ChatRoom> getVisibleRooms(Long projectId, String username, boolean includeArchived) {
-        var currentUser = resolveUserByEmailOrUsername(username);
+        var currentUser = userCacheService.resolveUserByEmailOrUsername(username);
         if (currentUser == null) {
             return List.of();
         }
 
-        var memberRoomIds = chatRoomMemberRepository.findByUserUserId(currentUser.getUserId()).stream()
-                .map(roomMember -> roomMember.getChatRoom().getId())
-                .distinct()
-                .toList();
+        var memberRoomIds = chatRoomMemberRepository.findRoomIdsByUserId(currentUser.getUserId());
 
         return chatRoomRepository.findByProjectId(projectId).stream()
                 .filter(room -> room.getCreatedBy() != null && room.getCreatedBy().equalsIgnoreCase(username)
@@ -491,19 +541,12 @@ public class ChatController {
 
         aliases.stream()
                 .filter(alias -> alias != null && !alias.isBlank())
-                .map(this::resolveUserByEmailOrUsername)
+                .map(userCacheService::resolveUserByEmailOrUsername)
                 .filter(Objects::nonNull)
-                .forEach(user -> {
-                    if (user.getUsername() != null && !user.getUsername().isBlank()) {
-                        simpMessagingTemplate.convertAndSendToUser(user.getUsername().toLowerCase(), destination, event);
-                    }
-                    if (user.getEmail() != null && !user.getEmail().isBlank()) {
-                        simpMessagingTemplate.convertAndSendToUser(user.getEmail().toLowerCase(), destination, event);
-                    }
-                });
+                .forEach(user -> sendToUserDestinations(user, destination, event));
     }
 
-    private void sendPrivateMessageToConversationParticipants(Long projectId, ChatMessage savedMessage) {
+    private void sendPrivateMessageToConversationParticipants(Long projectId, ChatMessageDTO savedMessage) {
         var destination = "/queue/project/" + projectId + "/messages";
         var aliases = List.of(
                 savedMessage.getSender(),
@@ -511,20 +554,129 @@ public class ChatController {
 
         aliases.stream()
                 .filter(alias -> alias != null && !alias.isBlank())
-                .map(this::resolveUserByEmailOrUsername)
+                .map(userCacheService::resolveUserByEmailOrUsername)
                 .filter(Objects::nonNull)
-                .forEach(user -> {
-                    if (user.getUsername() != null && !user.getUsername().isBlank()) {
-                        simpMessagingTemplate.convertAndSendToUser(user.getUsername().toLowerCase(), destination, savedMessage);
-                    }
-
-                    if (user.getEmail() != null && !user.getEmail().isBlank()) {
-                        simpMessagingTemplate.convertAndSendToUser(user.getEmail().toLowerCase(), destination, savedMessage);
-                    }
-                });
+                .forEach(user -> sendToUserDestinations(user, destination, savedMessage));
     }
 
-    private void publishMentionNotifications(Long projectId, ChatMessage savedMessage, String scope) {
+    private void publishPrivateMessageNotification(Long projectId, String projectName, ChatMessageDTO savedMessage) {
+        if (savedMessage == null || savedMessage.getSender() == null || savedMessage.getRecipient() == null) {
+            return;
+        }
+
+        var senderUser = userCacheService.resolveUserByEmailOrUsername(savedMessage.getSender());
+        var recipientUser = userCacheService.resolveUserByEmailOrUsername(savedMessage.getRecipient());
+        if (recipientUser == null || senderUser == null
+                || recipientUser.getUserId() == null
+                || senderUser.getUserId() == null
+                || recipientUser.getUserId().equals(senderUser.getUserId())) {
+            return;
+        }
+
+        String senderDisplay = senderUser.getFullName() != null && !senderUser.getFullName().isBlank()
+                ? senderUser.getFullName()
+                : senderUser.getUsername();
+        String notifMessage = senderDisplay + " sent you a message in \"" + projectName + "\"";
+        String senderAlias = resolveCanonicalChatIdentifier(savedMessage.getSender());
+        String notifLink = "/project/" + projectId + "/chat?with=" + senderAlias;
+
+        // Keep parity with group-chat path: always persist and push in realtime.
+        notificationService.createNotification(recipientUser, notifMessage, notifLink);
+    }
+
+    private void publishThreadReplyNotifications(Long projectId, Long rootMessageId, ChatMessageDTO savedReply) {
+        if (savedReply == null) {
+            return;
+        }
+
+        var root = chatMessageRepository.findByIdAndProjectId(rootMessageId, projectId).orElse(null);
+        if (root == null) {
+            return;
+        }
+
+        if (root.getRoomId() != null) {
+            publishRoomChatNotifications(projectId, root.getRoomId(), savedReply);
+            return;
+        }
+
+        if (root.getRecipient() != null && !root.getRecipient().isBlank()) {
+            publishPrivateThreadReplyNotification(projectId, root, savedReply);
+            return;
+        }
+
+        publishTeamChatNotifications(projectId, resolveProjectContext(projectId), savedReply);
+    }
+
+    private void publishPrivateThreadReplyNotification(Long projectId, ChatMessage rootMessage, ChatMessageDTO savedReply) {
+        var senderUser = userCacheService.resolveUserByEmailOrUsername(savedReply.getSender());
+        if (senderUser == null || senderUser.getUserId() == null) {
+            return;
+        }
+
+        var rootSender = userCacheService.resolveUserByEmailOrUsername(rootMessage.getSender());
+        var rootRecipient = userCacheService.resolveUserByEmailOrUsername(rootMessage.getRecipient());
+        com.planora.backend.model.User counterpart = null;
+
+        if (rootSender != null && rootSender.getUserId() != null
+                && senderUser.getUserId().equals(rootSender.getUserId())) {
+            counterpart = rootRecipient;
+        } else if (rootRecipient != null && rootRecipient.getUserId() != null
+                && senderUser.getUserId().equals(rootRecipient.getUserId())) {
+            counterpart = rootSender;
+        }
+
+        if (counterpart == null || counterpart.getUserId() == null
+                || counterpart.getUserId().equals(senderUser.getUserId())) {
+            return;
+        }
+
+        String senderDisplay = senderUser.getFullName() != null && !senderUser.getFullName().isBlank()
+                ? senderUser.getFullName()
+                : senderUser.getUsername();
+        String project = projectRepository.findById(projectId).map(p -> p.getName()).orElse("the project");
+        String notifMessage = senderDisplay + " replied in a thread in \"" + project + "\"";
+        String notifLink = "/project/" + projectId + "/chat?with=" + resolveCanonicalChatIdentifier(savedReply.getSender());
+
+        notificationService.createNotification(counterpart, notifMessage, notifLink);
+    }
+
+    private void publishReactionNotification(Long projectId, Long messageId, String actorAlias, String emoji) {
+        var message = chatMessageRepository.findByIdAndProjectId(messageId, projectId).orElse(null);
+        if (message == null || message.getSender() == null || message.getSender().isBlank()) {
+            return;
+        }
+
+        var actorUser = userCacheService.resolveUserByEmailOrUsername(actorAlias);
+        var messageSender = userCacheService.resolveUserByEmailOrUsername(message.getSender());
+        if (actorUser == null || messageSender == null
+                || actorUser.getUserId() == null || messageSender.getUserId() == null
+                || actorUser.getUserId().equals(messageSender.getUserId())) {
+            return;
+        }
+
+        String actorDisplay = actorUser.getFullName() != null && !actorUser.getFullName().isBlank()
+                ? actorUser.getFullName()
+                : actorUser.getUsername();
+        String normalizedEmoji = emoji != null && !emoji.isBlank() ? emoji.trim() : "a reaction";
+        String notifMessage = actorDisplay + " reacted " + normalizedEmoji + " to your message";
+        String notifLink = buildNotificationLinkForMessage(projectId, message, resolveCanonicalChatIdentifier(actorAlias));
+
+        notificationService.createNotification(messageSender, notifMessage, notifLink);
+    }
+
+    private String buildNotificationLinkForMessage(Long projectId, ChatMessage message, String actorAlias) {
+        if (message.getRoomId() != null) {
+            return "/project/" + projectId + "/chat?roomId=" + message.getRoomId();
+        }
+
+        if (message.getRecipient() != null && !message.getRecipient().isBlank()) {
+            return "/project/" + projectId + "/chat?with=" + actorAlias;
+        }
+
+        return "/project/" + projectId + "/chat?view=team";
+    }
+
+    private void publishMentionNotifications(Long projectId, Long teamId, String projectName, ChatMessageDTO savedMessage, String scope) {
         if (savedMessage == null || savedMessage.getContent() == null || savedMessage.getContent().isBlank()) {
             return;
         }
@@ -542,7 +694,7 @@ public class ChatController {
             return;
         }
 
-        var senderAliases = resolveUserByEmailOrUsername(savedMessage.getSender());
+        var senderAliases = userCacheService.resolveUserByEmailOrUsername(savedMessage.getSender());
         var senderUsername = senderAliases != null && senderAliases.getUsername() != null
                 ? senderAliases.getUsername().toLowerCase()
                 : null;
@@ -550,31 +702,32 @@ public class ChatController {
                 ? senderAliases.getEmail().toLowerCase()
                 : null;
 
-        // Resolve the project name once for use in notification messages.
-        String projectName = projectRepository.findById(projectId)
-                .map(p -> p.getName()).orElse("the project");
-
         var destination = "/queue/project/" + projectId + "/mentions";
         var preview = savedMessage.getContent().length() > 120
                 ? savedMessage.getContent().substring(0, 120)
                 : savedMessage.getContent();
 
-        mentions.forEach(mentioned -> {
-            var user = resolveUserByEmailOrUsername(mentioned);
-            if (user == null) {
-                return;
-            }
+        var mentionedUsers = mentions.stream()
+                .map(userCacheService::resolveUserByEmailOrUsername)
+                .filter(Objects::nonNull)
+                .filter(user -> user.getUserId() != null)
+                .toList();
+        if (mentionedUsers.isEmpty()) {
+            return;
+        }
 
+        java.util.Set<Long> mentionedUserIds = mentionedUsers.stream()
+                .map(com.planora.backend.model.User::getUserId)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        java.util.Set<Long> memberUserIds = teamMemberRepository.findByTeamIdAndUserUserIdIn(teamId, mentionedUserIds).stream()
+                .map(tm -> tm.getUser() != null ? tm.getUser().getUserId() : null)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+
+        mentionedUsers.forEach(user -> {
             var isSender = (senderUsername != null && senderUsername.equalsIgnoreCase(user.getUsername()))
                     || (senderEmail != null && senderEmail.equalsIgnoreCase(user.getEmail()));
-            if (isSender) {
-                return;
-            }
-
-            var isProjectMember = projectRepository.findById(projectId)
-                    .flatMap(project -> teamMemberRepository.findByTeamIdAndUserUserId(project.getTeam().getId(), user.getUserId()))
-                    .isPresent();
-            if (!isProjectMember) {
+            if (isSender || !memberUserIds.contains(user.getUserId())) {
                 return;
             }
 
@@ -588,12 +741,7 @@ public class ChatController {
                     preview);
 
             // Send the real-time WebSocket mention event (existing behaviour).
-            if (user.getUsername() != null && !user.getUsername().isBlank()) {
-                simpMessagingTemplate.convertAndSendToUser(user.getUsername().toLowerCase(), destination, event);
-            }
-            if (user.getEmail() != null && !user.getEmail().isBlank()) {
-                simpMessagingTemplate.convertAndSendToUser(user.getEmail().toLowerCase(), destination, event);
-            }
+            sendToUserDestinations(user, destination, event);
 
             // ── NOTIFICATION: also persist a bell notification for the mention ─
             // The WebSocket event is ephemeral (lost if the user is offline).
@@ -611,36 +759,46 @@ public class ChatController {
         });
     }
 
-    private void publishTeamChatNotifications(Long projectId, ChatMessage savedMessage) {
+    private void publishTeamChatNotifications(Long projectId, ProjectContext projectContext, ChatMessageDTO savedMessage) {
         if (savedMessage == null || savedMessage.getSender() == null || savedMessage.getSender().isBlank()) {
             return;
         }
 
-        var project = projectRepository.findById(projectId).orElse(null);
-        if (project == null || project.getTeam() == null) {
+        if (projectContext.teamId() == null) {
             return;
         }
 
-        var senderUser = resolveUserByEmailOrUsername(savedMessage.getSender());
+        var senderUser = userCacheService.resolveUserByEmailOrUsername(savedMessage.getSender());
         var senderAlias = savedMessage.getSender();
         var senderDisplay = senderUser != null && senderUser.getFullName() != null && !senderUser.getFullName().isBlank()
                 ? senderUser.getFullName()
                 : senderAlias;
-        var projectName = project.getName() != null && !project.getName().isBlank()
-                ? project.getName()
-                : "the project";
+        var projectName = projectContext.projectName();
         var message = senderDisplay + " sent a message in \"" + projectName + "\" team chat: "
                 + buildNotificationPreview(savedMessage.getContent());
         var link = "/project/" + projectId + "/chat";
 
-        teamMemberRepository.findByTeamId(project.getTeam().getId()).stream()
+        teamMemberRepository.findByTeamId(projectContext.teamId()).stream()
                 .map(com.planora.backend.model.TeamMember::getUser)
                 .filter(Objects::nonNull)
                 .filter(recipient -> !isSender(recipient, senderUser, senderAlias))
                 .forEach(recipient -> notificationService.createNotification(recipient, message, link));
     }
 
-    private void publishRoomChatNotifications(Long projectId, Long roomId, ChatMessage savedMessage) {
+    private ProjectContext resolveProjectContext(Long projectId) {
+        var project = projectRepository.findById(projectId).orElse(null);
+        if (project == null) {
+            throw new RuntimeException("Project not found");
+        }
+        Long teamId = project.getTeam() != null ? project.getTeam().getId() : null;
+        if (teamId == null) {
+            throw new RuntimeException("Project team not found");
+        }
+        String projectName = project.getName() != null && !project.getName().isBlank() ? project.getName() : "the project";
+        return new ProjectContext(teamId, projectName);
+    }
+
+    private void publishRoomChatNotifications(Long projectId, Long roomId, ChatMessageDTO savedMessage) {
         if (savedMessage == null || savedMessage.getSender() == null || savedMessage.getSender().isBlank()) {
             return;
         }
@@ -650,7 +808,7 @@ public class ChatController {
             return;
         }
 
-        var senderUser = resolveUserByEmailOrUsername(savedMessage.getSender());
+        var senderUser = userCacheService.resolveUserByEmailOrUsername(savedMessage.getSender());
         var senderAlias = savedMessage.getSender();
         var senderDisplay = senderUser != null && senderUser.getFullName() != null && !senderUser.getFullName().isBlank()
                 ? senderUser.getFullName()
@@ -668,7 +826,7 @@ public class ChatController {
                 .filter(Objects::nonNull)
                 .forEach(recipientIds::add);
 
-        var creatorUser = resolveUserByEmailOrUsername(room.getCreatedBy());
+        var creatorUser = userCacheService.resolveUserByEmailOrUsername(room.getCreatedBy());
         if (creatorUser != null && creatorUser.getUserId() != null) {
             recipientIds.add(creatorUser.getUserId());
         }
@@ -721,6 +879,20 @@ public class ChatController {
         }
 
         return principal.getName();
+    }
+
+    private void sendToUserDestinations(com.planora.backend.model.User user, String destination, Object payload) {
+        if (user == null || destination == null || destination.isBlank() || payload == null) {
+            return;
+        }
+        var identities = new LinkedHashSet<String>();
+        if (user.getUsername() != null && !user.getUsername().isBlank()) {
+            identities.add(user.getUsername().toLowerCase());
+        }
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            identities.add(user.getEmail().toLowerCase());
+        }
+        identities.forEach(identity -> simpMessagingTemplate.convertAndSendToUser(identity, destination, payload));
     }
 
     private boolean isRoomCreator(com.planora.backend.model.ChatRoom room, com.planora.backend.model.User user, String usernameOrEmail) {

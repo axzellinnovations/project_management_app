@@ -20,7 +20,6 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import SockJS from 'sockjs-client';
 import { CompatClient, Stomp } from '@stomp/stompjs';
 import { getValidToken } from '@/lib/auth';
 
@@ -123,8 +122,8 @@ export function useMembersSync(
     }
 
     const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
-    const socket = new SockJS(`${backendUrl}/ws`);
-    const client = Stomp.over(socket);
+    const wsUrl = backendUrl.replace(/^http/, 'ws');
+    const client = Stomp.client(`${wsUrl}/ws-native`);
 
     // Silence the STOMP library's own console noise in production.
     client.debug = process.env.NODE_ENV === 'development'

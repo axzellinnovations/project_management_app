@@ -15,10 +15,12 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-@Data
+@Getter
+@Setter
 @Entity
 @Table(name = "users")
 @AllArgsConstructor
@@ -84,4 +86,17 @@ public class User {
     private LocalDateTime updatedAt;
 
     private LocalDateTime lastActive;
+    
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        User user = (User) o;
+        return java.util.Objects.equals(userId, user.userId);
+    }
+
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(userId);
+    }
 }
