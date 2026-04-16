@@ -9,6 +9,7 @@ interface TaskEvent {
   type: 'TASK_CREATED' | 'TASK_UPDATED' | 'TASK_DELETED';
   task?: {
     id: number;
+    projectTaskNumber?: number;
     title: string;
     storyPoint: number;
     status: string;

@@ -303,11 +303,32 @@ public class TaskController {
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal UserPrincipal currentUser
     ) {
-        LocalDate startDate = body.containsKey("startDate") && body.get("startDate") != null && !body.get("startDate").trim().isEmpty()
+        boolean startDateProvided = body.containsKey("startDate");
+        boolean dueDateProvided = body.containsKey("dueDate");
+        LocalDate startDate = startDateProvided && body.get("startDate") != null && !body.get("startDate").trim().isEmpty()
                 ? LocalDate.parse(body.get("startDate")) : null;
-        LocalDate dueDate = body.containsKey("dueDate") && body.get("dueDate") != null && !body.get("dueDate").trim().isEmpty()
+        LocalDate dueDate = dueDateProvided && body.get("dueDate") != null && !body.get("dueDate").trim().isEmpty()
                 ? LocalDate.parse(body.get("dueDate")) : null;
-        service.patchTaskDates(taskId, startDate, dueDate, currentUser.getUserId());
+        service.patchTaskDates(taskId, startDate, startDateProvided, dueDate, dueDateProvided, currentUser.getUserId());
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @PatchMapping("/reorder")
+    public ResponseEntity<Void> reorderTasks(
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal UserPrincipal currentUser
+    ) {
+        Long projectId = body.get("projectId") == null ? null : Long.valueOf(String.valueOf(body.get("projectId")));
+        Long sprintId = body.get("sprintId") == null ? null : Long.valueOf(String.valueOf(body.get("sprintId")));
+        @SuppressWarnings("unchecked")
+        List<Object> rawIds = (List<Object>) body.get("orderedTaskIds");
+        List<Long> orderedTaskIds = rawIds == null
+                ? List.of()
+                : rawIds.stream().map(id -> Long.valueOf(String.valueOf(id))).toList();
+        if (projectId == null) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+        service.reorderTasks(projectId, sprintId, orderedTaskIds, currentUser.getUserId());
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
