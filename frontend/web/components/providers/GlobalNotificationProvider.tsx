@@ -326,7 +326,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
     (destination: string, body: string, headers?: Record<string, string>) => {
       const client = stompClientRef.current;
       if (!client?.connected) return;
-      client.send(destination, headers || {}, body);
+      client.publish({ destination, body, headers });
     },
     [],
   );
