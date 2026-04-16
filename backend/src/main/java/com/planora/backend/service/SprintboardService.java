@@ -255,6 +255,8 @@ public class SprintboardService {
 
         requireViewBoard(sprint.getProId(), currentUserId);
 
+        // Use the details query so assignee/reporter are available for notifications
+        // and unit tests that mock this repository path remain stable.
         Task task = taskRepository.findByIdWithDetails(taskId)
                 .orElseThrow(() -> new RuntimeException("Task not found"));
 
