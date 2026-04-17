@@ -56,12 +56,6 @@ const renderActiveShape = (props: any) => {
 
   return (
     <g>
-      <text x={cx} y={cy - 10} dy={8} textAnchor="middle" fill="#101828" className="font-arimo font-bold text-lg">
-        {payload.name === 'Unassigned' ? 'Unassigned' : payload.name.split(' ')[0]}
-      </text>
-      <text x={cx} y={cy + 15} dy={8} textAnchor="middle" fill="#6A7282" className="font-arimo text-xs">
-        {value} Tasks ({(percent * 100).toFixed(0)}%)
-      </text>
       <Sector
         cx={cx}
         cy={cy}
@@ -222,12 +216,25 @@ export function WorkloadDistribution({ projectId, tasks = [] }: { projectId: num
           {activeWorkloadData.length > 0 ? (
             <div className="relative w-full h-[280px]">
               {/* Perfectly centered absolute HTML inside the precise PieChart geometry */}
-              <div className={`absolute inset-0 flex flex-col items-center justify-center pointer-events-none transition-opacity duration-300 z-10 ${activeIndex === -1 ? 'opacity-100' : 'opacity-0'}`}>
-                <h3 className="text-[24px] font-black text-[#101828] leading-none mb-1">{members.length}</h3>
-                <p className="text-[10px] font-bold text-[#667085] uppercase tracking-widest mb-1.5">Members</p>
-                <div className="w-8 h-[2px] bg-gray-200 rounded-full mb-1.5"></div>
-                <h3 className="text-[18px] font-black text-[#0052CC] leading-none mb-1">{tasks.length}</h3>
-                <p className="text-[10px] font-bold text-[#667085] uppercase tracking-widest">Tasks</p>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none transition-all duration-300 z-10 opacity-100">
+                {activeIndex === -1 ? (
+                  <>
+                    <h3 className="text-[24px] font-black text-[#101828] leading-none mb-1">{members.length}</h3>
+                    <p className="text-[10px] font-bold text-[#667085] uppercase tracking-widest mb-1.5">Members</p>
+                    <div className="w-8 h-[2px] bg-gray-200 rounded-full mb-1.5"></div>
+                    <h3 className="text-[18px] font-black text-[#0052CC] leading-none mb-1">{tasks.length}</h3>
+                    <p className="text-[10px] font-bold text-[#667085] uppercase tracking-widest">Tasks</p>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-2 mt-[-2px]">
+                    <h3 className="text-[22px] font-arimo font-extrabold tracking-tight bg-gradient-to-br from-[#101828] to-[#667085] bg-clip-text text-transparent leading-[1.2] text-center px-4 line-clamp-1">
+                      {activeWorkloadData[activeIndex]?.name === 'Unassigned' ? 'Unassigned' : activeWorkloadData[activeIndex]?.name?.split(' ')[0] || 'Unknown'}
+                    </h3>
+                    <p className="text-[13px] font-arimo text-[#667085]">
+                      {activeWorkloadData[activeIndex]?.value || 0} Tasks ({Math.round(((activeWorkloadData[activeIndex]?.value || 0) / (tasks.length || 1)) * 100)}%)
+                    </p>
+                  </div>
+                )}
               </div>
 
               <SafeChartFrame>
@@ -277,7 +284,8 @@ export function WorkloadDistribution({ projectId, tasks = [] }: { projectId: num
               return (
                 <div
                   key={member.name}
-                  onMouseEnter={() => { if (actualPieIndex !== -1) setActiveIndex(actualPieIndex); }}
+                  onMouseEnter={() => setActiveIndex(actualPieIndex)}
+                  onClick={() => setActiveIndex(actualPieIndex)}
                   className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border bg-white/60 backdrop-blur-md transition-all cursor-pointer ${actualPieIndex === activeIndex && actualPieIndex !== -1 ? 'border-white/90 shadow-md ring-1 ring-white shadow-[0_4px_20px_rgb(0,82,204,0.06)] scale-[1.01]' : 'border-white/50 hover:border-white/80 hover:bg-white/80'
                     }`}
                 >
