@@ -106,6 +106,13 @@ button, a {
 @media (max-width: 767px) {
   .main-content-area {
     padding-bottom: 0px;
+    transition: filter 280ms ease;
+  }
+
+  body.mobile-sidebar-open .main-content-area {
+    filter: blur(6px);
+    pointer-events: none;
+    user-select: none;
   }
 }
 

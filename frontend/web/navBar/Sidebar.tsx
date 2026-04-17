@@ -19,6 +19,7 @@ import { NotificationsPanelContent } from './sidebar/NotificationsPanel';
 import ProjectList from '@/components/layout/sidebar/ProjectList';
 import InboxBadge from '@/components/layout/sidebar/InboxBadge';
 import { useGlobalNotifications } from '@/components/providers/GlobalNotificationProvider';
+import { useNavigation } from '@/lib/navigation-context';
 import {
   HomeIcon,
   ProfileIcon,
@@ -126,6 +127,7 @@ export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const { unreadCount: globalUnreadCount, notifications } = useGlobalNotifications();
+  const { setSidebarOpen } = useNavigation();
 
   const token = useSyncExternalStore<string | null>(
     subscribeToBrowserStorage,
@@ -178,6 +180,23 @@ export default function Sidebar() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    setSidebarOpen(isMobile && !collapsed);
+  }, [isMobile, collapsed, setSidebarOpen]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const isOpenOnMobile = isMobile && !collapsed;
+    document.body.classList.toggle('mobile-sidebar-open', isOpenOnMobile);
+    return () => {
+      document.body.classList.remove('mobile-sidebar-open');
+    };
+  }, [isMobile, collapsed]);
+
+  useEffect(() => {
+    return () => setSidebarOpen(false);
+  }, [setSidebarOpen]);
 
   const favRef = useRef<HTMLDivElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
@@ -368,11 +387,17 @@ export default function Sidebar() {
   /* -- render -- */
   return (
     <>
-      {/* Mobile Backdrop Overlay */}
+      {/* Mobile Backdrop Overlay - Full screen blur to cover everything */}
       <div
-        className={`md:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[9998] transition-opacity duration-300 ease-in-out ${isMobile && !collapsed ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        className={`md:hidden fixed inset-0 z-[9998] bg-slate-900/35 backdrop-blur-xl transition-all duration-300 ease-in-out ${isMobile && !collapsed ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
           }`}
         onClick={() => {
+          setCollapsed(true);
+          localStorage.setItem('planora:sidebar:collapsed', 'true');
+          window.dispatchEvent(new CustomEvent('planora:sidebar:collapsed', { detail: { collapsed: true } }));
+          closeAll();
+        }}
+        onTouchEnd={() => {
           setCollapsed(true);
           localStorage.setItem('planora:sidebar:collapsed', 'true');
           window.dispatchEvent(new CustomEvent('planora:sidebar:collapsed', { detail: { collapsed: true } }));
@@ -397,7 +422,7 @@ export default function Sidebar() {
           }}
         >
           <div className="relative h-full bg-[#F9FAFB] border-r border-cu-border flex flex-col w-[260px] md:w-[inherit]">
-            <SidebarHeader collapsed={collapsed} />
+            <SidebarHeader collapsed={collapsed} onToggle={toggleCollapsed} />
             <CollapseButton collapsed={collapsed} onToggle={toggleCollapsed} />
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 flex flex-col gap-0.5">
