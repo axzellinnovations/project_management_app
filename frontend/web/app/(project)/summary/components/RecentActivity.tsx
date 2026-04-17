@@ -1,9 +1,11 @@
 import React from 'react';
 import MotionWrapper from './MotionWrapper';
-import { Task, PageItem } from '@/types';
+import { Task, PageItem, MilestoneResponse } from '@/types';
 import Link from 'next/link';
 import api from '@/lib/axios';
 import useSWR from 'swr';
+import { Flag } from 'lucide-react';
+import { STATUS_CONFIG } from '../../milestones/components/milestoneConfig';
 
 function formatTimeAgo(dateString?: string) {
     if (!dateString) return '';
@@ -22,18 +24,34 @@ export default function RecentActivity({ projectId, tasks = [] }: { projectId: n
         projectId ? `/api/projects/${projectId}/pages` : null,
         fetcher
     );
+    const { data: milestones = [], isLoading: milestonesLoading } = useSWR<MilestoneResponse[]>(
+        projectId ? `/api/projects/${projectId}/milestones` : null,
+        fetcher
+    );
     // Recent Activity Feed: Most recently updated tasks
     const recentUpdates = [...tasks]
         .filter(t => t.updatedAt)
         .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime())
         .slice(0, 5);
 
-    // Milestones: Tasks with closest upcoming dueDates
-    const now = new Date().getTime();
-    const upcomingMilestones = [...tasks]
-        .filter(t => t.dueDate && t.status !== 'DONE' && new Date(t.dueDate).getTime() >= now)
-        .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
-        .slice(0, 3);
+    // Milestones: Use actual milestone records (same source as milestone page)
+    const todayStart = React.useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return today;
+    }, []);
+
+    const upcomingMilestones = React.useMemo(() => {
+        return [...milestones]
+            .filter((m) => m.status !== 'COMPLETED' && m.status !== 'ARCHIVED')
+            .sort((a, b) => {
+                if (!a.dueDate && !b.dueDate) return a.name.localeCompare(b.name);
+                if (!a.dueDate) return 1;
+                if (!b.dueDate) return -1;
+                return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+            })
+            .slice(0, 4);
+    }, [milestones]);
 
     // Pinned Docs: Project pages (latest first)
     const recentPages = [...pages]
@@ -82,25 +100,67 @@ export default function RecentActivity({ projectId, tasks = [] }: { projectId: n
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF8B00" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
                     Upcoming Milestones
                 </h2>
-                
-                {upcomingMilestones.length === 0 ? (
-                    <p className="font-arimo text-[13px] text-[#98A2B3] bg-gray-50 p-4 rounded-lg text-center border border-dashed border-gray-200">No upcoming deadlines.</p>
+
+                {milestonesLoading ? (
+                    <div className="space-y-3">
+                        {[1, 2, 3].map(i => (
+                            <div key={i} className="h-14 bg-gray-100/70 rounded-lg animate-pulse" />
+                        ))}
+                    </div>
+                ) : upcomingMilestones.length === 0 ? (
+                    <p className="font-arimo text-[13px] text-[#98A2B3] bg-gray-50 p-4 rounded-lg text-center border border-dashed border-gray-200">No upcoming milestones.</p>
                 ) : (
                     <div className="space-y-4">
-                        {upcomingMilestones.map(t => {
-                            const daysDiff = Math.ceil((new Date(t.dueDate!).getTime() - now) / (1000 * 3600 * 24));
+                        {upcomingMilestones.map((milestone) => {
+                            const statusKey = Object.prototype.hasOwnProperty.call(STATUS_CONFIG, milestone.status)
+                                ? (milestone.status as keyof typeof STATUS_CONFIG)
+                                : 'OPEN';
+                            const statusConf = STATUS_CONFIG[statusKey];
+
+                            const dueDate = milestone.dueDate ? new Date(milestone.dueDate) : null;
+                            const daysDiff = dueDate
+                                ? Math.ceil((dueDate.getTime() - todayStart.getTime()) / (1000 * 3600 * 24))
+                                : null;
+                            const isOverdue = Boolean(dueDate && milestone.status === 'OPEN' && dueDate < todayStart);
+
                             return (
-                                <div key={t.id} className="flex justify-between items-center group">
-                                    <div className="flex-1 min-w-0 pr-3">
-                                        <p className="font-arimo text-[13px] font-semibold text-gray-800 truncate">{t.title}</p>
-                                        <p className="font-arimo text-[11px] text-gray-500 truncate">Assigned to: {t.assigneeName || 'Unassigned'}</p>
+                                <div key={milestone.id} className="p-3 rounded-xl border border-gray-200 bg-white hover:border-blue-200 transition-colors">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <Flag size={13} className={milestone.status === 'COMPLETED' ? 'text-green-500' : 'text-blue-500'} />
+                                            <p className="font-arimo text-[13px] font-semibold text-gray-800 truncate">{milestone.name}</p>
+                                        </div>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${statusConf.badge}`}>
+                                            {statusConf.label}
+                                        </span>
                                     </div>
-                                    <div className={`px-2 py-1 rounded text-[11px] font-bold whitespace-nowrap ${daysDiff <= 3 ? 'bg-[#FFEBE6] text-[#DE350B]' : 'bg-[#FFF4ED] text-[#FF8B00]'}`}>
-                                        {daysDiff === 0 ? 'Today' : `In ${daysDiff} day${daysDiff > 1 ? 's' : ''}`}
+
+                                    <div className="mt-2 flex items-center justify-between gap-3">
+                                        <span className={`text-[11px] font-arimo ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                                            {dueDate
+                                                ? dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                                : 'No due date'}
+                                        </span>
+                                        <span className={`text-[11px] font-bold whitespace-nowrap ${isOverdue ? 'text-red-600' : 'text-amber-600'}`}>
+                                            {dueDate
+                                                ? (isOverdue
+                                                    ? `${Math.abs(daysDiff ?? 0)}d overdue`
+                                                    : daysDiff === 0
+                                                        ? 'Due today'
+                                                        : `In ${daysDiff} day${(daysDiff ?? 0) > 1 ? 's' : ''}`)
+                                                : `${milestone.taskCount} tasks`}
+                                        </span>
                                     </div>
                                 </div>
                             );
                         })}
+
+                        <Link
+                            href={`/milestones?projectId=${projectId}`}
+                            className="inline-flex items-center justify-center gap-1.5 w-full mt-1 py-2.5 rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors font-arimo text-[12px] font-bold"
+                        >
+                            Open Milestones
+                        </Link>
                     </div>
                 )}
             </MotionWrapper>

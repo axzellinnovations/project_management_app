@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import api from '@/lib/axios';
+import { ProjectTypeIcon, isAgileProjectType } from '@/components/shared/ProjectTypeIcon';
 
 interface RecentProjectCardProps {
     id: string;
@@ -28,6 +29,7 @@ export default function RecentProjectCard({
 }: RecentProjectCardProps) {
     const router = useRouter();
     const [isFavorite, setIsFavorite] = useState(initialIsFavorite);
+    const isAgileProject = isAgileProjectType(type);
 
     useEffect(() => {
         setIsFavorite(initialIsFavorite);
@@ -68,7 +70,7 @@ export default function RecentProjectCard({
         window.dispatchEvent(new CustomEvent('planora:project-accessed'));
         localStorage.setItem('currentProjectName', name);
         
-        if (type === 'AGILE' || type === 'Agile Scrum') {
+        if (isAgileProject) {
             router.push(`/sprint-board?projectId=${id}`);
         } else {
             router.push(`/kanban?projectId=${id}`);
@@ -76,7 +78,12 @@ export default function RecentProjectCard({
     };
 
     // Subtext like "SINTHU • V1.0"
-    const displaySubtext = `${projectKey ? projectKey : name.substring(0, 4)} • ${type === 'AGILE' || type === 'Agile Scrum' ? 'Agile' : 'Kanban'}`.toUpperCase();
+    const displaySubtext = `${projectKey ? projectKey : name.substring(0, 4)} • ${isAgileProject ? 'Agile' : 'Kanban'}`.toUpperCase();
+
+    const boardButtonTitle = isAgileProject ? 'View Sprint Board' : 'View Kanban Board';
+    const boardButtonClassName = isAgileProject
+        ? 'w-[32px] h-[32px] flex items-center justify-center bg-indigo-50/50 text-indigo-500 rounded-lg border border-indigo-100/50 shadow-sm transition-all duration-300 hover:bg-indigo-500 hover:text-white hover:scale-110 hover:shadow-indigo-200/50'
+        : 'w-[32px] h-[32px] flex items-center justify-center bg-emerald-50/50 text-emerald-500 rounded-lg border border-emerald-100/50 shadow-sm transition-all duration-300 hover:bg-emerald-500 hover:text-white hover:scale-110 hover:shadow-emerald-200/50';
 
     const handleMembersClick = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -149,29 +156,13 @@ export default function RecentProjectCard({
                     <div className="flex items-center justify-between">
                         {/* Icons */}
                         <div className="flex items-center gap-2.5">
-                            {type === 'AGILE' || type === 'Agile Scrum' ? (
-                                <button 
-                                    onClick={handleBoardClick}
-                                    title="View Sprint Board"
-                                    className="w-[32px] h-[32px] flex items-center justify-center bg-indigo-50/50 text-indigo-500 rounded-lg border border-indigo-100/50 shadow-sm transition-all duration-300 hover:bg-indigo-500 hover:text-white hover:scale-110 hover:shadow-indigo-200/50"
-                                >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-                                    </svg>
-                                </button>
-                            ) : (
-                                <button 
-                                    onClick={handleBoardClick}
-                                    title="View Kanban Board"
-                                    className="w-[32px] h-[32px] flex items-center justify-center bg-emerald-50/50 text-emerald-500 rounded-lg border border-emerald-100/50 shadow-sm transition-all duration-300 hover:bg-emerald-500 hover:text-white hover:scale-110 hover:shadow-emerald-200/50"
-                                >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" className="opacity-30" />
-                                        <path d="M8 7v9" />
-                                        <path d="M16 7v6" />
-                                    </svg>
-                                </button>
-                            )}
+                            <button 
+                                onClick={handleBoardClick}
+                                title={boardButtonTitle}
+                                className={boardButtonClassName}
+                            >
+                                <ProjectTypeIcon projectType={type} size={14} />
+                            </button>
 
                             {/* Users icon - Navigates to Members */}
                             <button 

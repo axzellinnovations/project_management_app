@@ -42,7 +42,15 @@ function SafeChartFrame({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: Task[], sprints?: Sprint[] }) {
+export default function DashboardCharts({
+  tasks = [],
+  sprints = [],
+  isAgile = true,
+}: {
+  tasks?: Task[];
+  sprints?: Sprint[];
+  isAgile?: boolean;
+}) {
   
   // 1. Task Distribution (Pie Chart) by Priority
   const taskDistribution = React.useMemo(() => {
@@ -150,32 +158,35 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
      return data;
   }, [tasks, sprints]);
 
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-      
+    return (
+    <div className={`grid grid-cols-1 ${isAgile ? 'md:grid-cols-2 mt-6' : 'mt-0'} gap-6`}>
+      {isAgile && (
+      <>
       {/* Burndown Chart Element */}
       <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
-          <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Sprint Burndown</h3>
-          {burndownData.length > 0 ? (
-              <SafeChartFrame>
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                    <LineChart data={burndownData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="date" tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
-                        <YAxis tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E3E8EF', fontSize: '13px' }} />
-                        <Legend wrapperStyle={{ fontSize: '12px' }}/>
-                        <Line type="monotone" dataKey="ideal" name="Ideal Tasks" stroke="#98A2B3" strokeDasharray="5 5" dot={false} strokeWidth={2}/>
-                        <Line type="stepAfter" dataKey="remaining" name="Actual Remaining" stroke="#0052CC" strokeWidth={3} activeDot={{ r: 6 }}/>
-                    </LineChart>
-                </ResponsiveContainer>
-              </SafeChartFrame>
-          ) : (
-              <div className="h-[250px] flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                  <p className="text-sm text-gray-400 font-arimo">No active sprint data available</p>
-              </div>
-          )}
+        <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Sprint Burndown</h3>
+        {burndownData.length > 0 ? (
+          <SafeChartFrame>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <LineChart data={burndownData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="date" tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
+              <YAxis tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E3E8EF', fontSize: '13px' }} />
+              <Legend wrapperStyle={{ fontSize: '12px' }}/>
+              <Line type="monotone" dataKey="ideal" name="Ideal Tasks" stroke="#98A2B3" strokeDasharray="5 5" dot={false} strokeWidth={2}/>
+              <Line type="stepAfter" dataKey="remaining" name="Actual Remaining" stroke="#0052CC" strokeWidth={3} activeDot={{ r: 6 }}/>
+            </LineChart>
+          </ResponsiveContainer>
+          </SafeChartFrame>
+        ) : (
+          <div className="h-[250px] flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
+            <p className="text-sm text-gray-400 font-arimo">No active sprint data available</p>
+          </div>
+        )}
       </MotionWrapper>
+      </>
+      )}
 
       {/* Task Distribution Element */}
       <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
@@ -209,49 +220,53 @@ export default function DashboardCharts({ tasks = [], sprints = [] }: { tasks?: 
           )}
       </MotionWrapper>
 
-      {/* Velocity Chart Element */}
-      <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
+        {isAgile && (
+        <>
+        {/* Velocity Chart Element */}
+        <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Velocity (Completed Story Points)</h3>
           {velocityData.length > 0 ? (
-              <SafeChartFrame>
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                    <BarChart data={velocityData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="name" tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
-                        <YAxis tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E3E8EF', fontSize: '13px' }} cursor={{fill: '#F2F4F7'}} />
-                        <Bar dataKey="points" fill="#00875A" radius={[4, 4, 0, 0]} maxBarSize={50} />
-                    </BarChart>
-                </ResponsiveContainer>
-              </SafeChartFrame>
+            <SafeChartFrame>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <BarChart data={velocityData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="name" tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
+                <YAxis tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E3E8EF', fontSize: '13px' }} cursor={{fill: '#F2F4F7'}} />
+                <Bar dataKey="points" fill="#00875A" radius={[4, 4, 0, 0]} maxBarSize={50} />
+              </BarChart>
+            </ResponsiveContainer>
+            </SafeChartFrame>
           ) : (
-              <div className="h-[250px] flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                  <p className="text-sm text-gray-400 font-arimo">Complete sprints to unlock velocity tracking</p>
-              </div>
+            <div className="h-[250px] flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
+              <p className="text-sm text-gray-400 font-arimo">Complete sprints to unlock velocity tracking</p>
+            </div>
           )}
-      </MotionWrapper>
+        </MotionWrapper>
 
-      {/* Lead Time Chart Element */}
-      <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
+        {/* Lead Time Chart Element */}
+        <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
           <h3 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4">Lead Time (Average Days to Complete)</h3>
           {leadTimeData.length > 0 ? (
-              <SafeChartFrame>
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                    <LineChart data={leadTimeData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="date" tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
-                        <YAxis tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E3E8EF', fontSize: '13px' }} />
-                        <Line type="monotone" dataKey="avgDays" name="Avg Days" stroke="#FF8B00" strokeWidth={3} dot={{r: 4}} activeDot={{ r: 6 }}/>
-                    </LineChart>
-                </ResponsiveContainer>
-              </SafeChartFrame>
+            <SafeChartFrame>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <LineChart data={leadTimeData} margin={{ top: 5, right: 20, bottom: 5, left: -20 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="date" tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
+                <YAxis tick={{fontSize: 12, fill: '#6A7282'}} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E3E8EF', fontSize: '13px' }} />
+                <Line type="monotone" dataKey="avgDays" name="Avg Days" stroke="#FF8B00" strokeWidth={3} dot={{r: 4}} activeDot={{ r: 6 }}/>
+              </LineChart>
+            </ResponsiveContainer>
+            </SafeChartFrame>
           ) : (
-              <div className="h-[250px] flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                  <p className="text-sm text-gray-400 font-arimo">Not enough completed tasks for data</p>
-              </div>
+            <div className="h-[250px] flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
+              <p className="text-sm text-gray-400 font-arimo">Not enough completed tasks for data</p>
+            </div>
           )}
-      </MotionWrapper>
+        </MotionWrapper>
+        </>
+        )}
 
     </div>
   );

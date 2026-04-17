@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import api from '@/lib/axios';
 import { Task, Sprint, ProjectMetrics } from '@/types';
 import useSWR from 'swr';
+import { isAgileProjectType } from '@/components/shared/ProjectTypeIcon';
 
 import MetricsGrid from "../components/MetricsGrid";
 import { CurrentSprint } from "../components/ProjectTimeline";
@@ -45,10 +46,16 @@ export default function SummaryPage() {
         projectId ? `/api/projects/${projectId}/metrics` : null,
         fetcher
     );
+    const { data: projectDetails, isLoading: projectLoading } = useSWR<{ type?: string }>(
+        projectId ? `/api/projects/${projectId}` : null,
+        fetcher
+    );
+
+    const isAgileProject = isAgileProjectType(projectDetails?.type);
 
     // Show full-page skeleton only for critical primary data (sprints/tasks/metrics)
     // SWR will skip this if data is cached!
-    if (tasksLoading || sprintsLoading || metricsLoading || !tasks || !sprints || !metrics) {
+    if (tasksLoading || sprintsLoading || metricsLoading || projectLoading || !tasks || !sprints || !metrics || !projectDetails) {
         return <SummaryPageSkeleton />;
     }
 
@@ -60,22 +67,32 @@ export default function SummaryPage() {
                 <MetricsGrid metrics={metrics} />
             </div>
 
-            {/* Main Grid: 2 Columns */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                
-                {/* Left Column (Timeline & Sprint) - Spans 2 cols */}
-                <div className="lg:col-span-2 flex flex-col gap-6">
-                    <CurrentSprint projectId={projectId} sprints={sprints} tasks={tasks} />
-                    <DashboardCharts tasks={tasks} sprints={sprints} />
-                </div>
+            {isAgileProject ? (
+                /* Main Grid: Agile layout */
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                    <div className="lg:col-span-2 flex flex-col gap-6">
+                        <CurrentSprint projectId={projectId} sprints={sprints} tasks={tasks} />
+                        <DashboardCharts tasks={tasks} sprints={sprints} isAgile />
+                    </div>
 
-                {/* Right Column (Activity & Team) - Spans 1 col */}
-                <div className="flex flex-col gap-6">
-                    <RecentActivity projectId={projectId} tasks={tasks} />
-                    <ProjectTeam projectId={projectId} tasks={tasks} />
+                    <div className="flex flex-col gap-6">
+                        <RecentActivity projectId={projectId} tasks={tasks} />
+                        <ProjectTeam projectId={projectId} tasks={tasks} />
+                    </div>
                 </div>
+            ) : (
+                /* Main Grid: Kanban layout (no sprint-specific widgets) */
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                    <div className="lg:col-span-1 flex flex-col gap-6">
+                        <DashboardCharts tasks={tasks} sprints={sprints} isAgile={false} />
+                    </div>
 
-            </div>
+                    <div className="lg:col-span-2 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                        <RecentActivity projectId={projectId} tasks={tasks} />
+                        <ProjectTeam projectId={projectId} tasks={tasks} />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -226,3 +226,32 @@ button, a {
     font-size: 16px !important;
   }
 }
+
+/* TopBar project-type icon animations */
+@keyframes topbarSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes topbarBarUp {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes topbarBarDown {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(3px); }
+}
+
+.topbar-agile-loop {
+  animation: topbarSpin 10s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+.topbar-kanban-bar-a {
+  animation: topbarBarUp 2.8s ease-in-out infinite;
+}
+
+.topbar-kanban-bar-b {
+  animation: topbarBarDown 2.8s ease-in-out infinite 0.9s;
+}
