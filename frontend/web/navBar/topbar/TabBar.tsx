@@ -106,7 +106,7 @@ export function TabBar({
                     Pages
                   </button>
                   <button
-                    onClick={() => { setDmsOpen(false); setMoreOpen(false); router.push(buildHref('/pages') + (projectId ? '&view=docs' : '?view=docs')); }}
+                    onClick={() => { setDmsOpen(false); setMoreOpen(false); router.push(buildHref('/folders/view-all')); }}
                     className="flex items-center gap-2.5 px-3.5 py-2 w-full text-left text-[13px] font-outfit font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors"
                   >
                     <BookOpen size={14} className="text-indigo-500" />
@@ -185,7 +185,7 @@ export function TabBar({
                     Pages
                   </button>
                   <button
-                    onClick={() => { setDmsOpen(false); router.push(buildHref('/pages') + (projectId ? '&view=docs' : '?view=docs')); }}
+                    onClick={() => { setDmsOpen(false); router.push(buildHref('/folders/view-all')); }}
                     className="flex items-center gap-2.5 px-3.5 py-2.5 w-full text-left text-[13px] font-outfit font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors"
                   >
                     <BookOpen size={14} className="text-indigo-500" />

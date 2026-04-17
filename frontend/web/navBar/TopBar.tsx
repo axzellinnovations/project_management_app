@@ -137,7 +137,7 @@ function TopBarContent() {
     if (pathname.startsWith('/workload')) return 'workload';
     if (pathname.startsWith('/project/') && pathname.includes('/chat')) return 'chats';
     if (pathname.startsWith('/members')) return 'members';
-    if (pathname.startsWith('/pages')) return 'dms';
+    if (pathname.startsWith('/pages') || pathname.startsWith('/folders')) return 'dms';
     return 'summary';
   }, [pathname]);
 
@@ -275,6 +275,7 @@ function TopBarContent() {
       '/milestones',
       '/workload',
       '/pages',
+      '/folders',
       '/notifications',
       '/members',
     ];

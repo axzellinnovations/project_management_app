@@ -161,6 +161,8 @@ export default function Sidebar() {
   const [recentOpen, setRecentOpen] = useState(false);
   const [favSearch, setFavSearch] = useState('');
   const [recentSearch, setRecentSearch] = useState('');
+  const [inboxSearch, setInboxSearch] = useState('');
+  const [notifSearch, setNotifSearch] = useState('');
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -316,6 +318,7 @@ export default function Sidebar() {
     setFavOpen(false);
     setRecentOpen(false);
     setNotifPanelOpen(false);
+    setInboxSearch('');
     if (inboxRef.current) {
       const rect = inboxRef.current.getBoundingClientRect();
       setDropdownPos({ top: rect.top, left: rect.right + 8 });
@@ -328,6 +331,7 @@ export default function Sidebar() {
     setFavOpen(false);
     setRecentOpen(false);
     setInboxPanelOpen(false);
+    setNotifSearch('');
     if (notifRef.current) {
       const rect = notifRef.current.getBoundingClientRect();
       setDropdownPos({ top: rect.top, left: rect.right + 8 });
@@ -369,6 +373,39 @@ export default function Sidebar() {
     () => chatInbox?.recentActivities?.slice(0, 5) || [],
     [chatInbox],
   );
+
+  const filteredInboxItems = useMemo(() => {
+    const query = inboxSearch.trim().toLowerCase();
+    if (!query) return inboxItems;
+
+    return inboxItems.filter((item) => {
+      const haystack = [
+        item.projectName,
+        item.roomName,
+        item.username,
+        item.participantLabel,
+        item.lastMessage,
+        item.lastMessageSender,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [inboxItems, inboxSearch]);
+
+  const filteredNotifications = useMemo(() => {
+    const query = notifSearch.trim().toLowerCase();
+    const source = notifications || [];
+
+    if (!query) return source.slice(0, 4);
+
+    return source.filter((n) => {
+      const haystack = `${n.message || ''} ${n.type || ''}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [notifications, notifSearch]);
 
   const inboxBadgeCount = useMemo(() => {
     if (!chatInbox) return 0;
@@ -527,6 +564,9 @@ export default function Sidebar() {
           onClose={() => setInboxPanelOpen(false)}
           title="Inbox"
           badge={inboxBadgeCount}
+          searchValue={inboxSearch}
+          onSearchChange={setInboxSearch}
+          searchPlaceholder="Search inbox…"
           anchorLeft={panelAnchorLeft}
           anchorTop={dropdownPos.top}
           footer={
@@ -554,17 +594,21 @@ export default function Sidebar() {
                 </div>
               ))}
             </div>
-          ) : inboxItems.length === 0 ? (
+          ) : filteredInboxItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
               <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mb-3">
                 <InboxIcon size={18} />
               </div>
-              <span className="text-[12px] font-medium text-cu-text-muted">No recent messages</span>
-              <span className="text-[10px] text-cu-text-muted mt-0.5">Start a conversation in your project chat</span>
+              <span className="text-[12px] font-medium text-cu-text-muted">
+                {inboxSearch.trim() ? 'No matching messages' : 'No recent messages'}
+              </span>
+              {!inboxSearch.trim() && (
+                <span className="text-[10px] text-cu-text-muted mt-0.5">Start a conversation in your project chat</span>
+              )}
             </div>
           ) : (
             <div className="py-1">
-              {inboxItems.map((item) => {
+              {filteredInboxItems.map((item) => {
                 const handleOpenActivity = () => {
                   setInboxPanelOpen(false);
                   if (typeof window !== 'undefined') {
@@ -595,6 +639,9 @@ export default function Sidebar() {
           onClose={() => setNotifPanelOpen(false)}
           title="Notifications"
           badge={globalUnreadCount}
+          searchValue={notifSearch}
+          onSearchChange={setNotifSearch}
+          searchPlaceholder="Search notifications…"
           anchorLeft={panelAnchorLeft}
           anchorTop={dropdownPos.top}
           footer={
@@ -610,8 +657,9 @@ export default function Sidebar() {
           }
         >
           <NotificationsPanelContent
-            notifications={notifications.slice(0, 4)}
+            notifications={filteredNotifications}
             onClose={() => setNotifPanelOpen(false)}
+            emptyMessage={notifSearch.trim() ? 'No matching notifications' : 'No new notifications'}
           />
         </SidebarPanel>
       </div>
