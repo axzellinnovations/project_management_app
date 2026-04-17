@@ -22,9 +22,19 @@ const RecentActivity = dynamic(() => import('../components/RecentActivity'), {
     loading: () => <div className="h-[200px] bg-gray-50 animate-pulse rounded-xl" />
 });
 
-const ProjectTeam = dynamic(() => import('../components/ProjectTeam'), {
+const ProjectChatWidget = dynamic(() => import('../components/ProjectChatWidget').then(m => m.ProjectChatWidget), {
+    ssr: false,
+    loading: () => <div className="h-[400px] bg-gray-50 animate-pulse rounded-xl" />
+});
+
+const ProjectNoteWidget = dynamic(() => import('../components/ProjectNoteWidget').then(m => m.ProjectNoteWidget), {
     ssr: false,
     loading: () => <div className="h-[200px] bg-gray-50 animate-pulse rounded-xl" />
+});
+
+const WorkloadDistribution = dynamic(() => import('../components/WorkloadDistribution').then(m => m.WorkloadDistribution), {
+    ssr: false,
+    loading: () => <div className="h-[300px] bg-gray-50 animate-pulse col-span-1 lg:col-span-3 rounded-xl" />
 });
 
 const fetcher = (url: string) => api.get(url).then(res => res.data);
@@ -46,7 +56,7 @@ export default function SummaryPage() {
         projectId ? `/api/projects/${projectId}/metrics` : null,
         fetcher
     );
-    const { data: projectDetails, isLoading: projectLoading } = useSWR<{ type?: string }>(
+    const { data: projectDetails, isLoading: projectLoading } = useSWR<{ type?: string, description?: string }>(
         projectId ? `/api/projects/${projectId}` : null,
         fetcher
     );
@@ -69,30 +79,40 @@ export default function SummaryPage() {
 
             {isAgileProject ? (
                 /* Main Grid: Agile layout */
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start mb-6">
                     <div className="lg:col-span-2 flex flex-col gap-6">
                         <CurrentSprint projectId={projectId} sprints={sprints} tasks={tasks} />
                         <DashboardCharts tasks={tasks} sprints={sprints} isAgile />
+                        <ProjectChatWidget projectId={projectId} />
                     </div>
 
                     <div className="flex flex-col gap-6">
+                        <ProjectNoteWidget projectId={projectId} defaultNote={projectDetails?.description} />
                         <RecentActivity projectId={projectId} tasks={tasks} />
-                        <ProjectTeam projectId={projectId} tasks={tasks} />
                     </div>
                 </div>
             ) : (
                 /* Main Grid: Kanban layout (no sprint-specific widgets) */
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start mb-6">
                     <div className="lg:col-span-1 flex flex-col gap-6">
                         <DashboardCharts tasks={tasks} sprints={sprints} isAgile={false} />
+                        <ProjectChatWidget projectId={projectId} />
                     </div>
 
                     <div className="lg:col-span-2 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
                         <RecentActivity projectId={projectId} tasks={tasks} />
-                        <ProjectTeam projectId={projectId} tasks={tasks} />
+                        <div className="flex flex-col gap-6">
+                            <ProjectNoteWidget projectId={projectId} defaultNote={projectDetails?.description} />
+                        </div>
                     </div>
                 </div>
             )}
+
+            {/* Workload Component - Pinned to the bottom gracefully */}
+            <div className="w-full">
+                <WorkloadDistribution projectId={projectId} tasks={tasks} />
+            </div>
+            
         </div>
     );
 }
