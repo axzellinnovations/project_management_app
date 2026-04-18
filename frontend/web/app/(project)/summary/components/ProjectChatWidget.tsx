@@ -27,13 +27,7 @@ export function ProjectChatWidget({ projectId }: { projectId: number | string })
 
   return (
     <MotionWrapper className="flex flex-col h-full min-h-[340px]">
-      <div className="p-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-         <h2 className="font-arimo text-[16px] font-semibold text-[#101828] flex items-center gap-2">
-            <MessageSquare size={16} className="text-[#0052CC]" />
-            Team Chat
-         </h2>
-      </div>
-      
+
       <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#F8FAFC]" ref={scrollContainerRef}>
          {messages && messages.length > 0 ? messages.slice(-50).map((msg: ChatMessage, i: number) => {
            const isMe = msg.sender === currentUser;

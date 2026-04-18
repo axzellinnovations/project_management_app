@@ -47,7 +47,7 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 // ═══════════════════════════════════════════════════════════════════════════════
 //  PERSISTENCE
 // ═══════════════════════════════════════════════════════════════════════════════
-const LAYOUT_VERSION = 'v10';
+const LAYOUT_VERSION = 'v18';
 
 function storageKey(projectId: number) {
   return `summary-bento-layout:${projectId}:${LAYOUT_VERSION}`;
@@ -77,6 +77,35 @@ function saveLayouts(projectId: number, layouts: Layouts) {
   } catch { /* quota full — silent fail */ }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ROW-GAP FILLER
+//  When a widget is resized horizontally, auto-expand its row-companion
+//  to fill the remaining columns (no empty gap between widgets).
+// ═══════════════════════════════════════════════════════════════════════════════
+function fillRowGaps(items: WidgetLayout[], totalCols: number): WidgetLayout[] {
+  const result = items.map(it => ({ ...it }));
+
+  // Group items that start at the same y-row
+  const byRow = new Map<number, WidgetLayout[]>();
+  for (const item of result) {
+    if (!byRow.has(item.y)) byRow.set(item.y, []);
+    byRow.get(item.y)!.push(item);
+  }
+
+  for (const group of byRow.values()) {
+    if (group.length !== 2) continue; // only handle clean 2-widget rows
+    const [a, b] = [...group].sort((x, y) => x.x - y.x); // left, right
+    const gap = totalCols - (a.x + a.w + (totalCols - (b.x + b.w)));
+    if (gap <= 0) continue;
+    // Snap right widget flush to end of left widget, expand to fill remaining cols
+    const rightItem = result.find(r => r.i === b.i)!;
+    rightItem.x = a.x + a.w;
+    rightItem.w = totalCols - rightItem.x;
+  }
+
+  return result;
+}
+
 function useBentoLayout(projectId: number, defaultLayouts: Layouts) {
   const [layouts, setLayouts] = useState<Layouts>(defaultLayouts);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -92,9 +121,14 @@ function useBentoLayout(projectId: number, defaultLayouts: Layouts) {
   const onLayoutChange = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (_layout: any, allLayouts: Layouts) => {
-      setLayouts(allLayouts);
+      // Auto-fill horizontal gaps in the lg breakpoint after every resize/drag
+      const adjusted: Layouts = { ...allLayouts };
+      if (adjusted.lg) {
+        adjusted.lg = fillRowGaps(adjusted.lg as WidgetLayout[], 20) as typeof adjusted.lg;
+      }
+      setLayouts(adjusted);
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => saveLayouts(projectId, allLayouts), 400);
+      saveTimer.current = setTimeout(() => saveLayouts(projectId, adjusted), 400);
     },
     [projectId],
   );
@@ -116,101 +150,104 @@ function useBentoLayout(projectId: number, defaultLayouts: Layouts) {
 /** Build default layouts taking isAgile into account */
 function buildDefaultLayouts(isAgile: boolean): Layouts {
   const lg: WidgetLayout[] = [
-    /* ── Row 0 (y=0, h=2): Metric cards ──────────────────── */
-    { i: 'metric-progress', x: 0, y: 0, w: 5, h: 2, minW: 3, minH: 2 },
-    { i: 'metric-total', x: 5, y: 0, w: 5, h: 2, minW: 3, minH: 2 },
-    { i: 'metric-completed', x: 10, y: 0, w: 5, h: 2, minW: 3, minH: 2 },
-    { i: 'metric-due', x: 15, y: 0, w: 5, h: 2, minW: 3, minH: 2 },
+    /* ── Row 0 (y=0, h=3 metrics, due is h=2) ──────────────────── */
+    { i: 'metric-progress', x: 0, y: 0, w: 5, h: 3, minW: 3, minH: 2 },
+    { i: 'metric-total', x: 5, y: 0, w: 5, h: 3, minW: 3, minH: 2 },
+    { i: 'metric-completed', x: 10, y: 0, w: 5, h: 3, minW: 3, minH: 2 },
+    { i: 'reset-layout', x: 15, y: 0, w: 5, h: 1, minW: 3, minH: 1, maxH: 1 },
+    { i: 'metric-due', x: 15, y: 1, w: 5, h: 2, minW: 3, minH: 2 },
 
-    /* ── Agile: Sprint (y=2, h=4) + Activity feed alongside ── */
+    /* ── Agile: Sprint (y=3, h=4) + Activity feed alongside (y=3) ── */
     ...(isAgile ? [
-      { i: 'sprint', x: 0, y: 2, w: 14, h: 4, minW: 8, minH: 3 },
-      { i: 'activity-feed', x: 14, y: 2, w: 6, h: 4, minW: 4, minH: 3 },
+      { i: 'sprint', x: 0, y: 3, w: 14, h: 4, minW: 8, minH: 3 },
+      { i: 'activity-feed', x: 14, y: 3, w: 6, h: 4, minW: 4, minH: 3 },
     ] as WidgetLayout[] : []),
 
-    /* ── Agile: All 4 charts on ONE row (y=6, w=5, h=4) ────── */
+    /* ── Agile: All 4 charts on ONE row (y=7) ────── */
     ...(isAgile ? [
-      { i: 'burndown',  x: 0,  y: 6, w: 5, h: 4, minW: 3, minH: 3 },
-      { i: 'task-dist', x: 5,  y: 6, w: 5, h: 4, minW: 3, minH: 3 },
-      { i: 'velocity',  x: 10, y: 6, w: 5, h: 4, minW: 3, minH: 3 },
-      { i: 'lead-time', x: 15, y: 6, w: 5, h: 4, minW: 3, minH: 3 },
+      { i: 'burndown', x: 0, y: 7, w: 5, h: 4, minW: 3, minH: 3 },
+      { i: 'task-dist', x: 5, y: 7, w: 5, h: 4, minW: 3, minH: 3 },
+      { i: 'velocity', x: 10, y: 7, w: 5, h: 4, minW: 3, minH: 3 },
+      { i: 'lead-time', x: 15, y: 7, w: 5, h: 4, minW: 3, minH: 3 },
     ] as WidgetLayout[] : []),
 
     /* ── Non-agile: task-dist + activity feed ──────────────── */
     ...(!isAgile ? [
-      { i: 'task-dist',     x: 0,  y: 2, w: 10, h: 5, minW: 5, minH: 4 },
-      { i: 'activity-feed', x: 10, y: 2, w: 10, h: 5, minW: 4, minH: 3 },
+      { i: 'task-dist', x: 0, y: 3, w: 10, h: 5, minW: 5, minH: 4 },
+      { i: 'activity-feed', x: 10, y: 3, w: 10, h: 5, minW: 4, minH: 3 },
     ] as WidgetLayout[] : []),
 
     /* ── Left col: Report (h=1) + Notes (h=4) = 5 total ────── */
     /* ── Right col: Recently Completed (h=5) — both end same row ─ */
-    { i: 'report',             x: 0,  y: isAgile ? 10 : 7, w: 10, h: 1, minW: 6, minH: 1, maxH: 1 },
-    { i: 'notes',              x: 0,  y: isAgile ? 11 : 8, w: 10, h: 4, minW: 4, minH: 3 },
-    { i: 'recently-completed', x: 10, y: isAgile ? 10 : 7, w: 10, h: 5, minW: 5, minH: 3 },
+    { i: 'report', x: 0, y: isAgile ? 11 : 8, w: 10, h: 1, minW: 6, minH: 1, maxH: 1 },
+    { i: 'notes', x: 0, y: isAgile ? 12 : 9, w: 10, h: 4, minW: 4, minH: 3 },
+    { i: 'recently-completed', x: 10, y: isAgile ? 11 : 8, w: 10, h: 5, minW: 5, minH: 3 },
 
-    /* ── Due Tasks + Milestones (same h=5) ────────────────── */
-    { i: 'due-tasks',  x: 0,  y: isAgile ? 15 : 12, w: 10, h: 5, minW: 5, minH: 3 },
-    { i: 'milestones', x: 10, y: isAgile ? 15 : 12, w: 10, h: 5, minW: 5, minH: 3 },
+    /* ── Due Tasks + Milestones (same h=4) ────────────────── */
+    { i: 'due-tasks', x: 0, y: isAgile ? 16 : 13, w: 10, h: 4, minW: 5, minH: 3 },
+    { i: 'milestones', x: 10, y: isAgile ? 16 : 13, w: 10, h: 4, minW: 5, minH: 3 },
 
-    /* ── Docs (1/4) + Chat (3/4) — 1:3 ratio ──────────────── */
-    { i: 'docs', x: 0, y: isAgile ? 20 : 17, w: 5,  h: 5, minW: 3, minH: 3 },
-    { i: 'chat', x: 5, y: isAgile ? 20 : 17, w: 15, h: 5, minW: 8, minH: 4 },
+    /* ── Docs (2/5) + Chat (3/5) — 2:3 ratio ──────────────── */
+    { i: 'docs', x: 0, y: isAgile ? 21 : 18, w: 8, h: 5, minW: 3, minH: 3 },
+    { i: 'chat', x: 8, y: isAgile ? 21 : 18, w: 12, h: 5, minW: 6, minH: 4 },
   ];
 
   const md: WidgetLayout[] = [
-    { i: 'metric-progress', x: 0, y: 0, w: 6, h: 2, minW: 3, minH: 2 },
-    { i: 'metric-total', x: 6, y: 0, w: 6, h: 2, minW: 3, minH: 2 },
-    { i: 'metric-completed', x: 0, y: 2, w: 6, h: 2, minW: 3, minH: 2 },
-    { i: 'metric-due', x: 6, y: 2, w: 6, h: 2, minW: 3, minH: 2 },
+    { i: 'metric-progress', x: 0, y: 0, w: 6, h: 3, minW: 3, minH: 2 },
+    { i: 'metric-total', x: 6, y: 0, w: 6, h: 3, minW: 3, minH: 2 },
+    { i: 'metric-completed', x: 0, y: 3, w: 6, h: 3, minW: 3, minH: 2 },
+    { i: 'reset-layout', x: 6, y: 3, w: 6, h: 1, minW: 3, minH: 1, maxH: 1 },
+    { i: 'metric-due', x: 6, y: 4, w: 6, h: 2, minW: 3, minH: 2 },
 
     ...(isAgile ? [
-      { i: 'sprint',        x: 0, y: 4,  w: 12, h: 4, minW: 6, minH: 3 },
-      { i: 'activity-feed', x: 0, y: 8,  w: 12, h: 4, minW: 4, minH: 3 },
-      { i: 'burndown',      x: 0, y: 12, w: 6,  h: 4, minW: 4, minH: 3 },
-      { i: 'task-dist',     x: 6, y: 12, w: 6,  h: 4, minW: 4, minH: 3 },
-      { i: 'velocity',      x: 0, y: 16, w: 6,  h: 4, minW: 4, minH: 3 },
-      { i: 'lead-time',     x: 6, y: 16, w: 6,  h: 4, minW: 4, minH: 3 },
+      { i: 'sprint', x: 0, y: 6, w: 12, h: 4, minW: 6, minH: 3 },
+      { i: 'activity-feed', x: 0, y: 10, w: 12, h: 4, minW: 4, minH: 3 },
+      { i: 'burndown', x: 0, y: 14, w: 6, h: 4, minW: 4, minH: 3 },
+      { i: 'task-dist', x: 6, y: 14, w: 6, h: 4, minW: 4, minH: 3 },
+      { i: 'velocity', x: 0, y: 18, w: 6, h: 4, minW: 4, minH: 3 },
+      { i: 'lead-time', x: 6, y: 18, w: 6, h: 4, minW: 4, minH: 3 },
     ] as WidgetLayout[] : []),
 
     ...(!isAgile ? [
-      { i: 'task-dist',     x: 0, y: 4, w: 12, h: 5, minW: 5, minH: 4 },
-      { i: 'activity-feed', x: 0, y: 9, w: 12, h: 4, minW: 4, minH: 3 },
+      { i: 'task-dist', x: 0, y: 6, w: 12, h: 5, minW: 5, minH: 4 },
+      { i: 'activity-feed', x: 0, y: 11, w: 12, h: 4, minW: 4, minH: 3 },
     ] as WidgetLayout[] : []),
 
-    { i: 'report',             x: 0, y: isAgile ? 20 : 13, w: 12, h: 1, minW: 6, minH: 1, maxH: 1 },
-    { i: 'notes',              x: 0, y: isAgile ? 21 : 14, w: 12, h: 4, minW: 4, minH: 3 },
-    { i: 'recently-completed', x: 0, y: isAgile ? 25 : 18, w: 12, h: 5, minW: 5, minH: 3 },
-    { i: 'due-tasks',          x: 0, y: isAgile ? 30 : 23, w: 12, h: 5, minW: 5, minH: 3 },
-    { i: 'milestones',         x: 0, y: isAgile ? 35 : 28, w: 12, h: 5, minW: 5, minH: 3 },
-    { i: 'docs',               x: 0, y: isAgile ? 40 : 33, w: 3,  h: 4, minW: 3, minH: 3 },
-    { i: 'chat',               x: 3, y: isAgile ? 40 : 33, w: 9,  h: 4, minW: 5, minH: 4 },
+    { i: 'report', x: 0, y: isAgile ? 22 : 15, w: 12, h: 1, minW: 6, minH: 1, maxH: 1 },
+    { i: 'notes', x: 0, y: isAgile ? 23 : 16, w: 12, h: 4, minW: 4, minH: 3 },
+    { i: 'recently-completed', x: 0, y: isAgile ? 27 : 20, w: 12, h: 5, minW: 5, minH: 3 },
+    { i: 'due-tasks', x: 0, y: isAgile ? 32 : 25, w: 12, h: 4, minW: 5, minH: 3 },
+    { i: 'milestones', x: 0, y: isAgile ? 36 : 29, w: 12, h: 5, minW: 5, minH: 3 },
+    { i: 'docs', x: 0, y: isAgile ? 41 : 34, w: 4, h: 4, minW: 3, minH: 3 },
+    { i: 'chat', x: 4, y: isAgile ? 41 : 34, w: 8, h: 4, minW: 5, minH: 4 },
   ];
 
   // On sm, disable drag/resize by making everything a single column (static layout)
   const sm: WidgetLayout[] = [
-    { i: 'metric-progress', x: 0, y: 0, w: 4, h: 2, static: true },
-    { i: 'metric-total', x: 0, y: 2, w: 4, h: 2, static: true },
-    { i: 'metric-completed', x: 0, y: 4, w: 4, h: 2, static: true },
-    { i: 'metric-due', x: 0, y: 6, w: 4, h: 2, static: true },
+    { i: 'reset-layout', x: 0, y: 0, w: 4, h: 1, static: true },
+    { i: 'metric-progress', x: 0, y: 1, w: 4, h: 3, static: true },
+    { i: 'metric-total', x: 0, y: 4, w: 4, h: 3, static: true },
+    { i: 'metric-completed', x: 0, y: 7, w: 4, h: 3, static: true },
+    { i: 'metric-due', x: 0, y: 10, w: 4, h: 2, static: true },
     ...(isAgile ? [
-      { i: 'sprint',        x: 0, y: 8,  w: 4, h: 4, static: true },
-      { i: 'activity-feed', x: 0, y: 12, w: 4, h: 4, static: true },
-      { i: 'burndown',      x: 0, y: 16, w: 4, h: 4, static: true },
-      { i: 'task-dist',     x: 0, y: 20, w: 4, h: 4, static: true },
-      { i: 'velocity',      x: 0, y: 24, w: 4, h: 4, static: true },
-      { i: 'lead-time',     x: 0, y: 28, w: 4, h: 4, static: true },
+      { i: 'sprint', x: 0, y: 12, w: 4, h: 4, static: true },
+      { i: 'activity-feed', x: 0, y: 16, w: 4, h: 4, static: true },
+      { i: 'burndown', x: 0, y: 20, w: 4, h: 4, static: true },
+      { i: 'task-dist', x: 0, y: 24, w: 4, h: 4, static: true },
+      { i: 'velocity', x: 0, y: 28, w: 4, h: 4, static: true },
+      { i: 'lead-time', x: 0, y: 32, w: 4, h: 4, static: true },
     ] as WidgetLayout[] : []),
     ...(!isAgile ? [
-      { i: 'task-dist',     x: 0, y: 8,  w: 4, h: 5, static: true },
-      { i: 'activity-feed', x: 0, y: 13, w: 4, h: 4, static: true },
+      { i: 'task-dist', x: 0, y: 12, w: 4, h: 5, static: true },
+      { i: 'activity-feed', x: 0, y: 17, w: 4, h: 4, static: true },
     ] as WidgetLayout[] : []),
-    { i: 'report',             x: 0, y: isAgile ? 32 : 17, w: 4, h: 1, static: true },
-    { i: 'notes',              x: 0, y: isAgile ? 33 : 18, w: 4, h: 4, static: true },
-    { i: 'recently-completed', x: 0, y: isAgile ? 37 : 22, w: 4, h: 5, static: true },
-    { i: 'due-tasks',          x: 0, y: isAgile ? 42 : 27, w: 4, h: 6, static: true },
-    { i: 'milestones',         x: 0, y: isAgile ? 48 : 33, w: 4, h: 5, static: true },
-    { i: 'docs',               x: 0, y: isAgile ? 53 : 38, w: 4, h: 4, static: true },
-    { i: 'chat',               x: 0, y: isAgile ? 57 : 42, w: 4, h: 5, static: true },
+    { i: 'report', x: 0, y: isAgile ? 36 : 21, w: 4, h: 1, static: true },
+    { i: 'notes', x: 0, y: isAgile ? 37 : 22, w: 4, h: 4, static: true },
+    { i: 'recently-completed', x: 0, y: isAgile ? 41 : 26, w: 4, h: 5, static: true },
+    { i: 'due-tasks', x: 0, y: isAgile ? 46 : 31, w: 4, h: 5, static: true },
+    { i: 'milestones', x: 0, y: isAgile ? 51 : 36, w: 4, h: 5, static: true },
+    { i: 'docs', x: 0, y: isAgile ? 56 : 41, w: 4, h: 4, static: true },
+    { i: 'chat', x: 0, y: isAgile ? 60 : 45, w: 4, h: 5, static: true },
   ];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -409,7 +446,7 @@ export default function BentoDashboard({
   // All widget IDs that exist in this project type
   const activeIds = React.useMemo(() => {
     const base = [
-      'metric-progress', 'metric-total', 'metric-completed', 'metric-due',
+      'metric-progress', 'metric-total', 'metric-completed', 'reset-layout', 'metric-due',
       'task-dist', 'activity-feed', 'report', 'recently-completed',
       'due-tasks', 'milestones', 'docs', 'chat', 'notes',
     ];
@@ -433,27 +470,14 @@ export default function BentoDashboard({
   if (!isHydrated) return null;
 
   return (
-    <div className="w-full relative">
-      {/* ── Toolbar ── */}
-      <div className="flex items-center justify-end mb-3 px-1">
-        <button
-          onClick={resetLayouts}
-          className="bento-no-drag flex items-center gap-1.5 text-[11px] font-semibold font-arimo text-gray-500 hover:text-[#0052CC] px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-200 transition-all duration-200 shadow-sm"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" />
-          </svg>
-          Reset Layout
-        </button>
-      </div>
-
+    <div className="w-full pt-4">
       {/* ── Grid ── */}
       <ResponsiveGridLayout
         className="bento-grid"
         layouts={filteredLayouts}
         breakpoints={{ lg: 1200, md: 768, sm: 0 }}
         cols={{ lg: 20, md: 12, sm: 4 }}
-        rowHeight={80}
+        rowHeight={64}
         margin={[16, 16]}
         containerPadding={[0, 0]}
         draggableHandle=".bento-drag-handle"
@@ -465,6 +489,20 @@ export default function BentoDashboard({
         useCSSTransforms
         resizeHandles={['se']}
       >
+        {/* ── Reset Layout (Grid Widget) ── */}
+        <div key="reset-layout" className="flex items-start justify-center w-full pt-0">
+          <button
+            onClick={resetLayouts}
+            title="Reset layout to default"
+            className="bento-drag-handle w-full h-[36px] flex flex-row items-center justify-center gap-2 cursor-grab active:cursor-grabbing bg-white shadow-sm ring-1 ring-black/[0.05] border border-[#E3E8EF] hover:bg-blue-50 hover:border-blue-200 text-[13px] rounded-lg font-semibold text-gray-600 hover:text-[#0052CC] transition-all"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" />
+            </svg>
+            <span className="whitespace-nowrap">Reset Layout</span>
+          </button>
+        </div>
+
         {/* ── Metric: Overall Progress ── */}
         <div key="metric-progress">
           <BentoCard title="Overall Progress" icon={Icons.progress}>
@@ -503,15 +541,19 @@ export default function BentoDashboard({
 
         {/* ── Metric: Due Issues ── */}
         <div key="metric-due">
-          <BentoCard title="Due Issues" icon={Icons.due}>
-            <StatMetricWidget
-              iconBg="bg-[#FFF4ED]"
-              iconColor="#DE350B"
-              icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#DE350B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>}
-              value={metrics?.overdueTasks || 0}
-              label="Due Issues"
-            />
-          </BentoCard>
+          <div className="w-full h-full relative">
+            <div className="absolute left-0 right-0 bottom-0 -top-[28px]">
+              <BentoCard title="Due Issues" icon={Icons.due}>
+                <StatMetricWidget
+                  iconBg="bg-[#FFF4ED]"
+                  iconColor="#DE350B"
+                  icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#DE350B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>}
+                  value={metrics?.overdueTasks || 0}
+                  label="Due Issues"
+                />
+              </BentoCard>
+            </div>
+          </div>
         </div>
 
         {/* ── Sprint (agile only) ── */}

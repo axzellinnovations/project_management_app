@@ -14,6 +14,7 @@ const BentoDashboard = dynamic(() => import('../components/BentoDashboard'), {
     loading: () => <SummaryPageSkeleton />
 });
 
+
 const fetcher = (url: string) => api.get(url).then(res => res.data);
 
 export default function SummaryPage() {

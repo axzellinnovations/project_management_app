@@ -25,7 +25,7 @@ export function DueTasksFiveDaysCard({ tasks = [] }: { tasks?: Task[] }) {
           return due >= todayStart && due <= fiveDaysEnd;
         })
         .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
-        .slice(0, 8),
+        .slice(0, 5),
     [tasks, todayStart, fiveDaysEnd]
   );
 
@@ -37,7 +37,7 @@ export function DueTasksFiveDaysCard({ tasks = [] }: { tasks?: Task[] }) {
           No tasks due in the next 5 days.
         </p>
       ) : (
-        <div className="space-y-4 bento-no-drag">
+        <div className="space-y-2.5 bento-no-drag">
           {upcomingFiveDayTasks.map((task) => {
             const dueDate = new Date(task.dueDate!);
             const daysDiff = Math.ceil((dueDate.getTime() - todayStart.getTime()) / (1000 * 3600 * 24));
@@ -51,7 +51,7 @@ export function DueTasksFiveDaysCard({ tasks = [] }: { tasks?: Task[] }) {
             return (
               <div 
                 key={task.id} 
-                className="p-3 rounded-xl border border-gray-200 bg-white hover:border-blue-200 transition-colors"
+                className="p-2.5 rounded-xl border border-gray-200 bg-white hover:border-blue-200 transition-colors"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 min-w-0">

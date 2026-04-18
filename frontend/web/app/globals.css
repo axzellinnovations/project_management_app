@@ -17,16 +17,24 @@
   }
 
   @media (min-width: 640px) {
-    html { font-size: 14.5px; }
+    html {
+      font-size: 14.5px;
+    }
   }
 
   @media (min-width: 768px) {
-    html { font-size: 15px; }
+    html {
+      font-size: 15px;
+    }
   }
 
   /* Ensure proper touch targets on mobile */
   @media (max-width: 639px) {
-    button, a { min-height: 44px; }
+
+    button,
+    a {
+      min-height: 44px;
+    }
   }
 }
 
@@ -46,13 +54,21 @@ h3 {
   @apply text-md font-medium;
 }
 
-button, a {
+button,
+a {
   @apply text-sm;
 }
 
 @keyframes dropdownIn {
-  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0)    scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* Custom modern scrollbar for UI containers */
@@ -60,21 +76,30 @@ button, a {
   height: 6px;
   width: 6px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
   border-radius: 4px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #E5E7EB;
   border-radius: 4px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #D1D5DB;
 }
 
 /* ── No-scrollbar utility ── */
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 
 .mask-fade {
   -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
@@ -92,9 +117,15 @@ button, a {
 
 /* ── Skeleton shimmer ── */
 @keyframes skeleton-shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position:  200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
 }
+
 .skeleton {
   background: linear-gradient(90deg, #F3F4F6 25%, #E9EAEC 50%, #F3F4F6 75%);
   background-size: 200% 100%;
@@ -121,12 +152,16 @@ button, a {
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
 }
-.snap-start { scroll-snap-align: start; }
+
+.snap-start {
+  scroll-snap-align: start;
+}
 
 /* ── Card hover elevation ── */
 .card-hover {
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
+
 .card-hover:hover {
   transform: translateY(-2px) scale(1.01);
   box-shadow: 0 8px 24px -4px rgba(16, 24, 40, 0.12);
@@ -149,18 +184,23 @@ button, a {
   box-shadow: 0 4px 16px -4px var(--cu-primary);
   transition: transform 120ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 120ms ease;
 }
+
 .fab:active {
   transform: scale(0.92);
   box-shadow: 0 2px 8px -2px var(--cu-primary);
 }
+
 @media (min-width: 768px) {
-  .fab-mobile-only { display: none; }
+  .fab-mobile-only {
+    display: none;
+  }
 }
 
 /* ── Mobile page padding — consistent content inset on all pages ── */
 .mobile-page-padding {
   padding: 1.25rem 1rem 1.5rem 1rem;
 }
+
 @media (min-width: 640px) {
   .mobile-page-padding {
     padding: 1.5rem 1.5rem 2rem 1.5rem;
@@ -172,6 +212,7 @@ button, a {
   background: #16A34A;
   color: #fff;
 }
+
 .swipe-action-left {
   background: #DC2626;
   color: #fff;
@@ -182,7 +223,7 @@ button, a {
   position: sticky;
   top: env(safe-area-inset-top, 0px);
   z-index: 20;
-  background: rgba(255,255,255,0.92);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -196,12 +237,23 @@ button, a {
 
 /* ── Bottom sheet backdrop animation ── */
 @keyframes backdropIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
+
 @keyframes sheetUp {
-  from { transform: translateY(100%); }
-  to   { transform: translateY(0); }
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
 }
 
 /* ── Additional mobile utilities ── */
@@ -222,25 +274,47 @@ button, a {
 
 /* Prevent iOS zoom on input focus — font-size must be >= 16px */
 @media (max-width: 640px) {
-  input, select, textarea {
+
+  input,
+  select,
+  textarea {
     font-size: 16px !important;
   }
 }
 
 /* TopBar project-type icon animations */
 @keyframes topbarSpin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes topbarBarUp {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
 }
 
 @keyframes topbarBarDown {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(3px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(3px);
+  }
 }
 
 .topbar-agile-loop {
@@ -258,7 +332,8 @@ button, a {
 
 /* ── Bento Grid (react-grid-layout) ───────────────────────── */
 .bento-grid .react-grid-item {
-  transition: none !important; /* prevent layout flicker on sidebar resize */
+  transition: none !important;
+  /* prevent layout flicker on sidebar resize */
 }
 
 .bento-grid .react-grid-item.react-draggable-dragging,
@@ -277,33 +352,45 @@ button, a {
   z-index: 2;
 }
 
-/* Resize handle — hidden by default, appears on card hover */
+/* ── Bento resize handles — SE corner (width + height) ─────── */
+
+/* Hide all resize handles by default */
 .bento-grid .react-resizable-handle {
   opacity: 0;
   transition: opacity 180ms ease;
-  width: 18px;
-  height: 18px;
-  bottom: 4px;
-  right: 4px;
-  padding: 0;
   z-index: 10;
+  padding: 0;
 }
 
+/* Show on grid-item hover */
 .bento-grid .react-grid-item:hover .react-resizable-handle {
   opacity: 1;
 }
 
-/* Resize handle arrow replacement — subtle and premium */
-.bento-grid .react-resizable-handle::after {
+/* SE corner handle — width + height drag indicator */
+.bento-grid .react-resizable-handle-se {
+  width: 20px;
+  height: 20px;
+  bottom: 4px;
+  right: 4px;
+  cursor: se-resize;
+}
+
+.bento-grid .react-resizable-handle-se::after {
   content: '';
   position: absolute;
   right: 4px;
   bottom: 4px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid #C4C9D4;
-  border-bottom: 2px solid #C4C9D4;
+  width: 10px;
+  height: 10px;
+  border-right: 2.5px solid #98A2B3;
+  border-bottom: 2.5px solid #98A2B3;
   border-radius: 1px;
+  transition: border-color 150ms ease;
+}
+
+.bento-grid .react-grid-item:hover .react-resizable-handle-se::after {
+  border-color: #0052CC;
 }
 
 /* Drag handle cursor */
@@ -313,6 +400,11 @@ button, a {
 }
 
 /* Override RGL inline height on grid items so flex works correctly */
-.bento-grid .react-grid-item > div {
+.bento-grid .react-grid-item>div {
   height: 100%;
-}
+}
+
+/* Override RGL inline height on grid items so flex works correctly */
+.bento-grid .react-grid-item>div {
+  height: 100%;
+}
