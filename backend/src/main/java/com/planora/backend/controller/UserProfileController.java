@@ -41,6 +41,7 @@ public class UserProfileController {
         dto.setCompany(user.getCompany());
         dto.setPosition(user.getPosition());
         dto.setBio(user.getBio());
+        dto.setNotifyDueDateReminders(user.isNotifyDueDateReminders());
         return dto;
     }
 

@@ -116,7 +116,8 @@ public class UserController {
                                     ? service.generatePresignedUrl(user.getProfilePicUrl())
                                     : null,
                             user.getLastActive(),
-                            null, null, null, null, null, null, null, null
+                                null, null, null, null, null, null, null, null,
+                                user.isNotifyDueDateReminders()
                     ))
                     .collect(Collectors.toList());
 
@@ -175,7 +176,8 @@ public class UserController {
                     user.getJobTitle(),
                     user.getCompany(),
                     user.getPosition(),
-                    user.getBio()
+                    user.getBio(),
+                    user.isNotifyDueDateReminders()
             );
             return new ResponseEntity<>(dto, HttpStatus.OK);
         } catch (Exception e) {

@@ -350,6 +350,62 @@ class TaskServiceTest {
     }
 
     @Test
+    void updateAssignees_notifiesOnlyNewlyAddedAssignees() {
+        Task task = buildTask(72L);
+        task.getAssignees().add(assignee);
+
+        User newUser = new User();
+        newUser.setUserId(300L);
+        newUser.setUsername("newAssignee");
+
+        TeamMember newMember = new TeamMember();
+        newMember.setId(4L);
+        newMember.setRole(TeamRole.MEMBER);
+        newMember.setUser(newUser);
+        newMember.setTeam(team);
+
+        when(taskRepository.findByIdWithProjectTeam(72L)).thenReturn(Optional.of(task));
+        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(taskRepository.findByIdWithDetails(72L)).thenReturn(Optional.of(task));
+        when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
+        when(teamMembershipLookupService.getTeamMember(20L, 300L)).thenReturn(newMember);
+        when(userRepository.findAllById(argThat(ids -> {
+            java.util.Set<Long> values = new java.util.LinkedHashSet<>();
+            ids.forEach(values::add);
+            return values.equals(java.util.Set.of(300L));
+        }))).thenReturn(List.of(newUser));
+
+        TaskResponseDTO result = taskService.updateAssignees(72L, List.of(200L, 300L), 500L);
+
+        assertEquals(72L, result.getId());
+        verify(taskActivityService).logActivity(eq(72L), any(), eq("actor"), contains("updated assignees"));
+        verify(notificationService, times(1)).createNotification(
+                eq(newUser),
+                eq("You were assigned to task: Build tests"),
+                eq("/taskcard?taskId=72")
+        );
+    }
+
+    @Test
+    void updateAssignees_doesNotNotifyExistingAssigneesOrActor() {
+        Task task = buildTask(73L);
+        task.getAssignees().add(assignee);
+        task.getAssignees().add(actorMember);
+
+        when(taskRepository.findByIdWithProjectTeam(73L)).thenReturn(Optional.of(task));
+        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(taskRepository.findByIdWithDetails(73L)).thenReturn(Optional.of(task));
+        when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
+
+        TaskResponseDTO result = taskService.updateAssignees(73L, List.of(200L, 500L), 500L);
+
+        assertEquals(73L, result.getId());
+        verify(taskActivityService).logActivity(eq(73L), any(), eq("actor"), contains("updated assignees"));
+        verify(userRepository, never()).findAllById(any());
+        verify(notificationService, never()).createNotification(any(User.class), any(String.class), any(String.class));
+    }
+
+    @Test
     void addComment_notifiesAssigneeAndReporterWhenCommenterIsDifferentUser() {
         Task task = buildTask(80L);
         CommentRequestDTO request = new CommentRequestDTO();

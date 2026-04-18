@@ -399,6 +399,9 @@ public class UserService {
         if (request.getCompany() != null) user.setCompany(request.getCompany());
         if (request.getPosition() != null) user.setPosition(request.getPosition());
         if (request.getBio() != null) user.setBio(request.getBio());
+        if (request.getNotifyDueDateReminders() != null) {
+            user.setNotifyDueDateReminders(request.getNotifyDueDateReminders());
+        }
 
         return userRepository.save(user);
     }

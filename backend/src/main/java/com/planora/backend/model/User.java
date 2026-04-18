@@ -77,6 +77,9 @@ public class User {
     @Column(columnDefinition = "TEXT")
     private String bio;
 
+    @Column(name = "notify_due_date_reminders", nullable = false)
+    private boolean notifyDueDateReminders = true;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

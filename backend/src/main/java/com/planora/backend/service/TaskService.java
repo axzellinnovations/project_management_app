@@ -584,8 +584,20 @@ public class TaskService {
         Long teamId = task.getProject().getTeam().getId();
         requireMinimumRole(teamId, currentUserId, TeamRole.MEMBER);
 
+        Set<Long> previousAssigneeUserIds = new LinkedHashSet<>();
+        if (task.getAssignee() != null && task.getAssignee().getUser() != null) {
+            previousAssigneeUserIds.add(task.getAssignee().getUser().getUserId());
+        }
+        task.getAssignees().stream()
+                .map(TeamMember::getUser)
+                .filter(Objects::nonNull)
+                .map(User::getUserId)
+                .filter(Objects::nonNull)
+                .forEach(previousAssigneeUserIds::add);
+
         task.getAssignees().clear();
-        for (Long uid : userIds) {
+        List<Long> requestedAssigneeIds = userIds == null ? List.of() : userIds;
+        for (Long uid : requestedAssigneeIds) {
             task.getAssignees().add(validateTeamMember(teamId, uid));
         }
         task.setAssignee(task.getAssignees().isEmpty() ? null : task.getAssignees().iterator().next());
@@ -596,6 +608,27 @@ public class TaskService {
         String actorName = actor != null ? actor.getUsername() : "Unknown";
         taskActivityService.logActivity(saved.getId(), TaskActivityType.ASSIGNEE_CHANGED,
                 actorName, actorName + " updated assignees");
+
+        Set<Long> currentAssigneeUserIds = new LinkedHashSet<>();
+        if (saved.getAssignee() != null && saved.getAssignee().getUser() != null) {
+            currentAssigneeUserIds.add(saved.getAssignee().getUser().getUserId());
+        }
+        saved.getAssignees().stream()
+            .map(TeamMember::getUser)
+            .filter(Objects::nonNull)
+            .map(User::getUserId)
+            .filter(Objects::nonNull)
+            .forEach(currentAssigneeUserIds::add);
+
+        currentAssigneeUserIds.removeAll(previousAssigneeUserIds);
+        currentAssigneeUserIds.remove(currentUserId);
+
+        if (!currentAssigneeUserIds.isEmpty()) {
+            String message = "You were assigned to task: " + saved.getTitle();
+            String link = "/taskcard?taskId=" + saved.getId();
+            userRepository.findAllById(currentAssigneeUserIds)
+                .forEach(recipient -> notificationService.createNotification(recipient, message, link));
+        }
 
         return getTaskById(saved.getId());
     }
