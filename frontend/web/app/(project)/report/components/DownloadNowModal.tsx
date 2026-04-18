@@ -10,9 +10,7 @@ import {
   X, FileText, Table2, Sparkles, Download,
   CheckCircle2, Loader2, AlertTriangle,
 } from 'lucide-react';
-import { ReportData } from '@/lib/report/reportUtils';
-import { generatePDFReport }   from '@/lib/report/pdfReportGenerator';
-import { generateExcelReport } from '@/lib/report/excelReportGenerator';
+import { downloadProjectReport } from '@/services/report-download-service';
 
 type DlState = 'idle' | 'loading' | 'done' | 'error';
 type Format  = 'pdf' | 'excel' | 'both';
@@ -20,7 +18,7 @@ type Format  = 'pdf' | 'excel' | 'both';
 interface Props {
   open:         boolean;
   onClose:      () => void;
-  reportData:   ReportData;
+  projectId:    number;
   projectName:  string;
 }
 
@@ -42,7 +40,7 @@ const FORMAT_OPTIONS: {
   },
 ];
 
-export default function DownloadNowModal({ open, onClose, reportData, projectName }: Props) {
+export default function DownloadNowModal({ open, onClose, projectId, projectName }: Props) {
   const [format, setFormat]     = useState<Format>('both');
   const [pdfState, setPdf]      = useState<DlState>('idle');
   const [xlState, setXl]        = useState<DlState>('idle');
@@ -71,20 +69,20 @@ export default function DownloadNowModal({ open, onClose, reportData, projectNam
 
     try {
       if (doPdf) {
-        await generatePDFReport(reportData);
+        await downloadProjectReport(projectId, 'pdf');
         setPdf('done');
       }
     } catch { setPdf('error'); }
 
     try {
       if (doExcel) {
-        await generateExcelReport(reportData);
+        await downloadProjectReport(projectId, 'excel');
         setXl('done');
       }
     } catch { setXl('error'); }
 
     setTimeout(() => { setPdf('idle'); setXl('idle'); }, 8000);
-  }, [isLoading, doPdf, doExcel, reportData]);
+  }, [isLoading, doPdf, doExcel, projectId]);
 
   const handleClose = () => {
     if (isLoading) return;

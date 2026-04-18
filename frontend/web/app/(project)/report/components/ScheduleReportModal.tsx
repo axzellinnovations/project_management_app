@@ -259,6 +259,7 @@ export default function ScheduleReportModal({ open, onClose, projectId, projectN
       format:        form.format as ReportFormat,
       scheduleType:  form.scheduleType as ScheduleType,
       sendTime:      form.sendTime,
+      timezone:      Intl.DateTimeFormat().resolvedOptions().timeZone,
       recipientsTo:  form.recipientsTo,
       ...(form.recipientsCc.length  && { recipientsCc:  form.recipientsCc }),
       ...(form.recipientsBcc.length && { recipientsBcc: form.recipientsBcc }),
@@ -439,7 +440,7 @@ export default function ScheduleReportModal({ open, onClose, projectId, projectN
 
           {/* Time of day */}
           <div>
-            <FieldLabel>Time of Day (UTC)</FieldLabel>
+            <FieldLabel>Time of Day (Local)</FieldLabel>
             <TextInput type="time" value={form.sendTime} onChange={v => set('sendTime', v)} />
             {errors.sendTime && <p className="text-[11px] text-red-500 mt-1">{errors.sendTime}</p>}
           </div>

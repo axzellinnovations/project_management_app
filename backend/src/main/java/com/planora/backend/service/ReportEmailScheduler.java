@@ -16,6 +16,8 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 
+import org.springframework.core.io.ByteArrayResource;
+
 /**
  * Cron job that runs every 60 seconds and dispatches all ACTIVE scheduled reports
  * whose nextSendAt has elapsed.
@@ -28,16 +30,25 @@ public class ReportEmailScheduler {
     private final ScheduledReportRepository  repo;
     private final ScheduledReportService     service;
     private final JavaMailSenderImpl         mailSender;
+    private final ProjectReportDataService   dataService;
+    private final PdfReportBuilder           pdfBuilder;
+    private final ExcelReportBuilder         excelBuilder;
 
     private static final String FROM       = "no-reply@planora.com";
     private static final String APP_BASE   = "http://localhost:3000";
 
     public ReportEmailScheduler(ScheduledReportRepository repo,
                                  ScheduledReportService     service,
-                                 JavaMailSenderImpl         mailSender) {
-        this.repo       = repo;
-        this.service    = service;
-        this.mailSender = mailSender;
+                                 JavaMailSenderImpl         mailSender,
+                                 ProjectReportDataService   dataService,
+                                 PdfReportBuilder           pdfBuilder,
+                                 ExcelReportBuilder         excelBuilder) {
+        this.repo         = repo;
+        this.service      = service;
+        this.mailSender   = mailSender;
+        this.dataService  = dataService;
+        this.pdfBuilder   = pdfBuilder;
+        this.excelBuilder = excelBuilder;
     }
 
     @Scheduled(fixedDelay = 60_000)   // check every 60 seconds
@@ -95,6 +106,21 @@ public class ReportEmailScheduler {
         String reportUrl = APP_BASE + "/report/" + sr.getProjectId();
         h.setText(buildEmailHtml(sr, reportUrl), true);
 
+        // Generate data & attach files
+        ProjectReportDataService.ReportSnapshot snap = dataService.loadSnapshot(sr.getProjectId());
+        String format = sr.getFormat().toUpperCase();
+        String safeName = snap.project().getName().replaceAll("[^a-zA-Z0-9_-]", "_") + "_Report";
+
+        if ("PDF".equals(format) || "BOTH".equals(format)) {
+            byte[] pdfBytes = pdfBuilder.build(snap);
+            h.addAttachment(safeName + ".pdf", new ByteArrayResource(pdfBytes));
+        }
+
+        if ("EXCEL".equals(format) || "BOTH".equals(format)) {
+            byte[] excelBytes = excelBuilder.build(snap);
+            h.addAttachment(safeName + ".xlsx", new ByteArrayResource(excelBytes));
+        }
+
         mailSender.send(mime);
     }
 
@@ -149,8 +175,8 @@ public class ReportEmailScheduler {
                       <td style="padding:36px 40px;">
                         %s
                         <p style="color:#374151;font-size:14px;line-height:1.7;margin:0 0 24px 0;">
-                          Your scheduled <strong>%s</strong> is ready to download.
-                          Click the button below to open the Report Studio and generate your report.
+                          Your scheduled <strong>%s</strong> is attached to this email.
+                          You can also click the button below to view it live in the Report Studio.
                         </p>
 
                         <!-- Info pills -->
@@ -158,7 +184,7 @@ public class ReportEmailScheduler {
                           <tr>
                             <td style="background:#EBF2FF;border-radius:8px;padding:8px 14px;
                                        font-size:12px;font-weight:600;color:#155DFC;margin-right:8px;">
-                              📄 %s
+                              📎 Attached: %s
                             </td>
                             <td width="8"></td>
                             <td style="background:#F0FDF4;border-radius:8px;padding:8px 14px;

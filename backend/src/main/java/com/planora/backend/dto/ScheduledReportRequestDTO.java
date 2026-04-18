@@ -47,6 +47,9 @@ public class ScheduledReportRequestDTO {
     /** ISO date string (YYYY-MM-DD) for ONE_TIME */
     private String scheduledDate;
 
+    /** Timezone string from client (e.g. Asia/Kolkata). Defaults to UTC. */
+    private String timezone;
+
     // ── Recipients ───────────────────────────────────────────────────────────
 
     @NotEmpty

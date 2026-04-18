@@ -3,7 +3,7 @@
 //  ReportPageContent.tsx  ·  Planora Report Studio — Analytics Dashboard
 // ══════════════════════════════════════════════════════════════════════════════
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Download, CalendarClock, BarChart3, RefreshCw,
@@ -23,12 +23,6 @@ import {
 
 // ── Analytics components ──────────────────────────────────────────────────────
 import KpiStrip                         from './analytics/KpiStrip';
-import { StatusChart, PriorityChart }   from './analytics/DistributionCharts';
-import WorkloadChart                    from './analytics/WorkloadChart';
-import SprintChart                      from './analytics/SprintChart';
-import { OverdueTable, UpcomingTable }  from './analytics/TaskAlerts';
-import FullTaskTable, { TaskTableFilters } from './analytics/FullTaskTable';
-import MilestoneSection                 from './analytics/MilestoneSection';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface Props {
@@ -57,11 +51,10 @@ function ActionBtn({
       whileHover={{ scale: 1.03, y: -1 }}
       whileTap={{ scale: 0.97 }}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className="flex items-center gap-3 px-5 py-3 rounded-2xl text-left relative overflow-hidden"
+      className="w-full sm:w-auto min-w-0 sm:min-w-[160px] flex items-center gap-3 px-5 py-3 rounded-2xl text-left relative overflow-hidden"
       style={{
         background:     gradient,
         boxShadow:      '0 4px 20px rgba(21,93,252,0.25)',
-        minWidth:       160,
       }}
     >
       <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
@@ -160,17 +153,6 @@ export default function ReportPageContent({
   const [dlOpen,  setDlOpen]  = useState(false);
   const [schOpen, setSchOpen] = useState(false);
 
-  // Active filter state — controlled by both chart clicks and table dropdowns
-  const [filters, setFilters] = useState<TaskTableFilters>({
-    status: '', priority: '', assignee: '', sprint: '',
-  });
-  const updateFilter = useCallback((partial: Partial<TaskTableFilters>) => {
-    setFilters(f => ({ ...f, ...partial }));
-  }, []);
-
-  // Member filter for workload chart click
-  const [memberFilter, setMemberFilter] = useState('');
-
   // Build report data (memoized)
   const reportData = useMemo(() => buildReportData(
     project,
@@ -200,30 +182,13 @@ export default function ReportPageContent({
     mutateSchedules();
   };
 
-  // Unique values for table dropdowns (derived from data)
-  const allAssignees = useMemo(() =>
-    [...new Set(reportData.tasks.map(t => t.assignee).filter(a => a !== '—'))].sort(),
-  [reportData.tasks]);
-
-  const allSprints = useMemo(() =>
-    [...new Set(reportData.tasks.map(t => t.sprint).filter(s => s !== '—'))].sort(),
-  [reportData.tasks]);
-
-  // Member chart click → update assignee filter in task table
-  const handleMemberFilter = useCallback((name: string) => {
-    setMemberFilter(name);
-    updateFilter({ assignee: name });
-  }, [updateFilter]);
-
-  const hasActiveFilters = filters.status || filters.priority || filters.assignee || filters.sprint;
-
   return (
     <>
       {/* Modals */}
       <DownloadNowModal
         open={dlOpen}
         onClose={() => setDlOpen(false)}
-        reportData={reportData}
+        projectId={projectId}
         projectName={project?.name || 'Project'}
       />
       <ScheduleReportModal
@@ -235,26 +200,26 @@ export default function ReportPageContent({
 
       {/* Page */}
       <div
-        className="w-full min-h-[calc(100vh-80px)] relative"
+        className="w-full min-h-[calc(100vh-80px)] relative overflow-x-clip"
         style={{
           background: 'linear-gradient(160deg, #F8FAFF 0%, #F0F4FF 35%, #F8F9FF 70%, #FAFBFF 100%)',
         }}
       >
         {/* Decorative blobs */}
-        <div className="absolute top-0 right-0 w-[480px] h-[480px] rounded-full opacity-[0.03] pointer-events-none"
+        <div className="hidden sm:block absolute top-0 right-0 w-[480px] h-[480px] rounded-full opacity-[0.03] pointer-events-none"
           style={{ background: 'radial-gradient(circle, #155DFC, transparent)', transform: 'translate(30%, -30%)' }}
         />
-        <div className="absolute bottom-0 left-0 w-[360px] h-[360px] rounded-full opacity-[0.03] pointer-events-none"
+        <div className="hidden sm:block absolute bottom-0 left-0 w-[360px] h-[360px] rounded-full opacity-[0.03] pointer-events-none"
           style={{ background: 'radial-gradient(circle, #7C3AED, transparent)', transform: 'translate(-30%, 30%)' }}
         />
 
-        <div className="relative z-10 px-4 py-8 max-w-[1400px] mx-auto space-y-6">
+        <div className="relative z-10 w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-6 py-5 sm:py-6 lg:py-8 space-y-5 sm:space-y-6">
 
           {/* ── HEADER ───────────────────────────────────────────────────────── */}
           <motion.div
             initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl p-6"
+            className="rounded-2xl p-4 sm:p-6"
             style={{
               background:     'rgba(255,255,255,0.85)',
               backdropFilter: 'blur(20px) saturate(180%)',
@@ -278,7 +243,7 @@ export default function ReportPageContent({
                   </span>
                 </div>
 
-                <h1 className="text-[22px] font-black text-[#1A1A2E] leading-tight">
+                <h1 className="text-[20px] sm:text-[22px] font-black text-[#1A1A2E] leading-tight break-words">
                   {project?.name || 'Project'} Analytics
                 </h1>
 
@@ -304,7 +269,7 @@ export default function ReportPageContent({
               </div>
 
               {/* Action buttons */}
-              <div className="flex gap-3 flex-wrap">
+              <div className="grid grid-cols-1 sm:flex gap-3 w-full sm:w-auto">
                 <ActionBtn
                   data-id="report-download-btn"
                   label="Download"
@@ -324,36 +289,58 @@ export default function ReportPageContent({
               </div>
             </div>
 
-            {/* Active sprint banner */}
-            {isAgile && reportData.activeSprint && (
-              <div
-                className="mt-4 flex items-center gap-4 px-4 py-3 rounded-xl"
-                style={{ background: '#EBF2FF', border: '1px solid #BFDBFE' }}
+          </motion.div>
+
+          {/* ── ACTIVE SCHEDULES ───────────────────────────────────────────── */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08 }}
+            className="rounded-2xl p-5"
+            style={{
+              background:     'rgba(255,255,255,0.75)',
+              backdropFilter: 'blur(20px)',
+              border:         '1px solid rgba(255,255,255,0.60)',
+              boxShadow:      '0 2px 16px rgba(0,0,0,0.04)',
+            }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-widest">
+                Active Schedules
+              </p>
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ background: '#EBF2FF', color: '#155DFC' }}
               >
-                <div className="w-2 h-2 rounded-full bg-[#155DFC] animate-pulse" />
-                <div className="flex-1">
-                  <span className="text-[11px] font-bold text-[#155DFC]">Active Sprint: </span>
-                  <span className="text-[11px] text-[#374151] font-semibold">{reportData.activeSprint.name}</span>
-                  <span className="text-[10px] text-[#9CA3AF] ml-2">
-                    {reportData.activeSprint.start} → {reportData.activeSprint.end}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-black text-[#155DFC]">
-                    {reportData.activeSprint.completionRate}%
-                  </span>
-                  <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: '#BFDBFE' }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${reportData.activeSprint.completionRate}%`, background: '#155DFC' }}
+                {schedules.filter(s => s.status === 'ACTIVE').length} active
+              </span>
+            </div>
+
+            {schedules.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                <AnimatePresence>
+                  {schedules.map(sr => (
+                    <ScheduleRow
+                      key={sr.id}
+                      sr={sr}
+                      onDelete={() => handleDelete(sr.id)}
+                      onToggle={() => handleToggle(sr)}
                     />
-                  </div>
-                  <span className="text-[10px] text-[#9CA3AF]">
-                    {reportData.activeSprint.completedTasks}/{reportData.activeSprint.totalTasks}
-                  </span>
-                </div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-[#CBD5E1] bg-white/60 px-4 py-4 text-[11px] text-[#94A3B8]">
+                No active schedules yet. Create one to start automatic report emails.
               </div>
             )}
+
+            <button
+              onClick={() => setSchOpen(true)}
+              className="mt-3 w-full h-9 rounded-xl border border-dashed border-[#155DFC]/30 text-[11px] font-semibold text-[#155DFC] hover:bg-[#EBF2FF] flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <CalendarClock size={12} /> Add another schedule
+            </button>
           </motion.div>
 
           {/* ── KPI STRIP ──────────────────────────────────────────────────── */}
@@ -361,135 +348,11 @@ export default function ReportPageContent({
             <KpiStrip data={reportData} />
           </motion.div>
 
-          {/* ── ACTIVE FILTER CHIPS ────────────────────────────────────────── */}
-          <AnimatePresence>
-            {hasActiveFilters && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="flex items-center gap-2 flex-wrap"
-              >
-                <span className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">
-                  Filtered by:
-                </span>
-                {filters.status && (
-                  <button
-                    onClick={() => updateFilter({ status: '' })}
-                    className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full hover:opacity-80 transition-opacity"
-                    style={{ background: '#EBF2FF', color: '#155DFC' }}
-                  >
-                    Status: {filters.status} ×
-                  </button>
-                )}
-                {filters.priority && (
-                  <button
-                    onClick={() => updateFilter({ priority: '' })}
-                    className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full hover:opacity-80 transition-opacity"
-                    style={{ background: '#FEF2F2', color: '#DC2626' }}
-                  >
-                    Priority: {filters.priority} ×
-                  </button>
-                )}
-                {filters.assignee && (
-                  <button
-                    onClick={() => { updateFilter({ assignee: '' }); setMemberFilter(''); }}
-                    className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full hover:opacity-80 transition-opacity"
-                    style={{ background: '#F3E8FF', color: '#7C3AED' }}
-                  >
-                    Member: {filters.assignee} ×
-                  </button>
-                )}
-                {filters.sprint && (
-                  <button
-                    onClick={() => updateFilter({ sprint: '' })}
-                    className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full hover:opacity-80 transition-opacity"
-                    style={{ background: '#ECFDF5', color: '#16A34A' }}
-                  >
-                    Sprint: {filters.sprint} ×
-                  </button>
-                )}
-                <button
-                  onClick={() => { setFilters({ status: '', priority: '', assignee: '', sprint: '' }); setMemberFilter(''); }}
-                  className="text-[10px] font-semibold text-[#9CA3AF] hover:text-[#DC2626] transition-colors"
-                >
-                  Clear all
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* ── DISTRIBUTION CHARTS ────────────────────────────────────────── */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 }}
-            className="flex gap-4 flex-wrap"
-          >
-            <StatusChart
-              data={reportData}
-              activeStatus={filters.status}
-              onFilter={s => updateFilter({ status: s })}
-            />
-            <PriorityChart
-              data={reportData}
-              activePriority={filters.priority}
-              onFilter={p => updateFilter({ priority: p })}
-            />
-          </motion.div>
-
-          {/* ── WORKLOAD + SPRINT ───────────────────────────────────────────── */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.12 }}
-            className={`grid gap-4 ${isAgile && reportData.sprintStats.length > 0 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}
-          >
-            <WorkloadChart
-              data={reportData}
-              activeMember={memberFilter}
-              onMemberFilter={handleMemberFilter}
-            />
-            {isAgile && reportData.sprintStats.length > 0 && (
-              <SprintChart data={reportData} />
-            )}
-          </motion.div>
-
-          {/* ── OVERDUE TASKS ───────────────────────────────────────────────── */}
-          {reportData.overdueTasks.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}>
-              <OverdueTable tasks={reportData.overdueTasks} />
-            </motion.div>
-          )}
-
-          {/* ── UPCOMING TASKS ──────────────────────────────────────────────── */}
-          {reportData.upcomingTasks.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
-              <UpcomingTable tasks={reportData.upcomingTasks} />
-            </motion.div>
-          )}
-
-          {/* ── FULL TASK TABLE ─────────────────────────────────────────────── */}
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
-            <FullTaskTable
-              tasks={reportData.tasks}
-              externalFilters={filters}
-              onExternalChange={updateFilter}
-              allAssignees={allAssignees}
-              allSprints={allSprints}
-            />
-          </motion.div>
-
-          {/* ── MILESTONES ─────────────────────────────────────────────────── */}
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <MilestoneSection milestones={reportData.milestones} />
-          </motion.div>
-
           {/* ── REPORT CONTENTS INFO ──────────────────────────────────────── */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.22 }}
+            transition={{ delay: 0.1 }}
             className="rounded-2xl p-5"
             style={{
               background:     'rgba(255,255,255,0.75)',
@@ -501,7 +364,7 @@ export default function ReportPageContent({
             <p className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-widest mb-4">
               Export Contents
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {[
                 { Icon: BarChart3, label: 'Project Overview & KPIs',       color: '#155DFC' },
                 { Icon: Zap,       label: isAgile ? 'Sprint Analytics' : 'Kanban Flow', color: '#F59E0B' },
@@ -533,52 +396,6 @@ export default function ReportPageContent({
               ))}
             </div>
           </motion.div>
-
-          {/* ── ACTIVE SCHEDULES ───────────────────────────────────────────── */}
-          {schedules.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.24 }}
-              className="rounded-2xl p-5"
-              style={{
-                background:     'rgba(255,255,255,0.75)',
-                backdropFilter: 'blur(20px)',
-                border:         '1px solid rgba(255,255,255,0.60)',
-                boxShadow:      '0 2px 16px rgba(0,0,0,0.04)',
-              }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-widest">
-                  Active Schedules
-                </p>
-                <span
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: '#EBF2FF', color: '#155DFC' }}
-                >
-                  {schedules.filter(s => s.status === 'ACTIVE').length} active
-                </span>
-              </div>
-              <div className="flex flex-col gap-2">
-                <AnimatePresence>
-                  {schedules.map(sr => (
-                    <ScheduleRow
-                      key={sr.id}
-                      sr={sr}
-                      onDelete={() => handleDelete(sr.id)}
-                      onToggle={() => handleToggle(sr)}
-                    />
-                  ))}
-                </AnimatePresence>
-              </div>
-              <button
-                onClick={() => setSchOpen(true)}
-                className="mt-3 w-full h-9 rounded-xl border border-dashed border-[#155DFC]/30 text-[11px] font-semibold text-[#155DFC] hover:bg-[#EBF2FF] flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <CalendarClock size={12} /> Add another schedule
-              </button>
-            </motion.div>
-          )}
 
           {/* Footer */}
           <p className="text-center text-[10px] text-[#C4C9D4] pb-4">

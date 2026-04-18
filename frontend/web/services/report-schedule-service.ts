@@ -31,6 +31,9 @@ export interface ScheduledReportRequest {
   // One-time date: ISO date string "YYYY-MM-DD"
   scheduledDate?:     string;
 
+  // Local Timezone
+  timezone?:          string;
+
   // Recipients
   recipientsTo:       string[];   // required, at least one
   recipientsCc?:      string[];
@@ -57,6 +60,7 @@ export interface ScheduledReportResponse {
   sendDayOfWeek?: number;
   sendDayOfMonth?: number;
   scheduledDate?: string;
+  timezone?:      string;
   recipientsTo:   string[];
   recipientsCc?:  string[];
   recipientsBcc?: string[];

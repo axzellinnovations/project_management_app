@@ -12,9 +12,7 @@ import {
   AlertTriangle, BarChart3, Layers, Users, Flag, Zap,
 } from 'lucide-react';
 import { Task, Sprint, ProjectMetrics, MilestoneResponse, TeamMemberInfo } from '@/types';
-import { buildReportData } from '@/lib/report/reportUtils';
-import { generatePDFReport } from '@/lib/report/pdfReportGenerator';
-import { generateExcelReport } from '@/lib/report/excelReportGenerator';
+import { downloadProjectReport } from '@/services/report-download-service';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type ReportFormat = 'pdf' | 'excel' | 'both';
@@ -126,7 +124,7 @@ function IncludedRow({ icon, label, count }: { icon: React.ReactNode; label: str
 //  MODAL COMPONENT
 // ════════════════════════════════════════════════════════════════════════════
 export function GenerateReportModal({
-  isOpen, onClose, projectDetails, tasks, sprints, metrics,
+  isOpen, onClose, projectId, projectDetails, tasks, sprints, metrics,
   milestones, members, isAgile,
 }: Props) {
   const [format, setFormat] = useState<ReportFormat>('both');
@@ -139,18 +137,6 @@ export function GenerateReportModal({
     ? Math.round((metrics.completedTasks / metrics.totalTasks) * 100) : 0;
 
   const handleGenerate = useCallback(async () => {
-    const data = buildReportData(
-      projectDetails,
-      tasks, sprints, metrics, milestones,
-      members.map(m => ({
-        id: m.id,
-        userId: m.user.userId,       // ← used to match task.assigneeId
-        role: m.role,
-        user: { fullName: m.user.fullName, username: m.user.username },
-      })),
-      isAgile,
-    );
-
     const shouldPdf   = format === 'pdf'   || format === 'both';
     const shouldExcel = format === 'excel' || format === 'both';
 
@@ -158,21 +144,22 @@ export function GenerateReportModal({
     if (shouldExcel) setExcelState('loading');
 
     try {
-      if (shouldPdf && shouldExcel) {
-        await generatePDFReport(data);
+      if (shouldPdf) {
+        await downloadProjectReport(projectId, 'pdf');
         setPdfState('done');
-        await generateExcelReport(data);
-        setExcelState('done');
-      } else if (shouldPdf) {
-        await generatePDFReport(data);
-        setPdfState('done');
-      } else {
-        await generateExcelReport(data);
+      }
+    } catch (err) {
+      console.error('[GenerateReport] PDF download failed:', err);
+      if (shouldPdf) setPdfState('error');
+    }
+
+    try {
+      if (shouldExcel) {
+        await downloadProjectReport(projectId, 'excel');
         setExcelState('done');
       }
     } catch (err) {
-      console.error('[GenerateReport] Report generation failed:', err);
-      if (shouldPdf)   setPdfState('error');
+      console.error('[GenerateReport] Excel download failed:', err);
       if (shouldExcel) setExcelState('error');
     }
 
@@ -181,7 +168,7 @@ export function GenerateReportModal({
       setPdfState('idle');
       setExcelState('idle');
     }, 8000);
-  }, [format, projectDetails, tasks, sprints, metrics, milestones, members, isAgile]);
+  }, [format, projectId]);
 
   const handleClose = () => {
     if (!isLoading) {

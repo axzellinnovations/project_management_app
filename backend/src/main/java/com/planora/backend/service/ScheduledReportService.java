@@ -49,6 +49,8 @@ public class ScheduledReportService {
             sr.setScheduledDate(LocalDate.parse(dto.getScheduledDate()));
         }
 
+        sr.setTimezone(dto.getTimezone() != null && !dto.getTimezone().isBlank() ? dto.getTimezone() : "UTC");
+
         sr.setRecipientsTo(String.join(",", dto.getRecipientsTo()));
         if (dto.getRecipientsCc() != null) {
             sr.setRecipientsCc(String.join(",", dto.getRecipientsCc()));
@@ -153,7 +155,7 @@ public class ScheduledReportService {
     public Instant computeNextSendAt(ScheduledReport sr, Instant after) {
         try {
             LocalTime time = LocalTime.parse(sr.getSendTime()); // HH:mm
-            ZoneId zone    = ZoneId.of("UTC");
+            ZoneId zone    = ZoneId.of(sr.getTimezone() != null ? sr.getTimezone() : "UTC");
             LocalDate baseDate;
 
             if ("ONE_TIME".equalsIgnoreCase(sr.getScheduleType())) {
@@ -212,6 +214,7 @@ public class ScheduledReportService {
             .sendDayOfWeek(sr.getSendDayOfWeek())
             .sendDayOfMonth(sr.getSendDayOfMonth())
             .scheduledDate(sr.getScheduledDate() != null ? sr.getScheduledDate().toString() : null)
+            .timezone(sr.getTimezone() != null ? sr.getTimezone() : "UTC")
             .recipientsTo(splitEmails(sr.getRecipientsTo()))
             .recipientsCc(splitEmails(sr.getRecipientsCc()))
             .recipientsBcc(splitEmails(sr.getRecipientsBcc()))

@@ -80,7 +80,7 @@ function hRule(doc: Doc, y: number, c: RGB = C.light) {
 }
 
 function clip(s: string, maxChars: number): string {
-  return s.length > maxChars ? s.slice(0, maxChars - 1) + '…' : s;
+  return s.length > maxChars ? s.slice(0, maxChars - 3) + '...' : s;
 }
 
 // ── Pie / donut chart ─────────────────────────────────────────────────────────
@@ -236,8 +236,8 @@ function newPage(doc: Doc, data: ReportData): number {
   const n = doc.internal.getNumberOfPages();
   fillRect(doc, 0, 0, PW, PH, C.bg);
   fillRect(doc, 0, 0, PW, 10, C.primary);
-  txt(doc, 'PLANORA · PROJECT MANAGEMENT', ML, 6.5, 6, [200, 220, 255]);
-  txt(doc, `${data.projectName.toUpperCase()} · Page ${n}`, PW - MR, 6.5, 6, [210, 225, 255], false, 'right');
+  txt(doc, 'PLANORA - PROJECT MANAGEMENT', ML, 6.5, 6, [200, 220, 255]);
+  txt(doc, `${data.projectName.toUpperCase()} - Page ${n}`, PW - MR, 6.5, 6, [210, 225, 255], false, 'right');
   return 16;
 }
 
@@ -343,7 +343,7 @@ export async function generatePDFReport(data: ReportData): Promise<void> {
 
   const nameLines: string[] = doc.splitTextToSize(data.projectName, CW - 15);
   txt(doc, nameLines.slice(0, 2).join('\n'), ML, 40, 20, C.white, true);
-  txt(doc, `${data.projectType}  ·  ${data.generatedAt}`, ML, 62, 9, [190, 215, 255]);
+  txt(doc, `${data.projectType}  -  ${data.generatedAt}`, ML, 62, 9, [190, 215, 255]);
 
   // Type badge
   fillRect(doc, ML, 68, 38, 8, [10, 50, 180], 2);
@@ -420,7 +420,7 @@ export async function generatePDFReport(data: ReportData): Promise<void> {
 
   // Page footer
   fillRect(doc, 0, PH - 12, PW, 12, C.dark);
-  txt(doc, 'PLANORA PROJECT MANAGEMENT SUITE · CONFIDENTIAL', PW / 2, PH - 6, 6, [180, 190, 210], false, 'center');
+  txt(doc, 'PLANORA PROJECT MANAGEMENT SUITE - CONFIDENTIAL', PW / 2, PH - 6, 6, [180, 190, 210], false, 'center');
   txt(doc, 'Page 1', PW - MR, PH - 6, 6, [180, 190, 210], false, 'right');
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -553,7 +553,7 @@ export async function generatePDFReport(data: ReportData): Promise<void> {
     y += chartH + 14;
 
     // Velocity legend
-    txt(doc, '■ Completed', ML, y, 6.5, C.green); txt(doc, '■ Active', ML + 28, y, 6.5, C.primary); txt(doc, '■ Planned', ML + 52, y, 6.5, C.grey);
+    txt(doc, '[*] Completed', ML, y, 6.5, C.green); txt(doc, '[*] Active', ML + 28, y, 6.5, C.primary); txt(doc, '[*] Planned', ML + 52, y, 6.5, C.grey);
     y += 8;
 
     // Sprint completion rate bars
@@ -628,7 +628,7 @@ export async function generatePDFReport(data: ReportData): Promise<void> {
     y = sectionHead(doc, y, 'MEMBER COMPLETION RATES');
     data.memberStats.forEach((m, i) => {
       const col = TEAM_PALETTE[i % TEAM_PALETTE.length];
-      y = hBar(doc, y, `${m.name} · ${m.role}`, m.completionRate, 100, col, 90, 54, 5);
+      y = hBar(doc, y, `${m.name} - ${m.role}`, m.completionRate, 100, col, 90, 54, 5);
       txt(doc, `${m.completedTasks}/${m.totalTasks}`, PW - MR - 2, y - 5, 6, C.mid, false, 'right');
     });
     y += 6;
@@ -721,7 +721,7 @@ export async function generatePDFReport(data: ReportData): Promise<void> {
   for (let i = 2; i <= total; i++) {
     doc.setPage(i);
     fillRect(doc, 0, PH - 10, PW, 10, C.dark);
-    txt(doc, 'PLANORA PROJECT MANAGEMENT · CONFIDENTIAL', PW / 2, PH - 5, 5.5, [180, 190, 210], false, 'center');
+    txt(doc, 'PLANORA PROJECT MANAGEMENT - CONFIDENTIAL', PW / 2, PH - 5, 5.5, [180, 190, 210], false, 'center');
     txt(doc, `Page ${i} of ${total}`, PW - MR, PH - 5, 5.5, [180, 190, 210], false, 'right');
   }
 

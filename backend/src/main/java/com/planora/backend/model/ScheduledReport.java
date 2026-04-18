@@ -62,9 +62,13 @@ public class ScheduledReport {
     @Column(name = "send_day_of_month")
     private Integer sendDayOfMonth;
 
-    /** Specific date for ONE_TIME schedules */
+    /** ISO date string (YYYY-MM-DD) for ONE_TIME */
     @Column(name = "scheduled_date")
     private LocalDate scheduledDate;
+
+    /** Timezone ID (e.g. "Asia/Kolkata") */
+    @Column(length = 50)
+    private String timezone = "UTC";
 
     // ── Recipients ──────────────────────────────────────────────────────────
 

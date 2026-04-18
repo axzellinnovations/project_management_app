@@ -31,6 +31,7 @@ public class ScheduledReportResponseDTO {
     private Integer sendDayOfWeek;
     private Integer sendDayOfMonth;
     private String  scheduledDate;
+    private String  timezone;
 
     // Recipients
     private List<String> recipientsTo;
