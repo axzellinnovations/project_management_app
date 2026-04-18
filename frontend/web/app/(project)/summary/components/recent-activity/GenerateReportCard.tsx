@@ -1,72 +1,52 @@
-import React, { useState } from 'react';
-import { FileBarChart2, Loader2, Download, CheckCircle } from 'lucide-react';
+'use client';
 
-export function GenerateReportCard({ projectId }: { projectId: number | string }) {
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isDone, setIsDone] = useState(false);
+// ══════════════════════════════════════════════════════════════════════════════
+//  GenerateReportCard.tsx
+//  Banner widget on the summary dashboard — links to the dedicated Report tab
+// ══════════════════════════════════════════════════════════════════════════════
 
-  const handleGenerate = () => {
-    setIsGenerating(true);
-    
-    // Simulate generation delay
-    setTimeout(() => {
-      setIsGenerating(false);
-      setIsDone(true);
-      
-      // Reset back to original state after 4 seconds
-      setTimeout(() => {
-        setIsDone(false);
-      }, 4000);
-    }, 2000);
-  };
+import React from 'react';
+import Link from 'next/link';
+import { FileBarChart2, ArrowRight, BarChart3 } from 'lucide-react';
 
+interface Props {
+  projectId: number | string;
+  isAgile: boolean;
+}
+
+export function GenerateReportCard({ projectId, isAgile }: Props) {
   return (
     <div className="h-full w-full">
-      <div className="h-full bg-gradient-to-r from-[#0052CC] to-[#2684FF] rounded-xl border border-blue-400 p-4 shadow-lg shadow-blue-500/20 text-white relative overflow-hidden group">
-        {/* Decorative Abstract Background Elements */}
-        <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/20 rounded-full blur-2xl group-hover:scale-125 transition-transform duration-700 pointer-events-none" />
-        <div className="absolute -top-4 -right-2 w-16 h-16 bg-white/20 rounded-full blur-xl animate-pulse pointer-events-none" />
-        
-        <div className="absolute right-[-10px] top-[10px] text-white/5 rotate-[-15deg] pointer-events-none">
-          <FileBarChart2 size={80} strokeWidth={1} />
+      <div className="h-full bg-gradient-to-r from-[#0052CC] via-[#1A6FE0] to-[#2684FF] rounded-xl border border-blue-400/40 p-4 shadow-lg shadow-blue-500/20 text-white relative overflow-hidden group">
+        {/* Decorative elements */}
+        <div className="absolute -right-6 -bottom-6 w-28 h-28 bg-white/10 rounded-full blur-2xl group-hover:scale-125 transition-transform duration-700 pointer-events-none" />
+        <div className="absolute -top-3 -right-1 w-14 h-14 bg-white/10 rounded-full blur-xl animate-pulse pointer-events-none" />
+        <div className="absolute right-[-8px] top-[8px] text-white/5 rotate-[-12deg] pointer-events-none">
+          <FileBarChart2 size={78} strokeWidth={1} />
         </div>
 
         <div className="relative z-10 flex flex-row items-center justify-between gap-4 h-full">
-          <div className="flex flex-col">
-            <h3 className="font-arimo text-[16px] font-bold mb-1 text-white flex items-center gap-2">
-              Project Overview Report
-            </h3>
-            <p className="font-arimo text-[12px] text-blue-100 opacity-90">
-              Export a highly detailed PDF of tasks, sprints & workload.
-            </p>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-white/[0.15] flex items-center justify-center shrink-0">
+              <BarChart3 size={18} className="text-white" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-arimo text-[15px] font-bold text-white truncate">
+                Project Analytics Report
+              </h3>
+              <p className="font-arimo text-[11px] text-blue-100/80 truncate">
+                {isAgile ? 'Agile / Scrum' : 'Kanban'} · Full insights + PDF &amp; Excel download
+              </p>
+            </div>
           </div>
 
-          <button 
-            onClick={handleGenerate}
-            disabled={isGenerating || isDone}
-            className={`bento-no-drag flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-arimo text-[13px] font-bold transition-all duration-300 transform active:scale-95 shadow-sm whitespace-nowrap
-              ${isDone 
-                 ? 'bg-emerald-500 text-white border border-emerald-400 hover:bg-emerald-600 shadow-emerald-500/30' 
-                 : 'bg-white text-[#0052CC] border border-white hover:bg-blue-50 hover:shadow-md hover:shadow-white/20'
-              } disabled:opacity-90 disabled:active:scale-100`}
+          <Link
+            href={`/report/${projectId}`}
+            className="bento-no-drag flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-arimo text-[13px] font-bold transition-all duration-300 transform active:scale-95 shadow-sm whitespace-nowrap bg-white text-[#0052CC] border border-white hover:bg-blue-50 hover:shadow-md hover:shadow-white/20"
           >
-            {isGenerating ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Generating...
-              </>
-            ) : isDone ? (
-              <>
-                <CheckCircle size={16} />
-                Downloaded
-              </>
-            ) : (
-              <>
-                <Download size={16} className="group-hover:translate-y-0.5 transition-transform" />
-                Generate Report
-              </>
-            )}
-          </button>
+            <ArrowRight size={15} />
+            View Report
+          </Link>
         </div>
       </div>
     </div>

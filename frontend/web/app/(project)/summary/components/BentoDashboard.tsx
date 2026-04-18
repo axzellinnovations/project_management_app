@@ -587,9 +587,12 @@ export default function BentoDashboard({
           </BentoCard>
         </div>
 
-        {/* ── Generate Report (no BentoCard shell — banner is self-styled) ── */}
+        {/* ── Generate Report (links to Report tab) ── */}
         <div key="report" className="bento-drag-handle h-full w-full cursor-grab active:cursor-grabbing rounded-xl overflow-hidden shadow-sm ring-1 ring-black/[0.03] border border-[#E3E8EF] group">
-          <GenerateReportCard projectId={projectId} />
+          <GenerateReportCard
+            projectId={projectId}
+            isAgile={isAgile}
+          />
         </div>
 
         {/* ── Recently Completed Tasks ── */}

@@ -37,7 +37,7 @@ const stompClient = {
   deactivate: jest.fn(),
 };
 
-const ClientMock = function (options: Record<string, unknown>) {
+const ClientMock = function (options: Record<string, any>) {
   stompClientOnConnect = options.onConnect;
   return stompClient;
 };
