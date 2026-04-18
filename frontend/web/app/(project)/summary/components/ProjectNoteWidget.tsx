@@ -65,10 +65,9 @@ export function ProjectNoteWidget({ projectId, defaultNote = '' }: { projectId: 
   };
 
   return (
-    <MotionWrapper className="flex flex-col h-full min-h-[220px]">
+    <MotionWrapper className="flex flex-col h-full w-full relative overflow-hidden">
 
-
-      <div className="flex-1 p-0 relative">
+      <div className="flex-1 p-0 relative w-full h-full overflow-hidden">
         {/* Floating Edit / Save button */}
         <div className="absolute top-2 right-3 z-10 flex items-center gap-2">
           {!isEditing && parsedDefault.author && (
@@ -102,11 +101,11 @@ export function ProjectNoteWidget({ projectId, defaultNote = '' }: { projectId: 
             value={note}
             onChange={e => setNote(e.target.value)}
             placeholder="Jot down important rules, goals, or notes for this project..."
-            className="w-full h-full min-h-[160px] p-4 resize-none bg-amber-50/20 text-[13px] font-arimo text-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-amber-200 transition-all border-none rounded-b-xl"
+            className="absolute inset-0 w-full h-full px-4 pt-11 pb-4 resize-none bg-amber-50/20 text-[13px] font-arimo text-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-amber-200 transition-all border-none rounded-b-xl custom-scrollbar"
           />
         ) : (
           <div
-            className="w-full h-full min-h-[160px] p-4 overflow-y-auto text-[13px] font-arimo text-gray-800 whitespace-pre-wrap cursor-text rounded-b-xl hover:bg-gray-50/50 transition-colors"
+            className="absolute inset-0 w-full h-full px-4 pt-11 pb-4 overflow-y-auto text-[13px] font-arimo text-gray-800 whitespace-pre-wrap cursor-text rounded-b-xl hover:bg-gray-50/50 transition-colors custom-scrollbar"
             onClick={() => setIsEditing(true)}
           >
             {note ? note : <span className="text-gray-400 italic">Click to write a shared project note or summary...</span>}

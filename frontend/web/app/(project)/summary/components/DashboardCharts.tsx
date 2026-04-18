@@ -153,7 +153,7 @@ export function TaskDistributionWidget({ tasks }: { tasks: Task[] }) {
                     ))}
                   </Pie>
                   <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #E3E8EF', fontSize: '11px' }} />
-                  <Legend wrapperStyle={{ fontSize: '10px' }} height={16} />
+                  <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} verticalAlign="bottom" />
                 </PieChart>
               </ResponsiveContainer>
             </SafeChartFrame>

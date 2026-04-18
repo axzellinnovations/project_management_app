@@ -7,24 +7,15 @@ export function CurrentSprint({ projectId, sprints = [], tasks = [] }: { project
 
     if (!activeSprint) {
         return (
-            <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-6 shadow-sm hover:shadow-md transition-all duration-200">
-                <div className="flex justify-between items-start mb-6">
-                    <div>
-                        <h2 className="font-arimo text-[18px] font-semibold text-[#101828]">Current Sprint</h2>
-                        <p className="font-arimo text-[14px] text-[#6A7282] mt-1">No active sprint</p>
-                    </div>
-                </div>
-
-                <div className="flex flex-col items-center justify-center p-6 bg-gray-50 border border-dashed border-gray-200 rounded-xl">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#98A2B3" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3">
-                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                    </svg>
-                    <p className="font-arimo text-[14px] text-gray-600 mb-4 text-center max-w-[250px]">Start a sprint to unleash your team&apos;s tracking capabilities.</p>
-                    <button className="px-4 py-2 bg-[#0052CC] text-white font-semibold rounded-lg text-sm hover:bg-[#0047b3] transition-colors shadow-sm">
-                        Create Sprint
-                    </button>
-                </div>
-            </MotionWrapper>
+            <div className="h-full flex flex-col items-center justify-center p-4 bento-no-drag">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#98A2B3" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                <p className="font-arimo text-[14px] text-gray-600 mb-4 text-center max-w-[250px]">Start a sprint to unleash your team&apos;s tracking capabilities.</p>
+                <button className="px-4 py-2 bg-[#0052CC] text-white font-semibold rounded-lg text-sm hover:bg-[#0047b3] transition-colors shadow-sm">
+                    Create Sprint
+                </button>
+            </div>
         );
     }
 
@@ -52,18 +43,15 @@ export function CurrentSprint({ projectId, sprints = [], tasks = [] }: { project
     }
 
     return (
-        <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-6 shadow-sm hover:shadow-md transition-all duration-200">
-            <div className="flex justify-between items-start mb-6">
-                <div>
-                    <h2 className="font-arimo text-[18px] font-semibold text-[#101828]">Current Sprint</h2>
-                    <p className="font-arimo text-[15px] text-[#0052CC] mt-1 font-bold">{activeSprint.name}</p>
-                </div>
-                <div className={`${isUrgent ? 'bg-[#FFEBE6] text-[#DE350B]' : 'bg-[#E3FCEF] text-[#00875A]'} px-3 py-1.5 rounded-md font-arimo font-bold text-[14px] shadow-sm`}>
+        <div className="h-full flex flex-col bento-no-drag">
+            <div className="flex justify-between items-center mb-3">
+                <h3 className="font-arimo text-[16px] text-[#0052CC] font-bold">{activeSprint.name}</h3>
+                <div className={`${isUrgent ? 'bg-[#FFEBE6] text-[#DE350B]' : 'bg-[#E3FCEF] text-[#00875A]'} px-3 py-1.5 rounded-md font-arimo font-bold text-[12px] shadow-sm`}>
                     {daysRemainingText}
                 </div>
             </div>
 
-            <div className="mb-6">
+            <div className="mb-3">
                 <div className="flex justify-between text-[14px] text-[#4A5565] font-arimo mb-2">
                     <span className="font-medium">Points Done: {donePoints} / {totalPoints}</span>
                     <span className="font-bold text-[#101828]">{percentage}%</span>
@@ -74,13 +62,13 @@ export function CurrentSprint({ projectId, sprints = [], tasks = [] }: { project
                 <p className="text-[12px] text-gray-500 mt-2 font-arimo">{completedTasks.length} out of {sprintTasks.length} tasks completed.</p>
             </div>
 
-            <Link href={`/project/${projectId}/sprintboard`} className="inline-flex items-center gap-2 text-[#0052CC] font-arimo text-[15px] font-semibold hover:underline group">
+            <Link href={`/project/${projectId}/sprintboard`} className="mt-auto inline-flex items-center gap-2 text-[#0052CC] font-arimo text-[14px] font-semibold hover:underline group w-max">
                 Go to Sprint Board
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="group-hover:translate-x-1 transition-transform">
                     <path d="M3.33334 8H12.6667" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="round" strokeLinejoin="round" />
                     <path d="M8 3.33334L12.6667 8L8 12.6667" stroke="currentColor" strokeWidth="1.33333" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             </Link>
-        </MotionWrapper>
+        </div>
     );
 }
