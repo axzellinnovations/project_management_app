@@ -45,7 +45,7 @@ function SafeChartFrame({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div ref={hostRef} className="h-[280px] w-full">
+    <div ref={hostRef} className="h-full min-h-[250px] w-full">
       {ready ? children : null}
     </div>
   );
@@ -196,7 +196,7 @@ export function WorkloadDistribution({ projectId, tasks = [] }: { projectId: num
   }
 
   return (
-    <MotionWrapper className="relative bg-white/60 backdrop-blur-2xl rounded-2xl border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 col-span-1 lg:col-span-3 overflow-hidden">
+    <MotionWrapper className="relative bg-white/60 backdrop-blur-2xl rounded-2xl border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 overflow-hidden">
       {/* Decorative gradient blob background for glass effect */}
       <div className="absolute top-[-50%] left-[-10%] w-[60%] h-[150%] bg-gradient-to-r from-blue-100/40 to-emerald-50/40 rounded-full blur-3xl -z-10 animate-pulse pointer-events-none" style={{ animationDuration: '8s' }} />
       <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[100%] bg-gradient-to-l from-amber-50/40 to-purple-50/40 rounded-full blur-3xl -z-10 animate-pulse pointer-events-none" style={{ animationDuration: '10s' }} />
@@ -240,22 +240,23 @@ export function WorkloadDistribution({ projectId, tasks = [] }: { projectId: num
               <SafeChartFrame>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart onMouseLeave={() => setActiveIndex(-1)}>
-                    <Pie
-                      activeIndex={activeIndex}
-                      activeShape={renderActiveShape}
-                      data={activeWorkloadData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={70}
-                      outerRadius={95}
-                      dataKey="value"
-                      onMouseEnter={onPieEnter}
-                    >
-                      {activeWorkloadData.map((entry, index) => (
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {React.createElement(Pie as any, {
+                      activeIndex,
+                      activeShape: renderActiveShape,
+                      data: activeWorkloadData,
+                      cx: '50%',
+                      cy: '50%',
+                      innerRadius: 70,
+                      outerRadius: 95,
+                      dataKey: 'value',
+                      onMouseEnter: onPieEnter,
+                      children: activeWorkloadData.map((entry: { color: string }, index: number) => (
                         <Cell key={`cell-${index}`} fill={entry.color} style={{ outline: 'none' }} />
-                      ))}
-                    </Pie>
+                      ))
+                    })}
                   </PieChart>
+
                 </ResponsiveContainer>
               </SafeChartFrame>
             </div>

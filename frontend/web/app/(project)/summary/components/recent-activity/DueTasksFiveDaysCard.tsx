@@ -1,6 +1,5 @@
 import React from 'react';
 import { Task } from '@/types';
-import MotionWrapper from '../MotionWrapper';
 import { Clock } from 'lucide-react';
 
 export function DueTasksFiveDaysCard({ tasks = [] }: { tasks?: Task[] }) {
@@ -31,28 +30,14 @@ export function DueTasksFiveDaysCard({ tasks = [] }: { tasks?: Task[] }) {
   );
 
   return (
-    <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
-      <h2 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4 border-b border-gray-100 pb-3 flex items-center justify-between gap-3">
-        <span className="flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0052CC" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-            <line x1="16" y1="2" x2="16" y2="6" />
-            <line x1="8" y1="2" x2="8" y2="6" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-          </svg>
-          Due In Next 5 Days
-        </span>
-        <span className="text-[10px] font-black tracking-wide uppercase px-2 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
-          {upcomingFiveDayTasks.length} Tasks
-        </span>
-      </h2>
+    <div className="h-full">
 
       {upcomingFiveDayTasks.length === 0 ? (
         <p className="font-arimo text-[13px] text-[#98A2B3] bg-gray-50 p-4 rounded-lg text-center border border-dashed border-gray-200">
           No tasks due in the next 5 days.
         </p>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4 bento-no-drag">
           {upcomingFiveDayTasks.map((task) => {
             const dueDate = new Date(task.dueDate!);
             const daysDiff = Math.ceil((dueDate.getTime() - todayStart.getTime()) / (1000 * 3600 * 24));
@@ -94,6 +79,6 @@ export function DueTasksFiveDaysCard({ tasks = [] }: { tasks?: Task[] }) {
           })}
         </div>
       )}
-    </MotionWrapper>
+    </div>
   );
 }

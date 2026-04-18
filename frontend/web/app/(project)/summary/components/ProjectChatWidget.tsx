@@ -26,7 +26,7 @@ export function ProjectChatWidget({ projectId }: { projectId: number | string })
   };
 
   return (
-    <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] flex flex-col h-[400px] shadow-sm hover:shadow-md transition-all duration-200">
+    <MotionWrapper className="flex flex-col h-full min-h-[340px]">
       <div className="p-4 border-b border-gray-100 flex items-center justify-between shrink-0">
          <h2 className="font-arimo text-[16px] font-semibold text-[#101828] flex items-center gap-2">
             <MessageSquare size={16} className="text-[#0052CC]" />

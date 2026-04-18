@@ -1,6 +1,5 @@
 import React from 'react';
 import { Task } from '@/types';
-import MotionWrapper from '../MotionWrapper';
 import { formatTimeAgo } from './utils';
 import { CheckCircle2, Trophy } from 'lucide-react';
 
@@ -17,19 +16,12 @@ export function RecentlyCompletedTasksCard({ tasks = [] }: { tasks?: Task[] }) {
   );
 
   return (
-    <MotionWrapper className="bg-gradient-to-br from-[#00875A]/[0.04] to-white rounded-2xl border border-[#00875A]/10 p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 relative overflow-hidden backdrop-blur-xl">
+    <div className="h-full relative overflow-hidden">
       {/* Decorative Blob */}
-      <div className="absolute -right-8 -top-8 w-32 h-32 bg-[#00875A]/10 rounded-full blur-3xl -z-10" />
+      <div className="absolute -right-8 -top-8 w-32 h-32 bg-[#00875A]/10 rounded-full blur-3xl -z-10 pointer-events-none" />
       <div className="absolute right-[-10px] top-[-10px] text-[#00875A]/5 rotate-12 z-0 pointer-events-none">
         <Trophy size={120} strokeWidth={1} />
       </div>
-
-      <h2 className="font-arimo text-[16px] font-bold text-[#101828] mb-4 flex items-center gap-2.5 relative z-10 pb-3 border-b border-[#00875A]/10">
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#00875A] to-[#36B37E] flex items-center justify-center text-white shadow-sm shadow-[#00875A]/20">
-          <CheckCircle2 size={14} strokeWidth={3} />
-        </div>
-        Recently Completed
-      </h2>
 
       {completedTasks.length === 0 ? (
         <div className="py-6 px-4 flex flex-col items-center justify-center bg-white/50 rounded-xl border border-dashed border-gray-200">
@@ -95,6 +87,6 @@ export function RecentlyCompletedTasksCard({ tasks = [] }: { tasks?: Task[] }) {
           })}
         </div>
       )}
-    </MotionWrapper>
+    </div>
   );
 }

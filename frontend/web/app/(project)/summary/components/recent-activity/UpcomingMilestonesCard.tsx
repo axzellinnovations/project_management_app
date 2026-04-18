@@ -2,7 +2,6 @@ import React from 'react';
 import Link from 'next/link';
 import { Flag } from 'lucide-react';
 import { MilestoneResponse } from '@/types';
-import MotionWrapper from '../MotionWrapper';
 import { STATUS_CONFIG } from '../../../milestones/components/milestoneConfig';
 
 interface UpcomingMilestonesCardProps {
@@ -37,12 +36,7 @@ export function UpcomingMilestonesCard({
   );
 
   return (
-    <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
-      <h2 className="font-arimo text-[16px] font-semibold text-[#101828] mb-4 border-b border-gray-100 pb-3 flex items-center gap-2">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF8B00" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
-        Upcoming Milestones
-      </h2>
-
+    <div className="h-full">
       {milestonesLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
@@ -52,7 +46,7 @@ export function UpcomingMilestonesCard({
       ) : upcomingMilestones.length === 0 ? (
         <p className="font-arimo text-[13px] text-[#98A2B3] bg-gray-50 p-4 rounded-lg text-center border border-dashed border-gray-200">No upcoming milestones.</p>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4 bento-no-drag">
           {upcomingMilestones.map((milestone) => {
             const statusKey = Object.prototype.hasOwnProperty.call(STATUS_CONFIG, milestone.status)
               ? (milestone.status as keyof typeof STATUS_CONFIG)
@@ -99,12 +93,12 @@ export function UpcomingMilestonesCard({
 
           <Link
             href={`/milestones?projectId=${projectId}`}
-            className="inline-flex items-center justify-center gap-1.5 w-full mt-1 py-2.5 rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors font-arimo text-[12px] font-bold"
+            className="bento-no-drag inline-flex items-center justify-center gap-1.5 w-full mt-1 py-2.5 rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors font-arimo text-[12px] font-bold"
           >
             Open Milestones
           </Link>
         </div>
       )}
-    </MotionWrapper>
+    </div>
   );
 }

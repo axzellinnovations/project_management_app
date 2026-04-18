@@ -1,6 +1,5 @@
 import React from 'react';
 import { Task } from '@/types';
-import MotionWrapper from '../MotionWrapper';
 import { formatTimeAgo } from './utils';
 
 export function RecentActivityFeedCard({ tasks = [] }: { tasks?: Task[] }) {
@@ -14,9 +13,7 @@ export function RecentActivityFeedCard({ tasks = [] }: { tasks?: Task[] }) {
   );
 
   return (
-    <MotionWrapper className="bg-white rounded-xl border border-[#E3E8EF] p-5 shadow-sm hover:shadow-md transition-all duration-200">
-      <h2 className="font-arimo text-[16px] font-semibold text-[#101828] mb-5 border-b border-gray-100 pb-3">Recent Activity Feed</h2>
-
+    <div className="h-full">
       {recentUpdates.length === 0 ? (
         <p className="font-arimo text-[14px] text-[#98A2B3] italic bg-gray-50 p-4 rounded-lg text-center border border-dashed border-gray-200">No recent updates</p>
       ) : (
@@ -46,6 +43,6 @@ export function RecentActivityFeedCard({ tasks = [] }: { tasks?: Task[] }) {
           })}
         </div>
       )}
-    </MotionWrapper>
+    </div>
   );
 }
