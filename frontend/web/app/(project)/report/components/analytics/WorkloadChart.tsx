@@ -5,9 +5,9 @@
 import React from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, Cell,
+  Legend, ResponsiveContainer,
 } from 'recharts';
-import type { ReportData, MemberStat } from '@/lib/report/reportUtils';
+import type { ReportData } from '@/lib/report/reportUtils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CustomTooltip({ active, payload, label }: any) {

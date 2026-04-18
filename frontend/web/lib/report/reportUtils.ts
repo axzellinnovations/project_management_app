@@ -175,7 +175,6 @@ export function buildReportData(
     const rawDue  = t.dueDate   || null;
     const rawDone = t.completedAt || null;
     const dueMs   = rawDue ? new Date(rawDue).getTime() : null;
-    const doneMs  = rawDone ? new Date(rawDone).getTime() : null;
 
     const statusKey  = (t.status   || 'TODO').toUpperCase();
     const priorityKey = (t.priority || 'NORMAL').toUpperCase();

@@ -2,52 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { motion, animate } from 'framer-motion';
-import { ProjectMetrics } from '@/types';
-
-const itemVariants = {
-    hidden: { opacity: 0, y: 10 },
-    show: { opacity: 1, y: 0 }
-};
-
-const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.05
-        }
-    }
-};
-
-function MetricCard({
-    icon,
-    value,
-    label,
-    iconBg,
-    iconColor
-}: {
-    icon: React.ReactNode,
-    value: string | number,
-    label: string,
-    iconBg: string,
-    iconColor: string
-}) {
-    return (
-        <motion.div
-            variants={itemVariants}
-            whileHover={{ y: -2, transition: { duration: 0.2 } }}
-            className="bg-white rounded-[10px] border border-gray-200 p-5 shadow-[0_2px_12px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(0,82,204,0.08)] hover:border-[#0052CC]/20 transition-all duration-200 h-full min-h-[110px] flex flex-col justify-between relative group pointer-events-auto cursor-default"
-        >
-            <div className="flex justify-between items-start">
-                <p className="font-arimo text-[14px] text-gray-500 font-medium group-hover:text-[#0052CC] transition-colors">{label}</p>
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${iconBg} text-[${iconColor}]`}>
-                    {icon}
-                </div>
-            </div>
-            <h3 className="font-arimo text-[28px] text-gray-900 leading-none font-bold mt-auto">{value}</h3>
-        </motion.div>
-    );
-}
 
 function SmallCircularProgress({ percentage }: { percentage: number }) {
     const [displayValue, setDisplayValue] = useState(0);

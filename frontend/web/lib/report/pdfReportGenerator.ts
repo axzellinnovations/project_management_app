@@ -443,7 +443,6 @@ export async function generatePDFReport(data: ReportData): Promise<void> {
     color: STATUS_RGB[s.name.toUpperCase()] ?? C.grey,
     label: s.name,
   }));
-  const doneCount = data.statusDist.find(s => s.name === 'DONE')?.count ?? 0;
   const cx2 = ML + 70;
   donutChart(doc, cx2, chartY + donutR, donutR, donutInner, statusSegs, `${data.completionPct}%`, 'Complete');
   txt(doc, 'Status Distribution', cx2, chartY - 2, 8, C.dark, true, 'center');

@@ -29,20 +29,6 @@ function PieTooltip({ active, payload }: any) {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function BarTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  const d = payload[0];
-  return (
-    <div
-      className="rounded-xl px-3 py-2 text-xs font-semibold shadow-lg"
-      style={{ background: 'rgba(255,255,255,0.95)', border: `2px solid ${d.fill}`, color: '#1F2937' }}
-    >
-      {label}: <span style={{ color: d.fill }}>{d.value}</span> tasks ({payload[0].payload.pct}%)
-    </div>
-  );
-}
-
 // ── Glass card wrapper ─────────────────────────────────────────────────────────
 function ChartCard({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (

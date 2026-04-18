@@ -2,12 +2,13 @@
 
 import React, { useMemo, useState } from 'react';
 import { Task, TeamMemberInfo } from '@/types';
-import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Sector, PieSectorShapeProps } from 'recharts';
 import MotionWrapper from './MotionWrapper';
 import { Briefcase, UserPlus } from 'lucide-react';
 import useSWR from 'swr';
 import api from '@/lib/axios';
 import Link from 'next/link';
+import Image from 'next/image';
 
 const COLORS = ['#0052CC', '#00875A', '#FF8B00', '#DE350B', '#FFC400', '#6554C0', '#36B37E', '#FF5630', '#2684FF', '#FF991F'];
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
@@ -42,11 +43,6 @@ interface ActiveShapeProps {
   endAngle: number;
   fill?: string;
 }
-
-type PieShapeRenderer = Extract<
-  React.ComponentProps<typeof Pie>['shape'],
-  (props: any, index: number) => React.ReactElement
->;
 
 function formatRole(role?: string) {
   if (!role) return 'Team Member';
@@ -119,7 +115,7 @@ const renderActiveShape = (props: ActiveShapeProps) => {
 export function WorkloadDistribution({ projectId, tasks = [] }: { projectId: number | string; tasks: Task[] }) {
   const [activeIndex, setActiveIndex] = useState(-1);
 
-  const renderPieShape: PieShapeRenderer = (shapeProps) => {
+  const renderPieShape = (shapeProps: PieSectorShapeProps) => {
     const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, index } = shapeProps;
     const safeFill = fill || '#0052CC';
 
@@ -336,7 +332,7 @@ export function WorkloadDistribution({ projectId, tasks = [] }: { projectId: num
         <div className="w-full lg:w-8/12 p-6 relative" onMouseLeave={() => setActiveIndex(-1)}>
 
           <div className="grid grid-cols-1 gap-3 max-h-[310px] overflow-y-auto pr-3 custom-scrollbar relative z-10 w-full pb-8">
-            {workloadData.map((member, i) => {
+            {workloadData.map((member) => {
               const actualPieIndex = activeWorkloadData.findIndex(d => d.name === member.name);
 
               return (
@@ -354,7 +350,7 @@ export function WorkloadDistribution({ projectId, tasks = [] }: { projectId: num
                       style={{ backgroundColor: member.color }}
                     >
                       {member.avatar ? (
-                        <img src={member.avatar} alt={member.name} className="w-10 h-10 rounded-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        <Image src={member.avatar} alt={member.name} width={40} height={40} className="w-10 h-10 rounded-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                       ) : (
                         <span>{member.initials || 'U'}</span>
                       )}

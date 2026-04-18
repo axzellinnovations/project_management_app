@@ -2,6 +2,7 @@ import React from 'react';
 import { Task } from '@/types';
 import { formatTimeAgo } from './utils';
 import { CheckCircle2, Trophy } from 'lucide-react';
+import Image from 'next/image';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
@@ -52,7 +53,7 @@ export function RecentlyCompletedTasksCard({ tasks = [] }: { tasks?: Task[] }) {
                 {/* Avatar */}
                 <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-gray-100 to-gray-200 flex items-center justify-center border-2 border-white shadow-sm shrink-0 overflow-hidden ring-1 ring-black/5">
                   {photoUrl ? (
-                    <img src={photoUrl} alt="Avatar" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    <Image src={photoUrl} alt="Avatar" width={36} height={36} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                   ) : (
                     <span className="text-[11px] font-extrabold text-gray-500 bg-clip-text">
                       {(task.assigneeName || 'U').substring(0, 2).toUpperCase()}

@@ -1,4 +1,3 @@
-import MotionWrapper from './MotionWrapper';
 import { Sprint, Task } from '@/types';
 import Link from 'next/link';
 

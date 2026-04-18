@@ -6,7 +6,6 @@ import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import MotionWrapper from './MotionWrapper';
 
 const PRIORITY_COLORS = {
   URGENT: '#DE350B', // Red

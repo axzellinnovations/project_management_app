@@ -61,6 +61,9 @@ type SortKey = 'title' | 'status' | 'priority' | 'assignee' | 'dueDate' | 'daysU
 type SortDir = 'asc' | 'desc';
 
 const PAGE_SIZE = 25;
+const PRIORITY_WEIGHT: Record<string, number> = {
+  URGENT: 0, HIGH: 1, MEDIUM: 2, NORMAL: 3, LOW: 4, UNASSIGNED: 5,
+};
 
 export default function FullTaskTable({
   tasks, externalFilters, onExternalChange, allAssignees, allSprints,
@@ -69,10 +72,6 @@ export default function FullTaskTable({
   const [sortKey, setSortKey] = useState<SortKey>('daysUntilDue');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [page,    setPage]    = useState(0);
-
-  const priorityWeight: Record<string, number> = {
-    URGENT: 0, HIGH: 1, MEDIUM: 2, NORMAL: 3, LOW: 4, UNASSIGNED: 5,
-  };
 
   const filtered = useMemo(() => {
     let result = tasks;
@@ -103,7 +102,7 @@ export default function FullTaskTable({
       switch (sortKey) {
         case 'title':      cmp = a.title.localeCompare(b.title); break;
         case 'status':     cmp = a.statusKey.localeCompare(b.statusKey); break;
-        case 'priority':   cmp = (priorityWeight[a.priorityKey] ?? 5) - (priorityWeight[b.priorityKey] ?? 5); break;
+        case 'priority':   cmp = (PRIORITY_WEIGHT[a.priorityKey] ?? 5) - (PRIORITY_WEIGHT[b.priorityKey] ?? 5); break;
         case 'assignee':   cmp = a.assignee.localeCompare(b.assignee); break;
         case 'dueDate':
         case 'daysUntilDue':
@@ -281,7 +280,7 @@ export default function FullTaskTable({
                   : t.isUpcoming && t.daysUntilDue <= 2 ? '#FFFBEB'
                   : i % 2 === 0 ? '#FFFFFF' : '#FAFBFF';
                 return (
-                  <tr key={t.id} className="border-b border-[#F3F4F6] hover:bg-[#EBF2FF]/30 transition-colors">
+                  <tr key={t.id} className="border-b border-[#F3F4F6] hover:bg-[#EBF2FF]/30 transition-colors" style={{ background: rowBg }}>
                     <td className="px-4 py-2.5 text-[#9CA3AF]">{page * PAGE_SIZE + i + 1}</td>
                     <td className="px-4 py-2.5 font-semibold text-[#1F2937] max-w-[240px]">
                       <span className="block truncate" title={t.title}>

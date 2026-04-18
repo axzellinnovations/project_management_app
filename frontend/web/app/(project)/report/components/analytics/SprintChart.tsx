@@ -18,7 +18,7 @@ function getSprintColor(status: string): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function SprintTooltip({ active, payload, label }: any) {
+function SprintTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const d: SprintStat = payload[0].payload._raw;
   return (
