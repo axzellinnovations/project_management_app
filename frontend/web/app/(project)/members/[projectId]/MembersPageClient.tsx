@@ -33,7 +33,7 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
   useEffect(() => {
     if (hasAutoOpenedInvite.current) return;
 
-    const shouldOpenInvite = searchParams.get('invite') === 'true';
+    const shouldOpenInvite = searchParams?.get?.('invite') === 'true';
     if (!shouldOpenInvite) return;
 
     setShowModal(true);
