@@ -40,8 +40,13 @@ interface ActiveShapeProps {
   outerRadius: number;
   startAngle: number;
   endAngle: number;
-  fill: string;
+  fill?: string;
 }
+
+type PieShapeRenderer = Extract<
+  React.ComponentProps<typeof Pie>['shape'],
+  (props: any, index: number) => React.ReactElement
+>;
 
 function formatRole(role?: string) {
   if (!role) return 'Team Member';
@@ -84,6 +89,7 @@ function SafeChartFrame({ children }: { children: React.ReactNode }) {
 
 const renderActiveShape = (props: ActiveShapeProps) => {
   const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+  const safeFill = fill || '#0052CC';
 
   return (
     <g>
@@ -94,7 +100,7 @@ const renderActiveShape = (props: ActiveShapeProps) => {
         outerRadius={outerRadius + 8}
         startAngle={startAngle}
         endAngle={endAngle}
-        fill={fill}
+        fill={safeFill}
         className="transition-all duration-300 drop-shadow-md"
       />
       <Sector
@@ -104,7 +110,7 @@ const renderActiveShape = (props: ActiveShapeProps) => {
         endAngle={endAngle}
         innerRadius={outerRadius + 12}
         outerRadius={outerRadius + 16}
-        fill={fill}
+        fill={safeFill}
       />
     </g>
   );
@@ -112,6 +118,28 @@ const renderActiveShape = (props: ActiveShapeProps) => {
 
 export function WorkloadDistribution({ projectId, tasks = [] }: { projectId: number | string; tasks: Task[] }) {
   const [activeIndex, setActiveIndex] = useState(-1);
+
+  const renderPieShape: PieShapeRenderer = (shapeProps) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, index } = shapeProps;
+    const safeFill = fill || '#0052CC';
+
+    if (index !== activeIndex) {
+      return (
+        <Sector
+          cx={cx}
+          cy={cy}
+          innerRadius={innerRadius}
+          outerRadius={outerRadius}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={safeFill}
+          className="transition-all duration-300"
+        />
+      );
+    }
+
+    return renderActiveShape({ cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill: safeFill });
+  };
 
   const fetcher = (url: string) => api.get(url).then(res => res.data);
 
@@ -271,8 +299,7 @@ export function WorkloadDistribution({ projectId, tasks = [] }: { projectId: num
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart onMouseLeave={() => setActiveIndex(-1)}>
                     <Pie
-                      activeIndex={activeIndex}
-                      activeShape={renderActiveShape}
+                      shape={renderPieShape}
                       data={activeWorkloadData}
                       cx="50%"
                       cy="50%"
