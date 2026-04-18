@@ -2,15 +2,46 @@
 
 import React, { useMemo, useState } from 'react';
 import { Task, TeamMemberInfo } from '@/types';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Sector } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts';
 import MotionWrapper from './MotionWrapper';
-import { User, Briefcase, CheckCircle2, UserPlus } from 'lucide-react';
+import { Briefcase, UserPlus } from 'lucide-react';
 import useSWR from 'swr';
 import api from '@/lib/axios';
 import Link from 'next/link';
 
 const COLORS = ['#0052CC', '#00875A', '#FF8B00', '#DE350B', '#FFC400', '#6554C0', '#36B37E', '#FF5630', '#2684FF', '#FF991F'];
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+
+interface UserProfileItem {
+  userId: number;
+  email?: string;
+  username?: string;
+  profilePicUrl?: string;
+}
+
+interface WorkloadEntry {
+  isMember: boolean;
+  id?: number;
+  name: string;
+  role?: string;
+  avatar?: string | null;
+  initials?: string;
+  tasks: number;
+  completed: number;
+  overdue: number;
+  value: number;
+  color: string;
+}
+
+interface ActiveShapeProps {
+  cx: number;
+  cy: number;
+  innerRadius: number;
+  outerRadius: number;
+  startAngle: number;
+  endAngle: number;
+  fill: string;
+}
 
 function formatRole(role?: string) {
   if (!role) return 'Team Member';
@@ -51,8 +82,8 @@ function SafeChartFrame({ children }: { children: React.ReactNode }) {
   );
 }
 
-const renderActiveShape = (props: any) => {
-  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
+const renderActiveShape = (props: ActiveShapeProps) => {
+  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
 
   return (
     <g>
@@ -91,15 +122,15 @@ export function WorkloadDistribution({ projectId, tasks = [] }: { projectId: num
   );
 
   // Fetch user profiles globally to resolve mis-mapped avatars
-  const { data: usersData } = useSWR(
+  const { data: usersData = [] } = useSWR<UserProfileItem[]>(
     members.length > 0 ? '/api/auth/users' : null,
     fetcher
   );
 
   const userProfiles = useMemo(() => {
-    if (!usersData) return {};
+    if (!usersData || usersData.length === 0) return {};
     const profilesMap: Record<string, string> = {};
-    usersData.forEach((u: any) => {
+    usersData.forEach((u) => {
       if (u.profilePicUrl) {
         const fullUrl = u.profilePicUrl.startsWith('http') ? u.profilePicUrl : `${API_BASE_URL}${u.profilePicUrl.startsWith('/') ? '' : '/'}${u.profilePicUrl}`;
         profilesMap[`id:${u.userId}`] = fullUrl;
@@ -111,8 +142,7 @@ export function WorkloadDistribution({ projectId, tasks = [] }: { projectId: num
   }, [usersData]);
 
   const workloadData = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const workloads: Record<string, any> = {};
+    const workloads: Record<string, Omit<WorkloadEntry, 'value' | 'color'>> = {};
 
     // 1. Initialize all actual team members first (so people with 0 tasks also show up!)
     members.forEach(m => {
@@ -186,7 +216,7 @@ export function WorkloadDistribution({ projectId, tasks = [] }: { projectId: num
 
   const activeWorkloadData = useMemo(() => workloadData.filter(d => d.value > 0), [workloadData]);
 
-  const onPieEnter = (_: any, index: number) => {
+  const onPieEnter = (_payload: unknown, index: number) => {
     setActiveIndex(index);
   };
 
@@ -240,21 +270,21 @@ export function WorkloadDistribution({ projectId, tasks = [] }: { projectId: num
               <SafeChartFrame>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart onMouseLeave={() => setActiveIndex(-1)}>
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    {React.createElement(Pie as any, {
-                      activeIndex,
-                      activeShape: renderActiveShape,
-                      data: activeWorkloadData,
-                      cx: '50%',
-                      cy: '50%',
-                      innerRadius: 70,
-                      outerRadius: 95,
-                      dataKey: 'value',
-                      onMouseEnter: onPieEnter,
-                      children: activeWorkloadData.map((entry: { color: string }, index: number) => (
+                    <Pie
+                      activeIndex={activeIndex}
+                      activeShape={renderActiveShape}
+                      data={activeWorkloadData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={70}
+                      outerRadius={95}
+                      dataKey="value"
+                      onMouseEnter={onPieEnter}
+                    >
+                      {activeWorkloadData.map((entry: { color: string }, index: number) => (
                         <Cell key={`cell-${index}`} fill={entry.color} style={{ outline: 'none' }} />
-                      ))
-                    })}
+                      ))}
+                    </Pie>
                   </PieChart>
 
                 </ResponsiveContainer>

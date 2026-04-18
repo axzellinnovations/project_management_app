@@ -248,6 +248,14 @@ export default function ScheduleReportModal({ open, onClose, projectId, projectN
   const next = () => { if (validate(step)) setStep(s => s + 1); };
   const back = () => setStep(s => Math.max(1, s - 1));
 
+  const resetAndClose = useCallback(() => {
+    setStep(1);
+    setForm(EMPTY_FORM);
+    setErrors({});
+    setSaveState('idle');
+    onClose();
+  }, [onClose]);
+
   // ── Submit ────────────────────────────────────────────────────────────────────
 
   const handleConfirm = useCallback(async () => {
@@ -294,15 +302,7 @@ export default function ScheduleReportModal({ open, onClose, projectId, projectN
       setSaveState('error');
       setTimeout(() => setSaveState('idle'), 4000);
     }
-  }, [form, projectId, saveState]);
-
-  const resetAndClose = () => {
-    setStep(1);
-    setForm(EMPTY_FORM);
-    setErrors({});
-    setSaveState('idle');
-    onClose();
-  };
+  }, [form, projectId, resetAndClose, saveState]);
 
   // ── Derived summary strings ────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { Task, Sprint, ProjectMetrics, PageItem, MilestoneResponse } from '@/types';
 import api from '@/lib/axios';
 import useSWR from 'swr';
@@ -61,6 +61,7 @@ function isValidLayouts(data: unknown): data is Layouts {
 }
 
 function loadSavedLayouts(projectId: number): Layouts | null {
+  if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(storageKey(projectId));
     if (!raw) return null;
@@ -72,6 +73,7 @@ function loadSavedLayouts(projectId: number): Layouts | null {
 }
 
 function saveLayouts(projectId: number, layouts: Layouts) {
+  if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(storageKey(projectId), JSON.stringify(layouts));
   } catch { /* quota full — silent fail */ }
@@ -107,20 +109,14 @@ function fillRowGaps(items: WidgetLayout[], totalCols: number): WidgetLayout[] {
 }
 
 function useBentoLayout(projectId: number, defaultLayouts: Layouts) {
-  const [layouts, setLayouts] = useState<Layouts>(defaultLayouts);
-  const [isHydrated, setIsHydrated] = useState(false);
+  const [layouts, setLayouts] = useState<Layouts>(() => {
+    const saved = loadSavedLayouts(projectId);
+    return saved ?? defaultLayouts;
+  });
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load from localStorage on mount (client-side only)
-  useEffect(() => {
-    const saved = loadSavedLayouts(projectId);
-    if (saved) setLayouts(saved);
-    setIsHydrated(true);
-  }, [projectId]);
-
   const onLayoutChange = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (_layout: any, allLayouts: Layouts) => {
+    (_layout: unknown, allLayouts: Layouts) => {
       // Auto-fill horizontal gaps in the lg breakpoint after every resize/drag
       const adjusted: Layouts = { ...allLayouts };
       if (adjusted.lg) {
@@ -138,7 +134,7 @@ function useBentoLayout(projectId: number, defaultLayouts: Layouts) {
     setLayouts(defaultLayouts);
   }, [projectId, defaultLayouts]);
 
-  return { layouts, onLayoutChange, resetLayouts, isHydrated };
+  return { layouts, onLayoutChange, resetLayouts, isHydrated: true };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -249,8 +245,7 @@ function buildDefaultLayouts(isAgile: boolean): Layouts {
     { i: 'chat', x: 0, y: isAgile ? 54 : 39, w: 4, h: 5, static: true },
   ];
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { lg, md, sm } as any;
+  return { lg, md, sm } as Layouts;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -422,7 +417,7 @@ export default function BentoDashboard({
   tasks: Task[];
   sprints: Sprint[];
   metrics: ProjectMetrics;
-  projectDetails: any;
+  projectDetails: { description?: string } | null;
   isAgile: boolean;
 }) {
   const fetcher = (url: string) => api.get(url).then((r) => r.data);
@@ -456,13 +451,12 @@ export default function BentoDashboard({
   }, [isAgile]);
 
   // Filter all breakpoint layouts to remove irrelevant widget ids
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const filteredLayouts = React.useMemo<any>(() => {
+  const filteredLayouts = React.useMemo<Layouts>(() => {
     const filtered: Record<string, WidgetLayout[]> = {};
     for (const [bp, items] of Object.entries(layouts ?? {})) {
       filtered[bp] = ((items ?? []) as WidgetLayout[]).filter((item) => activeIds.has(item.i));
     }
-    return filtered;
+    return filtered as Layouts;
   }, [layouts, activeIds]);
 
   // Don't flash default layout before hydration — avoid SSR mismatch
