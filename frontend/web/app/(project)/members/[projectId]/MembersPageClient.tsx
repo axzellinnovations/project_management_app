@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMembersData } from "./useMembersData";
 import { ROLE_OPTIONS } from "./constants";
 import { InviteMemberModal } from "./components/InviteMemberModal";
@@ -10,6 +12,9 @@ import { MembersTable } from "./components/MembersTable";
 import { RemoveMemberModal } from "./components/RemoveMemberModal";
 
 export default function MembersPageClient({ projectId }: { projectId: string }) {
+  const searchParams = useSearchParams();
+  const hasAutoOpenedInvite = useRef(false);
+
   const {
     loading, filteredMembers, totalMembers, activeCount, adminCount, pendingCount,
     search, setSearch, roleFilter, setRoleFilter, statusFilter, setStatusFilter,
@@ -24,6 +29,16 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
     resolveProfilePicUrl, getMemberProfilePicCandidates,
     handleRoleChange, handleRemoveMemberConfirm, handleInvite,
   } = useMembersData(projectId);
+
+  useEffect(() => {
+    if (hasAutoOpenedInvite.current) return;
+
+    const shouldOpenInvite = searchParams?.get?.('invite') === 'true';
+    if (!shouldOpenInvite) return;
+
+    setShowModal(true);
+    hasAutoOpenedInvite.current = true;
+  }, [searchParams, setShowModal]);
 
   if (loading) return <div className="mobile-page-padding max-w-[900px] mx-auto pb-6 text-sm text-gray-500">Loading...</div>;
 

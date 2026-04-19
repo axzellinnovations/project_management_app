@@ -44,9 +44,10 @@ function NotificationItem({ n, onClick }: { n: Notification; onClick: () => void
 interface NotificationsPanelContentProps {
   notifications: Notification[];
   onClose: () => void;
+  emptyMessage?: string;
 }
 
-export function NotificationsPanelContent({ notifications, onClose }: NotificationsPanelContentProps) {
+export function NotificationsPanelContent({ notifications, onClose, emptyMessage }: NotificationsPanelContentProps) {
   const router = useRouter();
   const recent = notifications.slice(0, 6);
 
@@ -68,7 +69,7 @@ export function NotificationsPanelContent({ notifications, onClose }: Notificati
             <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
           </svg>
         </div>
-        <span className="text-[12px] font-medium text-cu-text-muted">No new notifications</span>
+        <span className="text-[12px] font-medium text-cu-text-muted">{emptyMessage || 'No new notifications'}</span>
       </div>
     );
   }

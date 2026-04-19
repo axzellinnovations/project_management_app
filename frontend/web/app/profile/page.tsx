@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { useState } from 'react';
 import { PhoneInput } from 'react-international-phone';
-import { Activity, BadgeCheck, BriefcaseBusiness, Camera, Mail, UserRound } from 'lucide-react';
+import { Activity, BadgeCheck, BriefcaseBusiness, Camera, Mail, UserRound, Menu } from 'lucide-react';
 import { useProfile } from './hooks/useProfile';
 import { useChangePassword } from './hooks/useChangePassword';
 import ChangePasswordCard from './components/ChangePasswordCard';
@@ -41,9 +41,19 @@ export default function ProfilePage() {
         <div className="mobile-page-padding max-w-[1400px] mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
             <div className="sticky-section-header glass-panel rounded-2xl border border-[#E4E7EC] bg-gradient-to-r from-white via-[#F8FAFF] to-white px-5 py-5 sm:px-6 sm:py-6 shadow-sm mb-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-[26px] sm:text-[30px] font-bold tracking-tight text-[#101828]">Profile Settings</h1>
-                        <p className="text-sm text-[#667085] mt-1">Manage your account, personal info, and workspace identity.</p>
+                    <div className="flex items-center gap-3">
+                        {/* Mobile Sidebar Toggle Button */}
+                        <button
+                            onClick={() => window.dispatchEvent(new CustomEvent('planora:sidebar:toggle'))}
+                            className="md:hidden p-2 -ml-2 text-[#4B5563] rounded-xl hover:bg-gray-100 transition-colors shrink-0 active:bg-gray-200"
+                            aria-label="Toggle Sidebar"
+                        >
+                            <Menu strokeWidth={2.5} size={22} className="text-[#4B5563]" />
+                        </button>
+                        <div>
+                            <h1 className="text-[26px] sm:text-[30px] font-bold tracking-tight text-[#101828]">Profile Settings</h1>
+                            <p className="text-sm text-[#667085] mt-1">Manage your account, personal info.</p>
+                        </div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
                         <span className="inline-flex items-center gap-1 rounded-full border border-[#D0D5DD] bg-white px-3 py-1 text-xs font-semibold text-[#344054]">

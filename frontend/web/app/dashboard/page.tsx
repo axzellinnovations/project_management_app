@@ -132,9 +132,9 @@ export default function DashboardPage() {
     );
 
     return (
-        <div className="flex flex-col gap-4 w-full h-full max-w-[1200px] mx-auto pb-6 mt-0 px-4 sm:px-6">
+        <div className="flex flex-col gap-4 w-full h-full max-w-[1200px] mx-auto pb-6 mt-0 px-4 sm:px-6 relative">
             {/* Page Header: Greeting + Actions */}
-            <div className="w-full flex items-center justify-between gap-3 py-2 px-1">
+            <div className="sticky top-0 z-30 w-full flex items-center justify-between gap-3 py-3 px-1 bg-white/95 backdrop-blur-md rounded-b-[10px] shadow-sm mb-1 before:absolute before:-top-4 before:h-4 before:w-full before:bg-white/95 before:z-30">
                 {/* Left: mobile menu toggle + greeting */}
                 <div className="flex items-center gap-2.5 min-w-0">
                     <button

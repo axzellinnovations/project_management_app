@@ -41,6 +41,11 @@ export async function toggleFavorite(projectId: number | string): Promise<void> 
   await api.post(`/api/projects/${projectId}/favorite`);
 }
 
+export async function updateProjectDetails(projectId: number | string, data: { name?: string; description?: string; type?: string }): Promise<ProjectSummary> {
+  const result = await api.put<ProjectSummary>(`/api/projects/${projectId}`, data);
+  return result.data;
+}
+
 export async function fetchDocuments(
   projectId: string,
   includeDeleted = false,
