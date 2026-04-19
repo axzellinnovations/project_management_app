@@ -28,4 +28,5 @@ public class UserResponseDTO {
     private String company;
     private String position;
     private String bio;
+    private boolean notifyDueDateReminders;
 }

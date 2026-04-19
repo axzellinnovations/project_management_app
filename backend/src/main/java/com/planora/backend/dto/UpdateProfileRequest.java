@@ -1,8 +1,9 @@
 package com.planora.backend.dto;
 
-import lombok.Data;
-import jakarta.validation.constraints.Size;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import jakarta.validation.constraints.Size;
+import lombok.Data;
 
 /**
  * Request DTO for updating user profile.
@@ -38,4 +39,6 @@ public class UpdateProfileRequest {
 
     @Size(max = 300, message = "Bio cannot exceed 300 characters")
     private String bio;
+
+    private Boolean notifyDueDateReminders;
 }

@@ -131,6 +131,49 @@ class NotificationServiceTest {
     }
 
     @Test
+    void createNotificationIfNotDuplicateSince_createsWhenNoDuplicateInWindow() {
+        LocalDateTime windowStart = LocalDateTime.parse("2026-04-18T00:00:00");
+        when(notificationRepository.existsByRecipientUserIdAndMessageAndLinkAndCreatedAtAfter(
+                15L, "Task due soon", "/taskcard?taskId=10", windowStart
+        )).thenReturn(false);
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> {
+            Notification toSave = invocation.getArgument(0);
+            toSave.setId(222L);
+            return toSave;
+        });
+
+        boolean created = notificationService.createNotificationIfNotDuplicateSince(
+                recipient,
+                "Task due soon",
+                "/taskcard?taskId=10",
+                windowStart
+        );
+
+        assertTrue(created);
+        verify(notificationRepository).save(any(Notification.class));
+        verify(messagingTemplate).convertAndSendToUser(eq("alice"), eq("/queue/notifications"), any(NotificationResponseDTO.class));
+    }
+
+    @Test
+    void createNotificationIfNotDuplicateSince_skipsWhenDuplicateInWindow() {
+        LocalDateTime windowStart = LocalDateTime.parse("2026-04-18T00:00:00");
+        when(notificationRepository.existsByRecipientUserIdAndMessageAndLinkAndCreatedAtAfter(
+                15L, "Task overdue", "/taskcard?taskId=12", windowStart
+        )).thenReturn(true);
+
+        boolean created = notificationService.createNotificationIfNotDuplicateSince(
+                recipient,
+                "Task overdue",
+                "/taskcard?taskId=12",
+                windowStart
+        );
+
+        assertFalse(created);
+        verify(notificationRepository, never()).save(any(Notification.class));
+        verify(messagingTemplate, never()).convertAndSendToUser(anyString(), anyString(), any());
+    }
+
+    @Test
     void getUserNotifications_mapsEntitiesToDtos() {
         Notification first = new Notification();
         first.setId(1L);

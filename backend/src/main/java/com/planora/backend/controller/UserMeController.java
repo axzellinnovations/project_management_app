@@ -46,7 +46,8 @@ public class UserMeController {
                     user.getJobTitle(),
                     user.getCompany(),
                     user.getPosition(),
-                    user.getBio()
+                    user.getBio(),
+                    user.isNotifyDueDateReminders()
             );
             return new ResponseEntity<>(dto, HttpStatus.OK);
         } catch (Exception e) {
