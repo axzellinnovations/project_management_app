@@ -47,6 +47,7 @@ export const ThreadPanel = ({
 }: ThreadPanelProps) => {
   const [replyInput, setReplyInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
 
   const orderedMessages = useMemo(() => {
     if (!rootMessage) return [] as ChatMessage[];
@@ -55,11 +56,30 @@ export const ThreadPanel = ({
     return [root, ...replies];
   }, [rootMessage, threadMessages]);
 
+  // Track scroll position inside the thread panel.
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [threadMessages]);
+    const el = scrollRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 80;
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Always scroll to bottom when the thread is first opened (root message change).
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    isAtBottomRef.current = true;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [rootMessage?.id]);
+
+  // Scroll to bottom on new replies only if already near the bottom.
+  useEffect(() => {
+    if (!scrollRef.current || !isAtBottomRef.current) return;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [threadMessages.length]);
 
   if (!rootMessage) return null;
 
