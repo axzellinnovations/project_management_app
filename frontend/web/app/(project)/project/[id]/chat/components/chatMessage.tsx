@@ -174,6 +174,11 @@ export const ChatMessages = ({
   const [loadingFileId, setLoadingFileId] = useState<number | null>(null);
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
   const [messageToDelete, setMessageToDelete] = useState<number | null>(null);
+  // Track whether the user is scrolled near the bottom so we don't interrupt
+  // reading history when new messages arrive.
+  const isAtBottomRef = useRef(true);
+  // Stable ref to the virtualizer so scroll effects don't re-run on every render.
+  const virtualizerRef = useRef<ReturnType<typeof useVirtualizer> | null>(null);
 
   const aliasSet = new Set([
     currentUser.toLowerCase(),
@@ -189,14 +194,47 @@ export const ChatMessages = ({
     overscan: 10,
   });
 
+  // Keep the stable ref in sync with the latest virtualizer instance.
+  virtualizerRef.current = rowVirtualizer;
+
+  // Track user scroll position so we can decide whether to auto-scroll.
   useEffect(() => {
-    if (visibleMessages.length > 0) {
-      // Wrap in setTimeout to avoid flushSync error during lifecycle methods
-      setTimeout(() => {
-        rowVirtualizer.scrollToIndex(visibleMessages.length - 1, { align: 'end' });
-      }, 0);
-    }
-  }, [visibleMessages.length, rowVirtualizer, typingUser, activeRoomId, isPrivateChat]);
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      // Consider "at bottom" when within 80px of the end.
+      isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 80;
+    };
+
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Scroll to bottom when the active chat context switches (room / private / team).
+  // This should always fire regardless of scroll position.
+  useEffect(() => {
+    isAtBottomRef.current = true;
+    const virtualizer = virtualizerRef.current;
+    if (!virtualizer || visibleMessages.length === 0) return;
+    requestAnimationFrame(() => {
+      virtualizer.scrollToIndex(visibleMessages.length - 1, { align: 'end' });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRoomId, isPrivateChat]);
+
+  // Scroll to bottom when new messages arrive — but only if the user is already
+  // near the bottom so we don't disrupt someone reading old messages.
+  useEffect(() => {
+    const virtualizer = virtualizerRef.current;
+    if (!virtualizer || visibleMessages.length === 0) return;
+    if (!isAtBottomRef.current) return;
+    requestAnimationFrame(() => {
+      virtualizer.scrollToIndex(visibleMessages.length - 1, { align: 'end' });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleMessages.length]);
 
   const handleDocumentClick = async (
     e: React.MouseEvent<HTMLAnchorElement>,
