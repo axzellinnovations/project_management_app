@@ -5,7 +5,7 @@ import { Pencil, Trash2, MessageSquare, Pin, PinOff, FileText, Loader2 } from 'l
 import { motion } from 'framer-motion';
 import { ChatMessage, ChatReactionSummary } from './chat';
 import { EditMessageModal, ConfirmDeleteModal } from './chatModals';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useVirtualizer, Virtualizer } from '@tanstack/react-virtual';
 import api from '@/lib/axios';
 
 interface ChatMessagesProps {
@@ -178,7 +178,7 @@ export const ChatMessages = ({
   // reading history when new messages arrive.
   const isAtBottomRef = useRef(true);
   // Stable ref to the virtualizer so scroll effects don't re-run on every render.
-  const virtualizerRef = useRef<ReturnType<typeof useVirtualizer> | null>(null);
+  const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null);
 
   const aliasSet = new Set([
     currentUser.toLowerCase(),
