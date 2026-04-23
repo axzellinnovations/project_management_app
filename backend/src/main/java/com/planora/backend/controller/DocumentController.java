@@ -22,6 +22,14 @@ public class DocumentController {
 
     private final DocumentService documentService;
 
+    // ── Direct-to-S3 Upload Pipeline ──────────────────────────────────────────────
+
+    /*
+     * PHASE 1: Initialize Upload.
+     * The frontend tells us it *wants* to upload a file (giving us the name and size).
+     * We return a temporary, cryptographic URL that allows the frontend to push
+     * the binary data directly to AWS S3, bypassing our server entirely.
+     */
     @PostMapping("/documents/upload/init")
     public ResponseEntity<DocumentUploadInitResponseDTO> initUpload(
             @PathVariable Long projectId,
@@ -33,6 +41,12 @@ public class DocumentController {
         );
     }
 
+    /*
+     * PHASE 2: Finalize Upload.
+     * The frontend calls this AFTER the direct-to-S3 upload succeeds.
+     * We verify the file is actually sitting in our AWS bucket, and then we create
+     * the official database record linking it to the project.
+     */
     @PostMapping("/documents/upload/finalize")
     public ResponseEntity<DocumentResponseDTO> finalizeUpload(
             @PathVariable Long projectId,
@@ -44,18 +58,30 @@ public class DocumentController {
         );
     }
 
-        @PostMapping(value = "/documents/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-        public ResponseEntity<DocumentResponseDTO> uploadViaBackend(
-                        @PathVariable Long projectId,
-                        @RequestParam("file") MultipartFile file,
-                        @RequestParam(value = "folderId", required = false) Long folderId,
-                        @AuthenticationPrincipal UserPrincipal principal) {
-                return new ResponseEntity<>(
-                                documentService.uploadDocumentViaBackend(projectId, principal.getUserId(), file, folderId),
-                                HttpStatus.CREATED
-                );
+    /*
+     * FALLBACK: Server-Proxied Upload.
+     * For older clients or scripts that cannot handle the 2-step presigned URL process.
+     * The file hits our Spring Boot server's RAM, and we proxy it to AWS.
+     * Consumes multipart/form-data.
+     */
+    @PostMapping(value = "/documents/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<DocumentResponseDTO> uploadViaBackend(
+            @PathVariable Long projectId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "folderId", required = false) Long folderId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return new ResponseEntity<>(
+                documentService.uploadDocumentViaBackend(projectId, principal.getUserId(), file, folderId),
+                HttpStatus.CREATED
+        );
         }
 
+    // ── Version Control ───────────────────────────────────────────────────────────
+
+    /*
+     * PHASE 1 for uploading a *new version* of an *existing* document.
+     * Sub-Resource Routing: `/documents/{documentId}/versions/...`
+     */
     @PostMapping("/documents/{documentId}/versions/upload/init")
     public ResponseEntity<DocumentUploadInitResponseDTO> initVersionUpload(
             @PathVariable Long projectId,
@@ -68,6 +94,9 @@ public class DocumentController {
         );
     }
 
+    /*
+     * PHASE 2 for finalizing a new document version.
+     */
     @PostMapping("/documents/{documentId}/versions/upload/finalize")
     public ResponseEntity<DocumentResponseDTO> finalizeVersionUpload(
             @PathVariable Long projectId,
@@ -80,6 +109,12 @@ public class DocumentController {
         );
     }
 
+    // ── Document Retrieval & Downloads ────────────────────────────────────────────
+
+    /*
+     * Fetches the file explorer view.
+     * Supports query params to filter by a specific folder or to view the "Trash" (includeDeleted).
+     */
     @GetMapping("/documents")
     public ResponseEntity<List<DocumentResponseDTO>> listDocuments(
             @PathVariable Long projectId,
@@ -103,6 +138,10 @@ public class DocumentController {
         );
     }
 
+    /*
+     * We don't stream the file bytes through the backend.
+     * Instead, we generate a secure, short-lived AWS S3 link that the browser can download directly.
+     */
     @GetMapping("/documents/{documentId}/download-url")
     public ResponseEntity<Map<String, String>> getDownloadUrl(
             @PathVariable Long projectId,
@@ -112,6 +151,7 @@ public class DocumentController {
         return new ResponseEntity<>(Map.of("downloadUrl", downloadUrl), HttpStatus.OK);
     }
 
+    // Lists all historical versions of a specific document.
     @GetMapping("/documents/{documentId}/versions")
     public ResponseEntity<List<DocumentVersionResponseDTO>> getVersions(
             @PathVariable Long projectId,
@@ -123,6 +163,12 @@ public class DocumentController {
         );
     }
 
+    // ── Document Metadata & Lifecycle (Trash Bin) ─────────────────────────────────
+
+    /*
+     * Allows renaming a document or moving it to a different folder.
+     * Uses PATCH because we are only partially updating the metadata, not replacing the file content.
+     */
     @PatchMapping("/documents/{documentId}")
     public ResponseEntity<DocumentResponseDTO> updateMetadata(
             @PathVariable Long projectId,
@@ -135,6 +181,10 @@ public class DocumentController {
         );
     }
 
+    /*
+     * SOFT DELETE: Moves the document to the "Trash" state without actually deleting
+     * the physical file from S3 yet.
+     */
     @DeleteMapping("/documents/{documentId}")
     public ResponseEntity<Void> softDelete(
             @PathVariable Long projectId,
@@ -144,6 +194,9 @@ public class DocumentController {
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
+    /*
+     * Pulls a document out of the Trash and back into active status.
+     */
     @PatchMapping("/documents/{documentId}/restore")
     public ResponseEntity<DocumentResponseDTO> restore(
             @PathVariable Long projectId,
@@ -155,6 +208,10 @@ public class DocumentController {
         );
     }
 
+    /*
+     * HARD DELETE: Instantly wipes the database records and deletes all physical
+     * files and historical versions from AWS S3. Cannot be undone.
+     */
     @DeleteMapping("/documents/{documentId}/permanent")
     public ResponseEntity<Void> permanentDelete(
             @PathVariable Long projectId,
@@ -163,6 +220,8 @@ public class DocumentController {
         documentService.permanentDelete(projectId, documentId, principal.getUserId());
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
+
+    // ── Folder Management ─────────────────────────────────────────────────────────
 
     @PostMapping("/folders")
     public ResponseEntity<DocumentFolderResponseDTO> createFolder(
@@ -197,6 +256,9 @@ public class DocumentController {
         );
     }
 
+    /*
+     * Deleting a folder will recursively soft-delete all child folders and documents inside it.
+     */
     @DeleteMapping("/folders/{folderId}")
     public ResponseEntity<Void> deleteFolder(
             @PathVariable Long projectId,

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import jakarta.validation.Valid;
 
+// Handles operations specifically related to managing the authenticated user's profile.
 @RestController
 @RequestMapping("/api/user/profile")
 public class UserProfileController {
@@ -20,74 +21,58 @@ public class UserProfileController {
     @Autowired
     UserService service;
 
+    // Centralizing this extraction keeps the controller DRY.
+    // If the token structure or authentication mechanism ever changes, we only update it here.
     private String getAuthenticatedUserEmail(Authentication authentication){
         return authentication.getName();
     }
 
-    private UserResponseDTO buildUserResponse(User user, String presignedUrl) {
-        UserResponseDTO dto = new UserResponseDTO();
-        dto.setUserId(user.getUserId());
-        dto.setUsername(user.getUsername());
-        dto.setFullName(user.getFullName());
-        dto.setEmail(user.getEmail());
-        dto.setVerified(user.isVerified());
-        dto.setProfilePicUrl(presignedUrl);
-        dto.setLastActive(user.getLastActive());
-        dto.setFirstName(user.getFirstName());
-        dto.setLastName(user.getLastName());
-        dto.setContactNumber(user.getContactNumber());
-        dto.setCountryCode(user.getCountryCode());
-        dto.setJobTitle(user.getJobTitle());
-        dto.setCompany(user.getCompany());
-        dto.setPosition(user.getPosition());
-        dto.setBio(user.getBio());
-        dto.setNotifyDueDateReminders(user.isNotifyDueDateReminders());
-        return dto;
-    }
-
+    // Fetches the current user's full profile details.
     @GetMapping
     public ResponseEntity<?> getProfile(Authentication authentication) {
         try {
-            String email = getAuthenticatedUserEmail(authentication);
-            User user = service.getUserByEmail(email);
-            String presignedUrl = service.generatePresignedUrl(user.getProfilePicUrl());
-            UserResponseDTO response = buildUserResponse(user, presignedUrl);
+            UserResponseDTO response = service.getCurrentUserDTO(getAuthenticatedUserEmail(authentication));
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.BAD_REQUEST);
         }
     }
 
+    /* Updates the user's textual profile data (name,bio, company, etc.).
+     * we return fully updated DTO so the frontend can immediately
+     * refresh its state without having to make a secondary GET request to fetch the new data.
+     */
     @PutMapping("/update")
     public ResponseEntity<?> updateProfile(
             @Valid @RequestBody UpdateProfileRequest request,
             Authentication authentication) {
         try {
-            String email = getAuthenticatedUserEmail(authentication);
-            User updatedUser = service.updateUserProfile(email, request);
-
-            String presignedUrl = service.generatePresignedUrl(updatedUser.getProfilePicUrl());
-
-            UserResponseDTO response = buildUserResponse(updatedUser, presignedUrl);
+            UserResponseDTO response = service.updateUserProfileAndGetDTO(getAuthenticatedUserEmail(authentication), request);
             return new ResponseEntity<>(response, HttpStatus.OK);
         } catch (Exception e){
             return new ResponseEntity<>(e.getMessage(), HttpStatus.BAD_REQUEST);
         }
     }
 
+    /* Handles multipart file uploads for user avatars.
+    *  Validates the file securely before attempting external S3 operations.
+    */
     @PostMapping("/photo")
     public ResponseEntity<?> uploadProfilePhoto(
             @RequestParam("file")MultipartFile file,
             Authentication authentication){
         try {
+            // Fail fast: Prevent unnecessary processing or AWS calls for empty payloads.
             if(file.isEmpty()){
                 PhotoUploadResponse response = new PhotoUploadResponse(false, "Please select file to upload", null, "EMPTY_FILE");
                 return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
             }
 
-            // Validate content type
+            // Validating the MIME type prevents malicious executables or scripts
             String contentType = file.getContentType();
             if(contentType == null || !service.isValidImageType(contentType)) {
+                // Returning a specific error code ("INVALID_FILE_TYPE") allows the frontend
+                // to show a localized, friendly error message without parsing the raw string.
                 PhotoUploadResponse response = new PhotoUploadResponse(false, "Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed", null, "INVALID_FILE_TYPE");
                 return new ResponseEntity<>(response, HttpStatus.UNSUPPORTED_MEDIA_TYPE);
             }
@@ -97,7 +82,9 @@ public class UserProfileController {
             // This saves the file to S3, updates the DB, and returns the permanent locked URL
             String rawFileUrl = service.uploadProfilePicture(email, file);
 
-            // Generate the secure, temporary URL so the frontend can display it immediately
+            // Because our S3 bucket is private, the raw URL is useless to the frontend.
+            // We immediately generate a temporary presigned URL so the user's UI can
+            // instantly display the newly uploaded avatar.
             String presignedUrl = service.generatePresignedUrl(rawFileUrl);
 
             // Send the presigned URL back to the frontend

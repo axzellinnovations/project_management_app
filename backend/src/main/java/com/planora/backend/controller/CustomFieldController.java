@@ -18,11 +18,16 @@ public class CustomFieldController {
     @Autowired
     private CustomFieldService customFieldService;
 
+    // Fetches all the custom columns defined for this specific project.
     @GetMapping
     public ResponseEntity<List<CustomFieldDTO>> getFields(@PathVariable Long projectId) {
         return ResponseEntity.ok(customFieldService.getFieldsForProject(projectId));
     }
 
+    /*
+     * Creates a new custom field definition (e.g., creating a new DROPDOWN field).
+     * REST STANDARD: Returns 201 CREATED because a new schema record was added to the database.
+     */
     @PostMapping
     public ResponseEntity<CustomFieldDTO> createField(
             @PathVariable Long projectId,
@@ -32,6 +37,7 @@ public class CustomFieldController {
                 .body(customFieldService.createField(projectId, req));
     }
 
+    // Updates the definition of a field (e.g., renaming the column or adding a new dropdown option).
     @PutMapping("/{fieldId}")
     public ResponseEntity<CustomFieldDTO> updateField(
             @PathVariable Long projectId,
@@ -41,6 +47,11 @@ public class CustomFieldController {
         return ResponseEntity.ok(customFieldService.updateField(fieldId, req));
     }
 
+    /*
+     * Permanently deletes a custom field definition.
+     * WARNING: Depending on the service layer, this typically cascades and destroys
+     * all data users have entered into this field across the entire project!
+     */
     @DeleteMapping("/{fieldId}")
     public ResponseEntity<Void> deleteField(
             @PathVariable Long projectId,

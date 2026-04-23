@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+// Manages rich-text documentation pages (like a Wiki) attached to a Project.
 @Service
 @RequiredArgsConstructor
 public class ProjectPageService {
@@ -35,12 +36,18 @@ public class ProjectPageService {
 
     @Transactional
     public ProjectPage createPage(Long projectId, PageRequestDto request, Long userId) {
+        // Defensive Programming: Fail immediately if someone passes bad data internally.
         Objects.requireNonNull(projectId, "projectId cannot be null");
         Objects.requireNonNull(userId, "userId cannot be null");
 
+        // Step 1: Verify the project exists.
         Project project = findProject(projectId);
+
+        // Step 2: Validate the user is actually in the project (Viewers are allowed to create pages).
         validateProjectMembership(project.getTeam().getId(), userId, false);
 
+        // Step 3: Map data and save. We track who created it and who last updated it
+        // to manage notifications later.
         ProjectPage page = ProjectPage.builder()
                 .projectId(projectId)
                 .title(request.getTitle())
@@ -50,10 +57,16 @@ public class ProjectPageService {
                 .build();
 
         ProjectPage saved = repository.save(page);
+
+        // Step 4: Alert management that documentation is being added to their project.
         notifyProjectOwnersAndAdminsOnCreate(project, userId, saved);
         return saved;
     }
 
+    /*
+     * Retrieves a lightweight list of pages for the sidebar navigation.
+     * We purposefully DO NOT load the `content` field here to save database memory and bandwidth.
+     */
     @Transactional(readOnly = true)
     public List<PageSummaryResponseDto> getProjectPages(Long projectId, Long userId) {
         Objects.requireNonNull(projectId, "projectId cannot be null");
@@ -67,6 +80,9 @@ public class ProjectPageService {
                 .collect(Collectors.toList());
     }
 
+    /*
+     * Retrieves the full rich-text content of a specific page when the user clicks on it.
+     */
     @Transactional(readOnly = true)
     public PageDetailResponseDto getPageById(Long pageId, Long userId) {
         Objects.requireNonNull(pageId, "pageId cannot be null");
@@ -92,17 +108,23 @@ public class ProjectPageService {
 
         ProjectPage existingPage = findPage(pageId);
         Project project = findProject(existingPage.getProjectId());
+
+        // Security Check: Viewers can read pages, but they cannot edit them.
         validateProjectMembership(project.getTeam().getId(), userId, true);
 
+        // Step 1: Snapshot old data to determine if we need to send notifications.
         String oldTitle = existingPage.getTitle();
         Long oldUpdatedByUserId = existingPage.getUpdatedByUserId();
 
+        // Step 2: Apply updates.
         existingPage.setTitle(request.getTitle());
         existingPage.setContent(request.getContent());
         existingPage.setUpdatedByUserId(userId);
 
         ProjectPage updatedPage = repository.save(existingPage);
 
+        // Step 3: Only alert stakeholders if the TITLE changed.
+        // We don't want to spam notifications every time someone fixes a typo in the content.
         if (!Objects.equals(oldTitle, updatedPage.getTitle())) {
             notifyImpactedStakeholdersOnRename(project, updatedPage, userId, oldTitle, oldUpdatedByUserId);
         }
@@ -126,13 +148,22 @@ public class ProjectPageService {
 
         ProjectPage existingPage = findPage(pageId);
         Project project = findProject(existingPage.getProjectId());
+
+        // Viewers cannot delete pages.
         validateProjectMembership(project.getTeam().getId(), userId, true);
 
+        // Notify people who wrote/edited this page BEFORE we delete it from the DB.
         notifyImpactedStakeholdersOnDelete(project, existingPage, userId);
 
         repository.delete(existingPage);
     }
 
+    // ── Notification Strategies ───────────────────────────────────────────────────
+
+    /*
+     * Alert Strategy: "Managerial Oversight"
+     * When a page is created, we only notify Owners and Admins, keeping regular Members focused on their tasks.
+     */
     private void notifyProjectOwnersAndAdminsOnCreate(Project project, Long actorUserId, ProjectPage page) {
         Set<TeamRole> roles = Set.of(TeamRole.OWNER, TeamRole.ADMIN);
         List<TeamMember> recipients = teamMemberRepository
@@ -149,6 +180,11 @@ public class ProjectPageService {
                 .forEach(user -> notificationService.createNotification(user, message, link));
     }
 
+    /*
+     * Alert Strategy: "Direct Stakeholders"
+     * If a page is renamed, we only notify the person who originally created it,
+     * and the person who last edited it. We don't spam the whole team.
+     */
     private void notifyImpactedStakeholdersOnRename(Project project,
                                                     ProjectPage page,
                                                     Long actorUserId,
@@ -176,6 +212,10 @@ public class ProjectPageService {
         notifyUsersByIds(recipientIds, message, link);
     }
 
+    /*
+     * Alert Strategy: "Direct Stakeholders"
+     * Tells the creator and last editor that their work has been deleted.
+     */
     private void notifyImpactedStakeholdersOnDelete(Project project, ProjectPage page, Long actorUserId) {
         Set<Long> recipientIds = new LinkedHashSet<>();
         if (page.getCreatedByUserId() != null) {
@@ -196,6 +236,9 @@ public class ProjectPageService {
         notifyUsersByIds(recipientIds, message, link);
     }
 
+    // ── Internal Helpers ──────────────────────────────────────────────────────────
+
+    // Resolves the display name for notifications, preferring Full Name over Username.
     private String resolveActorName(Long actorUserId) {
         return userRepository.findById(actorUserId)
                 .map(user -> user.getFullName() != null && !user.getFullName().isBlank()
@@ -221,6 +264,10 @@ public class ProjectPageService {
                 .orElseThrow(() -> new EntityNotFoundException("Project not found with ID: " + projectId));
     }
 
+    /*
+     * RBAC helper.
+     * @param denyViewer If true, users with the "VIEWER" role will trigger an AccessDeniedException.
+     */
     private void validateProjectMembership(Long teamId, Long userId, boolean denyViewer) {
         TeamMember member = teamMemberRepository.findByTeamIdAndUserUserId(teamId, userId)
                 .orElseThrow(() -> new AccessDeniedException("User is not a member of this team"));
