@@ -111,6 +111,7 @@ public class ChatController {
     private NotificationService notificationService;
     // ─────────────────────────────────────────────────────────────────────────
     private final ScheduledExecutorService unreadBadgeScheduler = Executors.newSingleThreadScheduledExecutor();
+    // Versioned debounce avoids stale badge broadcasts when many events happen in quick succession.
     private final ConcurrentHashMap<Long, Long> unreadBadgeVersionByProject = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, ScheduledFuture<?>> unreadBadgeTasks = new ConcurrentHashMap<>();
 
@@ -132,6 +133,7 @@ public class ChatController {
         
         simpMessagingTemplate.convertAndSend("/topic/project/" + projectId + "/public", saved);
 
+        // Side effects are offloaded to keep the websocket send path responsive.
         chatTaskExecutor.execute(() -> {
             publishMentionNotifications(projectId, projectContext.teamId(), projectContext.projectName(), saved, "TEAM");
             publishTeamChatNotifications(projectId, projectContext, saved);
@@ -419,12 +421,14 @@ public class ChatController {
     private void publishMessageEvent(Long projectId, ChatMessageDTO message) {
         var eventType = Boolean.TRUE.equals(message.getDeleted()) ? "MESSAGE_DELETED" : "MESSAGE_UPDATED";
 
+        // Private updates are sent to both participants via user destinations, not public topics.
         if (message.getRecipient() != null && !message.getRecipient().isBlank()) {
             sendPrivateMessageToConversationParticipants(projectId, message);
             chatTaskExecutor.execute(() -> chatWebhookService.dispatchMessageEvent(projectId, eventType, "PRIVATE", message));
             return;
         }
 
+        // Thread updates also hit thread topic so open thread views update in place.
         var threadRootId = chatService.resolveThreadTopicRootId(projectId, message).orElse(null);
         if (threadRootId != null) {
             simpMessagingTemplate.convertAndSend(
@@ -885,6 +889,7 @@ public class ChatController {
         if (user == null || destination == null || destination.isBlank() || payload == null) {
             return;
         }
+        // Fan-out to username and email aliases keeps delivery stable during identity migrations.
         var identities = new LinkedHashSet<String>();
         if (user.getUsername() != null && !user.getUsername().isBlank()) {
             identities.add(user.getUsername().toLowerCase());

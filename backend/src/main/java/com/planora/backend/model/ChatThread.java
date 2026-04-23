@@ -23,6 +23,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @Getter
 @Setter
+// Thread rows map a root message to thread metadata, avoiding repeated root lookups in hot paths.
 public class ChatThread {
 
     @Id
@@ -33,6 +34,7 @@ public class ChatThread {
 
     private Long rootMessageId;
 
+    // roomId is captured for room-scoped threads; null means team/private context.
     private Long roomId;
 
     private String createdBy;
