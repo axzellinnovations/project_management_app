@@ -17,9 +17,11 @@ const MilestoneCard: React.FC<MilestoneCardProps> = ({ milestone, onEdit, onDele
   const [statusOpen, setStatusOpen] = useState(false);
   const sConf = STATUS_CONFIG[milestone.status as MilestoneStatus] ?? STATUS_CONFIG.OPEN;
 
+  // undefined locale uses the browser's locale so dates display in the user's regional format
   const dueDateStr = milestone.dueDate
     ? new Date(milestone.dueDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
     : null;
+  // Only flag overdue when status is OPEN — completed milestones shouldn't show a red overdue badge
   const isOverdue = milestone.dueDate && milestone.status === 'OPEN' && new Date(milestone.dueDate) < new Date();
 
   return (
@@ -44,6 +46,7 @@ const MilestoneCard: React.FC<MilestoneCardProps> = ({ milestone, onEdit, onDele
 
           <div className="flex flex-wrap items-center gap-2">
             {/* Status badge */}
+            {/* stopPropagation prevents card-level click from interfering with the status dropdown */}
             <div className="relative" onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={() => setStatusOpen((v) => !v)}
@@ -77,6 +80,7 @@ const MilestoneCard: React.FC<MilestoneCardProps> = ({ milestone, onEdit, onDele
         </div>
 
         {/* Three-dot menu */}
+        {/* stopPropagation here for the same reason — clicking edit/delete must not bubble to a card click handler */}
         <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => setMenuOpen((v) => !v)}

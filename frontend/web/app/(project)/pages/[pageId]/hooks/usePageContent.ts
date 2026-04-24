@@ -9,6 +9,7 @@ import axiosInstance from '../../../../../lib/axios';
 
 export function usePageContent(pageId: string, projectId: string | null) {
     const searchParams = useSearchParams();
+    // The literal string "new" is the route convention for a draft — no numeric ID exists yet
     const isDraft = pageId === 'new';
 
     const [selectedPage, setSelectedPage] = useState<PageItem | null>(null);
@@ -25,6 +26,7 @@ export function usePageContent(pageId: string, projectId: string | null) {
         if (!pageId) return;
 
         if (isDraft) {
+            // Template ID comes from the URL so the template choice survives navigation without being stored in state
             const templateId = searchParams.get('template') || 'blank';
             const template = predefinedTemplates.find(t => t.id === templateId) ?? predefinedTemplates[0];
             const defaultTitle = template.id === 'blank' ? 'Untitled Page' : template.name;

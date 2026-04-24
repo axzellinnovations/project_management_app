@@ -35,6 +35,7 @@ const DependencyPicker: React.FC<DependencyPickerProps> = ({
       .finally(() => setLoading(false));
   }, [projectId]);
 
+  // Exclude the task itself and already-linked tasks so the picker only shows valid new targets
   const filtered = tasks.filter(
     (t) =>
       t.id !== taskId &&
@@ -48,7 +49,7 @@ const DependencyPicker: React.FC<DependencyPickerProps> = ({
       await api.post(`/api/tasks/${taskId}/dependencies/${blocker.id}`);
       onLinked();
     } catch {
-      // 409 = already linked — treat as success
+      // 409 Conflict means the dependency already exists — safe to ignore and still call onLinked
     } finally {
       setLinking(false);
     }

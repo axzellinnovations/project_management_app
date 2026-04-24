@@ -4,7 +4,14 @@ import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
 import { useLoginForm } from './useLoginForm';
 
+/*
+ * The Login View Component.
+ * Because we abstracted the logic into `useLoginForm`, 
+ * this file is extremely clean. Its only job is to bind the state variables 
+ * to the HTML inputs and render the UI.
+ */
 export default function LoginPage() {
+    // Destructure the state and handlers from our custom business logic hook.
   const {
     email, setEmail,
     password, setPassword,
@@ -19,9 +26,10 @@ export default function LoginPage() {
 
         <div className='min-h-screen flex flex-col items-center justify-center p-4'>
 
-            {/* 1. Back to Home Link */}
+            {/* ── 1. Navigation ── */}
             <div className="w-full max-w-[420px] mb-4">
                 <Link href={"/"} className='inline-flex items-center text-sm text-gray-500 hover:text-gray-900 transition-colors'>
+                    {/* Accessibility: aria-hidden="true" tells screen readers to ignore this decorative icon */}
                     <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
                     </svg>
@@ -29,7 +37,7 @@ export default function LoginPage() {
                 </Link>
             </div>
 
-            {/* 2. Header Section */}
+            {/* ── 2. Brand Header ── */}
             <div className='mb-8 text-center'>
                 <div className='mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg mb-4' aria-hidden="true">
                     <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -40,9 +48,11 @@ export default function LoginPage() {
                 <p className="text-gray-500 text-sm mt-2">Project Management Platform</p>
             </div>
 
-            {/* 3. Main Card Container */}
+            {/* ── 3. Main Card Container ── */}
             <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-4 sm:p-8'>
-                {/* The Tab Switcher */}
+
+                {/* ── Tab Switcher ── */}
+                {/* Accessibility: role="tablist" and "tab" help screen readers understand this UI paradigm */}
                 <div className='flex bg-gray-100 p-1.5 rounded-xl mb-8' role="tablist">
                     <button
                         role="tab"
@@ -61,7 +71,8 @@ export default function LoginPage() {
                     </Link>
                 </div>
 
-                {/* FEATURE-1: Error banner with role="alert" and aria-live */}
+                {/* ── Error Banner ── */}
+                {/* Accessibility: aria-live="polite" ensures the error is read aloud exactly when it appears */}
                 {error && (
                     <div
                         id="login-error"
@@ -73,29 +84,37 @@ export default function LoginPage() {
                     </div>
                 )}
 
-                {/* The Form */}
+                {/* ── The Form ── */}
+                {/* noValidate tells the browser to let React handle the validation logic and error messages */}
                 <form className='space-y-5' onSubmit={handleLogin} noValidate>
-                    {/* FEATURE-1: id + htmlFor pairing on all label/input pairs */}
+
+                    {/* Email Input */}
                     <div>
+                        {/* Accessibility: htmlFor matches the input ID, making the label clickable */}
                         <label htmlFor="login-email" className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">
                             Email Address
                         </label>
                         <input
                             id="login-email"
                             type="email"
+                            // Mobile OS hints for better UX on phones
                             autoComplete="email"
                             autoCapitalize="off"
                             autoCorrect="off"
                             inputMode="email"
+                            // The text-[16px] prevents iOS Safari from auto-zooming
                             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-[16px] sm:text-sm"
                             placeholder="Enter your email"
                             value={email}
+                            // Data Normalization: Force lowercase immediately to prevent case-sensitive login bugs later.
                             onChange={(e) => setEmail(e.target.value.toLowerCase())}
+                            // Accessibility: Links this specific input to the error banner above
                             aria-describedby={error ? 'login-error' : undefined}
                             aria-invalid={!!error}
                         />
                     </div>
 
+                    {/* Password Input */}
                     <div>
                         <label htmlFor="login-password" className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">Password</label>
                         <div className="relative">
@@ -110,6 +129,8 @@ export default function LoginPage() {
                                 aria-describedby={error ? 'login-error' : undefined}
                                 aria-invalid={!!error}
                             />
+
+                            {/* Visibility Toggle */}
                             <button
                                 type="button"
                                 onClick={() => setShowPassword((v) => !v)}
@@ -122,7 +143,7 @@ export default function LoginPage() {
                         </div>
                     </div>
 
-                    {/* NTH-2: Remember-me checkbox + Forgot password link */}
+                    {/* ── Utilities: Remember Me & Forgot Password ── */}
                     <div className="flex items-center justify-between mt-2">
                         <label htmlFor="login-remember" className="flex items-center gap-2 cursor-pointer">
                             <input
@@ -139,6 +160,8 @@ export default function LoginPage() {
                         </Link>
                     </div>
 
+                    {/* ── Submit Button ── */}
+                     {/* Accessibility: The button's disabled state is managed by the isLoading flag to prevent multiple submissions */}
                     <button
                         type="submit"
                         disabled={isLoading}
@@ -148,6 +171,7 @@ export default function LoginPage() {
                     </button>
                 </form>
 
+                {/* ── Footer ── */}
                 <p className="mt-8 text-center text-xs text-gray-400">
                     © 2026 Planora. All rights reserved.
                 </p>

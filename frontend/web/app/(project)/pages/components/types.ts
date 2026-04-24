@@ -1,3 +1,4 @@
+// Shared types live here to prevent circular imports between usePages, DocumentSidebar, and the page routes
 import React from 'react';
 
 export interface PageItem {

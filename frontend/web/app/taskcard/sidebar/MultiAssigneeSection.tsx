@@ -32,6 +32,7 @@ const MultiAssigneeSection: React.FC<MultiAssigneeSectionProps> = ({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Lazy-load members only when the dropdown opens — avoids an API call for every task card that renders
     if (!projectId || !open) return;
     api.get(`/api/projects/${projectId}/members`).then((res) => {
       setMembers(

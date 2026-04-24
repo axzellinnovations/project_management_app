@@ -27,6 +27,7 @@ const MilestoneSection: React.FC<MilestoneSectionProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
+    // Document-level click closes the dropdown when the user clicks anywhere outside it
     const close = () => setIsOpen(false);
     document.addEventListener('click', close);
     return () => document.removeEventListener('click', close);
@@ -64,6 +65,7 @@ const MilestoneSection: React.FC<MilestoneSectionProps> = ({
           <ChevronDown size={12} className="ml-auto text-gray-400 opacity-60" />
         </button>
         {isOpen && (
+          {/* stopPropagation prevents the dropdown's own clicks from bubbling to the document close handler */}
           <div
             className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 overflow-hidden"
             onClick={(e) => e.stopPropagation()}

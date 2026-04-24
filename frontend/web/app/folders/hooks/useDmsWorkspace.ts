@@ -21,14 +21,19 @@ import {
 } from '@/lib/dms';
 import { ViewMode } from '@/app/folders/components/types';
 
+// Favorites are stored client-side rather than in the DB because they are per-browser preferences,
+// not shared team state — no round-trip needed and no account required to persist them.
 const FAVORITES_KEY = 'dmsFavoriteDocumentIds';
 
 export function useDmsWorkspace(mode: ViewMode) {
     const searchParams = useSearchParams();
+    // Initialized once from URL or localStorage — the project never changes within this workspace,
+    // so useState with an initializer avoids re-parsing on every render.
     const [projectId] = useState<number | null>(() => {
         const qp = searchParams.get('projectId');
         const stored = typeof window !== 'undefined' ? localStorage.getItem('currentProjectId') : null;
         const id = Number(qp || stored);
+        // Reject 0 and NaN so callers can use a simple null-check rather than also guarding against falsy numbers
         return Number.isFinite(id) && id > 0 ? id : null;
     });
     const [folders, setFolders] = useState<DocumentFolder[]>([]);
@@ -67,6 +72,7 @@ export function useDmsWorkspace(mode: ViewMode) {
         const load = async () => {
             try {
                 setLoading(true); setError(null);
+                // Parallel fetch — folders and documents are independent, so no reason to serialize them
                 const [folderData, documentData] = await Promise.all([
                     listFolders(projectId),
                     listDocuments(projectId, undefined, isTrashMode),
@@ -84,6 +90,8 @@ export function useDmsWorkspace(mode: ViewMode) {
         const loadShared = async () => {
             try {
                 const allProjects = await listUserProjects();
+                // Cap at 5 projects for "shared" view to keep the API fan-out manageable;
+                // a note is shown if the user has more projects than this limit.
                 const topProjects = allProjects.slice(0, 5);
                 const nameMap: Record<number, string> = {};
                 for (const p of topProjects) nameMap[p.id] = p.name;
@@ -102,6 +110,8 @@ export function useDmsWorkspace(mode: ViewMode) {
         void loadShared();
     }, [mode, projectId]);
 
+    // useMemo avoids re-filtering the full document list on every render — the list can be large
+    // and the filter depends on multiple pieces of state that change independently.
     const filteredDocuments = useMemo(() => {
         let result = (mode === 'shared' ? sharedDocuments : documents).filter((doc) => {
             if (isTrashMode && doc.status !== 'SOFT_DELETED') return false;
@@ -252,7 +262,8 @@ export function useDmsWorkspace(mode: ViewMode) {
         setSelectedVersionsDocId(documentId);
         if (versions[documentId]) return;
         try {
-            setVersions((prev) => ({ ...prev, [documentId]: [] })); // optimistic empty
+            // Optimistic empty array so the modal opens immediately with a spinner instead of waiting for the fetch
+            setVersions((prev) => ({ ...prev, [documentId]: [] }));
             const data = await getDocumentVersions(projectId, documentId);
             setVersions((prev) => ({ ...prev, [documentId]: data }));
         } catch { setError('Failed to load version history.'); }
@@ -260,6 +271,8 @@ export function useDmsWorkspace(mode: ViewMode) {
 
     const onOpenInfo = (document: DocumentItem) => setSelectedInfoDoc(document);
 
+    // Fall back to the unfiltered list because a document may not appear in filteredDocuments
+    // (e.g. in trash mode) but the versions modal still needs its metadata for the header.
     const selectedVersionsDoc = selectedVersionsDocId
         ? filteredDocuments.find((d) => d.id === selectedVersionsDocId)
             ?? documents.find((d) => d.id === selectedVersionsDocId)

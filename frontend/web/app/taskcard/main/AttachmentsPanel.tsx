@@ -3,6 +3,7 @@ import React from 'react';
 import { Download, Trash2, FileText, Image as ImageIcon, File as FileIcon } from 'lucide-react';
 import type { TaskAttachment } from '@/services/task-attachments-service';
 
+// Uses aria-hidden because the icon is decorative — the file name in the adjacent text already describes the attachment
 const AttachmentIcon = ({ contentType }: { contentType: string }) => {
   if (contentType.startsWith('image/')) return <ImageIcon size={18} className="text-purple-500 shrink-0" aria-hidden="true" />;
   if (contentType === 'application/pdf') return <FileText size={18} className="text-red-500 shrink-0" aria-hidden="true" />;

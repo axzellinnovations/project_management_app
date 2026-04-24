@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import SidebarField from './SidebarField';
 
+// Co-located display config means changing a priority color only requires editing one record entry
 const PRIORITY_CONFIG: Record<string, { text: string; bg: string; hover: string; dot: string }> = {
   URGENT: { text: 'text-red-600',    bg: 'bg-red-50',    hover: 'hover:bg-red-100',    dot: 'bg-red-500' },
   HIGH:   { text: 'text-orange-600', bg: 'bg-orange-50', hover: 'hover:bg-orange-100', dot: 'bg-orange-500' },

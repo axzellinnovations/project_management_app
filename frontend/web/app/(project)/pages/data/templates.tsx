@@ -4,6 +4,9 @@ import {
 } from 'lucide-react';
 import { Template } from '../components/types';
 
+// Templates are stored as raw TipTap HTML rather than Tiptap JSON because the editor's
+// setContent() accepts HTML directly and HTML stays readable/editable without a schema reference.
+// Array order is intentional — displayed top-to-bottom in the template picker as authored here.
 export const predefinedTemplates: Template[] = [
     {
         id: 'blank',

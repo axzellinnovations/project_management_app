@@ -1,3 +1,5 @@
+// toLocaleString() without a locale argument uses the browser's locale for date formatting,
+// matching whatever regional format the user's OS is set to rather than hard-coding one.
 export function formatBytes(bytes: number): string {
     if (bytes === 0) return '0 B';
     const k = 1024;

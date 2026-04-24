@@ -17,6 +17,7 @@ export default function PasswordInput({
   placeholder = 'Enter password',
   disabled = false
 }: PasswordInputProps) {
+  // Local state keeps the toggle per-field so two PasswordInput siblings don't share visibility state
   const [showPassword, setShowPassword] = useState(false);
 
   return (
@@ -27,11 +28,13 @@ export default function PasswordInput({
       <div className="relative">
         <input
           type={showPassword ? 'text' : 'password'}
+          // text-[16px] on mobile prevents iOS Safari from auto-zooming the viewport on input focus
           className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-[16px] sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
           placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
+          // new-password signals to the browser this is a creation field, preventing autofill of existing saved passwords
           autoComplete="new-password"
           required
         />
