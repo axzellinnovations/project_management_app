@@ -1,0 +1,18 @@
+[build]
+  command   = "npm run build"
+  publish   = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Netlify's Next.js runtime handles SSR, API routes, and server-side rewrites.
+# Set these environment variables in the Netlify dashboard → Site settings → Environment variables:
+#
+#   BACKEND_URL             = https://<your-aws-backend-url>   (server-side proxy rewrites)
+#   NEXT_PUBLIC_BACKEND_HOST = <your-aws-backend-hostname>     (image remotePatterns)
+#
+# The server-side rewrites in next.config.mjs proxy /api/* to your AWS backend,
+# so the browser never needs to know the backend URL directly.
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
