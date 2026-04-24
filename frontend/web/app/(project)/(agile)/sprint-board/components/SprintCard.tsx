@@ -211,11 +211,6 @@ export default function SprintCard({
               {priorityStyle.label}
             </span>
           )}
-          {task.storyPoint !== undefined && (
-            <div className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[#F2F4F7] text-[#344054]">
-              {task.storyPoint}
-            </div>
-          )}
         </div>
         
         <div className="relative">
