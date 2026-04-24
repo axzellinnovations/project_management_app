@@ -17,6 +17,7 @@ export default function MobileTaskRow(props: TaskRowProps) {
     task, teamMembers = [], onStatusChange, onStoryPointsChange,
     onAssignTask, onDueDateChange, onDeleteTask, onMoveUp, onMoveDown, projectKey,
     canDelete = true, projectLabels = [], onAddLabel, onRemoveLabel, onCreateLabel, extraStatuses = [],
+    hideStatus = false,
   } = props;
 
   const {
@@ -43,10 +44,14 @@ export default function MobileTaskRow(props: TaskRowProps) {
 
   const displayTaskKey = projectKey ? `#${projectKey}-${task.taskNo || task.id}` : `#${task.taskNo || task.id}`;
 
+  const amberStyle = dueClass === 'five_days' ? { backgroundColor: 'rgba(245, 158, 11, 0.4)' } : {};
+
   return (
     <div
-      className="group relative flex flex-col rounded-2xl border-l-[6px] border border-[#EAECF0] bg-white shadow-sm hover:shadow-md transition-all duration-200 mb-3 select-none overflow-hidden"
-      style={{ borderLeftColor: statusBorderColor }}
+      className={`group relative flex flex-col rounded-2xl border-l-[6px] border border-transparent shadow-sm hover:shadow-md transition-all duration-200 mb-3 select-none overflow-hidden ${
+        dueClass === 'five_days' ? 'text-[#92400E]' : 'bg-white'
+      }`}
+      style={{ borderLeftColor: statusBorderColor, ...amberStyle }}
       onContextMenu={(e) => e.preventDefault()}
     >
       <div className="flex items-center w-full min-h-[72px]">
@@ -85,6 +90,7 @@ export default function MobileTaskRow(props: TaskRowProps) {
               onTouchEnd={onTouchEndInternal}
               onTouchMove={onTouchMoveInternal}
               className={`text-[15px] font-bold leading-tight truncate cursor-text select-none ${
+                dueClass === 'five_days' ? 'text-[#92400E]' :
                 task.status?.toUpperCase() === 'DONE' ? 'line-through text-[#98A2B3]' : 'text-[#101828]'
               }`}
             >
@@ -95,7 +101,7 @@ export default function MobileTaskRow(props: TaskRowProps) {
             {task.labels?.slice(0, 1).map((label) => (
               <span
                 key={label.id}
-                style={hexToLabelStyle(label.color ?? '#6366F1')}
+                style={dueClass === 'five_days' ? { backgroundColor: 'rgba(251, 191, 36, 0.3)', color: '#92400E' } : hexToLabelStyle(label.color ?? '#6366F1')}
                 className="px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap shadow-sm"
               >
                 {label.name}
@@ -165,10 +171,10 @@ export default function MobileTaskRow(props: TaskRowProps) {
             <div className="flex-shrink-0 flex items-center relative" onClick={(e) => e.stopPropagation()}>
               <button
                 type="button" onClick={openDatePicker}
-                title={`Due Date: ${formatDate(task.dueDate)}`}
-                className={`text-[12px] font-bold leading-none whitespace-nowrap bg-[#F2F4F7] px-2 py-2 rounded-lg min-h-[44px] ${dueClass === 'overdue' ? 'text-red-600 bg-red-50' : 'text-[#475467]'}`}
+                title={formatDate(task.dueDate)}
+                className={`text-[12px] font-bold leading-none whitespace-nowrap bg-[#F2F4F7] px-2 py-2 rounded-lg min-h-[44px] ${dueClass === 'overdue' || dueClass === 'old' ? 'text-red-600 bg-red-50' : 'text-[#475467]'}`}
               >
-                {formatDate(task.dueDate)}
+                {dueClass === 'overdue' ? 'Overdue' : formatDate(task.dueDate)}
               </button>
               <input ref={dateRef} type="date" value={task.dueDate || ''} onChange={(e) => onDueDateChange(task.id, e.target.value)} className="sr-only" />
             </div>
@@ -177,7 +183,7 @@ export default function MobileTaskRow(props: TaskRowProps) {
       </div>
 
       {/* Status Portal */}
-      {statusOpen && typeof document !== 'undefined' && createPortal(
+      {!hideStatus && statusOpen && typeof document !== 'undefined' && createPortal(
         <div
           ref={statusPortalRef}
           style={{ position: 'fixed', top: `${statusPosition.top}px`, left: `${statusPosition.left}px`, width: '160px' }}

@@ -93,7 +93,6 @@ export default function SprintColumn({
   const isEmpty = column.tasks.length === 0;
   const isCompact = compactEmpty && isEmpty && !inlineOpen && !collapsed;
   const columnWidth = collapsed ? 72 : (isCompact ? 220 : (dense ? 300 : 330));
-  const storyPoints = column.tasks.reduce((sum, task) => sum + (task.storyPoint ?? 0), 0);
   const overdue = column.tasks.filter((task) => task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'DONE').length;
 
   return (
@@ -129,18 +128,6 @@ export default function SprintColumn({
             {column.columnName}
           </h3>
           )}
-          {(() => {
-            const isWipDanger = column.columnStatus.toUpperCase() === 'IN_PROGRESS' && column.tasks.length >= 5;
-            return (
-              <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-semibold border transition-colors ${
-                isWipDanger
-                  ? 'bg-[#FEF3F2] border-[#FECDCA] text-[#B42318]'
-                  : 'bg-white/50 border-[#EAECF0]/50 text-[#475467]'
-              }`}>
-                {column.tasks.length}
-              </span>
-            );
-          })()}
         </div>
         {!collapsed && (
           <div className="flex items-center gap-1.5 ml-auto">
@@ -165,7 +152,6 @@ export default function SprintColumn({
               </div>
             </div>
             <div className="flex items-center gap-1 text-[10px] text-[#667085] ml-1">
-              <span className="rounded bg-[#F2F4F7] px-1.5 py-0.5">{storyPoints}pt</span>
               {overdue > 0 && <span className="rounded bg-[#FEF3F2] px-1.5 py-0.5 text-[#B42318]">{overdue} overdue</span>}
             </div>
           </div>

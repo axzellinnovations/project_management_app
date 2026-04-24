@@ -52,6 +52,7 @@ export interface TaskRowProps {
   extraStatuses?: Array<{ value: string; label: string }>;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  hideStatus?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────

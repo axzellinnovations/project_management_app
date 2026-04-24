@@ -31,11 +31,13 @@ export const PRIORITY_STYLES: Record<string, string> = {
   LOW: 'bg-[#F2F4F7] text-[#344054]',
 };
 
-export type DueClass = 'none' | 'overdue' | 'today' | 'soon' | 'future';
+export type DueClass = 'none' | 'overdue' | 'today' | 'soon' | 'future' | 'old' | 'five_days';
 
 export const DUE_CHIP_STYLES: Record<DueClass, string> = {
+  old: 'bg-[#FEF3F2] text-[#B42318] border-[#FDA29B]',
   overdue: 'bg-[#FEF3F2] text-[#B42318] border-[#FDA29B]',
   today: 'bg-[#FEF3F2] text-[#B42318] border-[#FDA29B]',
+  five_days: 'bg-[#FDF2F2] text-[#F59E0B] border-[#F59E0B]/30',
   soon: 'bg-[#FFFAEB] text-[#B54708] border-[#FEDF89]',
   future: 'bg-[#F9FAFB] text-[#344054] border-[#EAECF0]',
   none: 'bg-[#F9FAFB] text-[#98A2B3] border-[#EAECF0]',
@@ -44,13 +46,15 @@ export const DUE_CHIP_STYLES: Record<DueClass, string> = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 export function classifyDue(dueDate: string | undefined, status: string): DueClass {
-  if (!dueDate || status === 'DONE') return 'none';
+  if (!dueDate || status.toUpperCase() === 'DONE') return 'none';
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   // Force local-time parsing to avoid off-by-one from UTC interpretation
   const due = new Date(dueDate.length === 10 ? dueDate + 'T00:00:00' : dueDate);
   due.setHours(0, 0, 0, 0);
-  const diffDays = Math.floor((due.getTime() - now.getTime()) / 86_400_000);
+  const diffDays = Math.round((due.getTime() - now.getTime()) / 86_400_000);
+  
+  if (diffDays === 5 || diffDays === 3) return 'five_days';
   if (diffDays < 0) return 'overdue';
   if (diffDays === 0) return 'today';
   if (diffDays <= 3) return 'soon';

@@ -167,9 +167,28 @@ export function useBacklogData(projectId: string | null) {
         }
     }, [tasks, forceRefresh]);
 
-    const handleDateChange = useCallback((id: number, dueDate: string | null) => {
+    const handleDateChange = useCallback(async (id: number, dueDate: string | null) => {
+        const task = tasks.find(t => t.id === id);
         setTasks(prev => prev.map(t => t.id === id ? { ...t, dueDate: dueDate || undefined } : t));
-    }, []);
+        try {
+            await api.patch(`/api/tasks/${id}/due-date`, { dueDate });
+            const cKey = buildSessionCacheKey('kanban-backlog', [projectId]);
+            if (cKey) removeSessionCache(cKey);
+            window.dispatchEvent(new CustomEvent('planora:task-updated'));
+        } catch (e: unknown) {
+            const errStatus = (e as { response?: { status?: number } })?.response?.status;
+            if ((errStatus === 401 || errStatus === 404) && task?.title) {
+                try {
+                    await api.put(`/api/tasks/${id}`, { title: task.title, dueDate });
+                    const cKey = buildSessionCacheKey('kanban-backlog', [projectId]);
+                    if (cKey) removeSessionCache(cKey);
+                    window.dispatchEvent(new CustomEvent('planora:task-updated'));
+                    return;
+                } catch { /* fall through */ }
+            }
+            forceRefresh();
+        }
+    }, [tasks, projectId, forceRefresh]);
 
     const handleBulkDelete = useCallback(async () => {
         const ids = [...selectedIds];

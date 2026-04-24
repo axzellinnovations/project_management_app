@@ -10,7 +10,7 @@ interface StartSprintModalProps {
   sprintName: string;
   loading: boolean;
   error: string;
-  onStart: (durationDays: number) => void;
+  onStart: (durationDays: number, startDate?: string) => void;
   onCancel: () => void;
 }
 
@@ -27,6 +27,7 @@ export default function StartSprintModal({ open, sprintName, loading, error, onS
   const [selectedDuration, setSelectedDuration] = useState<number>(14);
   const [customDuration, setCustomDuration] = useState<string>('');
   const [useCustomDuration, setUseCustomDuration] = useState(false);
+  const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   if (!open) return null;
 
@@ -40,8 +41,10 @@ export default function StartSprintModal({ open, sprintName, loading, error, onS
 
   const getPreviewDates = () => {
     const duration = getEffectiveDuration();
-    const start = new Date();
-    const end = new Date();
+    const startObj = new Date(startDate);
+    // Use UTC for date manipulation to avoid timezone issues when displaying
+    const start = new Date(startObj.getTime() + startObj.getTimezoneOffset() * 60000);
+    const end = new Date(start.getTime());
     end.setDate(start.getDate() + duration);
     const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     return { start: fmt(start), end: fmt(end) };
@@ -82,8 +85,24 @@ export default function StartSprintModal({ open, sprintName, loading, error, onS
         <div className="p-6 space-y-5">
           {/* Description */}
           <p className="text-[13.5px] text-[#475467] leading-relaxed">
-            Set the sprint duration. The sprint will start today and end based on your selection.
+            Set the sprint duration and start date.
           </p>
+
+          {/* Start Date */}
+          <div>
+            <label className="block text-[12px] font-semibold text-[#344054] uppercase tracking-wider mb-2">
+              Start Date
+            </label>
+            <div className="relative flex-1">
+              <CalendarDays size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98A2B3] pointer-events-none" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full rounded-lg border pl-9 pr-3 py-2.5 text-[14px] text-[#101828] outline-none transition-all duration-150 border-[#D0D5DD] hover:border-[#98A2B3] focus:border-[#175CD3] focus:ring-2 focus:ring-[#175CD3]/20"
+              />
+            </div>
+          </div>
 
           {/* Preset chips */}
           <div>
@@ -175,7 +194,7 @@ export default function StartSprintModal({ open, sprintName, loading, error, onS
           </button>
           <button
             type="button"
-            onClick={() => onStart(duration)}
+            onClick={() => onStart(duration, startDate)}
             disabled={loading || duration <= 0}
             className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#175CD3] to-[#2E90FA] px-5 py-2.5 text-[13.5px] font-semibold text-white shadow-sm hover:from-[#1849A9] hover:to-[#1570EF] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
           >

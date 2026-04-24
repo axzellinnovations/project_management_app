@@ -39,7 +39,7 @@ describe('BurndownPage', () => {
       }
       if (url.includes('/api/burndown/sprint/')) {
         return Promise.resolve({ 
-          data: { 
+          data: {  
             id: 1, 
             sprintName: 'Sprint 1', 
             totalStoryPoints: 10, 

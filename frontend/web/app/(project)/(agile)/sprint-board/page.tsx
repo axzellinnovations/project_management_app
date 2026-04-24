@@ -159,6 +159,7 @@ export default function SprintBoardPage() {
             totalTasks={metrics.totalTasks} doneTasks={metrics.doneTasks} doneStoryPoints={metrics.doneStoryPoints}
             totalStoryPoints={metrics.totalStoryPoints} overdueTasks={metrics.overdueTasks} selectedCount={metrics.selectedCount}
             isLoading={actions.isUpdating} onOpenShortcuts={() => setShowShortcuts(true)}
+            teamMembers={teamMembers}
           />
           <div className="px-4 md:px-6 py-1 border-b border-[#EAECF0] bg-white">
             <button type="button" onClick={() => setDenseMode((prev) => !prev)} className="rounded-lg border border-[#D0D5DD] px-2 py-1 text-xs text-[#344054]">

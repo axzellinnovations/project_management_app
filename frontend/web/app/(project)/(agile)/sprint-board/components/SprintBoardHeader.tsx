@@ -27,6 +27,7 @@ interface SprintBoardHeaderProps {
   selectedCount: number;
   isLoading?: boolean;
   onOpenShortcuts?: () => void;
+  teamMembers?: { id: number; name: string; userId?: number }[];
 }
 
 export default function SprintBoardHeader({
@@ -45,7 +46,8 @@ export default function SprintBoardHeader({
   overdueTasks,
   selectedCount,
   onOpenShortcuts: _onOpenShortcuts,
-  isLoading
+  isLoading,
+  teamMembers = []
 }: SprintBoardHeaderProps) {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const showTabs = allActiveSprints.length > 1;
@@ -134,6 +136,23 @@ export default function SprintBoardHeader({
                       <option value="IN_PROGRESS">In progress</option>
                       <option value="IN_REVIEW">In review</option>
                       <option value="DONE">Done</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Assignee</label>
+                    <select
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-blue-500"
+                      value={filters.assignee}
+                      onChange={(e) => onFilterChange({ assignee: e.target.value })}
+                    >
+                      <option value="ALL">All assignees</option>
+                      <option value="Unassigned">Unassigned</option>
+                      {teamMembers.map((m) => (
+                        <option key={m.id || m.userId} value={m.name}>
+                          {m.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
