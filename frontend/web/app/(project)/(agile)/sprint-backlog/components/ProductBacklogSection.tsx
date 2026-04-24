@@ -230,16 +230,6 @@ export default function ProductBacklogSection({
               {totals.total} pts
             </span>
           )}
-          {totals.inProgress > 0 && (
-            <span className="flex-shrink-0 rounded-full bg-[#EFF8FF] px-2 py-0.5 text-[12px] font-bold text-[#175CD3] hidden sm:inline">
-              {totals.inProgress} active
-            </span>
-          )}
-          {totals.done > 0 && (
-            <span className="flex-shrink-0 rounded-full bg-[#ECFDF3] px-2 py-0.5 text-[12px] font-bold text-[#027A48] hidden sm:inline">
-              {totals.done} done
-            </span>
-          )}
         </div>
 
         {/* Action buttons */}
@@ -303,6 +293,7 @@ export default function ProductBacklogSection({
                         loadingMembers={loadingMembers}
                         canDelete={canDeleteTask}
                         showCheckbox={false}
+                        hideStatus={true}
                         onStatusChange={(id, status) => onStatusChange(id, status)}
                         onStoryPointsChange={onStoryPointsChange}
                         onRenameTask={handleRenameTask}

@@ -247,24 +247,33 @@ export function useBacklogCardHandlers({
     catch { /* silent */ } finally { setSavingGoal(false); }
   };
 
-  const confirmStartSprint = async (durationDays: number) => {
+  const confirmStartSprint = async (durationDays: number, selectedStartDate?: string) => {
     if (!durationDays || durationDays <= 0) {
       setStartSprintError('Please enter a valid duration greater than 0.');
       return;
     }
     setStartingSprintLoading(true);
     setStartSprintError('');
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(startDate.getDate() + durationDays);
+    
+    // Parse the selected start date or default to today
+    const startDate = selectedStartDate ? new Date(selectedStartDate) : new Date();
+    
+    // Ensure we use UTC midnight for the calculation if a string was provided to match input behavior
+    const baseDate = selectedStartDate 
+      ? new Date(startDate.getTime() + startDate.getTimezoneOffset() * 60000)
+      : startDate;
+
+    const endDate = new Date(baseDate.getTime());
+    endDate.setDate(baseDate.getDate() + durationDays);
+
     try {
       await api.put(`/api/sprints/${sprint.id}/start`, {
-        startDate: startDate.toISOString().split('T')[0],
+        startDate: baseDate.toISOString().split('T')[0],
         endDate: endDate.toISOString().split('T')[0],
       });
       setShowStartSprintModal(false);
       sprint.status = 'ACTIVE';
-      sprint.startDate = startDate.toISOString().split('T')[0];
+      sprint.startDate = baseDate.toISOString().split('T')[0];
       sprint.endDate = endDate.toISOString().split('T')[0];
       window.dispatchEvent(new CustomEvent('planora:task-updated'));
     } catch (err: unknown) {

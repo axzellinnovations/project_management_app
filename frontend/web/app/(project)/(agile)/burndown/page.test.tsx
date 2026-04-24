@@ -39,7 +39,7 @@ describe('BurndownPage', () => {
       }
       if (url.includes('/api/burndown/sprint/')) {
         return Promise.resolve({ 
-          data: { 
+          data: {  
             id: 1, 
             sprintName: 'Sprint 1', 
             totalStoryPoints: 10, 
@@ -57,7 +57,7 @@ describe('BurndownPage', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('burndown-chart')).toBeInTheDocument();
-      // Ensure we check for 'Sprint 1' within the sprint selection area or just check that it's present (getAllByText)
+t selection area or just check that it's present (getAllByText)
       expect(screen.getAllByText('Sprint 1').length).toBeGreaterThan(0);
     });
   });
