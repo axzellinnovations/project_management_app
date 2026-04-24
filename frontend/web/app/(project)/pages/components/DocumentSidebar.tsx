@@ -47,11 +47,10 @@ export default function DocumentSidebar({
           <Link
             href={projectId ? `/pages/${item.id}?projectId=${projectId}` : `/pages/${item.id}`}
             className={`group flex items-center justify-between py-2.5 px-2 min-h-[44px] lg:min-h-0 lg:py-1.5 rounded-md text-sm transition-colors ${
-              isSelected 
-                ? 'bg-blue-50 text-blue-700 font-medium' 
+              isSelected
+                ? 'bg-blue-50 text-blue-700 font-medium'
                 : 'text-gray-700 hover:bg-gray-100'
             }`}
-            {/* 16px per depth level gives a clear visual hierarchy; 8px base keeps the first level aligned with the sidebar padding */}
             style={{ paddingLeft: `${depth * 16 + 8}px` }}
           >
             <div className="flex items-center flex-1 min-w-0">

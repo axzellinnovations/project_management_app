@@ -16,7 +16,6 @@ const ProgressRing: React.FC<ProgressRingProps> = ({ value, max }) => {
   const offset = circumference - (pct / 100) * circumference;
 
   return (
-    {/* -rotate-90 corrects the SVG default start point from 3 o'clock to 12 o'clock */}
     <svg width={size} height={size} className="flex-shrink-0 -rotate-90">
       <circle cx={size / 2} cy={size / 2} r={r} stroke="#e5e7eb" strokeWidth="3" fill="none" />
       <circle
