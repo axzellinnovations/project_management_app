@@ -20,6 +20,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @Getter
 @Setter
+// Room metadata is intentionally lightweight; membership and message history live in separate tables.
 public class ChatRoom {
 
     @Id
@@ -34,6 +35,7 @@ public class ChatRoom {
 
     private String topic;
 
+    // Longer description supports channel guidelines without creating a separate profile entity.
     @Column(length = 1000)
     private String description;
 

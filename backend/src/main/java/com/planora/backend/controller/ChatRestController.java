@@ -37,6 +37,7 @@ import com.planora.backend.service.ChatDocumentService;
 @CrossOrigin(origins = "http://localhost:3000")
 @RequestMapping("/api/projects/{projectId}/chat")
 public class ChatRestController {
+    // Project metadata is resolved once and reused across notification and membership checks.
     private record ProjectMeta(Long teamId, String projectName) {}
 
     public static record ChatRoomResponse(Long id,
@@ -226,6 +227,7 @@ public class ChatRestController {
         Long teamId = projectMembershipService.resolveProjectTeamId(projectId);
         validateTeamMembership(teamId, username);
         if (roomId != null) {
+            // Room reads are marked immediately so unread badges stay accurate for sidebar views.
             validateRoomMembership(roomId, username);
             var roomMessages = chatService.getRoomMessages(projectId, roomId);
             chatService.markRoomAsRead(projectId, roomId, username);
@@ -392,6 +394,7 @@ public class ChatRestController {
         resolveValidatedTeamId(projectId, username);
 
         var visibleRoomIds = getVisibleRooms(projectId, username, false).stream().map(ChatRoom::getId).collect(java.util.stream.Collectors.toSet());
+        // Search results are filtered by room visibility to avoid leaking room content.
         var matches = chatService.searchMessages(projectId, username, query, visibleRoomIds, limit);
 
         var response = matches.stream().map(message -> {
@@ -642,6 +645,7 @@ public class ChatRestController {
             }
         });
 
+        // Persisted notifications complement websocket room events for offline users.
         publishRoomCreatedNotifications(projectId, savedRoom, username, usersToAdd);
 
         simpMessagingTemplate.convertAndSend(

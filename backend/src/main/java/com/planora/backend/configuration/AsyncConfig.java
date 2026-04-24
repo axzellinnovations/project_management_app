@@ -1,4 +1,4 @@
-package com.planora.backend.config;
+package com.planora.backend.configuration;
 
 import java.util.concurrent.Executor;
 

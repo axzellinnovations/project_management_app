@@ -13,6 +13,7 @@ import com.planora.backend.model.ChatMessage;
 
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> {
 
+       // Fetches room timeline with hydrated reactions/users to avoid follow-up lookups per message.
        @Query("""
               SELECT DISTINCT m FROM ChatMessage m
               LEFT JOIN FETCH m.reactions r
@@ -82,6 +83,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
                                                               @Param("userAliases") List<String> userAliases,
                                                               @Param("otherAliases") List<String> otherAliases);
 
+       // Single-scope unread counters used by focused chat views.
     @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.projectId = :projectId AND m.roomId = :roomId AND m.parentMessageId IS NULL AND LOWER(m.sender) <> LOWER(:currentUser) AND (:lastReadMessageId IS NULL OR m.id > :lastReadMessageId)")
     long countUnreadRoomMessages(@Param("projectId") Long projectId,
                                  @Param("roomId") Long roomId,
@@ -111,6 +113,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
                                           @Param("currentUserAliases") List<String> currentUserAliases,
                                           @Param("lastReadMessageId") Long lastReadMessageId);
 
+       // Batch unread queries back inbox/sidebar endpoints while keeping DB round trips bounded.
     @Query("SELECT m.roomId as roomId, COUNT(m) as count FROM ChatMessage m " +
            "WHERE m.projectId = :projectId AND m.roomId IN :roomIds AND m.parentMessageId IS NULL " +
            "AND LOWER(m.sender) NOT IN :currentUserAliases " +
@@ -141,6 +144,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     List<ChatMessage> searchMessages(@Param("projectId") Long projectId,
                                      @Param("query") String query);
 
+       // Latest-message projections support summaries without loading full conversations.
     @Query("SELECT m FROM ChatMessage m WHERE m.id IN (SELECT MAX(m2.id) FROM ChatMessage m2 WHERE m2.projectId = :projectId AND m2.roomId IN :roomIds GROUP BY m2.roomId)")
     List<ChatMessage> findLatestMessagesForSpecificRooms(@Param("projectId") Long projectId, @Param("roomIds") List<Long> roomIds);
 
@@ -203,6 +207,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
                                                                @Param("userId") Long userId,
                                                                @Param("teamKey") String teamKey);
 
+       // Per-user batch counters are used for websocket unread badge fan-out.
     @Query("""
             SELECT u.userId, COUNT(m.id)
             FROM User u, ChatMessage m
