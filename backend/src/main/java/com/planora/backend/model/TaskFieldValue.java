@@ -24,7 +24,7 @@ public class TaskFieldValue {
     @JoinColumn(name = "custom_field_id", nullable = false)
     private CustomField customField;
 
-    @Column(length = 2000)
+    @Column(name = "\"value\"", length = 2000)
     private String value;
 
     @Override

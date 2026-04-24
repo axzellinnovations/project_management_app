@@ -3,19 +3,23 @@
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
+import { SearchIcon } from './SidebarIcons';
 
 interface SidebarPanelProps {
   open: boolean;
   onClose: () => void;
   title: string;
   badge?: number;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  searchPlaceholder?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
   anchorLeft: number; // left position = sidebar right edge
   anchorTop?: number;
 }
 
-export function SidebarPanel({ open, onClose, title, badge, children, footer, anchorLeft, anchorTop }: SidebarPanelProps) {
+export function SidebarPanel({ open, onClose, title, badge, searchValue, onSearchChange, searchPlaceholder, children, footer, anchorLeft, anchorTop }: SidebarPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   /* Close on Escape */
@@ -80,6 +84,25 @@ export function SidebarPanel({ open, onClose, title, badge, children, footer, an
               <X size={14} strokeWidth={2.5} />
             </button>
           </div>
+
+          {/* Search bar (favorites dropdown style) */}
+          {onSearchChange && (
+            <div className="px-3 pt-3 pb-2 border-b border-cu-border-light shrink-0">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                  <SearchIcon />
+                </div>
+                <input
+                  type="text"
+                  value={searchValue ?? ''}
+                  onChange={e => onSearchChange(e.target.value)}
+                  placeholder={searchPlaceholder || 'Search…'}
+                  autoFocus
+                  className="w-full pl-8 pr-3 py-1.5 text-[12px] bg-cu-bg-tertiary border border-cu-border rounded-lg placeholder-cu-text-muted text-cu-text-primary focus:outline-none focus:ring-1 focus:ring-cu-primary/30 focus:border-cu-primary/40 transition-all"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Body */}
           <div className="flex-1 overflow-y-auto custom-scrollbar">

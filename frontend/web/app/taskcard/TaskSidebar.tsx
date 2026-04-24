@@ -91,6 +91,7 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
     const raw = window.localStorage.getItem(`planora:task-sidebar:${taskId}`);
     if (!raw) return;
     try {
+      // Restore per-task collapsed/expanded sidebar preferences set in a previous session
       setSections((prev) => ({ ...prev, ...(JSON.parse(raw) as Record<string, boolean>) }));
     } catch {
       // ignore malformed preferences
@@ -107,6 +108,8 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
 
   React.useEffect(() => {
     if (!labelMenuOpen) return;
+    // Document-level listener rather than onBlur so clicks on other interactive
+    // elements also close the label dropdown without requiring focus management.
     const handleOutside = (event: MouseEvent) => {
       if (labelMenuRef.current && !labelMenuRef.current.contains(event.target as Node)) {
         setLabelMenuOpen(false);

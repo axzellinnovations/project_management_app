@@ -1,4 +1,6 @@
 'use client';
+// force-dynamic prevents Next.js from statically rendering this page at build time,
+// because the content depends entirely on URL params that vary per request
 export const dynamic = 'force-dynamic';
 
 import React, { useState } from 'react';
@@ -23,6 +25,7 @@ export default function PageDetailPage() {
     ydoc, collaborationUser,
   } = usePageEditor();
 
+  // showMobileActions is local state because it's a purely visual toggle with no effect on data
   const [showMobileActions, setShowMobileActions] = useState(false);
 
   if (!projectId) {

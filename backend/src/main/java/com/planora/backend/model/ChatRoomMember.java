@@ -19,6 +19,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @Getter
 @Setter
+// Room membership row keeps authorization and role checks independent from message records.
 public class ChatRoomMember {
 
     @Id
@@ -33,6 +34,7 @@ public class ChatRoomMember {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    // Role drives management permissions (rename/archive/membership changes) inside a room.
     @Enumerated(EnumType.STRING)
     private RoomRole role = RoomRole.MEMBER;
 

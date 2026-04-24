@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
+// Single source of truth for status display — badge color and dot color are co-located so
+// adding a new status only requires one entry here, not edits across multiple render sites.
 const STATUS_CONFIG: Record<string, { label: string; badge: string; dot: string }> = {
   TODO:        { label: 'To Do',       badge: 'bg-gray-100 text-gray-700',  dot: 'bg-gray-400' },
   IN_PROGRESS: { label: 'In Progress', badge: 'bg-blue-50 text-blue-700',   dot: 'bg-blue-500' },

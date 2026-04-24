@@ -31,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ChatService {
+    // Sentinel key used to store team chat read cursors in the shared read-state table.
     private static final String TEAM_CHAT_READ_KEY = "__TEAM_CHAT__";
 
     private final ChatMessageRepository chatMessageRepository;
@@ -124,6 +125,7 @@ public class ChatService {
 
         var saved = chatMessageRepository.save(replyMessage);
 
+        // Create thread metadata lazily so legacy roots become threaded without migration scripts.
         chatThreadRepository.findByProjectIdAndRootMessageId(projectId, rootMessageId)
                 .orElseGet(() -> {
                     var thread = new ChatThread();
@@ -162,6 +164,7 @@ public class ChatService {
 
         ensureMessageOwnership(message, actor);
 
+        // Preserve storage hygiene by removing uploaded documents when the message is deleted.
         if (message.getContent() != null && message.getContent().startsWith("http")) {
             chatDocumentService.deleteChatDocument(message.getContent());
         }
@@ -406,6 +409,7 @@ public class ChatService {
 
     @Transactional(readOnly = true)
     public UnreadBadgeSummary buildUnreadBadge(Long projectId, com.planora.backend.model.User currentUserEntity, String currentUserAlias, List<ChatRoom> rooms, List<String> participants) {
+        // Reuse existing summary builders so unread math is consistent across endpoints.
         var teamSummary = buildTeamSummary(projectId, currentUserEntity, currentUserAlias);
         var roomSummaries = buildRoomSummaries(projectId, currentUserEntity, currentUserAlias, rooms);
         var directSummaries = buildDirectSummaries(projectId, currentUserEntity, currentUserAlias, participants);
@@ -434,6 +438,7 @@ public class ChatService {
         var normalized = query.trim().toLowerCase();
         var currentAliases = resolveUserAliases(currentUser);
 
+        // Visibility filtering is applied after textual match to enforce room/private access rules.
         return mapToDTOList(chatMessageRepository.searchMessages(projectId, normalized).stream()
                 .filter(message -> isMessageVisibleToUser(message, currentAliases, visibleRoomIds))
                 .limit(Math.max(1, limit))
@@ -566,6 +571,7 @@ public class ChatService {
     public ChatMessageDTO convertToDTO(ChatMessage message) {
         if (message == null) return null;
 
+        // Keep mapping centralized so websocket and REST responses stay structurally identical.
         List<ChatReactionDTO> reactionDTOs = message.getReactions() != null 
                 ? message.getReactions().stream()
                         .map(this::convertToReactionDTO)

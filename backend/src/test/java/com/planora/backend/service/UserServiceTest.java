@@ -1,6 +1,7 @@
 package com.planora.backend.service;
 
 import com.planora.backend.dto.LoginResponse;
+import com.planora.backend.dto.UpdateProfileRequest;
 import com.planora.backend.model.User;
 import com.planora.backend.model.VerificationToken;
 import com.planora.backend.repository.TokenRepository;
@@ -270,5 +271,20 @@ public class UserServiceTest {
         String result = userService.generatePresignedUrlForUser(999L);
 
         assertNull(result);
+    }
+
+    @Test
+    void testUpdateUserProfile_UpdatesDueDateReminderPreference() {
+        testUser.setNotifyDueDateReminders(true);
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setNotifyDueDateReminders(false);
+
+        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(Optional.of(testUser));
+        when(userRepository.save(testUser)).thenReturn(testUser);
+
+        User updated = userService.updateUserProfile("test@example.com", request);
+
+        assertFalse(updated.isNotifyDueDateReminders());
+        verify(userRepository).save(testUser);
     }
 }

@@ -1,10 +1,11 @@
 package com.planora.backend.model;
 
 import java.time.LocalDateTime;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import org.hibernate.annotations.CreationTimestamp;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -24,8 +25,10 @@ import lombok.Setter;
 @Setter
 @Getter
 @JsonIgnoreProperties(ignoreUnknown = true)
+// Central chat event record used for team, room, private, and thread messages.
 public class ChatMessage {
     
+    // Reactions are excluded from default serialization to prevent recursive payload expansion.
     @jakarta.persistence.OneToMany(mappedBy = "message", cascade = jakarta.persistence.CascadeType.ALL, fetch = jakarta.persistence.FetchType.LAZY)
     @JsonIgnore
     private java.util.List<ChatReaction> reactions = new java.util.ArrayList<>();
@@ -47,6 +50,7 @@ public class ChatMessage {
 
     private ChatType chatType;
 
+    // parentMessageId links replies to a thread root while keeping a single message table.
     private Long parentMessageId;
 
     @Enumerated(EnumType.STRING)
@@ -54,6 +58,7 @@ public class ChatMessage {
 
     private Boolean deleted = false;
 
+    // Soft-delete metadata allows moderation/history flows without hard deletes.
     private LocalDateTime deletedAt;
 
     private LocalDateTime editedAt;

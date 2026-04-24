@@ -4,8 +4,10 @@ import React from 'react';
 
 export function SidebarHeader({
   collapsed,
+  onToggle,
 }: {
   collapsed: boolean;
+  onToggle?: () => void;
 }) {
   return (
     <div
@@ -15,7 +17,15 @@ export function SidebarHeader({
         justifyContent: collapsed ? 'center' : 'flex-start'
       }}
     >
-      <div className="flex items-center gap-3 min-w-0">
+      <button
+        type="button"
+        onClick={() => {
+          if (collapsed && onToggle) onToggle();
+        }}
+        className={`flex items-center gap-3 min-w-0 ${collapsed ? 'cursor-pointer' : 'cursor-default'}`}
+        aria-label={collapsed ? 'Expand sidebar' : 'Sidebar'}
+        title={collapsed ? 'Expand sidebar' : 'Planora'}
+      >
         {/* Logo Icon */}
         <div className="w-8 h-8 flex-shrink-0 rounded-[10px] bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-600 flex items-center justify-center shadow-sm relative group overflow-hidden">
           {/* Subtle inner glow */}
@@ -46,7 +56,7 @@ export function SidebarHeader({
             Planora
           </span>
         )}
-      </div>
+      </button>
     </div>
   );
 }

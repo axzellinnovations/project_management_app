@@ -27,7 +27,7 @@ public class ChatDocumentService {
     @Value("${aws.s3.chat-bucket:planaro-chat}")
     private String chatBucket;
 
-    // Pre-signed URL valid for 15 minutes
+    // Short-lived URLs limit accidental long-term sharing while keeping UX smooth.
     private static final Duration URL_DURATION = Duration.ofMinutes(15);
 
     public String uploadChatDocument(MultipartFile file, String key) {
@@ -64,7 +64,7 @@ public class ChatDocumentService {
                 path = path.substring(1);
             }
             
-            // The path might contain the bucket name depending on how S3 is configured
+            // Support both path-style and virtual-hosted style URLs from different environments.
             // e.g. /planaro-chat/19/... vs /19/...
             String key = URLDecoder.decode(path, StandardCharsets.UTF_8.name());
             if (key.startsWith(chatBucket + "/")) {
@@ -105,6 +105,7 @@ public class ChatDocumentService {
                     .build();
             s3Client.deleteObject(deleteObjectRequest);
         } catch (Exception e) {
+            // Deletion failures should not block message lifecycle operations.
             System.err.println("Failed to delete chat document from S3 or Not a valid S3 URL: " + e.getMessage());
         }
     }

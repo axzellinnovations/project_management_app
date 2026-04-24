@@ -72,6 +72,8 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
   const [projectMembers, setProjectMembers] = useState<ProjectMemberOption[]>([]);
   const [projectLabels, setProjectLabels] = useState<LabelOption[]>([]);
   const [projectSprints, setProjectSprints] = useState<SprintOption[]>([]);
+  // useRef instead of useState so wasModified always holds the current value inside
+  // the Escape keydown listener without needing it in the dependency array.
   const wasModified = useRef<boolean>(false);
 
   const fetchTaskData = async () => {
@@ -128,7 +130,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
   };
 
   useEffect(() => {
-    // Serve from localStorage cache instantly, then revalidate
+    // Stale-while-revalidate: populate the modal from cache immediately so it opens without a loading flash
     const cached = localStorage.getItem(`planora:task:${taskId}`);
     if (cached) {
       try {
@@ -149,6 +151,8 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
   }, [onClose]);
 
   useEffect(() => {
+    // Restores the exact overflow value that was set before the modal opened rather than
+    // always resetting to '' — in case the caller already had overflow set for another reason.
     const previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
@@ -172,16 +176,17 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
     labelIds: number[];
   }>) => {
     if (!taskData) return;
-    // Optimistic update — apply immediately so the UI feels instant
+    // Optimistic: apply locally before the API call so the UI reflects the change without latency
     setTaskData((prev) => prev ? { ...prev, ...updates } : prev);
     try {
       await api.put(`/api/tasks/${taskId}`, updates);
       wasModified.current = true;
+      // Notify sibling components (e.g. sprint board) that this task changed without requiring a full re-fetch
       window.dispatchEvent(new CustomEvent('planora:task-updated', { detail: { taskId } }));
-      // Bust the taskcard page cache so standalone page shows fresh data
+      // Bust the taskcard page cache so standalone page shows fresh data on next visit
       localStorage.removeItem(`planora:task:${taskId}`);
     } catch (err: unknown) {
-      // Revert by re-fetching actual server state
+      // Revert the optimistic update by re-fetching the server's authoritative state
       await fetchTaskData();
       const axiosErr = err as { response?: { data?: { message?: string } } };
       toast('Failed to update task: ' + (axiosErr?.response?.data?.message || 'Unknown error'), 'error');
@@ -213,6 +218,7 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
         exit={{ x: '100%', boxShadow: '-10px 0 30px rgba(0,0,0,0)' }}
         transition={{ type: 'spring', damping: 26, stiffness: 220 }}
         className="absolute inset-0 md:inset-y-3 md:left-auto md:right-3 md:w-[980px] md:max-w-[calc(100vw-24px)] max-h-[100dvh] bg-white flex flex-col font-sans overflow-hidden md:shadow-2xl md:rounded-2xl border border-transparent md:border-[#E5E7EB]"
+        // stopPropagation prevents clicks inside the panel from bubbling to the backdrop and closing the modal
         onClick={(e) => e.stopPropagation()}
       >
         {/* Mobile drag handle */}

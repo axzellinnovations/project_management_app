@@ -12,7 +12,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class ChatPresenceService {
 
+    // project -> online aliases, used for fast presence snapshots.
     private final Map<Long, Set<String>> onlineUsersByProject = new ConcurrentHashMap<>();
+    // session -> projects visited by that socket, used to cleanly fan-out disconnect updates.
     private final Map<String, Set<Long>> projectsBySession = new ConcurrentHashMap<>();
 
     public List<String> markOnline(Long projectId, String username, String sessionId) {
@@ -61,6 +63,7 @@ public class ChatPresenceService {
 
             users.remove(username.toLowerCase());
             if (users.isEmpty()) {
+                // Remove empty buckets to keep presence memory bounded for long-lived processes.
                 onlineUsersByProject.remove(projectId);
                 updatedPresence.put(projectId, List.of());
                 continue;

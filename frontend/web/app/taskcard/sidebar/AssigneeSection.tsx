@@ -14,6 +14,7 @@ const AssigneeSection: React.FC<AssigneeSectionProps> = ({ assignee, onUnassign 
   const [usersMap, setUsersMap] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
+    // getOrFetchUserMap is a module-level singleton — this call is free after the first task card opens
     void getOrFetchUserMap().then(setUsersMap);
   }, []);
 

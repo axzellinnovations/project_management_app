@@ -20,6 +20,7 @@ interface MilestoneFormProps {
 const MilestoneForm: React.FC<MilestoneFormProps> = ({ initial, onSubmit, onCancel }) => {
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
+  // substring(0, 10) strips the time component because HTML date inputs only accept YYYY-MM-DD
   const [dueDate, setDueDate] = useState(initial?.dueDate?.substring(0, 10) ?? '');
   const [status, setStatus] = useState<MilestoneStatus>((initial?.status as MilestoneStatus) ?? 'OPEN');
 
@@ -27,6 +28,7 @@ const MilestoneForm: React.FC<MilestoneFormProps> = ({ initial, onSubmit, onCanc
     <div className="bg-white rounded-xl border border-blue-200 p-5 shadow-sm">
       <h3 className="text-sm font-semibold text-gray-800 mb-4">{initial?.id ? 'Edit Milestone' : 'New Milestone'}</h3>
       <div className="space-y-3">
+        {/* autoFocus so the user can start typing immediately after clicking "New Milestone" */}
         <input
           autoFocus
           type="text"
@@ -74,6 +76,7 @@ const MilestoneForm: React.FC<MilestoneFormProps> = ({ initial, onSubmit, onCanc
           <X size={13} /> Cancel
         </button>
         <button
+          // name.trim() guard prevents creating milestones with whitespace-only names without firing a network request
           onClick={() => name.trim() && onSubmit({ name: name.trim(), description, dueDate, status })}
           disabled={!name.trim()}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors w-full sm:w-auto justify-center"

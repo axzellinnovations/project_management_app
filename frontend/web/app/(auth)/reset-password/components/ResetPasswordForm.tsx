@@ -23,14 +23,14 @@ export default function ResetPasswordForm({
 }: ResetPasswordFormProps) {
   return (
     <form className='space-y-5' onSubmit={onSubmit}>
-      {/* Error Message */}
+      {/* role="alert" makes screen readers announce the error immediately when it appears */}
       {error && (
         <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
           {error}
         </div>
       )}
 
-      {/* Password Requirements */}
+      {/* Shown upfront, not only on failure, so users know the rule before committing to a password */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
         <p className="text-xs font-semibold text-blue-900 mb-2">Password Requirements:</p>
         <ul className="text-xs text-blue-800 space-y-1">

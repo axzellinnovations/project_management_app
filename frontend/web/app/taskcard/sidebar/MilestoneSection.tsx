@@ -27,6 +27,7 @@ const MilestoneSection: React.FC<MilestoneSectionProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
+    // Document-level click closes the dropdown when the user clicks anywhere outside it
     const close = () => setIsOpen(false);
     document.addEventListener('click', close);
     return () => document.removeEventListener('click', close);

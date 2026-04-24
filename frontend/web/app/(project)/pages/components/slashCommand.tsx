@@ -100,10 +100,12 @@ const getSuggestionItems = ({ query }: { query: string }): CommandItem[] => {
         editor.chain().focus().deleteRange(range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
       },
     },
+  // slice(0, 10) caps the list so the dropdown stays usable; nobody needs more than 10 block types visible at once
   ].filter(item => item.title.toLowerCase().startsWith(query.toLowerCase())).slice(0, 10);
 };
 
-// The React Component for the Menu UI
+// forwardRef + useImperativeHandle are required because the Tiptap Suggestion plugin calls
+// onKeyDown imperatively on this component — it can't use the standard React event system
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CommandList = forwardRef((props: any, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -224,6 +226,7 @@ export const slashSuggestion = {
 
         popup = tippy('body', {
           getReferenceClientRect: props.clientRect,
+          // appendTo document.body escapes any parent CSS stacking context that would clip or hide the dropdown
           appendTo: () => document.body,
           content: component.element,
           showOnCreate: true,

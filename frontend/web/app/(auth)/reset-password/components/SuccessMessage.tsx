@@ -2,6 +2,10 @@
 
 import Link from 'next/link';
 
+/*
+ * Rendered in-place after a successful reset rather than immediately navigating away,
+ * so the user has a moment to read the confirmation before being redirected.
+ */
 export default function SuccessMessage() {
   return (
     <div className="text-center py-8">
@@ -14,6 +18,7 @@ export default function SuccessMessage() {
       <p className="text-gray-500 text-sm mb-6">
         Your password has been updated. You can now log in with your new password.
       </p>
+      {/* Link instead of router.push so the user can inspect the destination before navigating */}
       <Link href="/login" className='w-full block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition-colors text-center'>
         Go to login
       </Link>

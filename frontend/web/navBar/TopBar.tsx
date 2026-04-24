@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo, useSyncExternalStore, Suspense, useRef } from 'react';
-import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { AUTH_TOKEN_CHANGED_EVENT, getUserFromToken, getValidToken, User } from '@/lib/auth';
 import { useParams, usePathname, useSearchParams, useRouter } from 'next/navigation';
@@ -15,6 +14,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { TabBar } from './topbar/TabBar';
 import { ProjectDropdown } from './sidebar/ProjectDropdown';
 import GlobalSearch from './topbar/GlobalSearch';
+import { ProjectTypeIcon, isAgileProjectType } from '@/components/shared/ProjectTypeIcon';
 
 const subscribeToBrowserStorage = (onStoreChange: () => void) => {
   if (typeof window === 'undefined') return () => { };
@@ -97,17 +97,15 @@ function TopBarContent() {
 
   const effectiveProjectType = projectType || storedProjectType;
 
-  const isAgile = useMemo(() => {
-    return effectiveProjectType === 'AGILE' || effectiveProjectType === 'Agile Scrum' || effectiveProjectType === 'SCRUM';
-  }, [effectiveProjectType]);
+  const isAgile = useMemo(() => isAgileProjectType(effectiveProjectType), [effectiveProjectType]);
 
   const tabs = useMemo(() => {
     const base = [
-      { id: 'summary', label: 'Summary' },
-      { id: 'timeline', label: 'Timeline' },
-      { id: 'backlog', label: 'Backlog' },
-      { id: 'board', label: 'Board' },
-      { id: 'calendar', label: 'Calendar' },
+      { id: 'summary',    label: 'Summary' },
+      { id: 'timeline',   label: 'Timeline' },
+      { id: 'backlog',    label: 'Backlog' },
+      { id: 'board',      label: 'Board' },
+      { id: 'calendar',   label: 'Calendar' },
     ];
 
     if (isAgile) {
@@ -115,29 +113,31 @@ function TopBarContent() {
     }
 
     base.push(
-      { id: 'chats', label: 'Chats' },
+      { id: 'chats',      label: 'Chats' },
       { id: 'milestones', label: 'Milestones' },
-      { id: 'members', label: 'Members' },
-      { id: 'dms', label: 'DMS' },
-      { id: 'list', label: 'List' }
+      { id: 'members',    label: 'Members' },
+      { id: 'dms',        label: 'DMS' },
+      { id: 'list',       label: 'List' },
+      { id: 'report',     label: 'Report' },         // ← always last
     );
 
     return base;
   }, [isAgile]);
 
   const activeTab = useMemo(() => {
-    if (pathname.startsWith('/summary')) return 'summary';
-    if (pathname.startsWith('/timeline')) return 'timeline';
+    if (pathname.startsWith('/summary'))   return 'summary';
+    if (pathname.startsWith('/timeline'))  return 'timeline';
     if (pathname.startsWith('/sprint-backlog') || pathname.startsWith('/backlog')) return 'backlog';
-    if (pathname.startsWith('/kanban') || pathname.startsWith('/sprint-board')) return 'board';
-    if (pathname.startsWith('/list')) return 'list';
-    if (pathname.startsWith('/calendar')) return 'calendar';
-    if (pathname.startsWith('/burndown')) return 'burndown';
-    if (pathname.startsWith('/milestones')) return 'milestones';
-    if (pathname.startsWith('/workload')) return 'workload';
+    if (pathname.startsWith('/kanban') || pathname.startsWith('/sprint-board'))   return 'board';
+    if (pathname.startsWith('/list'))       return 'list';
+    if (pathname.startsWith('/calendar'))  return 'calendar';
+    if (pathname.startsWith('/burndown'))  return 'burndown';
+    if (pathname.startsWith('/milestones'))return 'milestones';
+    if (pathname.startsWith('/workload'))  return 'workload';
     if (pathname.startsWith('/project/') && pathname.includes('/chat')) return 'chats';
-    if (pathname.startsWith('/members')) return 'members';
-    if (pathname.startsWith('/pages')) return 'dms';
+    if (pathname.startsWith('/members'))  return 'members';
+    if (pathname.startsWith('/pages') || pathname.startsWith('/folders')) return 'dms';
+    if (pathname.startsWith('/report'))   return 'report';
     return 'summary';
   }, [pathname]);
 
@@ -240,19 +240,20 @@ function TopBarContent() {
 
   const getTabHref = (tabId: string) => {
     switch (tabId) {
-      case 'summary': return projectId ? `/summary/${projectId}` : '/dashboard';
-      case 'timeline': return withProjectId('/timeline');
-      case 'backlog': return isAgile ? withProjectId('/sprint-backlog') : withProjectId('/backlog');
-      case 'board': return isAgile ? withProjectId('/sprint-board') : withProjectId('/kanban');
-      case 'list': return withProjectId('/list');
-      case 'calendar': return withProjectId('/calendar');
-      case 'burndown': return withProjectId('/burndown');
-      case 'chats': return projectId ? `/project/${projectId}/chat` : '/dashboard';
+      case 'summary':    return projectId ? `/summary/${projectId}` : '/dashboard';
+      case 'timeline':   return withProjectId('/timeline');
+      case 'backlog':    return isAgile ? withProjectId('/sprint-backlog') : withProjectId('/backlog');
+      case 'board':      return isAgile ? withProjectId('/sprint-board')   : withProjectId('/kanban');
+      case 'list':       return withProjectId('/list');
+      case 'calendar':   return withProjectId('/calendar');
+      case 'burndown':   return withProjectId('/burndown');
+      case 'chats':      return projectId ? `/project/${projectId}/chat` : '/dashboard';
       case 'milestones': return withProjectId('/milestones');
-      case 'workload': return withProjectId('/workload');
-      case 'members': return projectId ? `/members/${projectId}` : '/members';
-      case 'dms': return withProjectId('/pages');
-      default: return projectId ? `/summary/${projectId}` : '/dashboard';
+      case 'workload':   return withProjectId('/workload');
+      case 'members':    return projectId ? `/members/${projectId}` : '/members';
+      case 'dms':        return withProjectId('/pages');
+      case 'report':     return projectId ? `/report/${projectId}` : '/dashboard';
+      default:           return projectId ? `/summary/${projectId}` : '/dashboard';
     }
   };
 
@@ -275,8 +276,10 @@ function TopBarContent() {
       '/milestones',
       '/workload',
       '/pages',
+      '/folders',
       '/notifications',
       '/members',
+      '/report',
     ];
     return hasProjectContext && projectScopedPaths.some(path => pathname.startsWith(path));
   }, [pathname, projectId]);
@@ -311,35 +314,25 @@ function TopBarContent() {
           </button>
 
           {/* Project animated icon */}
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-all duration-500 max-sm:w-[42px] max-sm:h-[42px] max-sm:rounded-2xl max-sm:shadow-lg ${isAgile
-            ? 'bg-blue-600 max-sm:shadow-blue-600/30'
-            : 'bg-indigo-600 max-sm:shadow-indigo-600/30'
-            }`}>
-            {isAgile ? (
-              <motion.svg
-                animate={{ rotate: 360 }}
-                transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-                width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-              >
-                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
-              </motion.svg>
-            ) : (
-              <div className="relative w-4 h-4">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" className="opacity-30" />
-                </svg>
-                <motion.div
-                  animate={{ y: [0, -3, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                  className="absolute left-[4px] top-[5px] w-[2.5px] h-[6px] bg-white rounded-full"
-                />
-                <motion.div
-                  animate={{ y: [0, 3, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                  className="absolute left-[10px] top-[5px] w-[2.5px] h-[6px] bg-white rounded-full opacity-80"
-                />
-              </div>
-            )}
+          <div
+            className="w-9 h-9 min-w-9 min-h-9 rounded-xl relative flex items-center justify-center shrink-0 text-white border border-white/20 transition-all duration-500 max-sm:w-[42px] max-sm:h-[42px] max-sm:min-w-[42px] max-sm:min-h-[42px] max-sm:rounded-2xl"
+            style={{
+              backgroundColor: isAgile ? '#2563EB' : '#1D4ED8',
+              boxShadow: isAgile ? '0 8px 18px rgba(37,99,235,0.28)' : '0 8px 18px rgba(29,78,216,0.28)',
+            }}
+            title={isAgile ? 'Agile project' : 'Kanban project'}
+          >
+            <div
+              className="absolute inset-[3px] rounded-lg border border-white/40 animate-spin pointer-events-none"
+              style={{ animationDuration: '7s' }}
+            />
+            <ProjectTypeIcon
+              projectType={effectiveProjectType}
+              size={16}
+              animated
+              stroke="white"
+              className="relative z-10 text-white"
+            />
           </div>
 
           <div className="flex flex-col justify-center gap-0.5 ml-1 max-sm:gap-0 max-sm:ml-2.5">

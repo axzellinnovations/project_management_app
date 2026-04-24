@@ -17,6 +17,7 @@ interface CommentSectionProps {
   taskId?: number;
 }
 
+// Relative profile picture URLs from the API need a host prefix; absolute CDN URLs are used as-is.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
 
 const CommentSection: React.FC<CommentSectionProps> = ({ taskId }) => {

@@ -120,7 +120,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
         );
       }
     } catch (e) {
-      console.error('Failed to load initial notifications', e);
+      console.warn('Failed to load initial notifications:', e instanceof Error ? e.message : 'Network error');
     }
   }, []);
 
@@ -339,7 +339,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (e) {
-      console.error(e);
+      console.warn('Failed to mark read:', e instanceof Error ? e.message : 'Network error');
       throw e;
     }
   };
@@ -350,7 +350,7 @@ export function GlobalNotificationProvider({ children }: { children: React.React
       setNotifications((prev) => prev.map((notif) => ({ ...notif, read: true })));
       setUnreadCount(0);
     } catch (e) {
-      console.error(e);
+      console.warn('Failed to mark all read:', e instanceof Error ? e.message : 'Network error');
       throw e;
     }
   };

@@ -15,7 +15,7 @@ export function usePageEditor() {
   const searchParams = useSearchParams();
   const pageId = params?.pageId as string;
 
-  // Optimized: Derive projectId immediately for lag-free initialization
+  // Falls back to localStorage so projectId survives navigation events that strip query params
   const projectId = searchParams.get('projectId') || (typeof window !== 'undefined' ? localStorage.getItem('currentProjectId') : null);
 
   const {
@@ -45,6 +45,7 @@ export function usePageEditor() {
     const doc = new Y.Doc();
     ydocRef.current = doc;
     setYdoc(doc); // eslint-disable-line react-hooks/set-state-in-effect
+    // localhost uses plain ws:// because TLS certificates aren't available in dev; prod uses wss://
     const wsUrl = (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
       ? `wss://${window.location.host}/yjs`
       : 'ws://localhost:8080/yjs';
@@ -110,6 +111,7 @@ export function usePageEditor() {
     try {
       const newPage = await createPage(title, selectedPage.content || '');
       setSaveStatus('saved');
+      // replace() instead of push() so the Back button skips the blank draft and returns to the page list
       router.replace(projectId ? `/pages/${newPage.id}?projectId=${projectId}` : `/pages/${newPage.id}`);
     } catch (err) {
       console.error('Error creating document:', err);
@@ -162,9 +164,11 @@ export function usePageEditor() {
     URL.revokeObjectURL(url);
   };
 
+  // useMemo avoids decoding the JWT on every render; the token doesn't change within a session
   const collaborationUser = useMemo(() => {
     const u = getUserFromToken();
     if (!u) return undefined;
+    // Deterministic color by userId ensures the same user always gets the same cursor color
     const colors = ['#f97316', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
     const color = colors[(u.userId ?? 0) % colors.length];
     return { name: u.fullName ?? u.username ?? u.email ?? 'Anonymous', color };
