@@ -233,7 +233,6 @@ export const ChatMessages = ({
     requestAnimationFrame(() => {
       virtualizer.scrollToIndex(visibleMessages.length - 1, { align: 'end' });
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleMessages.length]);
 
   const handleDocumentClick = async (

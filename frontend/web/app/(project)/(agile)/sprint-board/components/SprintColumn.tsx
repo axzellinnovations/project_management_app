@@ -93,7 +93,6 @@ export default function SprintColumn({
   const isEmpty = column.tasks.length === 0;
   const isCompact = compactEmpty && isEmpty && !inlineOpen && !collapsed;
   const columnWidth = collapsed ? 72 : (isCompact ? 220 : (dense ? 300 : 330));
-  const storyPoints = column.tasks.reduce((sum, task) => sum + (task.storyPoint ?? 0), 0);
   const overdue = column.tasks.filter((task) => task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'DONE').length;
 
   return (
