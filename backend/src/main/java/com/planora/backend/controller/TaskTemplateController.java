@@ -18,11 +18,21 @@ public class TaskTemplateController {
     @Autowired
     private TaskTemplateService templateService;
 
+    /*
+     * Fetches all available templates for a specific project.
+     * API DESIGN: This is typically called when the user opens the "Create Task" modal
+     * to populate a dropdown menu of available templates.
+     */
     @GetMapping
     public ResponseEntity<List<TaskTemplateDTO>> getTemplates(@PathVariable Long projectId) {
         return ResponseEntity.ok(templateService.getTemplates(projectId));
     }
 
+    /*
+     * Creates a new, blank template from user input.
+     * Note: Creating a template from an *existing* task is handled in the TaskController
+     * (`/api/tasks/{taskId}/save-as-template`) because its primary context is the Task, not the Project.
+     */
     @PostMapping
     public ResponseEntity<TaskTemplateDTO> createTemplate(
             @PathVariable Long projectId,
@@ -32,6 +42,10 @@ public class TaskTemplateController {
                 .body(templateService.createTemplate(projectId, req, currentUser.getUserId()));
     }
 
+    /*
+     * Deletes a template permanently.
+     * REST STANDARD: We return 204 No Content for successful deletions.
+     */
     @DeleteMapping("/{templateId}")
     public ResponseEntity<Void> deleteTemplate(
             @PathVariable Long projectId,

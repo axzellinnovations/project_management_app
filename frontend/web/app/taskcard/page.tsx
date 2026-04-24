@@ -43,7 +43,8 @@ function TaskPageContent() {
   const fetchTaskData = async () => {
     if (!taskId) return;
     const cacheKey = `planora:task:${taskId}`;
-    // Serve from cache immediately
+    // Stale-while-revalidate: show cached data instantly so the modal feels responsive,
+    // then overwrite with fresh data once the API responds.
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try {
@@ -92,7 +93,7 @@ function TaskPageContent() {
     
     try {
       await api.put(`/api/tasks/${taskId}`, updates);
-      // Invalidate cache and refresh
+      // Invalidate after update so the next page visit fetches fresh data instead of the old snapshot
       localStorage.removeItem(`planora:task:${taskId}`);
       await fetchTaskData();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -106,7 +107,7 @@ function TaskPageContent() {
     window.history.back();
   };
 
-  // Only render after mounting to avoid hydration issues
+  // Defer render until after mount so useSearchParams (which is client-only) has resolved
   if (!mounted) {
     return null;
   }

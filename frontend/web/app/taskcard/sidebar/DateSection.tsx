@@ -20,6 +20,7 @@ const DateSection: React.FC<DateSectionProps> = ({ dates, onUpdateDueDate, onUpd
   const [open, setOpen] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
 
+  // parseISO is used instead of new Date() to avoid timezone offset issues with bare YYYY-MM-DD strings
   const parsedDueDate = dates.dueDate ? parseISO(dates.dueDate) : undefined;
   const parsedStartDate = dates.startDate ? parseISO(dates.startDate) : undefined;
 
@@ -62,6 +63,7 @@ const DateSection: React.FC<DateSectionProps> = ({ dates, onUpdateDueDate, onUpd
                     </button>
                   </Popover.Trigger>
                   <Popover.Portal>
+                    {/* Popover.Portal renders outside the sidebar so overflow:hidden on the modal panel can't clip the calendar */}
                     <Popover.Content className="z-[10000] p-3 bg-white rounded-xl shadow-xl border border-gray-200" sideOffset={5} align="end">
                       <DayPicker
                         mode="single"

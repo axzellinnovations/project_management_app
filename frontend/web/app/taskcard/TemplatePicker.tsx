@@ -24,6 +24,7 @@ const TemplatePicker: React.FC<TemplatePickerProps> = ({ projectId, onApply, onC
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40" />
+      {/* stopPropagation keeps clicks inside the card from bubbling to the backdrop and closing the picker */}
       <div
         className="relative bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}

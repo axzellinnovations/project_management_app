@@ -49,7 +49,7 @@ export function usePages(projectId: string | number | null): UsePagesReturn {
     }
 
     const cacheKey = `planora:pages:${projectId}`;
-    // Serve stale data instantly
+    // Stale-while-revalidate: the sidebar populates instantly from cache while the fresh list loads in the background
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try {

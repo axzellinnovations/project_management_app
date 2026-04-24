@@ -11,6 +11,7 @@ const DescriptionEditor: React.FC<DescriptionEditorProps> = ({ description, onUp
   const [isEditing, setIsEditing] = useState(false);
   const [edited, setEdited] = useState(description);
 
+  // Sync local edit buffer when the description changes from outside (e.g. parent re-fetch after another user edits)
   useEffect(() => {
     setEdited(description);
   }, [description]);

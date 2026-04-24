@@ -10,6 +10,8 @@ type UserMapEntry = {
 
 const USERS_MAP_STORAGE_KEY = 'planora:usersMap';
 
+// Module-level singletons so all callers in the same browser session share one fetch
+// and one in-memory copy — avoids a per-component API call on every task card open.
 let userMapCache: Record<string, string | null> | null = null;
 let userMapFetchPromise: Promise<Record<string, string | null>> | null = null;
 
@@ -45,6 +47,7 @@ function buildUserMap(users: UserMapEntry[]): Record<string, string | null> {
       map[`email:${u.email.toLowerCase()}`] = pic;
     }
     if (u.username) {
+      // Index by both raw username and prefixed lowercase so lookups are case-insensitive
       map[u.username] = pic;
       map[`username:${u.username.toLowerCase()}`] = pic;
     }
@@ -72,8 +75,8 @@ function writeUsersMapToLocalStorage(map: Record<string, string | null>): void {
   window.localStorage.setItem(USERS_MAP_STORAGE_KEY, JSON.stringify(map));
 }
 
-// BUG-7: Module-level singleton so the user list is fetched at most once per
-// browser session regardless of how many task cards the user opens.
+// forceRefresh bypasses both the in-memory cache and localStorage so an explicit
+// refresh (e.g. after profile picture update) fetches the latest data from the API.
 export function getOrFetchUserMap(options?: { forceRefresh?: boolean }): Promise<Record<string, string | null>> {
   const forceRefresh = Boolean(options?.forceRefresh);
 

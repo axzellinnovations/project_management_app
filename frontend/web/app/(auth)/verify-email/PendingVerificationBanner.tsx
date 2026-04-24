@@ -12,15 +12,17 @@ export default function PendingVerificationBanner() {
     const searchParams = useSearchParams();
     const [dismissed, setDismissed] = useState(false);
 
+    // useMemo prevents re-running the localStorage read on every render; only recalculates when the URL params change
     const pendingEmail = useMemo(() => {
         const emailFromUrl = searchParams.get('email');
+        // localStorage fallback covers the case where the user refreshes the page and the URL email param is lost
         const emailFromStorage = typeof window !== 'undefined'
             ? localStorage.getItem('pendingVerificationEmail')
             : null;
         return emailFromUrl || emailFromStorage || null;
     }, [searchParams]);
 
-    // Persist so returning users still see the banner
+    // Persist so returning users still see the banner even after navigating away and back
     useEffect(() => {
         if (pendingEmail) {
             localStorage.setItem('pendingVerificationEmail', pendingEmail);

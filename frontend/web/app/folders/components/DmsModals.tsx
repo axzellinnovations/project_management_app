@@ -27,6 +27,8 @@ export default function DmsModals({
     isUploading = false,
     uploadProgress = 0,
 }: DmsModalsProps) {
+    // Early return avoids mounting any modal DOM when nothing is open,
+    // keeping the backdrop and z-index stack clean for the rest of the page.
     if (selectedVersionsDocId === null && selectedInfoDoc === null && !isUploading) {
         return null;
     }

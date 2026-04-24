@@ -25,6 +25,7 @@ export default function DocumentSidebar({
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
 
   const toggleFolder = (e: React.MouseEvent, folderId: string) => {
+    // preventDefault stops the wrapping <Link> from navigating when the user just wants to collapse the folder
     e.preventDefault();
     e.stopPropagation();
     setExpandedFolders(prev => ({ ...prev, [folderId]: !prev[folderId] }));
@@ -46,8 +47,8 @@ export default function DocumentSidebar({
           <Link
             href={projectId ? `/pages/${item.id}?projectId=${projectId}` : `/pages/${item.id}`}
             className={`group flex items-center justify-between py-2.5 px-2 min-h-[44px] lg:min-h-0 lg:py-1.5 rounded-md text-sm transition-colors ${
-              isSelected 
-                ? 'bg-blue-50 text-blue-700 font-medium' 
+              isSelected
+                ? 'bg-blue-50 text-blue-700 font-medium'
                 : 'text-gray-700 hover:bg-gray-100'
             }`}
             style={{ paddingLeft: `${depth * 16 + 8}px` }}
@@ -130,7 +131,8 @@ export default function DocumentSidebar({
         ) : (
           <div className="flex flex-col gap-[2px]">
             {searchQuery 
-              ? renderTree(pages) // If searching, just render all matching as flat for now to make them visible
+              // Flat render during search so matching children inside collapsed parents are still visible
+              ? renderTree(pages)
               : renderTree(rootPages)
             }
           </div>

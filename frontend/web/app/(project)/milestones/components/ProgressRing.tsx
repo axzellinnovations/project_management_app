@@ -7,9 +7,11 @@ interface ProgressRingProps {
 }
 
 const ProgressRing: React.FC<ProgressRingProps> = ({ value, max }) => {
+  // Math.min(100, ...) clamps so a task count mismatch can't exceed a full ring
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   const size = 40;
   const r = 15;
+  // strokeDasharray sets the full circle length; strokeDashoffset shrinks the visible arc to match the percentage
   const circumference = 2 * Math.PI * r;
   const offset = circumference - (pct / 100) * circumference;
 

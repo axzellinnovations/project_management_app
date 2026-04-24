@@ -18,6 +18,7 @@ const CustomFieldsSection: React.FC<CustomFieldsSectionProps> = ({ taskId, proje
 
   useEffect(() => {
     if (!projectId) return;
+    // Parallel fetch: field definitions and task-specific values are independent requests
     Promise.all([
       api.get<CustomField[]>(`/api/projects/${projectId}/custom-fields`),
       api.get<Record<number, string>>(`/api/tasks/${taskId}/custom-field-values`),
@@ -63,9 +64,11 @@ const CustomFieldsSection: React.FC<CustomFieldsSectionProps> = ({ taskId, proje
             <input
               type={field.fieldType === 'NUMBER' ? 'number' : 'text'}
               defaultValue={values[field.id] ?? ''}
+              // Key includes the current value so React re-mounts this input when the value is updated externally
               key={`${field.id}-${values[field.id]}`}
               onBlur={(e) => {
                 const next = e.target.value;
+                // Save on blur only when the value actually changed to avoid redundant API calls
                 if (next !== (values[field.id] ?? '')) void saveValue(field.id, next);
               }}
               disabled={readOnly}

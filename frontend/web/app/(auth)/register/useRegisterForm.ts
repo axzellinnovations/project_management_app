@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import api from '@/lib/axios';
 import { getValidToken } from '@/lib/auth';
 
+// Exported so the view component can read human-friendly labels and Tailwind colour classes
+// without duplicating the mapping or adding a prop-drilling chain.
 export const STRENGTH_LABELS = ['', 'Weak', 'Fair', 'Good', 'Strong'] as const;
 export const STRENGTH_COLOURS = ['bg-gray-200', 'bg-red-400', 'bg-amber-400', 'bg-emerald-400', 'bg-emerald-600'] as const;
 
@@ -28,7 +30,7 @@ export function useRegisterForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Skip register page if already authenticated
+  // replace() instead of push() so the browser's Back button can't navigate back to the register page after login
   useEffect(() => {
     if (getValidToken()) {
       router.replace('/dashboard');
@@ -36,6 +38,7 @@ export function useRegisterForm() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // useMemo avoids re-running the regex checks on every keystroke that doesn't touch the password field
   const strength = useMemo(() => getPasswordStrength(password), [password]);
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -43,6 +46,7 @@ export function useRegisterForm() {
     setIsLoading(true);
     setError('');
 
+    // Client-side mismatch check before hitting the API — saves a network round-trip for the most common mistake.
     if (password !== confirmPassword) {
       setError('Passwords do not match!');
       setIsLoading(false);
@@ -53,6 +57,7 @@ export function useRegisterForm() {
       await api.post('/api/auth/register', {
         username, fullName, email: email.toLowerCase(), password,
       });
+      // Stored in localStorage so PendingVerificationBanner can show the email even after a page refresh.
       localStorage.setItem('pendingVerificationEmail', email.toLowerCase());
       router.push(`/verify-email?email=${encodeURIComponent(email.toLowerCase())}`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -151,6 +151,8 @@ const TaskMainContent: React.FC<TaskMainContentProps> = ({
                 <button
                   className="text-sm text-blue-600 hover:underline font-medium"
                   onClick={() => {
+                    // Manually fire a popstate event after pushState so React Router / the
+                    // modal layer picks up the new taskId without a full page navigation.
                     const url = new URL(window.location.href);
                     url.searchParams.set('taskId', String(dep.id));
                     window.history.pushState({}, '', url.toString());

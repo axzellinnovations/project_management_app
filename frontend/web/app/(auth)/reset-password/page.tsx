@@ -9,6 +9,7 @@ import SuccessMessage from './components/SuccessMessage';
 
 export default function ResetPasswordPage() {
   const searchParams = useSearchParams();
+  // The token is embedded in the reset link email — reading it from the URL avoids requiring the user to copy-paste it
   const token = searchParams.get('token') || '';
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -20,16 +21,19 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setError('');
 
+    // Catch a missing/tampered token before the API call to give a clearer error than a generic 400
     if (!token) {
       setError('Invalid or missing reset token. Please use the reset link from your email.');
       return;
     }
 
+    // Client-side mismatch check saves a network round-trip for the most common user error
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
 
+    // Mirrors the backend minimum length constraint so the user gets instant feedback
     if (newPassword.length < 8) {
       setError('Password must be at least 8 characters long.');
       return;
@@ -44,6 +48,7 @@ export default function ResetPasswordPage() {
       });
 
       setSubmitted(true);
+      // Clear plaintext passwords from React state immediately after a successful reset as a security measure
       setNewPassword('');
       setConfirmPassword('');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -88,6 +93,7 @@ export default function ResetPasswordPage() {
 
       {/* Main Card Container */}
       <div className='w-full max-w-[420px] glass-panel rounded-[24px] shadow-xl p-4 sm:p-8'>
+        {/* Swap to SuccessMessage in-place so the user sees confirmation before being asked to navigate */}
         {submitted ? (
           <SuccessMessage />
         ) : (

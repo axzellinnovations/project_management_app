@@ -13,11 +13,16 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/user")
+// Maintaining a dedicated controller or endpoint for the "current user"
+// keeps user-context operations distinct from broader administrative actions (like fetching all users).
 public class UserMeController {
 
     @Autowired
     private UserService service;
 
+    /* Frontend calls this endpoint immediately after login or upon hard page refresh.
+        It allows fronted to blindly send its auth token and "hydrate" the app state with the current
+        user's profile, avatar, and permissions without needing to know ther user ID upfront */
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -25,30 +30,11 @@ public class UserMeController {
         }
 
         try {
-            String email = authentication.getName();
-            User user = service.getUserByEmail(email);
-            String presignedUrl = user.getProfilePicUrl() != null && !user.getProfilePicUrl().isEmpty()
-                    ? service.generatePresignedUrl(user.getProfilePicUrl())
-                    : null;
-            
-            UserResponseDTO dto = new UserResponseDTO(
-                    user.getUserId(),
-                    user.getUsername(),
-                    user.getFullName(),
-                    user.getEmail(),
-                    user.isVerified(),
-                    presignedUrl,
-                    user.getLastActive(),
-                    user.getFirstName(),
-                    user.getLastName(),
-                    user.getContactNumber(),
-                    user.getCountryCode(),
-                    user.getJobTitle(),
-                    user.getCompany(),
-                    user.getPosition(),
-                    user.getBio(),
-                    user.isNotifyDueDateReminders()
-            );
+            /* We extract the user's identifier (usually their email)
+              directly from the cryptographically verified token. This prevents Insecure Direct
+              Object Reference (IDOR) vulnerabilities, making it impossible for a malicious user
+              to fetch someone else's profile by manipulating a request parameter */
+            UserResponseDTO dto = service.getCurrentUserDTO(authentication.getName());
             return new ResponseEntity<>(dto, HttpStatus.OK);
         } catch (Exception e) {
             return new ResponseEntity<>("Failed to fetch current user: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);

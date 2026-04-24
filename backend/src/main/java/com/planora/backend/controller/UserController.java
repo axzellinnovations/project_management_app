@@ -28,6 +28,8 @@ public class UserController {
     @Autowired
     private UserService service;
 
+    //@Valid is used here to fail fast. It catches the bad data (like malformed emails or short passwords)
+    //at the controller level before we waste resources hitting the database or service layer.
     @PostMapping("/register")
     public ResponseEntity<String> register(@Valid @RequestBody User user) {
         return new ResponseEntity<>(service.register(user), HttpStatus.OK);
@@ -39,6 +41,8 @@ public class UserController {
         if (isSuccess) {
             return new ResponseEntity<>("Verification Success!", HttpStatus.OK);
         } else {
+            //Returning UNAUTHORIZED (401) because failing to verify means the user
+            // cannot be granted access to the system.
             return new ResponseEntity<>("Invalid or Expired OTP", HttpStatus.UNAUTHORIZED);
         }
     }
@@ -49,6 +53,9 @@ public class UserController {
         if (response.isSuccess()) {
             return new ResponseEntity<>(response, HttpStatus.OK);
         } else if ("UNVERIFIED_EMAIL".equals(response.getErrorCode())) {
+            // We return a specific FORBIDDEN (403) status and error code here so the frontend
+            // client knows to redirect the user to the OTP verification page,
+            // rather than just showing a generic "bad credentials" error.
             return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
         } else {
             return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
@@ -60,6 +67,7 @@ public class UserController {
         return new ResponseEntity<>(service.resendOtp(otpRequest.getEmail()), HttpStatus.OK);
     }
 
+    // Maintained as an alias to support older mobile app versions
     @PostMapping("/resend-otp")
     public ResponseEntity<String> resendOtpAlias(@Valid @RequestBody OtpRequest otpRequest) {
         return new ResponseEntity<>(service.resendOtp(otpRequest.getEmail()), HttpStatus.OK);
@@ -80,12 +88,17 @@ public class UserController {
         }
     }
 
+    // Using a Map for the body allows to quickly extract just the refreshToken without
+    // needing to build and maintain a dedicated DTO class.
     @PostMapping("/refresh")
     public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> body) {
         String refreshToken = body.get("refreshToken");
+
+        // Fail fast if the client didn't send the token, preventing unnecessary DB queries.
         if (refreshToken == null || refreshToken.isBlank()) {
             return new ResponseEntity<>("Refresh token is required", HttpStatus.BAD_REQUEST);
         }
+
         LoginResponse response = service.refreshTokens(refreshToken);
         if (response != null && response.isSuccess()) {
             return new ResponseEntity<>(response, HttpStatus.OK);
@@ -93,34 +106,12 @@ public class UserController {
         return new ResponseEntity<>("Invalid or expired refresh token", HttpStatus.UNAUTHORIZED);
     }
 
+    // The 'excludeEmail' parameter allows clients to fetch a list of peers without
+    // the currently logged-in user appearing in their own dropdowns.
     @GetMapping("/users")
     public ResponseEntity<?> getAllUsers(@RequestParam(required = false) String excludeEmail) {
         try {
-            List<User> allUsers = service.getAllUsers();
-
-            if (excludeEmail != null && !excludeEmail.isEmpty()) {
-                allUsers = allUsers.stream()
-                        .filter(user -> !user.getEmail().equalsIgnoreCase(excludeEmail))
-                        .collect(Collectors.toList());
-            }
-
-            // BUG-2 fix: only generate a presigned URL for users that actually have a photo key.
-            List<UserResponseDTO> userList = allUsers.stream()
-                    .map(user -> new UserResponseDTO(
-                            user.getUserId(),
-                            user.getUsername(),
-                            user.getFullName(),
-                            user.getEmail(),
-                            user.isVerified(),
-                            user.getProfilePicUrl() != null && !user.getProfilePicUrl().isEmpty()
-                                    ? service.generatePresignedUrl(user.getProfilePicUrl())
-                                    : null,
-                            user.getLastActive(),
-                                null, null, null, null, null, null, null, null,
-                                user.isNotifyDueDateReminders()
-                    ))
-                    .collect(Collectors.toList());
-
+            List<UserResponseDTO> userList = service.getAllUserDTOs(excludeEmail);
             return new ResponseEntity<>(userList, HttpStatus.OK);
         } catch (Exception e) {
             return new ResponseEntity<>("Error fetching users: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -137,6 +128,7 @@ public class UserController {
         try {
             String presignedUrl = service.generatePresignedUrlForUser(userId);
             if (presignedUrl == null) {
+                // Return 404 so the frontend knows to gracefully fallback to the default avatar.
                 return new ResponseEntity<>(HttpStatus.NOT_FOUND);
             }
             return new ResponseEntity<>(Map.of("url", presignedUrl), HttpStatus.OK);
@@ -145,6 +137,7 @@ public class UserController {
         }
     }
 
+    // Testing endpoint
     @GetMapping("/try")
     public String myTry() {
         return "Try - Running Successfully";
@@ -152,33 +145,14 @@ public class UserController {
 
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser(Authentication authentication) {
+        // While Spring security usually blocks unauthenticated traffic before it hits the controller,
+        // this explicit check prevents NullPointerExceptions if security configuration changes
+        // or if the endpoint accidentally exposed.
         if (authentication == null || !authentication.isAuthenticated()) {
             return new ResponseEntity<>("User is not authenticated", HttpStatus.UNAUTHORIZED);
         }
         try {
-            String email = authentication.getName();
-            User user = service.getUserByEmail(email);
-            String presignedUrl = user.getProfilePicUrl() != null && !user.getProfilePicUrl().isEmpty()
-                    ? service.generatePresignedUrl(user.getProfilePicUrl())
-                    : null;
-            UserResponseDTO dto = new UserResponseDTO(
-                    user.getUserId(),
-                    user.getUsername(),
-                    user.getFullName(),
-                    user.getEmail(),
-                    user.isVerified(),
-                    presignedUrl,
-                    user.getLastActive(),
-                    user.getFirstName(),
-                    user.getLastName(),
-                    user.getContactNumber(),
-                    user.getCountryCode(),
-                    user.getJobTitle(),
-                    user.getCompany(),
-                    user.getPosition(),
-                    user.getBio(),
-                    user.isNotifyDueDateReminders()
-            );
+            UserResponseDTO dto = service.getCurrentUserDTO(authentication.getName());
             return new ResponseEntity<>(dto, HttpStatus.OK);
         } catch (Exception e) {
             return new ResponseEntity<>("Failed to fetch current user: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);

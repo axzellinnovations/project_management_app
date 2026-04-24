@@ -8,6 +8,7 @@ import AuthCard from '../components/UI/AuthCard';
 import { useRegisterForm, STRENGTH_LABELS, STRENGTH_COLOURS } from './useRegisterForm';
 
 export default function RegisterPage() {
+  // All form state and API logic lives in the hook, keeping this file purely about rendering.
   const {
     username, setUsername,
     fullName, setFullName,
@@ -55,6 +56,7 @@ export default function RegisterPage() {
           </button>
         </div>
 
+        {/* noValidate disables the browser's built-in validation bubbles so React controls all error UI */}
         <form onSubmit={handleRegister} className="space-y-4" noValidate>
           {/* FEATURE-1: Error banner with role="alert" + aria-live */}
           {error && (
@@ -96,9 +98,12 @@ export default function RegisterPage() {
               label="Password" type="password" value={password} required showToggle
               onChange={(e) => setPassword(e.target.value)} placeholder="Create a password (min 8 chars)"
               aria-describedby="pw-strength"
+              // new-password prevents the browser from autofilling with an existing saved password
               autoComplete="new-password"
             />
+            {/* Only show the meter once the user starts typing — avoids "Weak" showing on an empty field */}
             {password.length > 0 && (
+              // aria-label exposes the textual strength level to screen readers since the colour bar isn't accessible
               <div id="pw-strength" className="mt-2" aria-label={`Password strength: ${STRENGTH_LABELS[strength]}`}>
                 <div className="flex gap-1 mb-1">
                   {[1, 2, 3, 4].map((seg) => (
