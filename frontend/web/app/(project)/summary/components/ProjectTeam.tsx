@@ -116,11 +116,11 @@ function TeamMemberRow({
                         
                         <div className="flex flex-col items-end gap-1">
                             {overdueCount > 0 ? (
-                                <span className={`text-[9px] px-2 py-0.5 rounded-full font-extrabold tracking-wider ${overdueCount > 2 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'} border border-black/5`}>
+                                <span className={`text-[9px] px-2 py-0.5 rounded-full font-extrabold tracking-wider ${overdueCount > 2 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'} border border-blue-100`}>
                                     {overdueCount} OVERDUE
                                 </span>
                             ) : totalTasks > 0 ? (
-                                <span className="text-[9px] px-2 py-0.5 rounded-full font-extrabold tracking-wider bg-emerald-100 text-emerald-700 border border-black/5 uppercase">
+                                <span className="text-[9px] px-2 py-0.5 rounded-full font-extrabold tracking-wider bg-emerald-100 text-emerald-700 border border-blue-100 uppercase">
                                     On Track
                                 </span>
                             ) : null}
@@ -137,34 +137,34 @@ function TeamMemberRow({
                         </svg>
                         <span>{totalTasks} {totalTasks === 1 ? 'Task' : 'Tasks'}</span>
                     </div>
-                    <span className={`font-bold transition-colors ${percentage === 100 ? 'text-emerald-600' : 'text-[#101828]'}`}>
+                    <span className={`font-bold transition-colors ${percentage === 100 ? 'text-emerald-600' : percentage === 0 ? 'text-[#0052CC]' : 'text-[#101828]'}`}>
                         {percentage}% Done
                     </span>
                 </div>
 
-                <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2.5 flex overflow-hidden shadow-inner ring-1 ring-black/5">
+                <div className="w-full bg-blue-50 rounded-full h-2.5 flex overflow-hidden shadow-inner ring-1 ring-blue-100">
                     {totalTasks > 0 ? (
                         <>
                             <div 
-                                className="h-full bg-emerald-500 transition-all duration-700 ease-out shadow-[inset_0_-1px_2px_rgba(0,0,0,0.1)]" 
+                                className="h-full bg-emerald-500 transition-all duration-700 ease-out shadow-[inset_0_-1px_2px_rgba(37,99,235,0.16)]" 
                                 style={{ width: `${percentage}%` }} 
                                 title={`Completed: ${tasksCompleted}`}
                             ></div>
                             <div 
-                                className="h-full bg-blue-500/90 transition-all duration-700 ease-out shadow-[inset_0_-1px_2px_rgba(0,0,0,0.1)]" 
+                                className="h-full bg-blue-500/90 transition-all duration-700 ease-out shadow-[inset_0_-1px_2px_rgba(37,99,235,0.16)]" 
                                 style={{ width: `${100 - percentage}%` }} 
                                 title={`Pending: ${totalTasks - tasksCompleted}`}
                             ></div>
                         </>
                     ) : (
-                        <div className="w-full h-full bg-gray-200/50 dark:bg-gray-700/50 transition-colors"></div>
+                        <div className="w-full h-full bg-blue-500/90 transition-colors"></div>
                     )}
                 </div>
 
                 <div className="flex items-center gap-4 mt-3">
-                     <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-bold uppercase tracking-wide">
+                     <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide ${percentage === 0 ? 'text-blue-600' : 'text-gray-500'}`}>
                         <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-200"></div> 
-                        <span>Done <span className="text-gray-900 ml-0.5">{tasksCompleted}</span></span>
+                        <span>Done <span className={`${percentage === 0 ? 'text-blue-700' : 'text-gray-900'} ml-0.5`}>{tasksCompleted}</span></span>
                      </div>
                      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-bold uppercase tracking-wide">
                         <div className="w-2 h-2 rounded-full bg-blue-500/90 shadow-sm shadow-blue-200"></div> 
@@ -225,7 +225,7 @@ export default function ProjectTeam({ projectId, tasks = [] }: { projectId: numb
     }
 
     return (
-        <MotionWrapper className="bg-white rounded-2xl border border-[#EAECF0] p-6 shadow-sm hover:shadow-xl transition-all duration-500">
+        <MotionWrapper className="self-start h-fit bg-white rounded-2xl border border-[#EAECF0] p-6 shadow-sm hover:shadow-xl transition-all duration-500">
             <h2 className="font-arimo text-[16px] font-bold text-[#101828] mb-6 flex items-center justify-between">
                 <span className="flex items-center gap-2">
                     <svg className="w-4 h-4 text-[#0052CC]" fill="currentColor" viewBox="0 0 20 20">
@@ -254,15 +254,15 @@ export default function ProjectTeam({ projectId, tasks = [] }: { projectId: numb
             )}
 
             <Link 
-                href={`/project/${projectId}/members`} 
-                className="group flex items-center justify-center gap-2 text-[#344054] bg-white border border-[#D0D5DD] hover:bg-[#101828] hover:text-white hover:border-[#101828] rounded-xl py-3 mt-6 font-arimo text-[13px] font-bold transition-all duration-300 shadow-sm hover:shadow-lg active:scale-[0.97]"
+                href={`/members/${projectId}?invite=true`} 
+                className="group flex items-center justify-center gap-2 text-[#344054] bg-white border border-[#D0D5DD] hover:bg-[#0052CC] hover:text-white hover:border-[#0052CC] rounded-xl py-3 mt-6 font-arimo text-[13px] font-bold transition-all duration-300 shadow-sm hover:shadow-lg active:scale-[0.97]"
             >
                 <div className="p-1 rounded-md bg-gray-50 group-hover:bg-white/10 transition-colors">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
                 </div>
-                <span>Manage Team</span>
+                <span>Add Member</span>
             </Link>
         </MotionWrapper>
     );

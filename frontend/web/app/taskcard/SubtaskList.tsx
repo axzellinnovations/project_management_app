@@ -60,12 +60,11 @@ const SubtaskList: React.FC<SubtaskListProps> = ({ subtasks: initialSubtasks, ta
     const isDone = st.status?.toUpperCase() === 'DONE';
     const newStatus = isDone ? 'TODO' : 'DONE';
     setToggleLoading(st.id);
-    // optimistic update
+    // Optimistic update makes the checkbox feel instant; revert to original status if the API rejects it
     setSubtasks(prev => prev.map(s => s.id === st.id ? { ...s, status: newStatus } : s));
     try {
       await api.patch(`/api/tasks/${st.id}/status`, { status: newStatus });
     } catch {
-      // revert on failure
       setSubtasks(prev => prev.map(s => s.id === st.id ? { ...s, status: st.status } : s));
     } finally {
       setToggleLoading(null);

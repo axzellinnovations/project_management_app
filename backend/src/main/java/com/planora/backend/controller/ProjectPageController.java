@@ -21,14 +21,24 @@ public class ProjectPageController {
     @Autowired
     private ProjectPageService service;
 
+    // Creates a new documentation page inside a specific project.
     @PostMapping("/projects/{projectId}/pages")
     public ResponseEntity<ProjectPage> createPage(
             @PathVariable Long projectId,
             @Valid @RequestBody PageRequestDto request,
+            // SECURITY TRICK: Using SpEL (expression = "userId") directly extracts
+            // the Long ID from the UserPrincipal. This keeps the controller parameter
+            // clean and saves us from having to do `currentUser.getUserId()` inside the method.
             @AuthenticationPrincipal(expression = "userId") Long userId){
         return new ResponseEntity<>(service.createPage(projectId, request, userId), HttpStatus.CREATED);
     }
 
+    /*
+     * Fetches a lightweight list of all pages for a project's sidebar navigation.
+     * API DESIGN: By returning `PageSummaryResponseDto` instead of the full page entity,
+     * we omit the heavy rich-text `content` field. This makes the API lightning fast
+     * and saves massive amounts of mobile data for the end-user.
+     */
     @GetMapping("/projects/{projectId}/pages")
     public ResponseEntity<List<PageSummaryResponseDto>> getPagesByProject(
             @PathVariable Long projectId,
@@ -39,6 +49,11 @@ public class ProjectPageController {
         );
     }
 
+    /*
+     * Fetches the complete, rich-text content of a single page.
+     * REST STANDARD: Uses flat routing (`/pages/{pageId}`) because the page ID alone
+     * is enough to uniquely identify the resource in the database.
+     */
     @GetMapping("/pages/{pageId}")
     public ResponseEntity<PageDetailResponseDto> getPage(
             @PathVariable Long pageId,
@@ -46,6 +61,11 @@ public class ProjectPageController {
         return new ResponseEntity<>(service.getPageById(pageId, userId), HttpStatus.OK);
     }
 
+    /*
+     * Updates the title or content of an existing page.
+     * REST STANDARD: Uses @PutMapping because this completely replaces the existing
+     * title and content with the new values provided in the payload.
+     */
     @PutMapping("/pages/{pageId}")
     public ResponseEntity<PageDetailResponseDto> updatePage(
             @PathVariable Long pageId,
@@ -56,6 +76,11 @@ public class ProjectPageController {
         return new ResponseEntity<>(updatedPage, HttpStatus.OK);
     }
 
+    /*
+     * Permanently deletes a documentation page.
+     * REST STANDARD: Returns a 204 No Content status code upon success,
+     * indicating the server fulfilled the request and there is no additional payload to send.
+     */
     @DeleteMapping("/pages/{pageId}")
     public ResponseEntity<Void> deletePage(
             @PathVariable Long pageId,

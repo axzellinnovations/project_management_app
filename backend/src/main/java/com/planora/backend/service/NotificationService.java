@@ -69,13 +69,29 @@ public class NotificationService {
     public void createNotificationIfNotDuplicate(User recipient, String message, String link) {
         // Dedup window: 60 seconds
         LocalDateTime window = LocalDateTime.now().minusSeconds(60);
+        createNotificationIfNotDuplicateSince(recipient, message, link, window);
+    }
+
+    /**
+     * Creates a notification if no identical notification exists since {@code windowStart}.
+     * Returns true when the notification was created, false when skipped as duplicate.
+     */
+    @Transactional
+    public boolean createNotificationIfNotDuplicateSince(
+            User recipient,
+            String message,
+            String link,
+            LocalDateTime windowStart
+    ) {
         boolean alreadyExists = notificationRepository
                 .existsByRecipientUserIdAndMessageAndLinkAndCreatedAtAfter(
-                        recipient.getUserId(), message, link, window
+                        recipient.getUserId(), message, link, windowStart
                 );
-        if (!alreadyExists) {
-            createNotification(recipient, message, link);
+        if (alreadyExists) {
+            return false;
         }
+        createNotification(recipient, message, link);
+        return true;
     }
 
     public List<NotificationResponseDTO> getUserNotifications(Long userId) {

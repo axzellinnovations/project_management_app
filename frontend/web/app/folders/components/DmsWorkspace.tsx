@@ -48,6 +48,7 @@ export default function DmsWorkspace({ mode }: DmsWorkspaceProps) {
                 onDragLeave={() => setIsDragOver(false)}
                 onDrop={onDrop}
             >
+                {/* pointer-events-none on the overlay so underlying drag events still fire on the container */}
                 {isDragOver && (
                     <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#EEF4FF]/80 border-2 border-dashed border-[#155DFC] rounded-xl pointer-events-none">
                         <p className="text-lg font-semibold text-[#155DFC]">Drop file to upload</p>

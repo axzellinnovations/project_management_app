@@ -43,6 +43,10 @@ import com.planora.backend.repository.TaskAccessRepository;
 import com.planora.backend.repository.TaskRepository;
 import com.planora.backend.repository.UserRepository;
 
+/*
+ * Handles the complete lifecycle of tasks, including Agile metrics (sprints, story points),
+ * complex relationships (dependencies, subtasks), and strict Role-Based Access Control.
+ */
 @Service
 public class TaskService {
 
@@ -82,21 +86,26 @@ public class TaskService {
     @Autowired
     private TeamMembershipLookupService teamMembershipLookupService;
 
-    // 1. CREATE TASK
+    // ── 1. CREATE TASK ──────────────────────────────────────────────────────────
+
+    // Creates a new task and intelligently places it in either a Sprint or the general Backlog.
     @Transactional
     public TaskResponseDTO createTask(TaskRequestDTO request, Long currentUserId) {
-        // Validate Project
+        // Step 1. Validate the parent project exists.
         Project project = projectRepository.findById(request.getProjectId())
                 .orElseThrow(()-> new ResourceNotFoundException("Project not found"));
 
-        //Permission Check
+        // Step 2. Security Check: Only active team members can create tasks. Viewers cannot.
         requireMinimumRole(project.getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
-        //Create Task Entity
+        // Step 3. Initialize the core task entity.
         Task task = new Task();
         task.setTitle(request.getTitle());
         task.setDescription(request.getDescription());
         task.setProject(project);
+
+        // Step 4. Generate a human-readable task ID (e.g., PLAN-124).
+        // This queries the max number currently in the project and increments by 1.
         task.setProjectTaskNumber(taskRepository.findMaxProjectTaskNumberByProjectId(project.getId()) + 1L);
 
         task.setStoryPoint(request.getStoryPoint() != null ? request.getStoryPoint() : 0);
@@ -108,14 +117,16 @@ public class TaskService {
         if(request.getPriority() != null) task.setPriority(Priority.valueOf(request.getPriority()));
         if(request.getStatus() != null) task.setStatus(request.getStatus());
 
-        //handle sprint-if provided
+        // Step 5. Kanban vs Scrum logic: Is this going into a specific Sprint or the Backlog?
         if(request.getSprintId() != null){
             Sprint sprint = sprintRepository.findById(request.getSprintId())
                     .orElseThrow(()-> new ResourceNotFoundException("Sprint not found"));
             task.setSprint(sprint);
+            // Append to the bottom of the Sprint board.
             task.setSprintPosition(taskRepository.findMaxSprintPositionBySprintId(sprint.getId()) + 1);
             task.setBacklogPosition(null);
         } else {
+            // Append to the bottom of the Backlog.
             task.setBacklogPosition(taskRepository.findMaxBacklogPositionByProjectId(project.getId()) + 1);
             task.setSprintPosition(null);
         }
@@ -124,7 +135,7 @@ public class TaskService {
             task.setMilestone(resolveMilestoneForProject(project.getId(), request.getMilestoneId()));
         }
 
-        // handle labels
+        // Step 6. Attach any requested tags/labels.
         if (request.getLabelIds() != null && !request.getLabelIds().isEmpty()) {
             for (Long labelId : request.getLabelIds()) {
                 labelRepository.findById(labelId).ifPresent(label -> task.getLabels().add(label));
@@ -134,28 +145,30 @@ public class TaskService {
         //validate and assign users
         Long teamId = project.getTeam().getId();
 
-        //handle assignee
+        // Step 7. Handle Assignees (Supporting legacy single-assignee and V4 multi-assignee).
         if(request.getAssigneeId() != null){
             task.setAssignee(validateTeamMember(teamId, request.getAssigneeId()));
         }
 
-        // handle multiple assignees (V4)
+        // handle multiple assignees
         if (request.getAssigneeIds() != null && !request.getAssigneeIds().isEmpty()) {
             for (Long aid : request.getAssigneeIds()) {
                 task.getAssignees().add(validateTeamMember(teamId, aid));
             }
+
+            // Set primary assignee for backwards compatibility with older clients.
             if (task.getAssignee() == null && !task.getAssignees().isEmpty()) {
                 task.setAssignee(task.getAssignees().iterator().next());
             }
         }
 
-        //default reporter is the creator
+        // Default reporter is the person hitting the endpoint.
         task.setReporter(validateTeamMember(teamId, currentUserId));
 
         // Set last modified by
         task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
 
-        // Recurring task fields (V7)
+        // Step 8. Recurring tasks logic. Computes the next time this task should pop up.
         if (request.getRecurrenceRule() != null) {
             task.setRecurrenceRule(request.getRecurrenceRule());
             task.setRecurrenceEnd(request.getRecurrenceEnd());
@@ -164,14 +177,14 @@ public class TaskService {
 
         Task savedTask = taskRepository.save(task);
 
-        // Log activity using the reporter that was already resolved above
+        // Step 9. Log the activity for the audit trail / project timeline.
         String actorName = savedTask.getReporter() != null
                 ? savedTask.getReporter().getUser().getUsername()
                 : "System";
         taskActivityService.logActivity(savedTask.getId(), TaskActivityType.TASK_CREATED,
                 actorName, "Task created: " + savedTask.getTitle());
 
-        // Notify assignee if set and is not the creator
+        // Step 10. Notify the assigned user (unless the creator assigned it to themselves).
         if (task.getAssignee() != null && !task.getAssignee().getUser().getUserId().equals(currentUserId)) {
             String message = "You were assigned to a new task: " + task.getTitle();
             String link = "/taskcard?taskId=" + savedTask.getId();
@@ -182,15 +195,18 @@ public class TaskService {
 
     }
 
-    //2. GET TASK BY ID
+    // ── 2. GET TASK BY ID ───────────────────────────────────────────────────────
+
     @Transactional(readOnly = true)
     public TaskResponseDTO getTaskById(Long taskId) {
+        // Uses a custom @Query to eagerly fetch details and prevent N+1 query performance issues.
         Task task = taskRepository.findByIdWithDetails(taskId)
                 .orElseThrow(()-> new ResourceNotFoundException("Task not found"));
         return mapToDTO(task);
     }
 
-    //3. UPDATE TASK
+    // ── 3. UPDATE TASK ──────────────────────────────────────────────────────────
+
     @Transactional
     public TaskResponseDTO updateTask(Long taskId, TaskRequestDTO request, Long currentUserId) {
         Task task = findTaskWithProjectTeam(taskId);
@@ -200,17 +216,18 @@ public class TaskService {
         //validate permission
         requireMinimumRole(teamId, currentUserId, TeamRole.MEMBER);
 
-        // Track old values for activity logging
+        // Step 1. Snapshot the old state so we can detect what actually changed for activity logging.
         String oldStatus = task.getStatus();
         Priority oldPriority = task.getPriority();
 
-        //update fields-basic
+        // Step 2. Apply basic text updates.
         if(request.getTitle() != null) task.setTitle(request.getTitle());
         if(request.getDescription() != null) task.setDescription(request.getDescription());
         if(request.getPriority() != null) task.setPriority(Priority.valueOf(request.getPriority()));
         if(request.getStatus() != null) task.setStatus(request.getStatus());
 
-        // Set or clear completedAt when status transitions to/from DONE
+        // Step 3. Automation: If they moved it to DONE, stamp the completion time.
+        // If they moved it out of DONE (re-opened it), clear the timestamp.
         if (request.getStatus() != null && !request.getStatus().equalsIgnoreCase(oldStatus)) {
             if ("DONE".equalsIgnoreCase(request.getStatus())) {
                 task.setCompletedAt(LocalDateTime.now());
@@ -223,13 +240,15 @@ public class TaskService {
         if(request.getDueDate() != null) task.setDueDate(request.getDueDate());
 
 
-        //update sprint(moving to different sprints)
+        // Step 4. Handle moving the task between Sprints and Backlog.
         if(request.isSprintIdProvided()){
             if (request.getSprintId() == null) {
+                // Sent to Backlog
                 task.setSprint(null);
                 task.setSprintPosition(null);
                 task.setBacklogPosition(taskRepository.findMaxBacklogPositionByProjectId(task.getProject().getId()) + 1);
             } else {
+                // Sent to a new Sprint
                 Sprint sprint = sprintRepository.findById(request.getSprintId())
                         .orElseThrow(()->new ResourceNotFoundException("Sprint not found"));
                 task.setSprint(sprint);
@@ -253,7 +272,7 @@ public class TaskService {
             task.setReporter(newReporter);
         }
 
-        // update multiple assignees (V4)
+        // Step 5. Completely replace the assignee list if new ones are provided.
         if (request.getAssigneeIds() != null) {
             task.getAssignees().clear();
             for (Long aid : request.getAssigneeIds()) {
@@ -271,6 +290,8 @@ public class TaskService {
 
         task.setLastModifiedBy(userRepository.findById(currentUserId).orElseThrow());
     Task saved = taskRepository.save(task);
+
+        // Step 6. Trigger specific notifications based on the delta (what changed).
         User actor = userRepository.findById(currentUserId)
                 .orElse(null);
         String actorName = actor != null ? actor.getUsername() : "Unknown";
@@ -299,7 +320,10 @@ public class TaskService {
         return getTaskById(saved.getId());
     }
 
-    /** Lightweight date-only update used by calendar drag-and-drop. */
+    /** * Lightweight date-only update.
+     * WHY: Used heavily by frontend Calendar/Gantt chart drag-and-drop features
+     * where sending a full TaskRequestDTO is overkill.
+     */
     @Transactional
     public void patchTaskDates(
             Long taskId,
@@ -317,7 +341,8 @@ public class TaskService {
         taskRepository.save(task);
     }
 
-    //4. DELETE TASK
+    // ── 4. DELETE TASK ──────────────────────────────────────────────────────────
+
     @Transactional
     public Long deleteTask(Long taskId, Long currentUserId) {
         Task task = taskRepository.findByIdWithDetails(taskId)
@@ -327,13 +352,16 @@ public class TaskService {
         Long teamId = task.getProject().getTeam().getId();
         Long projectId = task.getProject().getId();
 
+        // Step 1. Hard Security Check: Only Owners or Admins can destroy data.
         TeamMember member = requireMinimumRole(teamId, currentUserId, null);
 
         if (member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN) {
             throw new ForbiddenException("Access Denied: Only Project Owners or Admins can delete tasks.");
         }
 
-        // Collect notification data BEFORE delete so lazy-loaded associations are accessible
+        // Step 2. Collect notification data BEFORE delete.
+        // If we try to read `task.getAssignee()` after `taskRepository.delete()`,
+        // Hibernate might throw a LazyInitializationException.
         String actorName = userRepository.findById(currentUserId)
                 .map(User::getUsername)
                 .orElse("Unknown");
@@ -353,10 +381,10 @@ public class TaskService {
                 ? List.of()
                 : userRepository.findAllById(recipientIds);
 
-        // Delete the task first so delete never silently fails after notifications go out
+        // Step 3. Delete the task so a failure here prevents ghost notifications.
         taskRepository.delete(task);
 
-        // Send notifications after successful delete
+        // Step 4. Send out the alerts.
         for (User recipient : recipients) {
             notificationService.createNotification(recipient, message, taskLink);
         }
@@ -364,7 +392,7 @@ public class TaskService {
         return projectId;
     }
 
-    //5. GET PROJECT BY ID
+    // ── 5. GET TASKS BY PROJECT (Highly Optimized Fetch) ────────────────────────
     @Transactional(readOnly = true)
     public List<TaskResponseDTO> getTasksByProject(Long projectId, Long currentUserId,
                                                    String status, Long assigneeId,
@@ -373,6 +401,14 @@ public class TaskService {
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
         requireMinimumRole(project.getTeam().getId(), currentUserId, null);
 
+        /*
+         * PERFORMANCE OPTIMIZATION (The "Two-Phase Fetch"):
+         * Fetching a Task + Labels + Subtasks + Attachments + Assignees all in one SQL query
+         * creates a massive "Cartesian Product" (multiplying rows), which crashes the database memory.
+         * * Solution:
+         * 1. Query just the IDs of the tasks we need.
+         * 2. Use those IDs to execute a secondary, batched fetch that safely loads collections.
+         */
         boolean hasFilters = status != null || assigneeId != null || priority != null || sprintId != null || milestoneId != null;
         if (hasFilters) {
             List<Task> filteredTasks = taskRepository.findByProjectIdFiltered(projectId, status, assigneeId, priority, sprintId, milestoneId)
@@ -392,7 +428,7 @@ public class TaskService {
                     .collect(Collectors.toList());
         }
 
-        // Two-phase fetch to avoid cartesian product with multiple bags
+        // Standard unfiltered fetch
         List<Task> tasks = taskRepository.findByProjectIdWithScalars(projectId);
         if (tasks.isEmpty()) return List.of();
         List<Long> ids = tasks.stream().map(Task::getId).collect(Collectors.toList());
@@ -405,9 +441,8 @@ public class TaskService {
                 .collect(Collectors.toList());
     }
 
-    //----SUB TASKS--
+    // ── 6. CREATE SUB TASK ──────────────────────────────────────────────────────
 
-    //6. CREATE SUB TASK
     @Transactional
     public TaskResponseDTO createSubTask(Long parentId, TaskRequestDTO subTaskRequest, Long currentUserId) {
         Task parent = findTaskWithProjectTeam(parentId);
@@ -415,15 +450,16 @@ public class TaskService {
         //permission check
         requireMinimumRole(parent.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
-        //reuse create logic but set parent
+        // Step 1. Trick: We reuse our massive createTask logic, but pass it the parent's project ID.
         subTaskRequest.setProjectId(parent.getProject().getId());
         TaskResponseDTO childDTO = createTask(subTaskRequest, currentUserId);
 
-        //link parent-child manually
+        // Step 2. Manually forge the link between parent and child.
         Task child = taskRepository.findById(childDTO.getId()).orElseThrow();
         child.setParentTask(parent);
         Task savedChild = taskRepository.save(child);
 
+        // Step 3. Log it on the parent's activity timeline.
         User actor = userRepository.findById(currentUserId).orElse(null);
         String actorName = actor != null ? actor.getUsername() : "Unknown";
         taskActivityService.logActivity(parentId, TaskActivityType.SUBTASK_ADDED,
@@ -432,14 +468,14 @@ public class TaskService {
         return getTaskById(savedChild.getId());
     }
 
-    //DEPENDENCY
+    // ── 7 & 8. DEPENDENCIES ─────────────────────────────────────────────────────
 
-    //7. ADD DEPENDENCY
     @Transactional
     public void addDependency(Long taskId, Long blockerId, Long currentUserId) {
         Task task = findTaskWithProjectTeam(taskId);
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
+        // Circular logic prevention.
         if (taskId.equals(blockerId)) {
             throw new IllegalArgumentException("A task cannot depend on itself");
         }
@@ -462,7 +498,7 @@ public class TaskService {
         taskRepository.save(task);
     }
 
-    // LABEL
+    // ── 9 & 10. LABELS ──────────────────────────────────────────────────────────
 
     //9. ADD LABEL
     @Transactional
@@ -490,9 +526,8 @@ public class TaskService {
         taskRepository.save(task);
     }
 
-    //COMMENTS
+    // ── 11. COMMENTS ────────────────────────────────────────────────────────────
 
-    //11. ADD COMMENT
     @Transactional
     public void addComment(Long taskId, CommentRequestDTO request, Long currentUserId) {
         Task task = taskRepository.findById(taskId).orElseThrow();
@@ -508,14 +543,15 @@ public class TaskService {
         task.setLastModifiedBy(author);
         taskRepository.save(task);
 
-        // Log activity
+        // Generate a clean preview string for the audit log
         String preview = request.getContent().length() > 60
                 ? request.getContent().substring(0, 60) + "…"
                 : request.getContent();
         taskActivityService.logActivity(taskId, TaskActivityType.COMMENT_ADDED,
                 author.getUsername(), author.getUsername() + " commented: " + preview);
 
-        // Notify task stakeholders (assignee + reporter), excluding the comment author
+        // Alert stakeholders, making sure we don't send a notification to the person
+        // who actually wrote the comment.
         Set<Long> recipientIds = new LinkedHashSet<>();
 
         if (task.getAssignee() != null && task.getAssignee().getUser() != null) {
@@ -549,7 +585,8 @@ public class TaskService {
                 .collect(Collectors.toList());
     }
 
-    //12. ASSIGN MEMBER
+    // ── 12. ASSIGNEE MANAGEMENT ─────────────────────────────────────────────────
+
     @Transactional
     public void assignUser(Long taskID, Long userId, Long currentUserId) {
         Task task = findTaskWithProjectTeam(taskID);
@@ -576,7 +613,7 @@ public class TaskService {
         }
     }
 
-    //12b. UPDATE MULTI-ASSIGNEES (dedicated PATCH endpoint)
+    // Dedicated PATCH endpoint logic for managing multiple assignees seamlessly.
     @Transactional
     public TaskResponseDTO updateAssignees(Long taskId, List<Long> userIds, Long currentUserId) {
         Task task = findTaskWithProjectTeam(taskId);
@@ -584,8 +621,23 @@ public class TaskService {
         Long teamId = task.getProject().getTeam().getId();
         requireMinimumRole(teamId, currentUserId, TeamRole.MEMBER);
 
+        // Step 1. Remember who was already assigned so we don't spam them with duplicate notifications.
+        Set<Long> previousAssigneeUserIds = new LinkedHashSet<>();
+        if (task.getAssignee() != null && task.getAssignee().getUser() != null) {
+            previousAssigneeUserIds.add(task.getAssignee().getUser().getUserId());
+        }
+
+        // Step 2. Wipe the slate clean and rebuild the assignee list.
+        task.getAssignees().stream()
+                .map(TeamMember::getUser)
+                .filter(Objects::nonNull)
+                .map(User::getUserId)
+                .filter(Objects::nonNull)
+                .forEach(previousAssigneeUserIds::add);
+
         task.getAssignees().clear();
-        for (Long uid : userIds) {
+        List<Long> requestedAssigneeIds = userIds == null ? List.of() : userIds;
+        for (Long uid : requestedAssigneeIds) {
             task.getAssignees().add(validateTeamMember(teamId, uid));
         }
         task.setAssignee(task.getAssignees().isEmpty() ? null : task.getAssignees().iterator().next());
@@ -597,10 +649,34 @@ public class TaskService {
         taskActivityService.logActivity(saved.getId(), TaskActivityType.ASSIGNEE_CHANGED,
                 actorName, actorName + " updated assignees");
 
+        // Step 3. Determine the "Diff" (Who is new?)
+        Set<Long> currentAssigneeUserIds = new LinkedHashSet<>();
+        if (saved.getAssignee() != null && saved.getAssignee().getUser() != null) {
+            currentAssigneeUserIds.add(saved.getAssignee().getUser().getUserId());
+        }
+        saved.getAssignees().stream()
+            .map(TeamMember::getUser)
+            .filter(Objects::nonNull)
+            .map(User::getUserId)
+            .filter(Objects::nonNull)
+            .forEach(currentAssigneeUserIds::add);
+
+        currentAssigneeUserIds.removeAll(previousAssigneeUserIds);
+        currentAssigneeUserIds.remove(currentUserId);
+
+        // Step 4. Send notifications only to the freshly added assignees.
+        if (!currentAssigneeUserIds.isEmpty()) {
+            String message = "You were assigned to task: " + saved.getTitle();
+            String link = "/taskcard?taskId=" + saved.getId();
+            userRepository.findAllById(currentAssigneeUserIds)
+                .forEach(recipient -> notificationService.createNotification(recipient, message, link));
+        }
+
         return getTaskById(saved.getId());
     }
 
-    //13. RECORD TASK ACCESS
+    // ── 13-16. DASHBOARD FEEDS & METRICS ────────────────────────────────────────
+
     @Transactional
     public void recordTaskAccess(Long taskId, Long currentUserId) {
         Task task = taskRepository.findById(taskId)
@@ -715,8 +791,14 @@ public class TaskService {
     @Transactional
     public void bulkUpdateStatus(List<Long> taskIds, String status, Long currentUserId) {
         if (taskIds == null || taskIds.isEmpty()) return;
+
         List<Task> tasks = taskRepository.findByIdInWithDetails(taskIds);
+
+        // OPTIMIZATION: We preload all memberships into a map ONCE.
+        // If we queried the database for the user's role on every single iteration of the loop below,
+        // a bulk update of 50 tasks would generate 50 redundant SQL queries.
         java.util.Map<Long, TeamMember> membershipByTeamId = preloadMembershipByTeamIds(tasks, currentUserId);
+
         List<Task> doneTransitioned = new java.util.ArrayList<>();
         User currentUser = userRepository.findById(currentUserId).orElseThrow();
         String actorName = currentUser.getUsername();
@@ -724,8 +806,10 @@ public class TaskService {
         for (Task task : tasks) {
             TeamMember member = membershipByTeamId.get(task.getProject().getTeam().getId());
             ensureMinimumRole(member, TeamRole.MEMBER);
+
             String oldTaskStatus = task.getStatus();
             task.setStatus(status);
+
             if ("DONE".equalsIgnoreCase(status) && !"DONE".equalsIgnoreCase(oldTaskStatus)) {
                 task.setCompletedAt(LocalDateTime.now());
                 doneTransitioned.add(task);
@@ -736,7 +820,7 @@ public class TaskService {
         }
         taskRepository.saveAll(tasks);
 
-        // NTH-2: notify stakeholders of tasks that just moved to DONE
+        // Notify stakeholders of tasks that just moved to DONE
         if (!doneTransitioned.isEmpty()) {
             for (Task doneTask : doneTransitioned) {
                 String message = actorName + " marked \"" + doneTask.getTitle() + "\" as Done";
@@ -761,6 +845,8 @@ public class TaskService {
         }
         taskRepository.deleteAll(tasks);
     }
+
+    // ── INTERNAL HELPERS & RBAC ─────────────────────────────────────────────────
 
     private void notifyTaskStakeholders(Task task, Long actorUserId, String message, String link) {
         Set<Long> recipientIds = new LinkedHashSet<>();
@@ -792,6 +878,8 @@ public class TaskService {
         if (member == null) {
             throw new ForbiddenException("User is not a member of this team");
         }
+        // roleRank allows us to handle hierarchical permissions
+        // (e.g., an ADMIN can do everything a MEMBER can do).
         if (minimumRole != null && roleRank(member.getRole()) < roleRank(minimumRole)) {
             throw new ForbiddenException("Insufficient permissions: requires " + minimumRole + " or higher");
         }
@@ -820,6 +908,7 @@ public class TaskService {
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
     }
 
+    // Extracts unique team IDs from a list of tasks and fetches membership data in one query.
     private java.util.Map<Long, TeamMember> preloadMembershipByTeamIds(List<Task> tasks, Long userId) {
         java.util.Set<Long> teamIds = tasks.stream()
                 .map(Task::getProject)
@@ -849,7 +938,8 @@ public class TaskService {
         return milestone;
     }
 
-    //MAPPING DTO
+    // ── DATA TRANSFER OBJECT (DTO) MAPPING ──────────────────────────────────────
+
     private TaskResponseDTO mapToDTO(Task task){
         return mapToDTO(task, null);
     }
@@ -949,6 +1039,7 @@ public class TaskService {
         return dto;
     }
 
+    // Groups task dependencies tightly to avoid firing separate SQL queries.
     private java.util.Map<Long, List<DependencyDTO>> buildDependencyMap(List<Long> taskIds) {
         if (taskIds == null || taskIds.isEmpty()) {
             return java.util.Map.of();
@@ -967,6 +1058,7 @@ public class TaskService {
         return map;
     }
 
+    // Part of the Two-Phase fetch optimization strategy.
     private List<TaskResponseDTO> loadTaskDtosByIds(List<Long> taskIds) {
         if (taskIds == null || taskIds.isEmpty()) {
             return List.of();
@@ -994,6 +1086,8 @@ public class TaskService {
                     if (enriched == null) {
                         return mapToDTO(scalar, dependencyMap);
                     }
+
+                    // Reassemble the object graph carefully to leverage hibernate caching.
                     enriched.setProject(scalar.getProject());
                     enriched.setSprint(scalar.getSprint());
                     enriched.setAssignee(scalar.getAssignee());
@@ -1005,6 +1099,7 @@ public class TaskService {
                 .collect(Collectors.toList());
     }
 
+    // Handles the complex math of rearranging rows when a user drags and drops a task in the UI.
     @Transactional
     public void reorderTasks(Long projectId, Long sprintId, List<Long> orderedTaskIds, Long currentUserId) {
         Project project = projectRepository.findById(projectId)
@@ -1026,6 +1121,8 @@ public class TaskService {
         User actor = userRepository.findById(currentUserId).orElseThrow();
         java.util.Map<Long, Task> taskById = tasks.stream()
                 .collect(Collectors.toMap(Task::getId, task -> task));
+
+        // Iterate through the newly provided list and rewrite the position index integers
         for (int index = 0; index < orderedTaskIds.size(); index++) {
             Long taskId = orderedTaskIds.get(index);
             Task task = taskById.get(taskId);
@@ -1046,7 +1143,7 @@ public class TaskService {
         taskRepository.saveAll(tasks);
     }
 
-    /** Compute the next occurrence date after today based on recurrence rule. */
+    // Computes the next occurrence date after today based on recurrence rule.
     private LocalDate computeNextOccurrence(LocalDate base, String rule) {
         LocalDate from = (base != null && base.isAfter(LocalDate.now())) ? base : LocalDate.now();
         if (rule == null) return null;

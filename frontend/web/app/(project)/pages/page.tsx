@@ -12,7 +12,8 @@ export default function PagesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Directly derive projectId from URL for immediate, lag-free UI
+  // URL param is the authoritative source; localStorage fallback preserves the project context
+  // when the user navigates here without a full URL (e.g. direct sidebar click after page refresh)
   const projectId = searchParams.get('projectId') || (typeof window !== 'undefined' ? localStorage.getItem('currentProjectId') : null);
 
   const {
@@ -22,6 +23,7 @@ export default function PagesPage() {
     setSearchQuery,
   } = usePages(projectId);
 
+  // Local state (not URL) because sidebar visibility is transient UI — shouldn't survive navigation or page share
   const [showDocSidebar, setShowDocSidebar] = useState(false);
 
   const handleTemplateSelect = (template: Template) => {

@@ -85,6 +85,7 @@ public class ChatInboxService {
             return new ChatInboxResponse(List.of(), List.of(), 0, 0, 0);
         }
 
+                // Inbox is project-aware so ordering and unread totals align with project permissions.
         List<ProjectResponseDTO> projects = projectService.getProjectsForUser(userId, null, null, null);
         if (projectLimit > 0 && projects.size() > projectLimit) {
             projects = projects.subList(0, projectLimit);
@@ -132,6 +133,7 @@ public class ChatInboxService {
                     getVisibleRooms(roomsByProject.getOrDefault(projectId, List.of()), currentUser, usernameOrEmail, memberRoomIds));
         }
 
+        // Batch lookups keep inbox computation O(projects + rooms + directs), not O(messages).
         var currentUserAliases = resolveUserAliases(currentUser, usernameOrEmail);
         var allVisibleRoomIds = visibleRoomsByProject.values().stream()
                 .flatMap(List::stream)
@@ -267,6 +269,7 @@ public class ChatInboxService {
             }
 
             if ("unread".equals(status)) {
+                                // Status filtering happens after aggregation so unread counters stay internally consistent.
                 projectActivities.removeIf(activity -> !activity.unread());
             }
 
@@ -336,6 +339,7 @@ public class ChatInboxService {
             String usernameOrEmail,
             Set<Long> memberRoomIds
     ) {
+        // Resolve aliases once so creator checks behave the same for username and email identities.
         Set<String> currentAliases = Stream.of(
                         usernameOrEmail,
                         currentUser.getUsername(),

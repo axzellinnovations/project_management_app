@@ -67,11 +67,13 @@ function Divider() {
 export default function Editor({ content, onUpdate, editable = true, ydoc, collaborationUser: _collaborationUser }: EditorProps) {
   const [isMounted, setIsMounted] = useState(false);
 
+  // 800ms debounce avoids a save API call on every keystroke while still feeling responsive
   const handleUpdate = useMemo(
     () => debounce((html: string) => { onUpdate(html); }, 800),
     [onUpdate]
   );
 
+  // isMounted prevents TipTap from running during SSR — it depends on DOM APIs that don't exist server-side
   useEffect(() => { setIsMounted(true); }, []); // eslint-disable-line react-hooks/set-state-in-effect
 
   const extensions = useMemo(() => [
@@ -83,7 +85,7 @@ export default function Editor({ content, onUpdate, editable = true, ydoc, colla
       // (with custom config) are the sole registered instances.
       link: false,
       underline: false,
-      // Disable history when Yjs manages it
+      // Yjs maintains its own undo/redo stack; keeping StarterKit's history alongside it causes conflicts
       ...(ydoc ? { history: false } : {}),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any),
@@ -103,6 +105,7 @@ export default function Editor({ content, onUpdate, editable = true, ydoc, colla
   ], [ydoc]);
 
   const editor = useEditor({
+    // immediatelyRender: false prevents a SSR/CSR hydration mismatch since TipTap's output differs server vs browser
     immediatelyRender: false,
     extensions,
     content,
@@ -115,7 +118,8 @@ export default function Editor({ content, onUpdate, editable = true, ydoc, colla
     },
   });
 
-  // Sync content on external changes (e.g. import) — only when not focused
+  // Sync content on external changes (e.g. file import) — emitUpdate:false prevents the change from
+  // triggering the debounced save, which would immediately overwrite the just-imported content
   useEffect(() => {
     if (editor && !editor.isFocused && content !== editor.getHTML()) {
       editor.commands.setContent(content, { emitUpdate: false });

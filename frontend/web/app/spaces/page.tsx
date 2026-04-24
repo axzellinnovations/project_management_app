@@ -155,9 +155,9 @@ export default function SpacesPage() {
                     />
                 </div>
 
-                <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto min-w-0">
                     {/* Filter tabs */}
-                    <div className="flex items-center gap-1.5 bg-[#F4F5F7] p-1 rounded-xl overflow-x-auto no-scrollbar">
+                    <div className="flex items-center gap-1.5 bg-[#F4F5F7] p-1 rounded-xl overflow-x-auto no-scrollbar w-full sm:w-auto min-w-0">
                         {(['all', 'starred'] as const).map((tab) => (
                             <button
                                 key={tab}
@@ -174,7 +174,7 @@ export default function SpacesPage() {
                     </div>
 
                     {/* Sort tabs */}
-                    <div className="flex items-center gap-1.5 bg-[#F4F5F7] p-1 rounded-xl overflow-x-auto no-scrollbar">
+                    <div className="flex items-center gap-1.5 bg-[#F4F5F7] p-1 rounded-xl overflow-x-auto no-scrollbar w-full sm:w-auto min-w-0">
                         {([
                             { key: 'recent', label: 'Recent' },
                             { key: 'alphabetical', label: 'A-Z' },
@@ -195,7 +195,7 @@ export default function SpacesPage() {
                     </div>
 
                     {/* View toggle */}
-                    <div className="ml-auto sm:ml-0 flex items-center bg-[#F4F5F7] p-1 rounded-xl">
+                    <div className="self-end sm:self-auto ml-0 sm:ml-0 flex items-center bg-[#F4F5F7] p-1 rounded-xl">
                         <button
                             onClick={() => setAndPersistView('grid')}
                             className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
@@ -231,7 +231,7 @@ export default function SpacesPage() {
                 </div>
             ) : filteredAndSortedProjects.length > 0 ? (
                 viewMode === 'grid' ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 min-w-0">
                         {filteredAndSortedProjects.map((project) => (
                             <RecentProjectCard
                                 key={project.id}
@@ -244,7 +244,7 @@ export default function SpacesPage() {
                                 }}
                                 type={project.type === 'AGILE' ? 'Agile Scrum' : 'Kanban'}
                                 boardCount={1}
-                                width="w-full"
+                                width="w-full min-w-0 max-w-none"
                             />
                         ))}
                     </div>

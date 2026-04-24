@@ -219,4 +219,16 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     @Query("SELECT COALESCE(MAX(t.sprintPosition), -1) FROM Task t WHERE t.sprint.id = :sprintId")
     Integer findMaxSprintPositionBySprintId(@Param("sprintId") Long sprintId);
+
+    @Query("SELECT DISTINCT t FROM Task t " +
+           "LEFT JOIN FETCH t.project p " +
+           "LEFT JOIN FETCH p.owner po " +
+           "LEFT JOIN FETCH t.assignee a " +
+           "LEFT JOIN FETCH a.user au " +
+           "LEFT JOIN FETCH t.assignees tas " +
+           "LEFT JOIN FETCH tas.user tau " +
+           "WHERE t.dueDate IS NOT NULL " +
+           "AND UPPER(COALESCE(t.status, '')) <> 'DONE' " +
+           "AND t.dueDate <= :maxDueDate")
+    List<Task> findOpenTasksDueOnOrBeforeWithReminderRelations(@Param("maxDueDate") LocalDate maxDueDate);
 }

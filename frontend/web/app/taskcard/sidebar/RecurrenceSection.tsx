@@ -23,6 +23,7 @@ const RecurrenceSection: React.FC<RecurrenceSectionProps> = ({
   recurrenceEnd,
   onUpdate,
 }) => {
+  // Local state mirrors the prop so the section feels instant — changes fire onUpdate to persist to the server
   const [localRule, setLocalRule] = useState<string>(recurrenceRule ?? '');
   const [localEnd, setLocalEnd] = useState<string>(recurrenceEnd ?? '');
 

@@ -38,17 +38,15 @@ const nextConfig = {
         pathname: '/**',
       },
       {
-        protocol: 'http',
-        hostname: 'backend',
-        port: '8080',
+        protocol: 'https',
+        hostname: '*.amazonaws.com',
+        port: '',
         pathname: '/**',
       },
-      {
-        protocol: 'https',
-        hostname: '*.amazonaws.com', 
-        port: '',
-        pathname: '/**', 
-      },
+      // AWS backend (App Runner / ECS ALB) — set NEXT_PUBLIC_BACKEND_HOST in Netlify env vars
+      ...(process.env.NEXT_PUBLIC_BACKEND_HOST
+        ? [{ protocol: 'https', hostname: process.env.NEXT_PUBLIC_BACKEND_HOST, port: '', pathname: '/**' }]
+        : []),
     ],
   },
 };

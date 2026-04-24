@@ -29,11 +29,13 @@ public class ChatInboxController {
             @RequestParam(defaultValue = "100") int activityLimit,
             @RequestParam(defaultValue = "all") String status
     ) {
+        // Keep filtering strict and predictable for clients by normalizing unsupported values.
         String normalizedStatus = status == null ? "all" : status.trim().toLowerCase();
         if (!"all".equals(normalizedStatus) && !"unread".equals(normalizedStatus)) {
             normalizedStatus = "all";
         }
 
+        // Defensive caps prevent expensive inbox fan-out on accidental large query params.
         int normalizedProjectLimit = projectLimit <= 0 ? 0 : Math.min(projectLimit, 500);
         int normalizedActivityLimit = activityLimit <= 0 ? 1 : Math.min(activityLimit, 1000);
         if (userId == null || authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {

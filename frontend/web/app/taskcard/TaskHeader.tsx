@@ -30,6 +30,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({ project, taskId, numericTaskId,
   const openTemplateInput = () => {
     setShowTemplateInput(true);
     setDropdownOpen(false);
+    // setTimeout defers focus until after the input has been rendered into the DOM
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
@@ -104,6 +105,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({ project, taskId, numericTaskId,
           </button>
           {dropdownOpen && (
             <>
+              {/* Full-screen invisible overlay closes the dropdown when the user clicks outside it */}
               <div className="fixed inset-0 z-10" onClick={() => setDropdownOpen(false)} />
               <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-[#E5E7EB] rounded-xl shadow-lg z-20 py-1">
                 <button

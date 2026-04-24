@@ -7,12 +7,13 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
+    // overflow-hidden prevents the oversized blobs from creating a horizontal scrollbar
     <div className="min-h-screen w-full relative overflow-hidden font-sans text-gray-900 antialiased"
       style={{
         background: 'hsl(210, 40%, 98%)',
       }}
     >
-      {/* Background accent blobs */}
+      {/* pointer-events-none ensures these decorative blobs never accidentally intercept clicks on forms below them */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
           className="absolute -top-32 -left-32 w-[520px] h-[520px] rounded-full opacity-30"
@@ -27,6 +28,7 @@ export default function AuthLayout({
           style={{ background: 'radial-gradient(circle, hsl(221,83%,55%) 0%, transparent 60%)' }}
         />
       </div>
+      {/* z-10 guarantees page content always renders above the absolutely-positioned blob layer */}
       <div className="relative z-10">
         {children}
       </div>

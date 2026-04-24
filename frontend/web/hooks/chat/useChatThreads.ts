@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import * as chatApi from '@/services/chat-service';
 import type { ChatMessage } from '@/app/(project)/project/[id]/chat/components/chat';
 import { mergeMessage } from './chat-utils';
@@ -48,7 +48,9 @@ export function useChatThreads(projectId: string) {
       if (!trimmed) return;
 
       if (stompSend) {
+        const localId = `loc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         const message: ChatMessage = {
+          localId,
           sender: currentUser,
           content: trimmed,
           type: 'CHAT',

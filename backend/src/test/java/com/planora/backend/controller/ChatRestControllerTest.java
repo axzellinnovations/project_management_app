@@ -1,5 +1,7 @@
 package com.planora.backend.controller;
 
+import com.planora.backend.annotation.WithMockUserPrincipal;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.planora.backend.model.ChatMessage;
 import com.planora.backend.model.ChatRoom;
@@ -25,7 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -51,35 +53,35 @@ class ChatRestControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private ChatService chatService;
-    @MockBean
+    @MockitoBean
     private ProjectRepository projectRepository;
-    @MockBean
+    @MockitoBean
     private TeamMemberRepository teamMemberRepository;
-    @MockBean
+    @MockitoBean
     private UserCacheService userCacheService;
-    @MockBean
+    @MockitoBean
     private ProjectMembershipService projectMembershipService;
-    @MockBean
+    @MockitoBean
     private UserRepository userRepository;
-    @MockBean
+    @MockitoBean
     private ChatRoomRepository chatRoomRepository;
-    @MockBean
+    @MockitoBean
     private ChatRoomMemberRepository chatRoomMemberRepository;
-    @MockBean
+    @MockitoBean
     private SimpMessagingTemplate simpMessagingTemplate;
-    @MockBean
+    @MockitoBean
     private ChatPresenceService chatPresenceService;
-    @MockBean
+    @MockitoBean
     private ChatWebhookService chatWebhookService;
-    @MockBean
+    @MockitoBean
     private ChatDocumentService chatDocumentService;
-    @MockBean
+    @MockitoBean
     private NotificationService notificationService;
-    @MockBean
+    @MockitoBean
     private JWTService jwtService;
-    @MockBean
+    @MockitoBean
     private UserDetailsService userDetailsService;
 
     private User alice;
@@ -112,7 +114,7 @@ class ChatRestControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "alice")
+    @WithMockUserPrincipal(email = "alice")
     void getRoomMessages_marksAsRead_andReturnsPayload() throws Exception {
 		ChatMessageDTO message = new ChatMessageDTO();
 		message.setId(21L);
@@ -140,7 +142,7 @@ class ChatRestControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "alice")
+    @WithMockUserPrincipal(email = "alice")
     void getPrivateMessages_marksConversationRead() throws Exception {
         User bob = new User();
         bob.setUserId(11L);
@@ -168,7 +170,7 @@ class ChatRestControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "alice")
+    @WithMockUserPrincipal(email = "alice")
     void createThreadReply_rejectsBlankContent() throws Exception {
             @SuppressWarnings("null")
         var request = new ChatRestController.ThreadReplyRequest("   ", ChatMessage.FormatType.PLAIN);
@@ -181,7 +183,7 @@ class ChatRestControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "alice")
+    @WithMockUserPrincipal(email = "alice")
     void createThreadReply_returnsCreatedMessage() throws Exception {
             @SuppressWarnings("null")
         var request = new ChatRestController.ThreadReplyRequest("reply", ChatMessage.FormatType.PLAIN);
@@ -201,7 +203,7 @@ class ChatRestControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "alice")
+    @WithMockUserPrincipal(email = "alice")
     void toggleReaction_blankEmojiReturnsBadRequest() throws Exception {
             @SuppressWarnings("null")
         var request = new ChatRestController.ReactionToggleRequest(" ");
@@ -214,7 +216,7 @@ class ChatRestControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "alice")
+    @WithMockUserPrincipal(email = "alice")
     void toggleReaction_returnsSummaries() throws Exception {
         var request = new ChatRestController.ReactionToggleRequest("👍");
         var summary = new ChatService.ChatReactionSummary("👍", 1L, true);
@@ -230,7 +232,7 @@ class ChatRestControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "alice")
+    @WithMockUserPrincipal(email = "alice")
     void getFeatureFlags_returnsConfigValues() throws Exception {
         mockMvc.perform(get("/api/projects/5/chat/features"))
                 .andExpect(status().isOk())
@@ -241,7 +243,7 @@ class ChatRestControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "alice")
+    @WithMockUserPrincipal(email = "alice")
     void getFeatureFlags_validatesProjectMembershipViaService() throws Exception {
         mockMvc.perform(get("/api/projects/5/chat/features"))
                 .andExpect(status().isOk());
@@ -250,7 +252,7 @@ class ChatRestControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "alice")
+    @WithMockUserPrincipal(email = "alice")
     void createRoom_notifiesOnlyAddedMembers() throws Exception {
         User bob = new User();
         bob.setUserId(11L);

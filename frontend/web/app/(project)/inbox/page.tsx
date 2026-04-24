@@ -24,7 +24,7 @@ export default function InboxPage() {
   } = useInboxData();
 
   return (
-    <div className="mobile-page-padding max-w-[1200px] mx-auto pb-6 flex flex-col gap-4 sm:gap-5">
+    <div className="mobile-page-padding w-full max-w-[1200px] mx-auto pb-6 flex flex-col gap-4 sm:gap-5">
       {/* Mobile Top Header */}
       <div className="flex items-center gap-3 py-4 md:hidden">
           <button
@@ -95,7 +95,7 @@ export default function InboxPage() {
           ))}
         </div>
       ) : error ? (
-        <div className="bg-white border border-red-200 rounded-2xl p-6 text-center">
+        <div className="w-full bg-white border border-red-200 rounded-2xl p-6 text-center">
           <p className="text-[14px] font-semibold text-red-600">{error}</p>
           <button
             onClick={() => void refreshInbox()}
@@ -106,12 +106,18 @@ export default function InboxPage() {
           </button>
         </div>
       ) : groupedProjects.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center">
-          <h2 className="text-[16px] font-bold text-slate-800">No chat activity yet</h2>
-          <p className="text-[13px] text-slate-500 mt-1">Start a team, room, or direct conversation to populate your inbox.</p>
+        <div className="w-full bg-white border border-slate-200 rounded-2xl p-6 sm:p-8">
+          <h2 className="text-[16px] font-bold text-slate-800">
+            {filter === 'unread' ? 'All caught up!' : 'No chat activity yet'}
+          </h2>
+          <p className="text-[13px] text-slate-500 mt-1">
+            {filter === 'unread'
+              ? 'You have no unread messages. Switch to All Activity to browse all conversations.'
+              : 'Start a team, room, or direct conversation to populate your inbox.'}
+          </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="w-full flex flex-col gap-4">
           {visibleProjects.map((group) => (
             <ProjectSection
               key={group.projectId}

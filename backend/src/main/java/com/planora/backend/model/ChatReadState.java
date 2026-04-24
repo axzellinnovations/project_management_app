@@ -23,6 +23,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @Getter
 @Setter
+// Stores per-user read cursors so unread counts can be computed incrementally.
 public class ChatReadState {
 
     @Id
@@ -37,6 +38,7 @@ public class ChatReadState {
 
     private Long roomId;
 
+    // otherParticipant is used for private chat and team sentinel keys when roomId is null.
     private String otherParticipant;
 
     private Long lastReadMessageId;

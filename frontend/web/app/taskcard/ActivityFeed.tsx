@@ -18,6 +18,8 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
+// Keyed by activityType string from the API so new event types get a default '•'
+// without requiring a code change, and existing ones get a recognisable icon.
 const ACTIVITY_ICONS: Record<string, string> = {
   TASK_CREATED:     '✨',
   STATUS_CHANGED:   '🔄',

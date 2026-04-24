@@ -10,10 +10,12 @@ export default function VerifyEmailPage() {
       <BrandLogo />
 
       {/* FEATURE-5: Remind the user that their email is pending verification */}
+      {/* fallback={null} because the banner is non-critical — silently hiding it during SSR is fine */}
       <Suspense fallback={null}>
         <PendingVerificationBanner />
       </Suspense>
 
+      {/* Suspense is required here because VerifyEmailForm uses useSearchParams(), which suspends on the server */}
       <Suspense fallback={<div>Loading...</div>}>
         <VerifyEmailForm />
       </Suspense>

@@ -24,7 +24,7 @@ export default function MilestonesPage() {
 
   const loadMilestones = useCallback(async () => {
     if (!projectId || !cacheKey) return;
-    // Serve from cache immediately
+    // Stale-while-revalidate: show cached data instantly so the list doesn't flicker on every open
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try {
@@ -32,7 +32,7 @@ export default function MilestonesPage() {
         setLoading(false);
       } catch { /* ignore corrupt cache */ }
     }
-    // Always revalidate in the background
+    // Always revalidate so the list reflects any changes made from other sessions
     try {
       const data = await getMilestones(projectId);
       setMilestones(data);
@@ -108,6 +108,7 @@ export default function MilestonesPage() {
   const handleStatusChange = async (id: number, status: MilestoneStatus) => {
     const m = milestones.find((x) => x.id === id);
     if (!m) return;
+    // Optimistic update so the badge flips immediately without a loading spinner
     setMilestones((prev) => {
       const next = prev.map((x) => x.id === id ? { ...x, status } : x);
       if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify(next));
@@ -116,6 +117,7 @@ export default function MilestonesPage() {
     try {
       await updateMilestone(id, { name: m.name, status });
     } catch {
+      // On failure, bust the cache and reload so the UI reflects true server state rather than staying wrong
       invalidateCache();
       void loadMilestones();
     }
