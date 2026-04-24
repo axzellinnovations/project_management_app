@@ -2,7 +2,8 @@ import axios from "axios";
 import { clearTokens, getRefreshToken, getValidToken, refreshAccessToken, saveRefreshToken, saveToken } from "@/lib/auth";
 
 const api = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080',
+    // Changed fallback from 'http://localhost:8080' to ''
+    baseURL: process.env.NEXT_PUBLIC_API_BASE_URL || '', 
     headers: {
         'Content-Type': 'application/json'
     },
