@@ -17,7 +17,7 @@ export default function DesktopTaskRow(props: TaskRowProps) {
     canDelete = true, showCheckbox = false, onToggle, onStatusChange,
     onStoryPointsChange, onAssignTask, onDueDateChange, onDeleteTask,
     onOpenTask, projectLabels = [], onAddLabel, onRemoveLabel, onCreateLabel,
-    extraStatuses = [],
+    extraStatuses = [], hideStatus = false,
   } = props;
 
   const {
@@ -50,14 +50,20 @@ export default function DesktopTaskRow(props: TaskRowProps) {
   const getMemberName = (m: NonNullable<typeof teamMembers>[number]) => m.user.fullName || m.user.username;
 
   const rowBg =
-    dueClass === 'overdue' || dueClass === 'today' ? 'bg-[#FEE2E2]'
+    dueClass === 'five_days' ? 'bg-[#FFFBEB]'
+    : dueClass === 'old' ? 'bg-[#FEE2E2]'
+    : dueClass === 'overdue' || dueClass === 'today' ? 'bg-[#FEE2E2]'
     : dueClass === 'soon' ? 'bg-[#FFFDF5]'
     : 'bg-white';
 
+  const amberStyle = dueClass === 'five_days' ? { backgroundColor: 'rgba(245, 158, 11, 0.4)' } : {};
+
   return (
     <div
-      className={`group relative flex items-center min-h-[40px] rounded-lg border border-transparent ${rowBg} hover:bg-[#F9FAFB] hover:border-[#EAECF0] cursor-pointer transition-colors duration-150`}
-      style={{ borderLeft: `3px solid ${statusBorderColor}` }}
+      className={`group relative flex items-center min-h-[40px] rounded-lg border-2 ${
+        dueClass === 'five_days' ? 'border-transparent' : 'border-transparent'
+      } ${rowBg} hover:opacity-90 transition-colors duration-150`}
+      style={{ borderLeft: `3px solid ${statusBorderColor}`, ...amberStyle }}
       onClick={() => { if (!renaming) onOpenTask?.(task.id); }}
       onTouchStart={onTouchStartInternal}
       onTouchEnd={onTouchEndInternal}
@@ -103,7 +109,10 @@ export default function DesktopTaskRow(props: TaskRowProps) {
         ) : (
           <>
             <span
-              className={`text-[12px] font-medium text-[#101828] truncate min-w-0 select-none ${task.status.toUpperCase() === 'DONE' ? 'line-through text-[#98A2B3]' : ''}`}
+              className={`text-[12px] font-medium truncate min-w-0 select-none ${
+                dueClass === 'five_days' ? 'text-[#92400E]' :
+                task.status.toUpperCase() === 'DONE' ? 'line-through text-[#98A2B3]' : 'text-[#101828]'
+              }`}
               onClick={(e) => {
                 e.stopPropagation();
                 const now = Date.now();
@@ -164,45 +173,47 @@ export default function DesktopTaskRow(props: TaskRowProps) {
       </div>
 
       {/* Status dropdown */}
-      <div className="flex-shrink-0 w-[116px] px-1 flex items-center relative" ref={statusRef} onClick={(e) => e.stopPropagation()}>
-        <button type="button" onClick={() => openStatus()}
-          className={`flex h-6 w-full items-center justify-between gap-1 rounded-md px-2 text-[10px] font-bold uppercase tracking-wide transition-all ${displayStyle}`}
-        >
-          <span className="truncate">{displayLabel}</span>
-          <ChevronDown size={9} className="flex-shrink-0 opacity-60" />
-        </button>
-        {statusOpen && typeof document !== 'undefined' && createPortal(
-          <div ref={statusPortalRef} className="fixed z-[9999] w-32 overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-xl" style={{ top: statusPosition.top, left: statusPosition.left }}>
-            {(Object.keys(STATUS_LABELS) as TaskStatus[]).map((s) => (
-              <button key={s} onClick={() => { onStatusChange(task.id, s); setStatusOpen(false); }}
-                className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-[#F9FAFB] ${task.status?.toUpperCase() === s ? 'text-[#155DFC]' : ''}`}
-              >
-                {STATUS_LABELS[s]}
-              </button>
-            ))}
-            {extraStatuses.length > 0 && <div className="border-t border-[#EAECF0] my-1" />}
-            {extraStatuses.map((s) => (
-              <button key={s.value} onClick={() => { onStatusChange(task.id, s.value); setStatusOpen(false); }}
-                className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-[#F9FAFB] ${task.status?.toUpperCase() === s.value ? 'text-[#155DFC]' : ''}`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>,
-          document.body
-        )}
-      </div>
+      {!hideStatus && (
+        <div className="flex-shrink-0 w-[116px] px-1 flex items-center relative" ref={statusRef} onClick={(e) => e.stopPropagation()}>
+          <button type="button" onClick={() => openStatus()}
+            className={`flex h-6 w-full items-center justify-between gap-1 rounded-md px-2 text-[10px] font-bold uppercase tracking-wide transition-all ${displayStyle}`}
+          >
+            <span className="truncate">{displayLabel}</span>
+            <ChevronDown size={9} className="flex-shrink-0 opacity-60" />
+          </button>
+          {statusOpen && typeof document !== 'undefined' && createPortal(
+            <div ref={statusPortalRef} className="fixed z-[9999] w-32 overflow-hidden rounded-xl border border-[#E4E7EC] bg-white shadow-xl" style={{ top: statusPosition.top, left: statusPosition.left }}>
+              {(Object.keys(STATUS_LABELS) as TaskStatus[]).map((s) => (
+                <button key={s} onClick={() => { onStatusChange(task.id, s); setStatusOpen(false); }}
+                  className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-[#F9FAFB] ${task.status?.toUpperCase() === s ? 'text-[#155DFC]' : ''}`}
+                >
+                  {STATUS_LABELS[s]}
+                </button>
+              ))}
+              {extraStatuses.length > 0 && <div className="border-t border-[#EAECF0] my-1" />}
+              {extraStatuses.map((s) => (
+                <button key={s.value} onClick={() => { onStatusChange(task.id, s.value); setStatusOpen(false); }}
+                  className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-[#F9FAFB] ${task.status?.toUpperCase() === s.value ? 'text-[#155DFC]' : ''}`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )}
+        </div>
+      )}
 
       {/* Due date */}
       {onDueDateChange && (
         <div className="flex-shrink-0 w-[88px] px-1 flex items-center relative" onClick={(e) => e.stopPropagation()}>
-          <button type="button" onClick={openDatePicker}
+          <button type="button" onClick={openDatePicker} title={dueClass === 'overdue' ? formatDate(task.dueDate) : undefined}
             className={`flex h-6 w-full items-center justify-center gap-1 rounded-md px-2 text-[10px] font-bold transition-all border ${
               dueClass === 'none' ? 'bg-white border-[#EAECF0] text-[#667085] hover:bg-gray-50' : DUE_CHIP_STYLES[dueClass]
             }`}
           >
             <CalendarDays size={10} className="flex-shrink-0 opacity-60" />
-            <span className="truncate">{formatDate(task.dueDate)}</span>
+            <span className="truncate">{dueClass === 'overdue' ? 'Overdue' : formatDate(task.dueDate)}</span>
           </button>
           <input ref={dateRef} type="date" value={task.dueDate || ''} onChange={(e) => onDueDateChange(task.id, e.target.value)} className="sr-only" />
         </div>
