@@ -5,3 +5,4 @@ frontend/web/node_modules
 .vscode/
 .DS_Store
 **/.DS_Store
+planora.pem

@@ -1,5 +1,8 @@
 services:
-  # The Spring Boot Backend
+  # Spring Boot backend — for local development only.
+  # Production: deployed to AWS (ECS / App Runner).
+  # Database: Supabase (set SPRING_DATASOURCE_URL to the Supabase JDBC URL).
+  # Frontend: deployed to Netlify — not included here.
   backend:
     build: ./backend
     container_name: planora-backend
@@ -8,31 +11,15 @@ services:
     env_file:
       - .env
     environment:
-      # Require datasource values from environment/.env (no hardcoded defaults).
+      # Supabase PostgreSQL — use the "Session mode" pooler URL with ?sslmode=require
+      # Format: jdbc:postgresql://<host>:5432/<db>?sslmode=require
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?SPRING_DATASOURCE_URL is required}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?SPRING_DATASOURCE_USERNAME is required}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD is required}
+      # Allow requests from local frontend dev server and Netlify
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
     networks:
       - planora-network
-
-  # The Next.js Frontend
-  frontend:
-    build:
-      context: ./frontend/web
-      dockerfile: Dockerfile
-    container_name: planora-frontend
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
-      - BACKEND_URL=http://backend:8080
-    depends_on:
-      - backend
-    networks:
-      - planora-network
-
-volumes:
-  postgres_data:
 
 networks:
   planora-network:
