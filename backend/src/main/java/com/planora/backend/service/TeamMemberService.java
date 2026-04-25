@@ -1,5 +1,6 @@
 package com.planora.backend.service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.security.access.AccessDeniedException;
@@ -27,8 +28,11 @@ public class TeamMemberService {
                         String newRoleStr,
                         Long currentUserId,
                         Long projectId,
-                        String projectName
+                        String projectName,
+                        Long projectOwnerUserId
         ) {
+        enforceCreatorOnlyOwnerRole(teamId, projectOwnerUserId);
+
         TeamMember currentMember = validateMembership(teamId, currentUserId);
         TeamMember targetMember = teamMemberRepository
                 .findByTeamIdAndUserUserId(teamId, targetUserId)
@@ -40,6 +44,13 @@ public class TeamMemberService {
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid role");
         }
+
+                if (newRole == TeamRole.OWNER && !targetUserId.equals(projectOwnerUserId)) {
+                        throw new AccessDeniedException("Only the project creator can be assigned OWNER role");
+                }
+                if (targetUserId.equals(projectOwnerUserId) && newRole != TeamRole.OWNER) {
+                        throw new AccessDeniedException("Project creator must remain OWNER");
+                }
 
         if (currentMember.getRole() == TeamRole.OWNER) {
             // Owner can change anyone's role (except their own)
@@ -187,7 +198,10 @@ public class TeamMemberService {
                         Long targetUserId,
                         Long currentUserId,
                         Long projectId,
-                        String projectName) {
+                        String projectName,
+                        Long projectOwnerUserId) {
+                enforceCreatorOnlyOwnerRole(teamId, projectOwnerUserId);
+
                 TeamMember currentMember = validateMembership(teamId, currentUserId);
                 TeamMember targetMember = teamMemberRepository
                                 .findByTeamIdAndUserUserId(teamId, targetUserId)
@@ -282,6 +296,47 @@ public class TeamMemberService {
                 }
 
                 return member;
+        }
+
+        @Transactional
+        public void enforceCreatorOnlyOwnerRole(Long teamId, Long projectOwnerUserId) {
+                if (teamId == null || projectOwnerUserId == null) {
+                        return;
+                }
+
+                List<TeamMember> members = teamMemberRepository.findByTeamId(teamId);
+                if (members.isEmpty()) {
+                        return;
+                }
+
+                List<TeamMember> toUpdate = new ArrayList<>();
+                TeamMember creatorMember = null;
+
+                for (TeamMember member : members) {
+                        if (member.getUser() == null || member.getUser().getUserId() == null) {
+                                continue;
+                        }
+
+                        Long userId = member.getUser().getUserId();
+                        if (projectOwnerUserId.equals(userId)) {
+                                creatorMember = member;
+                                continue;
+                        }
+
+                        if (member.getRole() == TeamRole.OWNER) {
+                                member.setRole(TeamRole.ADMIN);
+                                toUpdate.add(member);
+                        }
+                }
+
+                if (creatorMember != null && creatorMember.getRole() != TeamRole.OWNER) {
+                        creatorMember.setRole(TeamRole.OWNER);
+                        toUpdate.add(creatorMember);
+                }
+
+                if (!toUpdate.isEmpty()) {
+                        teamMemberRepository.saveAll(toUpdate);
+                }
         }
 
 }

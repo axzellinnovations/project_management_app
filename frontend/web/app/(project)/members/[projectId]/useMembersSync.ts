@@ -25,7 +25,7 @@ import { getValidToken } from '@/lib/auth';
 
 // ── Types that mirror the backend MemberEvent record ───────────────────────────
 
-export type MemberEventAction = 'ROLE_CHANGED' | 'MEMBER_REMOVED' | 'MEMBER_JOINED';
+export type MemberEventAction = 'ROLE_CHANGED' | 'MEMBER_ROLE_CHANGED' | 'MEMBER_REMOVED' | 'MEMBER_JOINED';
 
 export interface MemberPayload {
   userId: number;
@@ -42,6 +42,7 @@ export interface MemberEvent {
   action: MemberEventAction;
   userId: number;
   newRole?: string;   // populated when action === 'ROLE_CHANGED'
+  role?: string;      // backward-compatible field used by older backend payloads
   member?: MemberPayload; // populated when action === 'MEMBER_JOINED'
 }
 
@@ -159,10 +160,13 @@ export function useMembersSync(
 
           switch (event.action) {
             case 'ROLE_CHANGED':
-              if (event.userId != null && event.newRole) {
-                onRoleChangedRef.current(event.userId, event.newRole);
+            case 'MEMBER_ROLE_CHANGED': {
+              const nextRole = event.newRole || event.role;
+              if (event.userId != null && nextRole) {
+                onRoleChangedRef.current(event.userId, nextRole);
               }
               break;
+            }
 
             case 'MEMBER_REMOVED':
               if (event.userId != null) {
