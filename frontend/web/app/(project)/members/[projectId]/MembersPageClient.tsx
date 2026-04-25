@@ -113,7 +113,7 @@ export default function MembersPageClient({ projectId }: { projectId: string }) 
         inviteLoading={inviteLoading}
         inviteError={inviteError}
         inviteSuccess={inviteSuccess}
-        roleOptions={ROLE_OPTIONS}
+        roleOptions={ROLE_OPTIONS.filter((role) => role !== 'OWNER')}
         onClose={() => setShowModal(false)}
         onInviteEmailChange={setInviteEmail}
         onInviteRoleChange={setInviteRole}

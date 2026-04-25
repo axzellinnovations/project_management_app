@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,9 +54,17 @@ public class ProjectInvitationService {
                 .orElseThrow(() -> new RuntimeException("Project not found"));
 
         Long teamId = project.getTeam().getId();
+        Long projectOwnerUserId = project.getOwner().getUserId();
+        String projectOwnerEmail = project.getOwner().getEmail();
+
+        teamMemberService.enforceCreatorOnlyOwnerRole(teamId, projectOwnerUserId);
 
         // Allow TEAM OWNER and ADMIN to invite
         teamMemberService.validateOwnerOrAdmin(teamId, inviterUserId);
+
+        if (inviteRole == TeamRole.OWNER && !inviteeEmail.equalsIgnoreCase(projectOwnerEmail)) {
+            throw new AccessDeniedException("Only the project creator can hold OWNER role");
+        }
 
 
         // Block if user is already a member
@@ -109,6 +118,13 @@ public class ProjectInvitationService {
         TeamInvitation invitation = teamInvitationRepository.findByToken(token)
                 .orElseThrow(() -> new RuntimeException("Invitation not found or invalid"));
 
+        Project project = invitation.getTeam().getProjects().stream().findFirst().orElse(null);
+        Long projectOwnerUserId = (project != null && project.getOwner() != null)
+            ? project.getOwner().getUserId()
+            : null;
+
+        teamMemberService.enforceCreatorOnlyOwnerRole(invitation.getTeam().getId(), projectOwnerUserId);
+
         if (invitation.getExpiresAt() != null && invitation.getExpiresAt().isBefore(LocalDateTime.now())) {
             throw new RuntimeException("Invitation has expired");
         }
@@ -149,6 +165,11 @@ public class ProjectInvitationService {
             System.out.println("[DEBUG] Invalid role, defaulting to MEMBER");
             invitedRole = TeamRole.MEMBER; // fallback
         }
+
+        if (invitedRole == TeamRole.OWNER && (projectOwnerUserId == null || !projectOwnerUserId.equals(userId))) {
+            invitedRole = TeamRole.ADMIN;
+        }
+
         member.setRole(invitedRole);
         System.out.println("  Assigned TeamMember Role: '" + invitedRole + "'");
         teamMemberRepository.save(member);
@@ -163,10 +184,8 @@ public class ProjectInvitationService {
                         ? user.getUsername()
                         : user.getEmail();
 
-        String projectName = invitation.getTeam().getProjects().stream()
-                .findFirst().map(p -> p.getName()).orElse("your project");
-        String projectId = invitation.getTeam().getProjects().stream()
-                .findFirst().map(p -> String.valueOf(p.getId())).orElse("");
+        String projectName = project != null ? project.getName() : "your project";
+        String projectId = project != null && project.getId() != null ? String.valueOf(project.getId()) : "";
 
         String message = joinerName + " accepted your invitation and joined project \""
                 + projectName + "\"";

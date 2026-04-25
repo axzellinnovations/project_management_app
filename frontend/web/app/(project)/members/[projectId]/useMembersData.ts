@@ -156,7 +156,17 @@ export function useMembersData(projectId: string) {
 
   // Real-time sync via STOMP
   const handleRoleChangedLive = useCallback((userId: number, newRole: string) => {
-    setMembers(prev => prev.map(m => m.user.userId === userId ? { ...m, role: newRole } : m));
+    setMembers(prev => {
+      let changed = false;
+      const next = prev.map(member => {
+        if (member.user.userId !== userId || member.role === newRole) {
+          return member;
+        }
+        changed = true;
+        return { ...member, role: newRole };
+      });
+      return changed ? next : prev;
+    });
   }, []);
 
   const handleMemberRemovedLive = useCallback((userId: number) => {
@@ -249,7 +259,7 @@ export function useMembersData(projectId: string) {
 
   const getAvailableOptions = useCallback(() => {
     if (currentUserRole?.toUpperCase() === "ADMIN") return ["MEMBER", "VIEWER"];
-    return ["OWNER", "ADMIN", "MEMBER", "VIEWER"];
+    return ["ADMIN", "MEMBER", "VIEWER"];
   }, [currentUserRole]);
 
   const resolveProfilePicUrl = useCallback(
