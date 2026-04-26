@@ -1,3 +1,4 @@
+// JPA repository for TeamMember; provides membership lookups used by both permission checks and the members page.
 package com.planora.backend.repository;
 
 import java.util.List;
@@ -14,23 +15,29 @@ import com.planora.backend.model.TeamMember;
 public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
 
     // Find a specific user in a team (used for permission checks)
-    @EntityGraph(attributePaths = {"user", "team"})
+    @EntityGraph(attributePaths = { "user", "team" })
     Optional<TeamMember> findByTeamIdAndUserUserId(Long teamId, Long userId);
 
-    @EntityGraph(attributePaths = {"team.owner", "team", "user"})
+    // Fetches all teams a user belongs to; loads owner details to support the team dashboard.
+    @EntityGraph(attributePaths = { "team.owner", "team", "user" })
     List<TeamMember> findByUserUserId(Long currentUserId);
+
     // Get all members of a team
-    @EntityGraph(attributePaths = {"user"})
+    @EntityGraph(attributePaths = { "user" })
     List<TeamMember> findByTeamId(Long teamId);
 
-    @EntityGraph(attributePaths = {"user"})
+    // Bulk-fetches members across multiple teams; used to resolve display info for cross-project task lists.
+    @EntityGraph(attributePaths = { "user" })
     List<TeamMember> findByTeamIdIn(Set<Long> teamIds);
 
-    @EntityGraph(attributePaths = {"user", "team"})
+    // Resolves which teams a user is part of from a given set; powers the N+1-safe bulk permission check.
+    @EntityGraph(attributePaths = { "user", "team" })
     List<TeamMember> findByTeamIdInAndUserUserId(Set<Long> teamIds, Long userId);
 
-    @EntityGraph(attributePaths = {"user", "team"})
+    // Fetches members of a team filtered by a set of user IDs; used to validate bulk-invite targets.
+    @EntityGraph(attributePaths = { "user", "team" })
     List<TeamMember> findByTeamIdAndUserUserIdIn(Long teamId, java.util.Collection<Long> userIds);
 
+    // Retrieves all OWNER/ADMIN members of a team; used when broadcasting admin-only notifications.
     List<TeamMember> findByTeamIdAndRoleIn(Long teamId, Set<com.planora.backend.model.TeamRole> roles);
 }

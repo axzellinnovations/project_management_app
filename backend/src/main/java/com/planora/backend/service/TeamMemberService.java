@@ -1,3 +1,4 @@
+// Service layer for all team membership operations: adding, removing, role changes, and permission enforcement.
 package com.planora.backend.service;
 
 import java.util.ArrayList;
@@ -20,7 +21,7 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class TeamMemberService {
-    // Change member role with owner/admin permission logic
+        // Change member role with owner/admin permission logic
         @Transactional
         public TeamMember changeMemberRoleWithPermissions(
                         Long teamId,
@@ -29,22 +30,23 @@ public class TeamMemberService {
                         Long currentUserId,
                         Long projectId,
                         String projectName,
-                        Long projectOwnerUserId
-        ) {
-        enforceCreatorOnlyOwnerRole(teamId, projectOwnerUserId);
+                        Long projectOwnerUserId) {
+                enforceCreatorOnlyOwnerRole(teamId, projectOwnerUserId);
 
-        TeamMember currentMember = validateMembership(teamId, currentUserId);
-        TeamMember targetMember = teamMemberRepository
-                .findByTeamIdAndUserUserId(teamId, targetUserId)
-                .orElseThrow(() -> new RuntimeException("User is not a member of this team"));
+                TeamMember currentMember = validateMembership(teamId, currentUserId);
+                TeamMember targetMember = teamMemberRepository
+                                .findByTeamIdAndUserUserId(teamId, targetUserId)
+                                .orElseThrow(() -> new RuntimeException("User is not a member of this team"));
 
-        TeamRole newRole;
-        try {
-            newRole = TeamRole.valueOf(newRoleStr.toUpperCase());
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid role");
-        }
+                TeamRole newRole;
+                // Reject the request if the incoming role string is not a valid TeamRole value.
+                try {
+                        newRole = TeamRole.valueOf(newRoleStr.toUpperCase());
+                } catch (Exception e) {
+                        throw new IllegalArgumentException("Invalid role");
+                }
 
+                // Enforce that only the project creator can hold (or be assigned) the OWNER role.
                 if (newRole == TeamRole.OWNER && !targetUserId.equals(projectOwnerUserId)) {
                         throw new AccessDeniedException("Only the project creator can be assigned OWNER role");
                 }
@@ -52,25 +54,25 @@ public class TeamMemberService {
                         throw new AccessDeniedException("Project creator must remain OWNER");
                 }
 
-        if (currentMember.getRole() == TeamRole.OWNER) {
-            // Owner can change anyone's role (except their own)
-            if (targetMember.getUser().getUserId().equals(currentUserId)) {
-                throw new IllegalArgumentException("Owner cannot change their own role");
-            }
-        } else if (currentMember.getRole() == TeamRole.ADMIN) {
-            // Admin can only change MEMBER or VIEWER, and not promote to OWNER or ADMIN
-            if (targetMember.getRole() == TeamRole.OWNER || targetMember.getRole() == TeamRole.ADMIN) {
-                throw new AccessDeniedException("Admin can only change roles of MEMBER or VIEWER");
-            }
-            if (newRole == TeamRole.OWNER || newRole == TeamRole.ADMIN) {
-                throw new AccessDeniedException("Admin cannot promote to OWNER or ADMIN");
-            }
-        } else {
-            throw new AccessDeniedException("Only OWNER or ADMIN can change roles");
-        }
+                if (currentMember.getRole() == TeamRole.OWNER) {
+                        // Owner can change anyone's role (except their own)
+                        if (targetMember.getUser().getUserId().equals(currentUserId)) {
+                                throw new IllegalArgumentException("Owner cannot change their own role");
+                        }
+                } else if (currentMember.getRole() == TeamRole.ADMIN) {
+                        // Admin can only change MEMBER or VIEWER, and not promote to OWNER or ADMIN
+                        if (targetMember.getRole() == TeamRole.OWNER || targetMember.getRole() == TeamRole.ADMIN) {
+                                throw new AccessDeniedException("Admin can only change roles of MEMBER or VIEWER");
+                        }
+                        if (newRole == TeamRole.OWNER || newRole == TeamRole.ADMIN) {
+                                throw new AccessDeniedException("Admin cannot promote to OWNER or ADMIN");
+                        }
+                } else {
+                        throw new AccessDeniedException("Only OWNER or ADMIN can change roles");
+                }
 
                 TeamRole oldRole = targetMember.getRole();
-        targetMember.setRole(newRole);
+                targetMember.setRole(newRole);
                 TeamMember updated = teamMemberRepository.save(targetMember);
 
                 if (oldRole != newRole) {
@@ -82,22 +84,27 @@ public class TeamMemberService {
                         if (!targetUserId.equals(currentUserId)) {
                                 String targetMessage = actorName + " changed your role to " + newRole.name()
                                                 + " in project \"" + resolvedProjectName + "\"";
-                                notificationService.createNotification(targetMember.getUser(), targetMessage, membersLink);
+                                notificationService.createNotification(targetMember.getUser(), targetMessage,
+                                                membersLink);
                         }
 
                         String adminMessage = actorName + " changed " + targetName + "'s role from "
                                         + oldRole.name() + " to " + newRole.name() + " in project \""
                                         + resolvedProjectName + "\"";
 
+                        // Notify other OWNER/ADMIN members (excluding the actor and the affected user) about the change.
                         teamMemberRepository.findByTeamId(teamId).stream()
-                                        .filter(member -> member.getRole() == TeamRole.OWNER || member.getRole() == TeamRole.ADMIN)
+                                        .filter(member -> member.getRole() == TeamRole.OWNER
+                                                        || member.getRole() == TeamRole.ADMIN)
                                         .filter(member -> !member.getUser().getUserId().equals(currentUserId))
                                         .filter(member -> !member.getUser().getUserId().equals(targetUserId))
-                                        .forEach(member -> notificationService.createNotification(member.getUser(), adminMessage, membersLink));
+                                        .forEach(member -> notificationService.createNotification(member.getUser(),
+                                                        adminMessage, membersLink));
                 }
 
                 return updated;
-    }
+        }
+
         // =====================================================
         // HELPER : VALIDATE OWNER OR ADMIN (STRICT)
         // =====================================================
@@ -239,11 +246,14 @@ public class TeamMemberService {
                                 + resolvedProjectName + "\"";
 
                 teamMemberRepository.findByTeamId(teamId).stream()
-                                .filter(member -> member.getRole() == TeamRole.OWNER || member.getRole() == TeamRole.ADMIN)
+                                .filter(member -> member.getRole() == TeamRole.OWNER
+                                                || member.getRole() == TeamRole.ADMIN)
                                 .filter(member -> !member.getUser().getUserId().equals(currentUserId))
-                                .forEach(member -> notificationService.createNotification(member.getUser(), adminMessage, membersLink));
+                                .forEach(member -> notificationService.createNotification(member.getUser(),
+                                                adminMessage, membersLink));
         }
 
+        // Returns a safe project name fallback to avoid exposing null or blank values in notification messages.
         private String resolveProjectName(String projectName) {
                 if (projectName == null || projectName.isBlank()) {
                         return "your project";
@@ -251,6 +261,7 @@ public class TeamMemberService {
                 return projectName;
         }
 
+        // Builds the deep-link used in notifications; falls back to "/members" when no project ID is available.
         private String buildMembersLink(Long projectId) {
                 if (projectId == null) {
                         return "/members";
@@ -258,6 +269,7 @@ public class TeamMemberService {
                 return "/members/" + projectId;
         }
 
+        // Resolves the best available display name for a user, prioritising fullName → username → email.
         private String resolveDisplayName(User user) {
                 if (user == null) {
                         return "A team member";
@@ -298,6 +310,11 @@ public class TeamMemberService {
                 return member;
         }
 
+        // =====================================================
+        // ENFORCE CREATOR-ONLY OWNER ROLE
+        // Ensures exactly one OWNER exists (the project creator);
+        // demotes any non-creator who was previously marked OWNER.
+        // =====================================================
         @Transactional
         public void enforceCreatorOnlyOwnerRole(Long teamId, Long projectOwnerUserId) {
                 if (teamId == null || projectOwnerUserId == null) {
