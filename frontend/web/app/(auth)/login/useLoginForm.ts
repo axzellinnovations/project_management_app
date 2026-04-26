@@ -42,6 +42,17 @@ export function useLoginForm() {
     setIsLoading(true);
     setError('');
 
+    // This regex is a basic check for the presence of "@" and "." in the right order, 
+    // but it doesn't guarantee the email is deliverable or that the user has access to it.
+    // This regex checks for text + @ + text + . + text
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address.');
+      setIsLoading(false);
+      return;
+    }
+    
+
     try {
       // API CONTRACT: Send credentials to Spring Boot.
       const response = await api.post('/api/auth/login', {

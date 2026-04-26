@@ -31,6 +31,7 @@ interface CollaborationUser { name: string; color: string; }
 interface EditorProps {
   content: string;
   onUpdate: (html: string) => void;
+  onImmediateUpdate?: (html: string) => void;
   editable?: boolean;
   ydoc?: Y.Doc;
   collaborationUser?: CollaborationUser;
@@ -64,7 +65,7 @@ function Divider() {
   return <div className="w-px h-5 bg-gray-200 mx-1 flex-shrink-0" />;
 }
 
-export default function Editor({ content, onUpdate, editable = true, ydoc, collaborationUser: _collaborationUser }: EditorProps) {
+export default function Editor({ content, onUpdate, onImmediateUpdate, editable = true, ydoc, collaborationUser: _collaborationUser }: EditorProps) {
   const [isMounted, setIsMounted] = useState(false);
 
   // 800ms debounce avoids a save API call on every keystroke while still feeling responsive
@@ -85,8 +86,8 @@ export default function Editor({ content, onUpdate, editable = true, ydoc, colla
       // (with custom config) are the sole registered instances.
       link: false,
       underline: false,
-      // Yjs maintains its own undo/redo stack; keeping StarterKit's history alongside it causes conflicts
-      ...(ydoc ? { history: false } : {}),
+      // TipTap v3 uses `undoRedo` (not `history`); Yjs manages its own undo stack via Collaboration
+      ...(ydoc ? { history: false, undoRedo: false } : {}),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any),
     Placeholder.configure({ placeholder: "Type '/' for commands, or start writing..." }),
@@ -110,7 +111,11 @@ export default function Editor({ content, onUpdate, editable = true, ydoc, colla
     extensions,
     content,
     editable,
-    onUpdate: ({ editor }) => { handleUpdate(editor.getHTML()); },
+    onUpdate: ({ editor }) => {
+      const html = editor.getHTML();
+      onImmediateUpdate?.(html);
+      handleUpdate(html);
+    },
     editorProps: {
       attributes: {
         class: 'prose prose-gray prose-base focus:outline-none max-w-none min-h-[400px] leading-relaxed',
@@ -118,10 +123,14 @@ export default function Editor({ content, onUpdate, editable = true, ydoc, colla
     },
   });
 
-  // Sync content on external changes (e.g. file import) — emitUpdate:false prevents the change from
-  // triggering the debounced save, which would immediately overwrite the just-imported content
+  // Sync content on external changes (e.g. file import or initial load when ydoc wasn't ready yet).
+  // We skip when the editor is focused (user is actively typing) and when content is truly identical.
+  // With Collaboration, getHTML() on an empty Yjs doc returns '<p></p>' so we treat that as empty too.
   useEffect(() => {
-    if (editor && !editor.isFocused && content !== editor.getHTML()) {
+    if (!editor || editor.isFocused || !content) return;
+    const editorHTML = editor.getHTML();
+    const editorIsEmpty = editorHTML === '<p></p>' || editorHTML === '';
+    if (editorIsEmpty || content !== editorHTML) {
       editor.commands.setContent(content, { emitUpdate: false });
     }
   }, [content, editor]);

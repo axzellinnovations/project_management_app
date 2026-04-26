@@ -1,13 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { usePageContent } from './hooks/usePageContent';
 import TurndownService from 'turndown';
 import { marked } from 'marked';
-import * as Y from 'yjs';
-import { WebsocketProvider } from 'y-websocket';
-import { getUserFromToken } from '@/lib/auth';
 
 export function usePageEditor() {
   const router = useRouter();
@@ -34,31 +31,15 @@ export function usePageEditor() {
   );
   const [showHistory, setShowHistory] = useState(false);
   const [showDocSidebar, setShowDocSidebar] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const ydocRef = useRef<Y.Doc | null>(null);
-  const providerRef = useRef<WebsocketProvider | null>(null);
-  const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
 
-  // Yjs collaborative editing setup
-  useEffect(() => {
-    if (!pageId || pageId === 'new') return;
-    const doc = new Y.Doc();
-    ydocRef.current = doc;
-    setYdoc(doc); // eslint-disable-line react-hooks/set-state-in-effect
-    // localhost uses plain ws:// because TLS certificates aren't available in dev; prod uses wss://
-    const wsUrl = (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
-      ? `wss://${window.location.host}/yjs`
-      : 'ws://localhost:8080/yjs';
-    const provider = new WebsocketProvider(wsUrl, `page-${pageId}`, doc);
-    providerRef.current = provider;
-    return () => {
-      provider.destroy();
-      doc.destroy();
-      ydocRef.current = null;
-      providerRef.current = null;
-      setYdoc(null);
-    };
-  }, [pageId]);
+  // Tracks the latest editor HTML without waiting for the 800ms debounce.
+  // Used by handleManualCreate so Publish always captures what the user typed.
+  const latestContentRef = useRef<string>('');
+  const setLatestContent = useCallback((html: string) => {
+    latestContentRef.current = html;
+  }, []);
 
   const handleUpdateContent = useCallback(async (htmlContent: string) => {
     if (!selectedPage || !projectId) return;
@@ -108,8 +89,11 @@ export function usePageEditor() {
   const handleManualCreate = async () => {
     if (!selectedPage || !projectId) return;
     setSaveStatus('saving');
+    // Use latestContentRef to capture whatever is in the editor right now,
+    // even if the 800ms debounce hasn't fired yet.
+    const content = latestContentRef.current || selectedPage.content || '';
     try {
-      const newPage = await createPage(title, selectedPage.content || '');
+      const newPage = await createPage(title, content);
       setSaveStatus('saved');
       // replace() instead of push() so the Back button skips the blank draft and returns to the page list
       router.replace(projectId ? `/pages/${newPage.id}?projectId=${projectId}` : `/pages/${newPage.id}`);
@@ -119,12 +103,18 @@ export function usePageEditor() {
     }
   };
 
-  const handleDeletePage = async () => {
+  const handleDeletePage = () => {
     if (isDraft) {
       router.push(projectId ? `/pages?projectId=${projectId}` : '/pages');
       return;
     }
-    if (!selectedPage || !confirm('Are you sure you want to delete this document?')) return;
+    if (!selectedPage) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedPage) return;
+    setShowDeleteConfirm(false);
     try {
       await deletePage(selectedPage.id);
       router.push(projectId ? `/pages?projectId=${projectId}` : '/pages');
@@ -164,16 +154,6 @@ export function usePageEditor() {
     URL.revokeObjectURL(url);
   };
 
-  // useMemo avoids decoding the JWT on every render; the token doesn't change within a session
-  const collaborationUser = useMemo(() => {
-    const u = getUserFromToken();
-    if (!u) return undefined;
-    // Deterministic color by userId ensures the same user always gets the same cursor color
-    const colors = ['#f97316', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
-    const color = colors[(u.userId ?? 0) % colors.length];
-    return { name: u.fullName ?? u.username ?? u.email ?? 'Anonymous', color };
-  }, []);
-
   return {
     pageId,
     isDraft,
@@ -190,11 +170,12 @@ export function usePageEditor() {
     error,
     searchQuery, setSearchQuery,
     handleUpdateContent,
+    setLatestContent,
     handleManualCreate,
     handleDeletePage,
+    handleConfirmDelete,
+    showDeleteConfirm, setShowDeleteConfirm,
     handleFileImport,
     handleExport,
-    ydoc,
-    collaborationUser,
   };
 }

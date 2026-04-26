@@ -53,6 +53,24 @@ export function useRegisterForm() {
       return;
     }
 
+    // Enforce a minimum strength requirement to encourage better password hygiene. 
+    // The API will still enforce its own rules and return an error if not met, but this gives users faster feedback.
+    if (strength < 4) {
+    setError('You must choose a Strong password.');
+    setIsLoading(false);
+    return;
+    }
+
+    // This regex is a basic check for the presence of "@" and "." in the right order, 
+    // but it doesn't guarantee the email is deliverable or that the user has access to it.
+    // This regex checks for text + @ + text + . + text
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       await api.post('/api/auth/register', {
         username, fullName, email: email.toLowerCase(), password,

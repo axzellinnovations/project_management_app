@@ -27,6 +27,7 @@ const nextConfig = {
       proxy('dms'),
       proxy('milestones'),
       proxy('user'),
+      proxy('pages'),
     ];
   },
   images: {
