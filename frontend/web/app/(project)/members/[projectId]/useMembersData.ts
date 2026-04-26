@@ -324,8 +324,9 @@ export function useMembersData(projectId: string) {
       setShowModal(false);
       const pendingData = await membersApi.fetchPendingInvites(projectId);
       setPending(pendingData as unknown as PendingInvite[]);
-    } catch (err: any) {
-      setInviteError(err?.response?.data?.message || "Failed to send invite");
+    } catch (err) {
+      const error = err as { response?: { data?: { message?: string } } };
+      setInviteError(error?.response?.data?.message || "Failed to send invite");
     } finally {
       setInviteLoading(false);
     }
