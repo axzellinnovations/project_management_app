@@ -1,4 +1,4 @@
-import type { ProjectSetupConfig } from './ProjectSetupPage';
+import type { ProjectSetupConfig } from './types';
 
 const kanbanConfig: ProjectSetupConfig = {
     projectType: 'KANBAN',

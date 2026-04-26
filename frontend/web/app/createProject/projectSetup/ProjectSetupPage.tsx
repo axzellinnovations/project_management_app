@@ -3,19 +3,10 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
 import api from '@/lib/axios';
+import type { ProjectSetupConfig } from './types';
 
 type TeamOption = 'NEW' | 'EXISTING';
-export type ProjectType = 'AGILE' | 'KANBAN';
-
-export type ProjectSetupConfig = {
-    projectType: ProjectType;
-    methodologyName: string;
-    projectNamePlaceholder: string;
-    projectKeyPlaceholder: string;
-    methodologyIcon: ReactNode;
-};
 
 // Shared project-creation screen used by both Agile and Kanban flows.
 export default function ProjectSetupPage({
