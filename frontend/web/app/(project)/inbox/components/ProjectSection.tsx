@@ -4,8 +4,6 @@ import type { ChatInboxActivity, ChatInboxProjectGroup } from '@/services/chat-s
 import { ACTIVITY_PREVIEW_COUNT } from '../constants';
 import { ActivityRow } from './ActivityRow';
 
-import { ActivityRow } from './ActivityRow';
-
 // =====================================================
 // PROJECT SECTION COMPONENT
 // =====================================================
