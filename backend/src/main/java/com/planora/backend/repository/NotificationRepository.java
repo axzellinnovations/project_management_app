@@ -1,3 +1,4 @@
+// Repository interface for managing Notification entity persistence and querying.
 package com.planora.backend.repository;
 
 import com.planora.backend.model.Notification;
@@ -9,7 +10,11 @@ import java.util.List;
 
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
+
+    // Retrieves all notifications for a user ordered by newest first.
     List<Notification> findByRecipientUserIdOrderByCreatedAtDesc(Long userId);
+
+    // Counts how many unread notifications a user has.
     long countByRecipientUserIdAndIsReadFalse(Long userId);
 
     /**

@@ -1,3 +1,4 @@
+// Entity representing a system notification sent to a user, containing a message and a deep-link.
 package com.planora.backend.model;
 
 import jakarta.persistence.*;

@@ -1,3 +1,4 @@
+// Scheduler component responsible for triggering the daily task due date reminders.
 package com.planora.backend.service;
 
 import com.planora.backend.configuration.DueDateReminderProperties;
@@ -20,6 +21,7 @@ public class DueDateReminderScheduler {
             cron = "${notifications.due-date-reminder.cron:0 0 12 * * *}",
             zone = "${notifications.due-date-reminder.timezone:UTC}"
     )
+    // Executes the due date reminder process according to the configured cron schedule.
     public void dispatchDueDateReminders() {
         if (!reminderProperties.isEnabled()) {
             logger.debug("DueDateReminderScheduler: reminders are disabled.");

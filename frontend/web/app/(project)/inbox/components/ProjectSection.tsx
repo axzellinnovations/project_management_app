@@ -1,8 +1,12 @@
+// UI component rendering a group of chat activities belonging to a single project.
 import { memo, useState } from 'react';
 import type { ChatInboxActivity, ChatInboxProjectGroup } from '@/services/chat-service';
 import { ACTIVITY_PREVIEW_COUNT } from '../constants';
 import { ActivityRow } from './ActivityRow';
 
+// =====================================================
+// PROJECT SECTION COMPONENT
+// =====================================================
 export const ProjectSection = memo(function ProjectSection({
   group,
   onActivityClick,
@@ -10,6 +14,7 @@ export const ProjectSection = memo(function ProjectSection({
   group: ChatInboxProjectGroup;
   onActivityClick: (activity: ChatInboxActivity) => void;
 }) {
+  // Controls whether to show all activities or just a preview subset to keep the initial list compact.
   const [showAllActivities, setShowAllActivities] = useState(false);
   const visibleActivities = showAllActivities
     ? group.activities

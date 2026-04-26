@@ -1,3 +1,4 @@
+// REST controller exposing endpoints for the chat inbox feature; delegates data aggregation to ChatInboxService.
 package com.planora.backend.controller;
 
 import org.springframework.http.ResponseEntity;
@@ -21,6 +22,9 @@ public class ChatInboxController {
 
     private final ChatInboxService chatInboxService;
 
+    // ---------------- GET INBOX ----------------
+
+    // Retrieves the aggregated chat inbox for the authenticated user, supporting optional pagination and filtering.
     @GetMapping("/inbox")
     public ResponseEntity<ChatInboxService.ChatInboxResponse> getInbox(
             @AuthenticationPrincipal(expression = "userId") Long userId,

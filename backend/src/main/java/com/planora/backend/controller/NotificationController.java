@@ -1,3 +1,4 @@
+// REST controller exposing endpoints for user notifications under /api/notifications; delegates logic to NotificationService.
 package com.planora.backend.controller;
 
 import java.util.List;
@@ -24,29 +25,40 @@ public class NotificationController {
     @Autowired
     private NotificationService notificationService;
 
+    // ---------------- GET NOTIFICATIONS ----------------
+
+    // Retrieves all notifications for the currently authenticated user.
     @GetMapping
     public ResponseEntity<List<NotificationResponseDTO>> getUserNotifications(@AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(notificationService.getUserNotifications(principal.getUserId()));
     }
 
+    // Retrieves the count of unread notifications for the user.
     @GetMapping("/unread-count")
     public ResponseEntity<?> getUnreadCount(@AuthenticationPrincipal UserPrincipal principal) {
         long count = notificationService.getUnreadCount(principal.getUserId());
         return ResponseEntity.ok(Map.of("count", count));
     }
 
+    // ---------------- UPDATE NOTIFICATION STATUS ----------------
+
+    // Marks a specific notification as read.
     @PatchMapping("/{id}/read")
     public ResponseEntity<?> markAsRead(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         notificationService.markAsRead(id, principal.getUserId());
         return ResponseEntity.ok().build();
     }
 
+    // Marks all notifications as read for the currently authenticated user.
     @PatchMapping("/read-all")
     public ResponseEntity<?> markAllAsRead(@AuthenticationPrincipal UserPrincipal principal) {
         notificationService.markAllAsRead(principal.getUserId());
         return ResponseEntity.ok().build();
     }
 
+    // ---------------- DELETE NOTIFICATION ----------------
+
+    // Deletes a specific notification by its ID.
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteNotification(@PathVariable Long id) {
         notificationService.deleteNotification(id);

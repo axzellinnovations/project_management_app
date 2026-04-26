@@ -1,3 +1,4 @@
+// Service layer for calculating and dispatching task due date and overdue notifications.
 package com.planora.backend.service;
 
 import com.planora.backend.configuration.DueDateReminderProperties;
@@ -28,6 +29,11 @@ public class TaskDueDateReminderService {
     private final NotificationService notificationService;
     private final DueDateReminderProperties reminderProperties;
 
+    // =====================================================
+    // TASK REMINDER DISPATCH
+    // =====================================================
+
+    // Orchestrates the process of finding eligible tasks and sending reminder notifications.
     @Transactional
     public ReminderRunStats sendDueDateReminders() {
         if (!reminderProperties.isEnabled()) {
@@ -93,6 +99,11 @@ public class TaskDueDateReminderService {
         return stats.build();
     }
 
+    // =====================================================
+    // MESSAGE & RECIPIENT RESOLUTION
+    // =====================================================
+
+    // Constructs the appropriate reminder message text based on the due date delta.
     private ReminderMessage buildReminderMessage(Task task, LocalDate today, List<Integer> dueSoonDays) {
         long dayDelta = ChronoUnit.DAYS.between(today, task.getDueDate());
         if (dayDelta > 0 && dueSoonDays.contains((int) dayDelta)) {
@@ -115,6 +126,7 @@ public class TaskDueDateReminderService {
         return null;
     }
 
+    // Determines if an overdue notification should be sent based on configured intervals.
     private boolean shouldSendOverdue(int daysOverdue) {
         int firstDay = reminderProperties.getOverdueFirstDay();
         int interval = reminderProperties.getOverdueIntervalDays();
@@ -124,10 +136,12 @@ public class TaskDueDateReminderService {
         return (daysOverdue - firstDay) % interval == 0;
     }
 
+    // Checks if a task is already completed.
     private boolean isDone(Task task) {
         return task.getStatus() != null && "DONE".equalsIgnoreCase(task.getStatus());
     }
 
+    // Gathers all unique users (owner, assignee, co-assignees) who should receive the reminder.
     private Map<Long, User> resolveRecipients(Task task) {
         Map<Long, User> recipients = new LinkedHashMap<>();
 
@@ -159,6 +173,11 @@ public class TaskDueDateReminderService {
         OVERDUE
     }
 
+    // =====================================================
+    // STATISTICS TRACKING
+    // =====================================================
+
+    // Container for recording the results of a reminder run.
     public static class ReminderRunStats {
         private final boolean disabled;
         private final int scannedTasks;

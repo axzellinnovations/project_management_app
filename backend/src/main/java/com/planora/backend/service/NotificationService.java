@@ -1,3 +1,4 @@
+// Service layer for notification operations: creation, deduplication, retrieval, and status updates.
 package com.planora.backend.service;
 
 import java.time.LocalDateTime;
@@ -25,6 +26,10 @@ public class NotificationService {
 
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
+
+    // =====================================================
+    // NOTIFICATION CREATION & DEDUPLICATION
+    // =====================================================
 
     /**
      * Unconditionally creates and persists a notification.
@@ -94,6 +99,11 @@ public class NotificationService {
         return true;
     }
 
+    // =====================================================
+    // NOTIFICATION RETRIEVAL & STATUS UPDATES
+    // =====================================================
+
+    // Retrieves all notifications for a specific user, ordered by creation date descending.
     public List<NotificationResponseDTO> getUserNotifications(Long userId) {
         return notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(userId)
                 .stream()
@@ -107,10 +117,12 @@ public class NotificationService {
                 .collect(Collectors.toList());
     }
 
+    // Gets the total count of unread notifications for a user.
     public long getUnreadCount(Long userId) {
         return notificationRepository.countByRecipientUserIdAndIsReadFalse(userId);
     }
 
+    // Marks a specific notification as read, ensuring the user owns the notification.
     @Transactional
     public void markAsRead(Long notificationId, Long userId) {
         Notification notification = notificationRepository.findById(notificationId)
@@ -124,6 +136,7 @@ public class NotificationService {
         notificationRepository.save(notification);
     }
 
+    // Marks all unread notifications as read for a specific user.
     @Transactional
     public void markAllAsRead(Long userId) {
         List<Notification> unread = notificationRepository.findByRecipientUserIdOrderByCreatedAtDesc(userId)
@@ -135,6 +148,7 @@ public class NotificationService {
         notificationRepository.saveAll(unread);
     }
 
+    // Deletes a notification by its ID.
     public void deleteNotification(Long id) {
         notificationRepository.deleteById(id);
     }

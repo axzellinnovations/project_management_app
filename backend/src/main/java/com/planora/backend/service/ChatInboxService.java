@@ -1,3 +1,4 @@
+// Service layer for aggregating and formatting chat inbox data across all projects, rooms, and direct messages.
 package com.planora.backend.service;
 
 import java.time.LocalDateTime;
@@ -27,6 +28,10 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ChatInboxService {
+
+    // =====================================================
+    // INBOX DATA TRANSFER OBJECTS (RECORDS)
+    // =====================================================
 
     public record ChatInboxActivity(
             Long projectId,
@@ -73,6 +78,11 @@ public class ChatInboxService {
     private final ChatMessageRepository chatMessageRepository;
     private final UserCacheService userCacheService;
 
+    // =====================================================
+    // INBOX AGGREGATION LOGIC
+    // =====================================================
+
+    // Aggregates all chat activities (team, room, direct) across all accessible projects for a user.
     public ChatInboxResponse getInbox(
             Long userId,
             String usernameOrEmail,
@@ -80,6 +90,7 @@ public class ChatInboxService {
             int activityLimit,
             String status
     ) {
+        // ---------------- 1. RESOLVE USER & PROJECTS ----------------
         var currentUser = userCacheService.resolveUserByEmailOrUsername(usernameOrEmail);
         if (currentUser == null) {
             return new ChatInboxResponse(List.of(), List.of(), 0, 0, 0);
@@ -99,6 +110,7 @@ public class ChatInboxService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
+        // ---------------- 2. PRE-FETCH METADATA ----------------
         // Pre-fetch team members for all projects to avoid N+1 inside the loop
         java.util.Set<Long> allTeamIds = projects.stream()
                 .map(ProjectResponseDTO::getTeamId)
@@ -133,6 +145,7 @@ public class ChatInboxService {
                     getVisibleRooms(roomsByProject.getOrDefault(projectId, List.of()), currentUser, usernameOrEmail, memberRoomIds));
         }
 
+        // ---------------- 3. BATCH LOOKUPS FOR LATEST MESSAGES & UNREAD COUNTS ----------------
         // Batch lookups keep inbox computation O(projects + rooms + directs), not O(messages).
         var currentUserAliases = resolveUserAliases(currentUser, usernameOrEmail);
         var allVisibleRoomIds = visibleRoomsByProject.values().stream()
@@ -196,6 +209,7 @@ public class ChatInboxService {
         List<ChatInboxProjectGroup> grouped = new ArrayList<>();
         List<ChatInboxActivity> allActivities = new ArrayList<>();
 
+        // ---------------- 4. AGGREGATE ACTIVITIES BY PROJECT ----------------
         for (ProjectResponseDTO project : projects) {
             Long projectId = project.getId();
             Long teamId = project.getTeamId();
@@ -291,6 +305,7 @@ public class ChatInboxService {
             allActivities.addAll(projectActivities);
         }
 
+        // ---------------- 5. SORT, FILTER & BUILD RESPONSE ----------------
         allActivities.sort(ACTIVITY_SORT);
         List<ChatInboxActivity> recentActivities = allActivities.stream()
                 .limit(Math.max(1, activityLimit))
@@ -306,6 +321,11 @@ public class ChatInboxService {
         );
     }
 
+    // =====================================================
+    // HELPER METHODS
+    // =====================================================
+
+    // Converts a TeamChatSummary into the standardized ChatInboxActivity format.
     private ChatInboxActivity toTeamActivity(
             Long projectId,
             String projectName,
@@ -333,6 +353,7 @@ public class ChatInboxService {
         );
     }
 
+    // Filters project rooms to only those the current user is a member of or has created.
     private List<ChatRoom> getVisibleRooms(
             List<ChatRoom> projectRooms,
             com.planora.backend.model.User currentUser,
@@ -361,6 +382,7 @@ public class ChatInboxService {
                 .toList();
     }
 
+    // Safely parses timestamp strings, falling back to LocalDateTime.MIN on failure.
     private static LocalDateTime parseTimestamp(String rawTimestamp) {
         if (rawTimestamp == null || rawTimestamp.isBlank()) {
             return LocalDateTime.MIN;
@@ -373,6 +395,7 @@ public class ChatInboxService {
         }
     }
 
+    // Gathers all known email/username aliases for a user to ensure consistent identity matching.
     private List<String> resolveUserAliases(com.planora.backend.model.User user, String fallbackName) {
         if (user == null) {
             return List.of(fallbackName != null ? fallbackName.toLowerCase() : "");

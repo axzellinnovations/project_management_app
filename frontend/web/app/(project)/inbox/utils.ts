@@ -1,5 +1,11 @@
+// Pure utility functions for formatting and transforming chat inbox data.
 import type { ChatInboxActivity, ChatInboxResponse } from '@/services/chat-service';
 
+// =====================================================
+// FORMATTING & UI HELPERS
+// =====================================================
+
+// Formats an ISO timestamp into a human-readable relative time string (e.g., "5m ago").
 export function formatRelativeTime(timestamp?: string | null): string {
   if (!timestamp) return 'No timestamp';
 
@@ -21,12 +27,14 @@ export function formatRelativeTime(timestamp?: string | null): string {
   return new Date(timestamp).toLocaleDateString();
 }
 
+// Returns a human-friendly display label for a chat activity based on its type.
 export function getChatTypeLabel(activity: ChatInboxActivity): string {
   if (activity.chatType === 'TEAM') return 'Team Chat';
   if (activity.chatType === 'ROOM') return activity.roomName || 'Channel';
   return activity.username || 'Direct Message';
 }
 
+// Constructs the URL path for navigating to a specific chat activity.
 export function buildChatHref(activity: ChatInboxActivity): string {
   const base = `/project/${activity.projectId}/chat`;
   if (activity.chatType === 'ROOM' && activity.roomId) {
@@ -38,6 +46,11 @@ export function buildChatHref(activity: ChatInboxActivity): string {
   return `${base}?view=team`;
 }
 
+// =====================================================
+// STATE MUTATION HELPERS (OPTIMISTIC UPDATES)
+// =====================================================
+
+// Returns a new state object with a specific activity marked as read, preventing mutation of the original state.
 export function markActivityAsRead(state: ChatInboxResponse | null, target: ChatInboxActivity): ChatInboxResponse | null {
   if (!state || !target.unread) return state;
 
@@ -88,6 +101,7 @@ export function markActivityAsRead(state: ChatInboxResponse | null, target: Chat
   };
 }
 
+// Returns a new state object with all activities marked as read.
 export function markAllActivitiesAsRead(state: ChatInboxResponse | null): ChatInboxResponse | null {
   if (!state) return state;
 

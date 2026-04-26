@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import com.planora.backend.model.TeamInvitation;
 
 public interface TeamInvitationRepository extends JpaRepository<TeamInvitation, Long> {
-    Optional<TeamInvitation> findByTeamIdAndEmail(Long teamId, String email);
+    java.util.List<TeamInvitation> findByTeamIdAndEmail(Long teamId, String email);
 
     @EntityGraph(attributePaths = {"team.projects"})
     Optional<TeamInvitation> findByToken(String token);

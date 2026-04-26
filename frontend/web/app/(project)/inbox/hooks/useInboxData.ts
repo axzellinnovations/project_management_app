@@ -1,3 +1,4 @@
+// Custom React hook managing the state, data fetching, caching, and interactions for the Chat Inbox.
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -16,6 +17,9 @@ import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/se
 
 const INBOX_CACHE_TTL_MS = 60_000;
 
+// =====================================================
+// USE INBOX DATA HOOK
+// =====================================================
 export function useInboxData() {
   const router = useRouter();
   const [data, setData] = useState<ChatInboxResponse | null>(null);
@@ -26,6 +30,7 @@ export function useInboxData() {
   const [visibleProjectCount, setVisibleProjectCount] = useState(PROJECT_BATCH_SIZE);
   const inboxCacheKey = buildSessionCacheKey('inbox', ['overview']);
 
+  // Refreshes inbox data from the server, optionally in the background (silent mode) without triggering loading states.
   const refreshInbox = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!silent) {
       setLoading(true);
@@ -55,6 +60,7 @@ export function useInboxData() {
     }
   }, [inboxCacheKey]);
 
+  // Restores cached inbox data on initial mount to provide instant perceived load times.
   useEffect(() => {
     let restored = false;
 
@@ -74,6 +80,7 @@ export function useInboxData() {
     void refreshInbox({ silent: restored });
   }, [inboxCacheKey, refreshInbox]);
 
+  // Listens for cross-tab or global events to invalidate and refresh the inbox.
   useEffect(() => {
     const handleInboxInvalidation = () => {
       void refreshInbox({ silent: true });
@@ -85,6 +92,7 @@ export function useInboxData() {
     };
   }, [refreshInbox]);
 
+  // Computes the project groups based on the active filter ('all' or 'unread').
   const groupedProjects = useMemo(() => {
     const projects = data?.projects || [];
     if (filter === 'all') return projects;
@@ -103,6 +111,7 @@ export function useInboxData() {
       .filter((project) => project.activities.length > 0);
   }, [data, filter]);
 
+  // Identifies the top few activities to aggressively prefetch their chat routes.
   const prefetchTargets = useMemo(() => {
     const targets: ChatInboxActivity[] = [];
     for (const group of groupedProjects) {
@@ -116,6 +125,7 @@ export function useInboxData() {
     return targets;
   }, [groupedProjects]);
 
+  // Schedules a low-priority background prefetch for the top activities to speed up navigation.
   useEffect(() => {
     if (prefetchTargets.length === 0) return;
 
@@ -149,6 +159,7 @@ export function useInboxData() {
     [data],
   );
 
+  // Calculates the total unread message count across all projects to show in the UI.
   const unreadCount = useMemo(
     () => allActivities.reduce((sum, activity) => sum + (activity.unread ? activity.unseenCount : 0), 0),
     [allActivities],
@@ -158,6 +169,7 @@ export function useInboxData() {
     setVisibleProjectCount(PROJECT_BATCH_SIZE);
   }, [filter, groupedProjects.length]);
 
+  // Limits the number of projects rendered at once to improve performance.
   const visibleProjects = useMemo(
     () => groupedProjects.slice(0, visibleProjectCount),
     [groupedProjects, visibleProjectCount],
@@ -165,6 +177,11 @@ export function useInboxData() {
 
   const hasMoreProjects = visibleProjects.length < groupedProjects.length;
 
+  // =====================================================
+  // ACTIONS: OPEN ACTIVITY & MARK READ
+  // =====================================================
+
+  // Optimistically marks a specific activity as read and navigates the user to its corresponding chat view.
   const openActivity = useCallback((activity: ChatInboxActivity) => {
     setData((current) => markActivityAsRead(current, activity));
 
@@ -185,6 +202,7 @@ export function useInboxData() {
     router.push(href);
   }, [router]);
 
+  // Optimistically marks all unread activities as read locally, then syncs with the server.
   const markAllAsRead = useCallback(async () => {
     if (unreadCount === 0 || isMarkingAllRead) return;
 
