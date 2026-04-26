@@ -63,6 +63,9 @@ export function InviteMemberModal({
                 <option key={role} value={role}>{role}</option>
               ))}
             </select>
+            {!inviteRole && (
+              <div className="text-red-500 text-xs mt-1">Please select a role.</div>
+            )}
           </div>
           {inviteError && <div className="text-red-600 text-sm">{inviteError}</div>}
           {inviteSuccess && <div className="text-green-600 text-sm">{inviteSuccess}</div>}

@@ -319,9 +319,13 @@ export function useMembersData(projectId: string) {
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    setInviteLoading(true);
     setInviteError("");
     setInviteSuccess("");
+    if (!inviteRole) {
+      setInviteError("Please select a role for the invitee.");
+      return;
+    }
+    setInviteLoading(true);
     try {
       await membersApi.sendInvite(projectId, inviteEmail, inviteRole.toUpperCase());
       setInviteSuccess("Invitation sent!");
@@ -330,9 +334,9 @@ export function useMembersData(projectId: string) {
       setShowModal(false);
       const pendingData = await membersApi.fetchPendingInvites(projectId);
       setPending(pendingData as unknown as PendingInvite[]);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      setInviteError(err?.response?.data?.message || "Failed to send invite");
+    } catch (err) {
+      const error = err as { response?: { data?: { message?: string } } };
+      setInviteError(error?.response?.data?.message || "Failed to send invite");
     } finally {
       setInviteLoading(false);
     }

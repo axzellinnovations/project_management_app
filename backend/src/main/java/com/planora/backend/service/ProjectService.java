@@ -1,7 +1,7 @@
 package com.planora.backend.service;
 
 import com.planora.backend.dto.ProjectDTO;
-import com.planora.backend.dto.ProjectResponseDTO; // Import your new DTO
+import com.planora.backend.dto.ProjectResponseDTO; 
 import com.planora.backend.dto.UpdateProjectDTO;
 import com.planora.backend.dto.ProjectMetricsDTO;
 import com.planora.backend.exception.ConflictException;
@@ -28,6 +28,7 @@ import org.springframework.data.domain.Pageable;
 
 @Service
 @RequiredArgsConstructor
+// Handles project creation, listing, updates, favorites, access tracking, and metrics.
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
@@ -39,11 +40,12 @@ public class ProjectService {
     private final SprintRepository sprintRepository;
     private final TaskRepository taskRepository;
 
+    // Checks whether a project key is already in use.
     public boolean checkKeyExists(String key) {
         return projectRepository.existsByProjectKey(key);
     }
 
-    // ---------------- CREATE ----------------
+    // Creates a project, links it to a team, and assigns the logged-in user as owner.
     @Transactional
     public ProjectResponseDTO createProject(ProjectDTO dto) {
         Project project = new Project();
@@ -52,9 +54,12 @@ public class ProjectService {
         project.setDescription(dto.getDescription());
         project.setType(dto.getType());
 
+        // The controller sets ownerId from the authenticated user.
         User owner = userRepository.findById(dto.getOwnerId())
                 .orElseThrow(() -> new RuntimeException("Owner not found"));
 
+        // Decide whether to use an existing team or create a new one.
+        // existing team
         Team team;
         if ("EXISTING".equalsIgnoreCase(dto.getTeamOption())) {
             if (dto.getTeamName() == null || dto.getTeamName().trim().isEmpty()) {
@@ -67,29 +72,30 @@ public class ProjectService {
                 throw new ConflictException("Project key already in use");
             }
 
-            // Verify user is in the team
+            // Make sure the user already belongs to that team.
             java.util.Optional<TeamMember> optMember = teamMemberRepository.findByTeamIdAndUserUserId(team.getId(),
                     owner.getUserId());
             if (optMember.isEmpty()) {
                 throw new RuntimeException("You are not a member of this team");
             }
-            // Ensure creator has OWNER role for the project context or upgrade them if
-            // missing, but typically we just verify membership.
-            // Let's upgrade them to OWNER or leave as is based on existing logic
-            // constraint:
+            // Promote the creator to OWNER if needed.
             TeamMember member = optMember.get();
             if (member.getRole() != TeamRole.OWNER) {
                 member.setRole(TeamRole.OWNER);
                 teamMemberRepository.save(member);
             }
 
+            //new team 
         } else if ("NEW".equalsIgnoreCase(dto.getTeamOption())) {
+            //team name required check
             if (dto.getTeamName() == null || dto.getTeamName().trim().isEmpty()) {
                 throw new RuntimeException("Team name is required for new team");
             }
+            //team name uniqueness check
             if (teamRepository.findByName(dto.getTeamName().trim()).isPresent()) {
                 throw new RuntimeException("Team name already in use");
             }
+
             team = new Team();
             team.setName(dto.getTeamName().trim());
             team.setOwner(owner);
@@ -99,7 +105,7 @@ public class ProjectService {
                 throw new ConflictException("Project key already in use");
             }
 
-            // Add owner as TeamMember
+            // Add the creator as the first member of the new team.
             TeamMember newMember = new TeamMember();
             newMember.setTeam(team);
             newMember.setUser(owner);
@@ -114,6 +120,7 @@ public class ProjectService {
 
         Project savedProject = projectRepository.save(project);
         if (ProjectType.AGILE.equals(savedProject.getType())) {
+            // Agile projects start with Sprint 1.
             Sprint initialSprint = new Sprint();
             initialSprint.setProject(savedProject);
             initialSprint.setName(savedProject.getProjectKey() + " Sprint 1");
@@ -123,7 +130,7 @@ public class ProjectService {
         return convertToResponseDTO(savedProject, dto.getOwnerId());
     }
 
-    // ---------------- READ ALL (FOR AUTH USER) ----------------
+    // Returns all projects the user can access, with optional filter and sorting.
     @Transactional(readOnly = true)
     public List<ProjectResponseDTO> getProjectsForUser(Long userId, String type, String sort, String order) {
         List<TeamMember> memberships = teamMemberRepository.findByUserUserId(userId);
@@ -163,7 +170,9 @@ public class ProjectService {
         if (!asc) {
             comparator = comparator.reversed();
         }
-        // Pre-fetch data to avoid N+1 queries
+
+        
+        // Load related data once to avoid repeated database calls.
         User userRef = userRepository.getReferenceById(userId);
 
         java.util.Map<Long, LocalDateTime> teamJoinedMap = memberships.stream()
@@ -185,6 +194,7 @@ public class ProjectService {
 
     @Transactional
     public void recordProjectAccess(Long projectId, Long userId) {
+        // Saves the latest access time so recent-project lists stay accurate.
         Project project = findProjectById(projectId);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -201,6 +211,7 @@ public class ProjectService {
 
     @Transactional
     public void toggleFavorite(Long projectId, Long userId) {
+        // Adds the project to favorites if missing, otherwise removes it.
         Project project = findProjectById(projectId);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -217,19 +228,19 @@ public class ProjectService {
                 );
     }
 
-    // ---------------- READ RECENT (TOP N FOR AUTH USER) ----------------
+    // Returns the most recently accessed projects for the user.
     @Transactional(readOnly = true)
     public List<ProjectResponseDTO> getRecentProjectsForUser(Long userId, int limit) {
-        // Get the teams the user currently belongs to
+        // Find all teams the user belongs to.
         List<TeamMember> memberships = teamMemberRepository.findByUserUserId(userId);
         List<Team> userTeams = memberships.stream().map(TeamMember::getTeam).collect(Collectors.toList());
 
         if (userTeams.isEmpty()) return java.util.Collections.emptyList();
 
-        // Fetch ALL candidate projects from user's teams
+        // Load all projects from those teams, then sort by recent access.
         List<Project> allMemberProjects = projectRepository.findByTeamIn(userTeams);
 
-        // Pre-fetch data to avoid N+1 queries
+        // Load related data once to keep the query count low.
         User userRef = userRepository.getReferenceById(userId);
 
         java.util.Map<Long, LocalDateTime> teamJoinedMap = memberships.stream()
@@ -241,7 +252,7 @@ public class ProjectService {
         java.util.Map<Long, LocalDateTime> favoriteMap = projectFavoriteRepository.findByUserOrderByCreatedAtDesc(userRef).stream()
             .collect(Collectors.toMap(f -> f.getProject().getId(), ProjectFavorite::getCreatedAt, (a, b) -> a));
 
-        // Map and sort by the effective lastAccessedAt field (which now includes joinedAt fallback)
+        // Sort by last access time, newest first.
         return allMemberProjects.stream()
                 .map(p -> convertToResponseDTO(p, userId, teamJoinedMap, accessMap, favoriteMap))
                 .sorted((d1, d2) -> {
@@ -253,13 +264,13 @@ public class ProjectService {
                 .collect(Collectors.toList());
     }
 
-    // ---------------- READ FAVORITES (FOR AUTH USER) ----------------
+    // Returns only the user's favorite projects that are still accessible.
     @Transactional(readOnly = true)
     public List<ProjectResponseDTO> getFavoriteProjectsForUser(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Only return favourites from projects the user is still a team member of
+        // Keep only favorites that belong to teams the user still has access to.
         List<TeamMember> memberships = teamMemberRepository.findByUserUserId(userId);
         List<Team> userTeams = memberships.stream().map(TeamMember::getTeam).collect(Collectors.toList());
         java.util.Set<Long> memberProjectIds = userTeams.isEmpty()
@@ -267,14 +278,14 @@ public class ProjectService {
                 : projectRepository.findByTeamIn(userTeams).stream()
                         .map(Project::getId).collect(java.util.stream.Collectors.toSet());
 
-        // Pre-fetch data to avoid N+1 queries
+        // Load access timestamps once for efficient DTO mapping.
         java.util.Map<Long, LocalDateTime> teamJoinedMap = memberships.stream()
             .collect(Collectors.toMap(m -> m.getTeam().getId(), TeamMember::getJoinedAt, (a, b) -> a));
             
         java.util.Map<Long, LocalDateTime> accessMap = projectAccessRepository.findByUser_UserIdOrderByLastAccessedAtDesc(userId, Pageable.unpaged()).stream()
             .collect(Collectors.toMap(a -> a.getProject().getId(), ProjectAccess::getLastAccessedAt, (a, b) -> a));
 
-        // Single query — reuse for both favoriteMap and the return stream
+        // Reuse the favorite list for both mapping and filtering.
         List<ProjectFavorite> favorites = projectFavoriteRepository.findByUserOrderByCreatedAtDesc(user);
         java.util.Map<Long, LocalDateTime> favoriteMap = favorites.stream()
             .collect(Collectors.toMap(f -> f.getProject().getId(), ProjectFavorite::getCreatedAt, (a, b) -> a));
@@ -285,7 +296,7 @@ public class ProjectService {
                 .collect(Collectors.toList());
     }
 
-    // ---------------- READ ALL (SYSTEM WIDE) ----------------
+    // Returns every project in the system.
     @Transactional(readOnly = true)
     public List<ProjectResponseDTO> getAllProjects() {
         return projectRepository.findAll()
@@ -294,21 +305,21 @@ public class ProjectService {
                 .collect(Collectors.toList());
     }
 
-    // ---------------- READ BY ID ----------------
+    // Returns a single project without user-specific flags.
     @Transactional(readOnly = true)
     public ProjectResponseDTO getProjectById(Long id) {
         Project project = findProjectById(id);
         return convertToResponseDTO(project, null);
     }
 
-    // ---------------- READ BY ID (with user context for isFavorite) ----------------
+    // Returns a single project and includes user-specific data like favorite state.
     @Transactional(readOnly = true)
     public ProjectResponseDTO getProjectByIdForUser(Long id, Long userId) {
         Project project = findProjectById(id);
         return convertToResponseDTO(project, userId);
     }
 
-    // ---------------- UPDATE ----------------
+    // Updates the fields provided in the request.
     @Transactional
     public ProjectResponseDTO updateProject(Long id, UpdateProjectDTO dto) {
         Project project = findProjectById(id);
@@ -324,7 +335,7 @@ public class ProjectService {
         return convertToResponseDTO(updatedProject, null);
     }
 
-    // ---------------- DELETE ----------------
+    // Deletes a project after owner permission is verified.
     @Transactional
     public void deleteProject(Long projectId, Long teamId, Long userId) {
         Project project = findProjectById(projectId);
@@ -336,17 +347,18 @@ public class ProjectService {
     // HELPERS
     // =====================================================
 
-    // Internal helper to get Entity (used by update/delete)
+    // Loads a project entity or throws a clear error if it does not exist.
     private Project findProjectById(Long id) {
         return projectRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Project not found with id: " + id));
     }
 
+    // Converts an entity into the response DTO used by the frontend.
     private ProjectResponseDTO convertToResponseDTO(Project project, Long userId) {
         return convertToResponseDTO(project, userId, null, null, null);
     }
 
-    // Mapping logic: Entity -> DTO with bulk maps to prevent N+1
+    // Builds the response DTO and fills in user-specific fields when available.
     private ProjectResponseDTO convertToResponseDTO(Project project, Long userId,
             java.util.Map<Long, LocalDateTime> teamJoinedMap,
             java.util.Map<Long, LocalDateTime> accessMap,
@@ -354,7 +366,7 @@ public class ProjectService {
         LocalDateTime lastAccessedAt = null;
         LocalDateTime favoriteMarkedAt = null;
         if (userId != null) {
-            // Determine access time from maps first, or fallback to repo (for single fetches)
+            // Prefer cached maps first, then fall back to direct repository calls.
             if (accessMap != null) {
                 lastAccessedAt = accessMap.get(project.getId());
                 if (lastAccessedAt == null && teamJoinedMap != null) {
@@ -398,25 +410,22 @@ public class ProjectService {
                 .build();
     }
 
-    // =====================================================
-    // METRICS
-    // =====================================================
-
+    // Returns project-level metrics such as task counts and sprint health.
     @Transactional(readOnly = true)
     public ProjectMetricsDTO getProjectMetrics(Long projectId) {
         Project project = findProjectById(projectId);
 
         List<Task> allTasks = taskRepository.findByProjectId(projectId);
 
-        // Count total tasks for the project
+        // Total tasks in the project.
         Long totalTasks = (long) allTasks.size();
 
-        // Count completed tasks (status = DONE)
+        // Tasks marked as done.
         Long completedTasks = allTasks.stream()
             .filter(task -> "DONE".equalsIgnoreCase(task.getStatus()))
             .count();
 
-        // Count overdue tasks (dueDate < today AND status != DONE)
+        // Tasks that are overdue and still not completed.
         LocalDate today = LocalDate.now();
         Long overdueTasks = allTasks.stream()
             .filter(task -> task.getDueDate() != null
@@ -424,10 +433,10 @@ public class ProjectService {
                 && !"DONE".equalsIgnoreCase(task.getStatus()))
                 .count();
 
-        // Count team members
+        // Number of members in the project team.
         Long memberCount = (long) teamMemberRepository.findByTeamId(project.getTeam().getId()).size();
 
-        // Get active sprint and calculate health
+        // Find the active sprint and estimate sprint health.
         Sprint activeSprint = sprintRepository.findByProject_Id(projectId).stream()
             .filter(sprint -> sprint.getStatus() == SprintStatus.ACTIVE)
             .findFirst()
@@ -455,6 +464,7 @@ public class ProjectService {
                 .build();
     }
 
+    // Only project owners can delete a project.
     private void validateOwnerPermission(Long teamId, Long userId) {
         TeamMember member = teamMemberRepository
                 .findByTeamIdAndUserUserId(teamId, userId)

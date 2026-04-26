@@ -2,63 +2,129 @@
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import api from '@/lib/axios';
+
+type StatusMessage = {
+    type: 'success' | 'error';
+    text: string;
+};
+
+type ProjectContext = {
+    projectId: string | null;
+    projectKey: string | null;
+};
+
+const EMAIL_REGEX = /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/;
+
+// Reads project context from URL first, then falls back to localStorage.
+function resolveProjectContext(params: URLSearchParams): ProjectContext {
+    const fromUrlId = params.get('projectId');
+    const fromUrlKey = params.get('projectKey');
+
+    if (typeof window !== 'undefined') {
+        if (fromUrlId) localStorage.setItem('currentProjectId', fromUrlId);
+        if (fromUrlKey) localStorage.setItem('currentProjectKey', fromUrlKey);
+    }
+
+    const projectId =
+        fromUrlId ||
+        (typeof window !== 'undefined' ? localStorage.getItem('currentProjectId') : null);
+
+    const projectKey =
+        fromUrlKey ||
+        (typeof window !== 'undefined' ? localStorage.getItem('currentProjectKey') : null);
+
+    return { projectId, projectKey };
+}
+
+function getApiErrorMessage(error: unknown): string {
+    const err = error as {
+        response?: {
+            data?: {
+                message?: string;
+            } | string;
+        };
+    };
+
+    return (
+        err?.response?.data && typeof err.response.data === 'object'
+            ? err.response.data.message || 'Failed to send invitation. Please try again.'
+            : typeof err?.response?.data === 'string'
+                ? err.response.data
+                : 'Failed to send invitation. Please try again.'
+    );
+}
+
+function StatusBanner({ message }: { message: StatusMessage }) {
+    const toneClass =
+        message.type === 'success'
+            ? 'bg-[#ECFDF3]/80 border-[#ABEFC6] text-[#067647]'
+            : 'bg-[#FEF3F2]/80 border-[#FECDCA] text-[#B42318]';
+
+    return (
+        <div className={`mb-6 rounded-[14px] p-4 border font-inter text-[14px] backdrop-blur-sm ${toneClass}`}>
+            {message.text}
+        </div>
+    );
+}
 
 export default function InviteMembersPage() {
     const searchParams = useSearchParams();
 
     const [email, setEmail] = useState('');
+    const [role, setRole] = useState<'ADMIN' | 'MEMBER' | 'VIEWER'>('MEMBER');
     const [projectId, setProjectId] = useState<string | null>(null);
     const [projectKey, setProjectKey] = useState<string | null>(null);
 
     const [loading, setLoading] = useState(false);
-    const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
 
-    // Get projectId and projectKey from URL or localStorage
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    // Keep project context in sync when URL query params change.
     useEffect(() => {
-        const fromUrlId = searchParams.get('projectId');
-        const fromUrlKey = searchParams.get('projectKey');
-
-        if (fromUrlId) {
-            setProjectId(fromUrlId);
-            if (typeof window !== 'undefined') localStorage.setItem('currentProjectId', fromUrlId);
-        }
-        if (fromUrlKey) {
-            setProjectKey(fromUrlKey);
-            if (typeof window !== 'undefined') localStorage.setItem('currentProjectKey', fromUrlKey);
-        }
-
-        if (!fromUrlId && typeof window !== 'undefined') {
-            const lsId = localStorage.getItem('currentProjectId');
-            if (lsId) setProjectId(lsId);
-        }
-        if (!fromUrlKey && typeof window !== 'undefined') {
-            const lsKey = localStorage.getItem('currentProjectKey');
-            if (lsKey) setProjectKey(lsKey);
-        }
+        const { projectId: resolvedProjectId, projectKey: resolvedProjectKey } = resolveProjectContext(searchParams);
+        setProjectId(resolvedProjectId);
+        setProjectKey(resolvedProjectKey);
     }, [searchParams]);
 
-    const canInvite = useMemo(() => {
-        return Boolean(projectId && email.trim());
-    }, [projectId, email]);
+    // Handle clicking outside of the dropdown to close it
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, []);
+
+    const canInvite = Boolean(projectId && email.trim());
 
     const handleInvite = async () => {
-        setMsg(null);
+        setStatusMessage(null);
 
         const trimmed = email.trim().toLowerCase();
+
+        // Validate form inputs before calling the API.
         if (!projectId) {
-            setMsg({ type: 'error', text: 'Project ID not found. Please open this page with ?projectId=... in URL.' });
+            setStatusMessage({
+                type: 'error',
+                text: 'Project ID not found. Please open this page with ?projectId=... in URL.'
+            });
             return;
         }
         if (!trimmed) {
-            setMsg({ type: 'error', text: 'Please enter an email address.' });
+            setStatusMessage({ type: 'error', text: 'Please enter an email address.' });
             return;
         }
-        // basic email check
-        if (!/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/.test(trimmed)) {
-            setMsg({ type: 'error', text: 'Please enter a valid email address.' });
+        if (!EMAIL_REGEX.test(trimmed)) {
+            setStatusMessage({ type: 'error', text: 'Please enter a valid email address.' });
             return;
         }
 
@@ -66,23 +132,20 @@ export default function InviteMembersPage() {
             setLoading(true);
             await api.post(`/api/projects/${projectId}/invitations`, {
                 email: trimmed,
+                role: role
             });
 
-            setMsg({ type: 'success', text: 'Invitation email sent successfully.' });
+            setStatusMessage({ type: 'success', text: 'Invitation email sent successfully.' });
             setEmail('');
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (err: any) {
-            const serverMsg =
-                err?.response?.data?.message ||
-                err?.response?.data ||
-                'Failed to send invitation. Please try again.';
-            setMsg({ type: 'error', text: String(serverMsg) });
+        } catch (error) {
+            setStatusMessage({ type: 'error', text: getApiErrorMessage(error) });
         } finally {
             setLoading(false);
         }
     };
 
     return (
+        // Page container with decorative background and centered invitation card.
         <div className="min-h-screen relative flex flex-col items-center justify-center py-10 px-4 overflow-hidden bg-[#F5F5F7] selection:bg-[#1D56D5] selection:text-white">
             {/* Ambient Background Orbs */}
             <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#3B82F6]/30 rounded-full blur-[120px] pointer-events-none" />
@@ -108,18 +171,9 @@ export default function InviteMembersPage() {
             <div className="relative z-10 w-full max-w-[800px] bg-white/60 backdrop-blur-2xl rounded-[24px] shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] border border-white/50 p-6 md:p-8">
 
                 {/* Status message */}
-                {msg && (
-                    <div
-                        className={`mb-6 rounded-[14px] p-4 border font-inter text-[14px] backdrop-blur-sm ${msg.type === 'success'
-                            ? 'bg-[#ECFDF3]/80 border-[#ABEFC6] text-[#067647]'
-                            : 'bg-[#FEF3F2]/80 border-[#FECDCA] text-[#B42318]'
-                            }`}
-                    >
-                        {msg.text}
-                    </div>
-                )}
+                {statusMessage && <StatusBanner message={statusMessage} />}
 
-                {/* Email Invite Section */}
+                {/* Email and Role Invite Section */}
                 <div className="flex flex-col sm:flex-row gap-4 mb-6">
                     <div className="flex-grow relative">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -135,6 +189,61 @@ export default function InviteMembersPage() {
                             placeholder="Enter email address"
                             className="w-full h-[44px] bg-white/50 border border-white/60 hover:border-[#D1D5DC] rounded-[14px] pl-12 pr-4 font-inter text-[15px] text-[#1D1D1F] placeholder:text-[#86868B] outline-none transition-all focus:bg-white focus:ring-4 focus:ring-[#1D56D5]/10 focus:border-[#1D56D5]"
                         />
+                    </div>
+
+                    <div className="relative min-w-[130px] sm:w-[150px]" ref={dropdownRef}>
+                        <button
+                            type="button"
+                            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                            className={`w-full h-[44px] flex items-center justify-between bg-white/50 border hover:border-[#D1D5DC] rounded-[14px] px-4 font-inter text-[15px] text-[#1D1D1F] outline-none transition-all ${isDropdownOpen ? 'bg-white border-[#1D56D5] ring-4 ring-[#1D56D5]/10' : 'border-white/60 focus:bg-white focus:ring-4 focus:ring-[#1D56D5]/10 focus:border-[#1D56D5]'}`}
+                        >
+                            <span className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${role === 'ADMIN' ? 'bg-[#1D56D5]' : role === 'MEMBER' ? 'bg-[#34C759]' : 'bg-[#FF9500]'}`}></div>
+                                {role === 'ADMIN' ? 'Admin' : role === 'MEMBER' ? 'Member' : 'Viewer'}
+                            </span>
+                            <svg className={`w-4 h-4 text-[#86868B] transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+
+                        {/* Dropdown Menu */}
+                        {isDropdownOpen && (
+                            <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white/90 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(31,38,135,0.07)] rounded-[14px] p-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                                <button
+                                    type="button"
+                                    onClick={() => { setRole('ADMIN'); setIsDropdownOpen(false); }}
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-[10px] text-[14px] font-inter transition-all ${role === 'ADMIN' ? 'bg-[#1D56D5]/10 text-[#1D56D5] font-medium' : 'text-[#1D1D1F] hover:bg-black/5'}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[#1D56D5]"></div>
+                                        Admin
+                                    </span>
+                                    {role === 'ADMIN' && <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setRole('MEMBER'); setIsDropdownOpen(false); }}
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-[10px] text-[14px] font-inter transition-all ${role === 'MEMBER' ? 'bg-[#34C759]/10 text-[#34C759] font-medium' : 'text-[#1D1D1F] hover:bg-black/5'}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[#34C759]"></div>
+                                        Member
+                                    </span>
+                                    {role === 'MEMBER' && <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setRole('VIEWER'); setIsDropdownOpen(false); }}
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-[10px] text-[14px] font-inter transition-all ${role === 'VIEWER' ? 'bg-[#FF9500]/10 text-[#FF9500] font-medium' : 'text-[#1D1D1F] hover:bg-black/5'}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[#FF9500]"></div>
+                                        Viewer
+                                    </span>
+                                    {role === 'VIEWER' && <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <button
@@ -174,10 +283,6 @@ export default function InviteMembersPage() {
                             </div>
                         </div>
                     </div>
-
-                    <p className="mt-5 pt-4 border-t border-white/40 font-inter text-[13px] text-[#86868B]">
-                        Default role for invited members: <span className="font-medium text-[#1D1D1F]">Member</span>
-                    </p>
                 </div>
 
                 {/* Footer Info */}
