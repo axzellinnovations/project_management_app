@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import api from '@/lib/axios';
 
@@ -74,11 +74,15 @@ export default function InviteMembersPage() {
     const searchParams = useSearchParams();
 
     const [email, setEmail] = useState('');
+    const [role, setRole] = useState<'ADMIN' | 'MEMBER' | 'VIEWER'>('MEMBER');
     const [projectId, setProjectId] = useState<string | null>(null);
     const [projectKey, setProjectKey] = useState<string | null>(null);
 
     const [loading, setLoading] = useState(false);
     const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
+
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Keep project context in sync when URL query params change.
     useEffect(() => {
@@ -86,6 +90,19 @@ export default function InviteMembersPage() {
         setProjectId(resolvedProjectId);
         setProjectKey(resolvedProjectKey);
     }, [searchParams]);
+
+    // Handle clicking outside of the dropdown to close it
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, []);
 
     const canInvite = Boolean(projectId && email.trim());
 
@@ -114,7 +131,8 @@ export default function InviteMembersPage() {
         try {
             setLoading(true);
             await api.post(`/api/projects/${projectId}/invitations`, {
-                email: trimmed
+                email: trimmed,
+                role: role
             });
 
             setStatusMessage({ type: 'success', text: 'Invitation email sent successfully.' });
@@ -155,7 +173,7 @@ export default function InviteMembersPage() {
                 {/* Status message */}
                 {statusMessage && <StatusBanner message={statusMessage} />}
 
-                {/* Email Invite Section */}
+                {/* Email and Role Invite Section */}
                 <div className="flex flex-col sm:flex-row gap-4 mb-6">
                     <div className="flex-grow relative">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -171,6 +189,61 @@ export default function InviteMembersPage() {
                             placeholder="Enter email address"
                             className="w-full h-[44px] bg-white/50 border border-white/60 hover:border-[#D1D5DC] rounded-[14px] pl-12 pr-4 font-inter text-[15px] text-[#1D1D1F] placeholder:text-[#86868B] outline-none transition-all focus:bg-white focus:ring-4 focus:ring-[#1D56D5]/10 focus:border-[#1D56D5]"
                         />
+                    </div>
+
+                    <div className="relative min-w-[130px] sm:w-[150px]" ref={dropdownRef}>
+                        <button
+                            type="button"
+                            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                            className={`w-full h-[44px] flex items-center justify-between bg-white/50 border hover:border-[#D1D5DC] rounded-[14px] px-4 font-inter text-[15px] text-[#1D1D1F] outline-none transition-all ${isDropdownOpen ? 'bg-white border-[#1D56D5] ring-4 ring-[#1D56D5]/10' : 'border-white/60 focus:bg-white focus:ring-4 focus:ring-[#1D56D5]/10 focus:border-[#1D56D5]'}`}
+                        >
+                            <span className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${role === 'ADMIN' ? 'bg-[#1D56D5]' : role === 'MEMBER' ? 'bg-[#34C759]' : 'bg-[#FF9500]'}`}></div>
+                                {role === 'ADMIN' ? 'Admin' : role === 'MEMBER' ? 'Member' : 'Viewer'}
+                            </span>
+                            <svg className={`w-4 h-4 text-[#86868B] transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+
+                        {/* Dropdown Menu */}
+                        {isDropdownOpen && (
+                            <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-white/90 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_rgba(31,38,135,0.07)] rounded-[14px] p-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                                <button
+                                    type="button"
+                                    onClick={() => { setRole('ADMIN'); setIsDropdownOpen(false); }}
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-[10px] text-[14px] font-inter transition-all ${role === 'ADMIN' ? 'bg-[#1D56D5]/10 text-[#1D56D5] font-medium' : 'text-[#1D1D1F] hover:bg-black/5'}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[#1D56D5]"></div>
+                                        Admin
+                                    </span>
+                                    {role === 'ADMIN' && <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setRole('MEMBER'); setIsDropdownOpen(false); }}
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-[10px] text-[14px] font-inter transition-all ${role === 'MEMBER' ? 'bg-[#34C759]/10 text-[#34C759] font-medium' : 'text-[#1D1D1F] hover:bg-black/5'}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[#34C759]"></div>
+                                        Member
+                                    </span>
+                                    {role === 'MEMBER' && <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setRole('VIEWER'); setIsDropdownOpen(false); }}
+                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-[10px] text-[14px] font-inter transition-all ${role === 'VIEWER' ? 'bg-[#FF9500]/10 text-[#FF9500] font-medium' : 'text-[#1D1D1F] hover:bg-black/5'}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[#FF9500]"></div>
+                                        Viewer
+                                    </span>
+                                    {role === 'VIEWER' && <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <button
@@ -210,10 +283,6 @@ export default function InviteMembersPage() {
                             </div>
                         </div>
                     </div>
-
-                    <p className="mt-5 pt-4 border-t border-white/40 font-inter text-[13px] text-[#86868B]">
-                        Default role for invited members: <span className="font-medium text-[#1D1D1F]">Member</span>
-                    </p>
                 </div>
 
                 {/* Footer Info */}
