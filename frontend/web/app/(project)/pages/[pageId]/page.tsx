@@ -3,7 +3,7 @@
 // because the content depends entirely on URL params that vary per request
 export const dynamic = 'force-dynamic';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import DocumentSidebar from '../components/DocumentSidebar';
 import Editor from '../components/Editor';
 import {
@@ -20,9 +20,9 @@ export default function PageDetailPage() {
     title, setTitle, showHistory, setShowHistory, historyMock,
     showDocSidebar, setShowDocSidebar, fileInputRef,
     filteredPages, error, searchQuery, setSearchQuery,
-    handleUpdateContent, handleManualCreate, handleDeletePage,
+    handleUpdateContent, setLatestContent, handleManualCreate, handleDeletePage,
+    handleConfirmDelete, showDeleteConfirm, setShowDeleteConfirm,
     handleFileImport, handleExport,
-    ydoc, collaborationUser,
   } = usePageEditor();
 
   // showMobileActions is local state because it's a purely visual toggle with no effect on data
@@ -224,8 +224,7 @@ export default function PageDetailPage() {
                 <Editor
                   content={selectedPage.content || ''}
                   onUpdate={handleUpdateContent}
-                  ydoc={ydoc ?? undefined}
-                  collaborationUser={collaborationUser}
+                  onImmediateUpdate={setLatestContent}
                 />
               </div>
 
@@ -278,6 +277,39 @@ export default function PageDetailPage() {
         <div className="fixed bottom-4 right-4 p-4 bg-red-50 border border-red-200 rounded-lg shadow-md z-50">
           <p className="text-sm text-red-600">{error}</p>
         </div>
+      )}
+
+      {showDeleteConfirm && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-50" onClick={() => setShowDeleteConfirm(false)} />
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[340px] bg-white rounded-2xl shadow-xl p-6 flex flex-col gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 size={18} className="text-red-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">Delete document?</p>
+                <p className="text-gray-500 text-sm mt-0.5">
+                  &ldquo;{title}&rdquo; will be permanently deleted and cannot be recovered.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
