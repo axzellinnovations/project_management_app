@@ -101,7 +101,7 @@ export default function SprintChart({ data }: Props) {
       <p className="text-[10px] text-[#B0B8C4] mb-4">{sprintStats.length} sprint{sprintStats.length > 1 ? 's' : ''} · click bar for details</p>
 
       {/* Completion rate chart */}
-      <ResponsiveContainer width="100%" height={180}>
+      <ResponsiveContainer width="100%" height={180} minWidth={0}>
         <BarChart data={chartData} margin={{ top: 10, right: 8, left: -12, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
           <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />

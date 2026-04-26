@@ -28,6 +28,8 @@ const nextConfig = {
       proxy('milestones'),
       proxy('user'),
       proxy('pages'),
+      proxy('scheduled-reports'),
+      proxy('reports'),
     ];
   },
   images: {
@@ -40,7 +42,7 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: '*.amazonaws.com',
+        hostname: '**.amazonaws.com',
         port: '',
         pathname: '/**',
       },

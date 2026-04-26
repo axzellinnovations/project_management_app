@@ -99,7 +99,7 @@ export default function WorkloadChart({ data, onMemberFilter, activeMember }: Pr
       </div>
 
       {/* Bar chart */}
-      <ResponsiveContainer width="100%" height={Math.max(200, memberStats.length * 40)}>
+      <ResponsiveContainer width="100%" height={Math.max(200, memberStats.length * 40)} minWidth={0}>
         <BarChart
           data={chartData}
           margin={{ top: 5, right: 16, left: -10, bottom: 5 }}
