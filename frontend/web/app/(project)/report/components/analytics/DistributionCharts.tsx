@@ -73,7 +73,7 @@ export function StatusChart({ data, activeStatus, onFilter }: StatusChartProps) 
       <div className="flex items-center gap-4">
         {/* Donut */}
         <div style={{ width: 140, height: 140, flexShrink: 0 }}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <PieChart>
               <Pie
                 data={chartData}
