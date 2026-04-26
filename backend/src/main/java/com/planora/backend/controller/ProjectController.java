@@ -19,9 +19,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ProjectController {
 
+    // Service layer handles all business rules and database-oriented operations.
     private final ProjectService projectService;
 
-    // ---------------- CREATE PROJECT ----------------
+
+    // Create a new project
+    // Flow: request DTO -> set owner from auth principal -> service -> 201 response.
     @PostMapping
     public ResponseEntity<ProjectResponseDTO> createProject(
             @Valid @RequestBody ProjectDTO projectDto,
@@ -32,22 +35,23 @@ public class ProjectController {
                 HttpStatus.CREATED);
     }
 
-    // ---------------- CHECK PROJECT KEY ----------------
+    // Check if the project key is available.
+    // Returns true when available and false when already used.
     @GetMapping("/check-key")
     public ResponseEntity<Boolean> checkProjectKey(@RequestParam String key) {
-        // Return true if available, false if in use
         boolean exists = projectService.checkKeyExists(key);
         return ResponseEntity.ok(!exists);
     }
 
-    // ---------------- GET PROJECT METRICS ----------------
+    // Get project-level metrics (task counts, completion, overdue details, etc.).
     @GetMapping("/{projectId}/metrics")
     public ResponseEntity<ProjectMetricsDTO> getProjectMetrics(
             @PathVariable Long projectId) {
         return ResponseEntity.ok(projectService.getProjectMetrics(projectId));
     }
 
-    // ---------------- READ PROJECTS (FOR AUTH USER) ----------------
+    // List all projects visible to the logged-in user.
+    // Optional query params support filter/sort/order.
     @GetMapping
     public ResponseEntity<List<ProjectResponseDTO>> getProjectsForUser(
             @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal,
@@ -59,7 +63,7 @@ public class ProjectController {
                 HttpStatus.OK);
     }
 
-    // ---------------- READ RECENT (FOR AUTH USER) ----------------
+    // Return recently accessed projects for the logged-in user.
     @GetMapping("/recent")
     public ResponseEntity<List<ProjectResponseDTO>> getRecentProjects(
             @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal,
@@ -67,14 +71,14 @@ public class ProjectController {
         return ResponseEntity.ok(projectService.getRecentProjectsForUser(principal.getUserId(), limit));
     }
 
-    // ---------------- READ FAVORITES (FOR AUTH USER) ----------------
+    // Get favorite projects for the logged-in user.
     @GetMapping("/favorites")
     public ResponseEntity<List<ProjectResponseDTO>> getFavoriteProjects(
             @AuthenticationPrincipal com.planora.backend.model.UserPrincipal principal) {
         return ResponseEntity.ok(projectService.getFavoriteProjectsForUser(principal.getUserId()));
     }
 
-    // ---------------- READ PROJECT BY ID ----------------
+    // Fetch a single project by id with user context for access and favorite state.
     @GetMapping("/{projectId}")
     public ResponseEntity<ProjectResponseDTO> getProjectById(
             @PathVariable Long projectId,
@@ -83,7 +87,8 @@ public class ProjectController {
                 projectService.getProjectByIdForUser(projectId, principal.getUserId()));
     }
 
-    // ---------------- UPDATE PROJECT ----------------
+    // Update editable project fields.
+    // Validation is applied on request payload before service execution.
     @PutMapping("/{projectId}")
     public ResponseEntity<ProjectResponseDTO> updateProject(
             @PathVariable Long projectId,
@@ -93,7 +98,7 @@ public class ProjectController {
                 HttpStatus.OK);
     }
 
-    // ---------------- RECORD PROJECT ACCESS ----------------
+    // Track project access time for recent-projects ordering.
     @PostMapping("/{projectId}/access")
     public ResponseEntity<Void> recordAccess(
             @PathVariable Long projectId,
@@ -102,6 +107,8 @@ public class ProjectController {
         return ResponseEntity.ok().build();
     }
 
+    // Toggle project favorite state for the logged-in user.
+    // If already favorite -> remove; otherwise -> add.
     @PostMapping("/{projectId}/favorite")
     public ResponseEntity<Void> toggleFavorite(
             @PathVariable Long projectId,
@@ -110,7 +117,8 @@ public class ProjectController {
         return ResponseEntity.ok().build();
     }
 
-    // ---------------- DELETE PROJECT (OWNER ONLY) ----------------
+    // Delete a project. Owner permission is validated in service layer.
+    // Returns 204 when deletion completes successfully.
     @DeleteMapping("/{projectId}/team/{teamId}")
     public ResponseEntity<Void> deleteProject(
             @PathVariable Long projectId,

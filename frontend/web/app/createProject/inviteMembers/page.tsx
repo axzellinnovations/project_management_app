@@ -2,9 +2,73 @@
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import api from '@/lib/axios';
+
+type StatusMessage = {
+    type: 'success' | 'error';
+    text: string;
+};
+
+type ProjectContext = {
+    projectId: string | null;
+    projectKey: string | null;
+};
+
+const EMAIL_REGEX = /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/;
+
+// Reads project context from URL first, then falls back to localStorage.
+function resolveProjectContext(params: URLSearchParams): ProjectContext {
+    const fromUrlId = params.get('projectId');
+    const fromUrlKey = params.get('projectKey');
+
+    if (typeof window !== 'undefined') {
+        if (fromUrlId) localStorage.setItem('currentProjectId', fromUrlId);
+        if (fromUrlKey) localStorage.setItem('currentProjectKey', fromUrlKey);
+    }
+
+    const projectId =
+        fromUrlId ||
+        (typeof window !== 'undefined' ? localStorage.getItem('currentProjectId') : null);
+
+    const projectKey =
+        fromUrlKey ||
+        (typeof window !== 'undefined' ? localStorage.getItem('currentProjectKey') : null);
+
+    return { projectId, projectKey };
+}
+
+function getApiErrorMessage(error: unknown): string {
+    const err = error as {
+        response?: {
+            data?: {
+                message?: string;
+            } | string;
+        };
+    };
+
+    return (
+        err?.response?.data && typeof err.response.data === 'object'
+            ? err.response.data.message || 'Failed to send invitation. Please try again.'
+            : typeof err?.response?.data === 'string'
+                ? err.response.data
+                : 'Failed to send invitation. Please try again.'
+    );
+}
+
+function StatusBanner({ message }: { message: StatusMessage }) {
+    const toneClass =
+        message.type === 'success'
+            ? 'bg-[#ECFDF3]/80 border-[#ABEFC6] text-[#067647]'
+            : 'bg-[#FEF3F2]/80 border-[#FECDCA] text-[#B42318]';
+
+    return (
+        <div className={`mb-6 rounded-[14px] p-4 border font-inter text-[14px] backdrop-blur-sm ${toneClass}`}>
+            {message.text}
+        </div>
+    );
+}
 
 export default function InviteMembersPage() {
     const searchParams = useSearchParams();
@@ -14,75 +78,56 @@ export default function InviteMembersPage() {
     const [projectKey, setProjectKey] = useState<string | null>(null);
 
     const [loading, setLoading] = useState(false);
-    const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null);
 
-    // Get projectId and projectKey from URL or localStorage
+    // Keep project context in sync when URL query params change.
     useEffect(() => {
-        const fromUrlId = searchParams.get('projectId');
-        const fromUrlKey = searchParams.get('projectKey');
-
-        if (fromUrlId) {
-            setProjectId(fromUrlId);
-            if (typeof window !== 'undefined') localStorage.setItem('currentProjectId', fromUrlId);
-        }
-        if (fromUrlKey) {
-            setProjectKey(fromUrlKey);
-            if (typeof window !== 'undefined') localStorage.setItem('currentProjectKey', fromUrlKey);
-        }
-
-        if (!fromUrlId && typeof window !== 'undefined') {
-            const lsId = localStorage.getItem('currentProjectId');
-            if (lsId) setProjectId(lsId);
-        }
-        if (!fromUrlKey && typeof window !== 'undefined') {
-            const lsKey = localStorage.getItem('currentProjectKey');
-            if (lsKey) setProjectKey(lsKey);
-        }
+        const { projectId: resolvedProjectId, projectKey: resolvedProjectKey } = resolveProjectContext(searchParams);
+        setProjectId(resolvedProjectId);
+        setProjectKey(resolvedProjectKey);
     }, [searchParams]);
 
-    const canInvite = useMemo(() => {
-        return Boolean(projectId && email.trim());
-    }, [projectId, email]);
+    const canInvite = Boolean(projectId && email.trim());
 
     const handleInvite = async () => {
-        setMsg(null);
+        setStatusMessage(null);
 
         const trimmed = email.trim().toLowerCase();
+
+        // Validate form inputs before calling the API.
         if (!projectId) {
-            setMsg({ type: 'error', text: 'Project ID not found. Please open this page with ?projectId=... in URL.' });
+            setStatusMessage({
+                type: 'error',
+                text: 'Project ID not found. Please open this page with ?projectId=... in URL.'
+            });
             return;
         }
         if (!trimmed) {
-            setMsg({ type: 'error', text: 'Please enter an email address.' });
+            setStatusMessage({ type: 'error', text: 'Please enter an email address.' });
             return;
         }
-        // basic email check
-        if (!/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/.test(trimmed)) {
-            setMsg({ type: 'error', text: 'Please enter a valid email address.' });
+        if (!EMAIL_REGEX.test(trimmed)) {
+            setStatusMessage({ type: 'error', text: 'Please enter a valid email address.' });
             return;
         }
 
         try {
             setLoading(true);
             await api.post(`/api/projects/${projectId}/invitations`, {
-                email: trimmed,
+                email: trimmed
             });
 
-            setMsg({ type: 'success', text: 'Invitation email sent successfully.' });
+            setStatusMessage({ type: 'success', text: 'Invitation email sent successfully.' });
             setEmail('');
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (err: any) {
-            const serverMsg =
-                err?.response?.data?.message ||
-                err?.response?.data ||
-                'Failed to send invitation. Please try again.';
-            setMsg({ type: 'error', text: String(serverMsg) });
+        } catch (error) {
+            setStatusMessage({ type: 'error', text: getApiErrorMessage(error) });
         } finally {
             setLoading(false);
         }
     };
 
     return (
+        // Page container with decorative background and centered invitation card.
         <div className="min-h-screen relative flex flex-col items-center justify-center py-10 px-4 overflow-hidden bg-[#F5F5F7] selection:bg-[#1D56D5] selection:text-white">
             {/* Ambient Background Orbs */}
             <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#3B82F6]/30 rounded-full blur-[120px] pointer-events-none" />
@@ -108,16 +153,7 @@ export default function InviteMembersPage() {
             <div className="relative z-10 w-full max-w-[800px] bg-white/60 backdrop-blur-2xl rounded-[24px] shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] border border-white/50 p-6 md:p-8">
 
                 {/* Status message */}
-                {msg && (
-                    <div
-                        className={`mb-6 rounded-[14px] p-4 border font-inter text-[14px] backdrop-blur-sm ${msg.type === 'success'
-                            ? 'bg-[#ECFDF3]/80 border-[#ABEFC6] text-[#067647]'
-                            : 'bg-[#FEF3F2]/80 border-[#FECDCA] text-[#B42318]'
-                            }`}
-                    >
-                        {msg.text}
-                    </div>
-                )}
+                {statusMessage && <StatusBanner message={statusMessage} />}
 
                 {/* Email Invite Section */}
                 <div className="flex flex-col sm:flex-row gap-4 mb-6">
