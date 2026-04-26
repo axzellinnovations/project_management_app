@@ -34,6 +34,7 @@ public class ProjectInvitationService {
     private final TeamMemberRepository teamMemberRepository;
     private final EmailService emailService;
     private final NotificationService notificationService;
+    private final UserService userService;
 
     // ── Real-time: broadcast MEMBER_JOINED to members page viewers ────────────
     // Uses the same STOMP broker as the chat system (/ws endpoint).
@@ -76,12 +77,13 @@ public class ProjectInvitationService {
         });
 
         // Block if already invited and not expired (pending)
-        teamInvitationRepository.findByTeamIdAndEmail(teamId, inviteeEmail).ifPresent(existing -> {
+        List<TeamInvitation> existingInvitations = teamInvitationRepository.findByTeamIdAndEmail(teamId, inviteeEmail);
+        for (TeamInvitation existing : existingInvitations) {
             if ((existing.getStatus() == null || existing.getStatus().equalsIgnoreCase("PENDING")) &&
                 (existing.getExpiresAt() == null || existing.getExpiresAt().isAfter(LocalDateTime.now()))) {
                 throw new RuntimeException("Invitation already sent to this email");
             }
-        });
+        }
 
         User inviter = userRepository.findById(inviterUserId)
                 .orElseThrow(() -> new RuntimeException("Inviter not found"));
@@ -207,7 +209,7 @@ public class ProjectInvitationService {
                     user.getUsername(),
                     user.getFullName(),
                     user.getEmail(),
-                    user.getProfilePicUrl(),
+                    userService.generatePresignedUrl(user.getProfilePicUrl()),
                     invitedRole.name(),
                     0,        // task count starts at 0 for a brand-new member
                     "Active"

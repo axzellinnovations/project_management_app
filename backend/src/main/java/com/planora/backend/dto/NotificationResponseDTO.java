@@ -1,3 +1,4 @@
+// Data Transfer Object for returning notification details to the client.
 package com.planora.backend.dto;
 
 import lombok.AllArgsConstructor;

@@ -1,3 +1,4 @@
+// Configuration properties for task due date and overdue reminder settings.
 package com.planora.backend.configuration;
 
 import jakarta.validation.constraints.Min;

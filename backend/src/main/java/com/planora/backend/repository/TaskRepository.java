@@ -231,4 +231,16 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
            "AND UPPER(COALESCE(t.status, '')) <> 'DONE' " +
            "AND t.dueDate <= :maxDueDate")
     List<Task> findOpenTasksDueOnOrBeforeWithReminderRelations(@Param("maxDueDate") LocalDate maxDueDate);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Task t SET t.assignee = null WHERE t.assignee.id = :memberId")
+    void nullifyAssigneeForMember(@Param("memberId") Long memberId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Task t SET t.reporter = null WHERE t.reporter.id = :memberId")
+    void nullifyReporterForMember(@Param("memberId") Long memberId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM task_assignees WHERE member_id = :memberId", nativeQuery = true)
+    void removeFromTaskAssignees(@Param("memberId") Long memberId);
 }

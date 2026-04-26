@@ -1,8 +1,10 @@
+// UI component rendering a single chat conversation (team, room, or DM) within the inbox list.
 import { memo, useCallback } from 'react';
 import { MessageSquare, UserRound, Users } from 'lucide-react';
 import type { ChatInboxActivity } from '@/services/chat-service';
 import { formatRelativeTime, getChatTypeLabel } from '../utils';
 
+// Helper to render the appropriate icon based on the chat type.
 function getChatTypeIcon(activity: ChatInboxActivity) {
   if (activity.chatType === 'TEAM') {
     return <Users size={16} className="text-blue-600" />;
@@ -15,6 +17,9 @@ function getChatTypeIcon(activity: ChatInboxActivity) {
   return <UserRound size={16} className="text-emerald-600" />;
 }
 
+// =====================================================
+// ACTIVITY ROW COMPONENT
+// =====================================================
 export const ActivityRow = memo(function ActivityRow({
   activity,
   onActivityClick,

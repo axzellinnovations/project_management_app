@@ -15,6 +15,7 @@ import com.planora.backend.model.User;
 import com.planora.backend.repository.TeamMemberRepository;
 import com.planora.backend.repository.TeamRepository;
 import com.planora.backend.repository.UserRepository;
+import com.planora.backend.repository.TaskRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -120,6 +121,7 @@ public class TeamMemberService {
         private final TeamRepository teamRepository;
         private final UserRepository userRepository;
         private final NotificationService notificationService;
+        private final TaskRepository taskRepository;
 
         // =====================================================
         // ADD MEMBER TO TEAM (OWNER ONLY)
@@ -182,6 +184,7 @@ public class TeamMemberService {
         // =====================================================
         // REMOVE MEMBER FROM TEAM (OWNER ONLY)
         // =====================================================
+        @Transactional
         public void removeMember(
                         Long teamId,
                         Long targetUserId,
@@ -192,6 +195,10 @@ public class TeamMemberService {
                 TeamMember member = teamMemberRepository
                                 .findByTeamIdAndUserUserId(teamId, targetUserId)
                                 .orElseThrow(() -> new RuntimeException("User is not a member of this team"));
+
+                taskRepository.nullifyAssigneeForMember(member.getId());
+                taskRepository.nullifyReporterForMember(member.getId());
+                taskRepository.removeFromTaskAssignees(member.getId());
 
                 teamMemberRepository.delete(member);
         }
@@ -233,6 +240,10 @@ public class TeamMemberService {
                 String membersLink = buildMembersLink(projectId);
                 String actorName = resolveDisplayName(currentMember.getUser());
                 String targetName = resolveDisplayName(targetMember.getUser());
+
+                taskRepository.nullifyAssigneeForMember(targetMember.getId());
+                taskRepository.nullifyReporterForMember(targetMember.getId());
+                taskRepository.removeFromTaskAssignees(targetMember.getId());
 
                 teamMemberRepository.delete(targetMember);
 

@@ -1,3 +1,5 @@
+// Main UI component for the Chat Inbox page.
+// Displays and filters chat conversations grouped by project, consuming state and logic from useInboxData.
 'use client';
 
 import { RefreshCw } from 'lucide-react';
@@ -6,6 +8,9 @@ import { ProjectSection } from './components/ProjectSection';
 import { useInboxData } from './hooks/useInboxData';
 import Link from 'next/link';
 
+// =====================================================
+// INBOX PAGE RENDER
+// =====================================================
 export default function InboxPage() {
   const {
     loading,
@@ -25,7 +30,9 @@ export default function InboxPage() {
 
   return (
     <div className="mobile-page-padding w-full max-w-[1200px] mx-auto pb-6 flex flex-col gap-4 sm:gap-5">
-      {/* Mobile Top Header */}
+      {/* ===================================================== */}
+      {/* MOBILE HEADER */}
+      {/* ===================================================== */}
       <div className="flex items-center gap-3 py-4 md:hidden">
           <button
               onClick={() => window.dispatchEvent(new CustomEvent('planora:sidebar:toggle'))}
@@ -44,7 +51,9 @@ export default function InboxPage() {
           </div>
       </div>
 
-      {/* Header */}
+      {/* ===================================================== */}
+      {/* DESKTOP HEADER & FILTERS */}
+      {/* ===================================================== */}
       <div className="flex flex-col gap-1 sm:mb-2">
           <div className="flex items-center gap-2 text-[13px] text-[#4A5565]">
               <Link href="/dashboard" className="hover:text-[#0052CC]">Dashboard</Link>
@@ -84,6 +93,9 @@ export default function InboxPage() {
         </button>
       </div>
 
+      {/* ===================================================== */}
+      {/* INBOX CONTENT (LOADING / ERROR / EMPTY / LIST) */}
+      {/* ===================================================== */}
       {loading ? (
         <div className="flex flex-col gap-3">
           {[1, 2, 3].map((row) => (

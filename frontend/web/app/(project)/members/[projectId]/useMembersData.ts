@@ -208,6 +208,10 @@ export function useMembersData(projectId: string) {
       ...(payload.username ? { [`username:${payload.username.toLowerCase()}`]: payload.profilePicUrl || null } : {}),
       ...(payload.fullName ? { [`fullname:${payload.fullName.toLowerCase()}`]: payload.profilePicUrl || null } : {}),
     }));
+
+    if (payload.email) {
+      setPending(prev => prev.filter(p => p.email.toLowerCase() !== payload.email.toLowerCase()));
+    }
   }, []);
 
   useMembersSync(projectId, {
