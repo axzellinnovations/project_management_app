@@ -26,7 +26,7 @@ public class TeamController {
     public ResponseEntity<java.util.Map<String, Boolean>> checkTeamName(
             @RequestParam String name,
             @AuthenticationPrincipal UserPrincipal currentUser) {
-        return ResponseEntity.ok(service.checkTeamName(name, currentUser.getUserId()));
+        return ResponseEntity.ok(service.checkTeamNameAvailability(name, currentUser.getUserId()));
     }
 
     // 1. CREATE TEAM
@@ -51,7 +51,7 @@ public class TeamController {
     public ResponseEntity<List<TeamSummaryDTO>> getAllTeams(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         Long currentUserId = currentUser.getUserId();
-        return new ResponseEntity<>(service.getAllTeams(currentUserId), HttpStatus.OK);
+        return new ResponseEntity<>(service.getMyTeams(currentUserId), HttpStatus.OK);
     }
 
     // 3. GET SINGLE TEAM (DashBoard)
@@ -60,7 +60,7 @@ public class TeamController {
             @PathVariable Long id,
             @AuthenticationPrincipal UserPrincipal currentUser) {
         Long currentUserId = currentUser.getUserId();
-        return new ResponseEntity<>(service.getTeam(id, currentUserId), HttpStatus.OK);
+        return new ResponseEntity<>(service.getTeamDetails(id, currentUserId), HttpStatus.OK);
     }
 
     // 4. UPDATE TEAM
