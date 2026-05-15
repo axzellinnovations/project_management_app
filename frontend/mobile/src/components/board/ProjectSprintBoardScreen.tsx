@@ -18,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { T, STATUS_MAP, StatusKey } from '../../constants/tokens';
 import { SprintboardTask, Sprintcolumn, SprintSummary, useProjectSprintBoard } from '../../hooks/useProjectSprintBoard';
+import { apiErrorMessage } from '../../utils/apiError';
 
 const PRIORITY_STYLES: Record<string, { dot: string; text: string; bg: string }> = {
   URGENT: { dot: '#EF4444', text: '#B91C1C', bg: '#FEF2F2' },
@@ -305,8 +306,8 @@ export default function ProjectSprintBoardScreen({
       await createTask(newTaskTitle, taskTarget.columnStatus);
       setTaskTarget(null);
       setNewTaskTitle('');
-    } catch {
-      Alert.alert('Task not created', 'Please try again.');
+    } catch (err) {
+      Alert.alert('Task not created', apiErrorMessage(err, 'Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -319,8 +320,8 @@ export default function ProjectSprintBoardScreen({
       await addColumn(newColumnName);
       setShowColumnModal(false);
       setNewColumnName('');
-    } catch {
-      Alert.alert('Column not created', 'Please try again.');
+    } catch (err) {
+      Alert.alert('Column not created', apiErrorMessage(err, 'Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -335,8 +336,8 @@ export default function ProjectSprintBoardScreen({
         onPress: async () => {
           try {
             await deleteTask(task.taskId);
-          } catch {
-            Alert.alert('Delete failed', 'The task could not be deleted.');
+          } catch (err) {
+            Alert.alert('Delete failed', apiErrorMessage(err, 'The task could not be deleted.'));
           }
         },
       },
@@ -357,8 +358,8 @@ export default function ProjectSprintBoardScreen({
         onPress: async () => {
           try {
             await deleteColumn(column.id);
-          } catch {
-            Alert.alert('Delete failed', 'The column could not be deleted.');
+          } catch (err) {
+            Alert.alert('Delete failed', apiErrorMessage(err, 'The column could not be deleted.'));
           }
         },
       },

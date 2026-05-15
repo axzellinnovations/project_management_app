@@ -25,6 +25,7 @@ import {
   KanbanBoardColumn,
   useProjectBoard,
 } from '../../hooks/useProjectBoard';
+import { apiErrorMessage } from '../../utils/apiError';
 
 const PRIORITY_STYLES: Record<string, { dot: string; text: string; bg: string }> = {
   URGENT: { dot: '#EF4444', text: '#B91C1C', bg: '#FEF2F2' },
@@ -500,8 +501,8 @@ export default function ProjectBoardScreen({
       setShowTaskModal(false);
       setTaskTarget(null);
       setNewTaskTitle('');
-    } catch {
-      Alert.alert('Task not created', 'Please try again.');
+    } catch (err) {
+      Alert.alert('Task not created', apiErrorMessage(err, 'Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -514,8 +515,8 @@ export default function ProjectBoardScreen({
       await createColumn(newColumnName);
       setShowColumnModal(false);
       setNewColumnName('');
-    } catch {
-      Alert.alert('Column not created', 'Please try again.');
+    } catch (err) {
+      Alert.alert('Column not created', apiErrorMessage(err, 'Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -556,8 +557,8 @@ export default function ProjectBoardScreen({
 
     try {
       await moveTask(task, targetColumn.status);
-    } catch {
-      Alert.alert('Move failed', 'The task could not be moved.');
+    } catch (err) {
+      Alert.alert('Move failed', apiErrorMessage(err, 'The task could not be moved.'));
     }
   };
 
@@ -574,8 +575,8 @@ export default function ProjectBoardScreen({
         onPress: async () => {
           try {
             await deleteTask(task.id);
-          } catch {
-            Alert.alert('Delete failed', 'The task could not be deleted.');
+          } catch (err) {
+            Alert.alert('Delete failed', apiErrorMessage(err, 'The task could not be deleted.'));
           }
         },
       },
@@ -598,8 +599,8 @@ export default function ProjectBoardScreen({
         onPress: async () => {
           try {
             await deleteColumn(column.id);
-          } catch {
-            Alert.alert('Delete failed', 'The column could not be deleted.');
+          } catch (err) {
+            Alert.alert('Delete failed', apiErrorMessage(err, 'The column could not be deleted.'));
           }
         },
       },

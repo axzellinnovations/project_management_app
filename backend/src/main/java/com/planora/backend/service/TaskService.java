@@ -353,16 +353,10 @@ public class TaskService {
         Task task = taskRepository.findByIdWithDetails(taskId)
                 .orElseThrow(()-> new ResourceNotFoundException("Task not found"));
 
-        //validate user - OWNER or ADMIN only
+        // Validate user. Project members can delete tasks from board workflows.
         Long teamId = task.getProject().getTeam().getId();
         Long projectId = task.getProject().getId();
-
-        // Step 1. Hard Security Check: Only Owners or Admins can destroy data.
-        TeamMember member = requireMinimumRole(teamId, currentUserId, null);
-
-        if (member.getRole() != TeamRole.OWNER && member.getRole() != TeamRole.ADMIN) {
-            throw new ForbiddenException("Access Denied: Only Project Owners or Admins can delete tasks.");
-        }
+        requireMinimumRole(teamId, currentUserId, TeamRole.MEMBER);
 
         // Step 2. Collect notification data BEFORE delete.
         // If we try to read `task.getAssignee()` after `taskRepository.delete()`,
