@@ -37,13 +37,6 @@ export interface BoardTask {
   attachmentCount?: number;
 }
 
-export interface BoardMember {
-  id: number;
-  userId: number;
-  name: string;
-  role?: string | null;
-}
-
 export interface KanbanBoardColumn {
   id: number;
   name: string;
@@ -77,7 +70,6 @@ function normalizeColumns(columns?: KanbanBoardColumn[]) {
 export function useProjectBoard(projectId: number) {
   const [board, setBoard] = useState<KanbanBoardData | null>(null);
   const [tasks, setTasks] = useState<BoardTask[]>([]);
-  const [members, setMembers] = useState<BoardMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,32 +87,14 @@ export function useProjectBoard(projectId: number) {
     setError(null);
 
     try {
-      const [boardRes, tasksRes, membersRes] = await Promise.all([
+      const [boardRes, tasksRes] = await Promise.all([
         api.get(`/api/kanbans/project/${projectId}/board`),
         api.get(`/api/tasks/project/${projectId}`),
-        api.get(`/api/projects/${projectId}/members`).catch(() => ({ data: [] })),
       ]);
 
       const rawBoard = boardRes.data as KanbanBoardData | null;
       setBoard(rawBoard ? { ...rawBoard, columns: normalizeColumns(rawBoard.columns) } : null);
       setTasks(Array.isArray(tasksRes.data) ? tasksRes.data : []);
-      const rawMembers = Array.isArray(membersRes.data) ? membersRes.data : [];
-      setMembers(rawMembers.map((member: {
-        id?: number;
-        userId?: number;
-        role?: string | null;
-        user?: { userId?: number; fullName?: string | null; username?: string | null };
-        name?: string | null;
-      }) => {
-        const userId = member.user?.userId ?? member.userId ?? member.id ?? 0;
-        const name = member.name || member.user?.fullName || member.user?.username || `Member ${userId}`;
-        return {
-          id: member.id ?? userId,
-          userId,
-          name,
-          role: member.role ?? null,
-        };
-      }).filter((member: BoardMember) => member.userId > 0));
     } catch {
       setError('Failed to load board. Pull down to retry.');
     } finally {
@@ -155,17 +129,7 @@ export function useProjectBoard(projectId: number) {
     }
   }, [tasks]);
 
-  const createTask = useCallback(async ({
-    title,
-    status,
-    dueDate,
-    assigneeId,
-  }: {
-    title: string;
-    status: string;
-    dueDate?: string | null;
-    assigneeId?: number | null;
-  }) => {
+  const createTask = useCallback(async (title: string, status: string) => {
     const cleanTitle = title.trim();
     if (!cleanTitle) return;
 
@@ -174,8 +138,6 @@ export function useProjectBoard(projectId: number) {
       title: cleanTitle,
       status,
       priority: 'MEDIUM',
-      dueDate: dueDate || undefined,
-      assigneeId: assigneeId || undefined,
     });
     const created = response.data as BoardTask;
     setTasks((current) => current.some((task) => task.id === created.id) ? current : [...current, created]);
@@ -186,20 +148,6 @@ export function useProjectBoard(projectId: number) {
     setTasks((current) => current.filter((task) => task.id !== taskId));
     try {
       await api.delete(`/api/tasks/${taskId}`);
-    } catch (err) {
-      setTasks(previous);
-      throw err;
-    }
-  }, [tasks]);
-
-  const updateTaskDueDate = useCallback(async (taskId: number, dueDate: string | null) => {
-    const previous = tasks;
-    setTasks((current) => current.map((task) => (
-      task.id === taskId ? { ...task, dueDate } : task
-    )));
-
-    try {
-      await api.patch(`/api/tasks/${taskId}/dates`, { dueDate });
     } catch (err) {
       setTasks(previous);
       throw err;
@@ -246,7 +194,6 @@ export function useProjectBoard(projectId: number) {
     board,
     columns,
     tasks,
-    members,
     loading,
     refreshing,
     error,
@@ -254,7 +201,6 @@ export function useProjectBoard(projectId: number) {
     moveTask,
     createTask,
     deleteTask,
-    updateTaskDueDate,
     createColumn,
     deleteColumn,
   };
