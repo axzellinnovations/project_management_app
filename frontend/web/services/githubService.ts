@@ -42,6 +42,16 @@ export interface GitHubPullRequest {
   base: { ref: string }
 }
 
+export interface GitHubCommit {
+  sha: string
+  html_url: string
+  commit: {
+    message: string
+    author: { name: string; date: string }
+  }
+  author: { login: string; avatar_url: string; html_url: string } | null
+}
+
 export interface ProjectGitHubConnection {
   repoId: number
   repoName: string
@@ -126,16 +136,6 @@ export async function fetchPullRequests(
   if (response.status === 404) throw new Error('Repository not found or no access')
   if (!response.ok) throw new Error('Failed to fetch pull requests')
   return response.json()
-}
-
-export interface GitHubCommit {
-  sha: string
-  html_url: string
-  commit: {
-    message: string
-    author: { name: string; date: string }
-  }
-  author: { login: string; avatar_url: string; html_url: string } | null
 }
 
 export async function fetchCommits(

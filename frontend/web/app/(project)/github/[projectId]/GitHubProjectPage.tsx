@@ -474,7 +474,7 @@ function ConnectedDashboard({
       animate={{ opacity: 1 }}
       className="w-full flex flex-col gap-5"
     >
-      {/* ── Top bar (unchanged) ─────────────────────────────────────────── */}
+      {/* ── Top bar ─────────────────────────────────────────── */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 shadow-sm">
           <GitHubMark size={14} className="text-white" />
