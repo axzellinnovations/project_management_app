@@ -21,6 +21,7 @@ import {
 import { getGitHubToken, getProjectGitHubRepo } from '@/services/githubService';
 import { CIStatusBadge } from '@/components/ui';
 import SidebarField from './SidebarField';
+import CreateIssueModal from './CreateIssueModal';
 
 // ── Backend DTO shapes ────────────────────────────────────────────────────────
 
@@ -207,23 +208,6 @@ const CollapseSection: React.FC<CollapseSectionProps> = ({
   </div>
 );
 
-interface EmptyStateProps {
-  icon: React.ReactNode;
-  title: string;
-  description?: string;
-}
-
-const EmptyState: React.FC<EmptyStateProps> = ({ icon, title, description }) => (
-  <div className="flex items-start gap-2.5 rounded-lg border border-dashed border-[#E5E7EB] px-3 py-3">
-    <span className="mt-0.5 text-[#D1D5DB]">{icon}</span>
-    <div>
-      <p className="text-[11px] font-medium text-[#9CA3AF]">{title}</p>
-      {description && (
-        <p className="mt-0.5 text-[10px] leading-snug text-[#C4C9D4]">{description}</p>
-      )}
-    </div>
-  </div>
-);
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -247,6 +231,7 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
   const [syncing, setSyncing]                 = useState(false);
   const [error, setError]                     = useState<string | null>(null);
   const [copied, setCopied]                   = useState(false);
+  const [issueModalOpen, setIssueModalOpen]   = useState(false);
 
   const [branchEditing, setBranchEditing] = useState(false);
   const [branchInput, setBranchInput]     = useState('');
@@ -326,11 +311,7 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleCreateIssue = () => {
-    const repo = projectId != null ? getProjectGitHubRepo(projectId) : null;
-    if (!repo) return;
-    window.open(`https://github.com/${repo.repoFullName}/issues/new`, '_blank', 'noopener,noreferrer');
-  };
+  const handleCreateIssue = () => setIssueModalOpen(true);
 
   const copyBranch = async () => {
     if (!summary?.githubBranch) return;
@@ -772,6 +753,13 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
           </motion.div>
         )}
       </AnimatePresence>
+
+      <CreateIssueModal
+        open={issueModalOpen}
+        onClose={() => setIssueModalOpen(false)}
+        taskId={taskId}
+        projectId={projectId}
+      />
     </div>
   );
 };
