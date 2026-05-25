@@ -151,6 +151,10 @@ public class Task {
     @JsonIgnore
     private Milestone milestone;
 
+    // GitHub branch linked to this task (V8 migration)
+    @Column(name = "github_branch")
+    private String githubBranch;
+
     // Recurring task fields (V7 migration)
     @Column(name = "recurrence_rule")
     private String recurrenceRule;   // DAILY | WEEKLY | MONTHLY | YEARLY

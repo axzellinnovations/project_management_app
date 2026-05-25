@@ -62,15 +62,26 @@ public class TaskController {
     /*
      * Fetches a single task and silently logs that the user viewed it
      * (used to populate their "Recently Viewed" dashboard).
+     *
+     * Optional GitHub enrichment: supply both X-GitHub-Token header and
+     * repoFullName query param (e.g. "owner/repo") to populate the
+     * githubPrCount, ciStatus, linkedPrs, and recentCommits response fields.
+     * Omitting either parameter returns the task with null GitHub fields —
+     * fully backward-compatible with existing API consumers.
      */
     @GetMapping("/{taskId}")
     public ResponseEntity<TaskResponseDTO> getTaskById(
             @PathVariable Long taskId,
-            @AuthenticationPrincipal UserPrincipal currentUser){
+            @RequestHeader(value = "X-GitHub-Token", required = false) String githubToken,
+            @RequestParam(required = false) String repoFullName,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
         if (currentUser != null) {
             service.recordTaskAccess(taskId, currentUser.getUserId());
         }
-        return new ResponseEntity<>(service.getTaskById(taskId), HttpStatus.OK);
+        TaskResponseDTO dto = (githubToken != null && repoFullName != null)
+                ? service.getTaskById(taskId, repoFullName, githubToken)
+                : service.getTaskById(taskId);
+        return new ResponseEntity<>(dto, HttpStatus.OK);
     }
 
     @PutMapping("/{taskId}")

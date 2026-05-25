@@ -54,6 +54,13 @@ public class TaskResponseDTO {
     private Long recurrenceParentId;
     private java.time.LocalDate nextOccurrence;
 
+    // GitHub integration fields (V8)
+    private String githubBranch;
+    private Integer githubPrCount;
+    private String ciStatus;
+    private List<LinkedPrDTO> linkedPrs;
+    private List<RecentCommitDTO> recentCommits;
+
     @Data
     @AllArgsConstructor
     @NoArgsConstructor
@@ -102,5 +109,28 @@ public class TaskResponseDTO {
         private String contentType;
         private Long fileSize;
         private String uploadedByName;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class LinkedPrDTO {
+        private int number;
+        private String title;
+        private String state;       // "open" | "closed" | "merged"
+        private String htmlUrl;
+        private String author;
+        private String createdAt;
+    }
+
+    @Data
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class RecentCommitDTO {
+        private String sha;         // 7-char short SHA for display
+        private String message;     // first line only
+        private String author;
+        private String date;
+        private String htmlUrl;
     }
 }
