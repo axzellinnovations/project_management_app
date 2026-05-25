@@ -1,47 +1,71 @@
-export interface GitHubOwner {
-  login: string
+/**
+ * GitHub integration service — backend-driven only.
+ *
+ * All GitHub API communication happens through the Planora backend.
+ * The frontend never calls github.com directly and never handles tokens.
+ */
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'http://localhost:8080'
+
+// ── Backend DTO types ─────────────────────────────────────────────────────────
+
+export interface GithubRepositoryDTO {
+  repoId: number
+  name: string
+  fullName: string
+  privateRepo: boolean
+  defaultBranch: string
+  ownerLogin: string
+  description: string | null
 }
 
+export interface GithubIntegrationStatus {
+  connected: boolean
+  repoFullName?: string
+  connectedAt?: string
+}
+
+export interface GithubIssueDTO {
+  id: number
+  issueNumber: number
+  title: string
+  state: 'open' | 'closed'
+  htmlUrl: string
+  author: string
+  body: string | null
+  createdAt: string | null
+  closedAt: string | null
+}
+
+export interface GithubStatsDTO {
+  connected: boolean
+  repoFullName?: string
+  defaultBranch?: string
+  openPrCount: number
+  mergedPrCount: number
+  totalCommits: number
+  openIssues: number
+  closedIssues: number
+  latestCiStatus: string | null
+  connectedAt?: string
+}
+
+// ── Legacy shape aliases (used by TaskGitHubSection and similar consumers) ────
+
+/** @deprecated Use GithubRepositoryDTO */
 export interface GitHubRepository {
   id: number
   name: string
   full_name: string
   private: boolean
-  owner: GitHubOwner
+  owner: { login: string }
   default_branch: string
 }
 
-export interface GitHubUser {
-  login: string
-  name: string | null
-  avatar_url: string
-  html_url: string
-  public_repos: number
-  followers: number
-}
-
-export interface GitHubLabel {
-  id: number
-  name: string
-  color: string
-}
-
-export interface GitHubPullRequest {
-  id: number
-  number: number
-  title: string
-  state: 'open' | 'closed'
-  merged_at: string | null
-  created_at: string
-  updated_at: string
-  html_url: string
-  draft: boolean
-  user: { login: string; avatar_url: string; html_url: string }
-  labels: GitHubLabel[]
-  head: { ref: string }
-  base: { ref: string }
-}
-
+/** @deprecated Token management now happens on the backend */
 export interface ProjectGitHubConnection {
   repoId: number
   repoName: string
@@ -52,164 +76,144 @@ export interface ProjectGitHubConnection {
   connectedAt: string
 }
 
-export async function fetchRepositories(): Promise<GitHubRepository[]> {
-  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080'
+// ── Repository listing ────────────────────────────────────────────────────────
 
-  const response = await fetch(`${baseUrl}/api/github/repositories`, {
-    method: 'GET',
+export async function fetchRepositories(projectId?: number): Promise<GithubRepositoryDTO[]> {
+  const url = projectId != null
+    ? `${API_BASE}/api/github/repositories?projectId=${projectId}`
+    : `${API_BASE}/api/github/repositories`
+
+  const res = await fetch(url, { credentials: 'include' })
+
+  if (res.status === 401) throw new Error('Unauthorized: Please log in again.')
+  if (res.status === 429) throw new Error('Rate limit exceeded. Please try again later.')
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string }
+    throw new Error(body.error ?? 'Failed to fetch repositories')
+  }
+  return res.json()
+}
+
+// ── Integration management ────────────────────────────────────────────────────
+
+export async function connectRepository(
+  projectId: number,
+  repoFullName: string,
+  token: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/github/integrations`, {
+    method: 'POST',
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId: String(projectId), repoFullName, token }),
   })
-
-  if (response.status === 401) {
-    throw new Error('Unauthorized: Please log in again.')
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string }
+    throw new Error(body.error ?? 'Failed to connect repository')
   }
-
-  if (response.status === 429) {
-    throw new Error('Rate limit exceeded. Please try again later.')
-  }
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error(body.error || 'Failed to fetch repositories')
-  }
-
-  return response.json()
 }
 
-export async function fetchRepositoriesWithToken(token: string): Promise<GitHubRepository[]> {
-  const response = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated', {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github.v3+json',
-    },
+export async function disconnectRepository(projectId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/github/integrations/project/${projectId}`, {
+    method: 'DELETE',
+    credentials: 'include',
   })
-
-  if (response.status === 401) {
-    throw new Error('Invalid GitHub token. Please reconnect your account.')
-  }
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch repositories from GitHub')
-  }
-
-  return response.json()
+  if (!res.ok) throw new Error('Failed to disconnect repository')
 }
 
-export async function fetchGitHubUser(token: string): Promise<GitHubUser> {
-  const response = await fetch('https://api.github.com/user', {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github.v3+json',
-    },
-  })
-  if (!response.ok) throw new Error('Failed to fetch GitHub user')
-  return response.json()
-}
-
-export const GITHUB_PER_PAGE = 10
-
-export async function fetchPullRequests(
-  token: string,
-  owner: string,
-  repo: string,
-  page = 1,
-): Promise<{ items: GitHubPullRequest[]; hasMore: boolean }> {
-  const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/pulls?state=all&per_page=${GITHUB_PER_PAGE}&page=${page}&sort=updated&direction=desc`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github.v3+json',
-      },
-    },
+export async function getProjectIntegration(
+  projectId: number,
+): Promise<GithubIntegrationStatus> {
+  const res = await fetch(
+    `${API_BASE}/api/github/integrations/project/${projectId}`,
+    { credentials: 'include' },
   )
-  if (response.status === 404) throw new Error('Repository not found or no access')
-  if (!response.ok) throw new Error('Failed to fetch pull requests')
-  const items: GitHubPullRequest[] = await response.json()
-  const hasMore = (response.headers.get('Link') ?? '').includes('rel="next"')
-  return { items, hasMore }
+  if (!res.ok) return { connected: false }
+  return res.json()
 }
 
-export interface GitHubCommit {
-  sha: string
-  html_url: string
-  commit: {
-    message: string
-    author: { name: string; date: string }
-  }
-  author: { login: string; avatar_url: string; html_url: string } | null
-}
+// ── Issues ────────────────────────────────────────────────────────────────────
 
-export async function fetchCommits(
-  token: string,
-  owner: string,
-  repo: string,
-  page = 1,
-): Promise<{ items: GitHubCommit[]; hasMore: boolean }> {
-  const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/commits?per_page=${GITHUB_PER_PAGE}&page=${page}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github.v3+json',
-      },
-    },
+export async function fetchProjectIssues(projectId: number): Promise<GithubIssueDTO[]> {
+  const res = await fetch(
+    `${API_BASE}/api/github/projects/${projectId}/issues`,
+    { credentials: 'include' },
   )
-  if (response.status === 404) throw new Error('Repository not found or no access')
-  if (!response.ok) throw new Error('Failed to fetch commits')
-  const items: GitHubCommit[] = await response.json()
-  const hasMore = (response.headers.get('Link') ?? '').includes('rel="next"')
-  return { items, hasMore }
+  if (!res.ok) return []
+  return res.json()
 }
 
-// ── GitHub token (stored per browser session) ────────────────────────────────
+export async function createProjectIssue(
+  projectId: number,
+  title: string,
+  body?: string,
+): Promise<GithubIssueDTO> {
+  const res = await fetch(`${API_BASE}/api/github/projects/${projectId}/issues`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, body: body ?? '' }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { error?: string }
+    throw new Error(data.error ?? 'Failed to create issue')
+  }
+  return res.json()
+}
 
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
+export async function fetchProjectStats(projectId: number): Promise<GithubStatsDTO> {
+  const res = await fetch(
+    `${API_BASE}/api/github/projects/${projectId}/stats`,
+    { credentials: 'include' },
+  )
+  if (!res.ok) return { connected: false, openPrCount: 0, mergedPrCount: 0, totalCommits: 0, openIssues: 0, closedIssues: 0, latestCiStatus: null }
+  return res.json()
+}
+
+export async function triggerProjectSync(projectId: number): Promise<void> {
+  await fetch(`${API_BASE}/api/github/projects/${projectId}/sync`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+}
+
+// ── Deprecated stubs — kept so existing imports do not break ─────────────────
+// These functions previously managed GitHub tokens in localStorage.
+// Tokens are now stored server-side only. These stubs are no-ops.
+
+/** @deprecated Token is now stored in the backend. Returns null. */
 export function getGitHubToken(): string | null {
-  if (typeof window === 'undefined') return null
-  return localStorage.getItem('github_access_token')
+  return null
 }
 
-export function setGitHubToken(token: string): void {
-  if (typeof window === 'undefined') return
-  localStorage.setItem('github_access_token', token)
+/** @deprecated Token is now stored in the backend. Has no effect. */
+export function setGitHubToken(_token: string): void {
+  // no-op: backend manages the token
 }
 
+/** @deprecated Token is now stored in the backend. Has no effect. */
 export function clearGitHubToken(): void {
-  if (typeof window === 'undefined') return
-  localStorage.removeItem('github_access_token')
+  // no-op
 }
 
-// ── Per-project GitHub repo connection ───────────────────────────────────────
-
-export function getProjectGitHubRepo(projectId: string | number): ProjectGitHubConnection | null {
-  if (typeof window === 'undefined') return null
-  const raw = localStorage.getItem(`github_project_${projectId}`)
-  if (!raw) return null
-  try {
-    return JSON.parse(raw) as ProjectGitHubConnection
-  } catch {
-    return null
-  }
+/** @deprecated Use getProjectIntegration() instead. Returns null. */
+export function getProjectGitHubRepo(
+  _projectId: string | number,
+): ProjectGitHubConnection | null {
+  return null
 }
 
-export function setProjectGitHubRepo(projectId: string | number, repo: GitHubRepository): void {
-  if (typeof window === 'undefined') return
-  const connection: ProjectGitHubConnection = {
-    repoId: repo.id,
-    repoName: repo.name,
-    repoFullName: repo.full_name,
-    private: repo.private,
-    defaultBranch: repo.default_branch,
-    ownerLogin: repo.owner.login,
-    connectedAt: new Date().toISOString(),
-  }
-  localStorage.setItem(`github_project_${projectId}`, JSON.stringify(connection))
+/** @deprecated Use connectRepository() instead. Has no effect. */
+export function setProjectGitHubRepo(
+  _projectId: string | number,
+  _repo: GitHubRepository,
+): void {
+  // no-op: integration is now managed via backend API
 }
 
-export function clearProjectGitHubRepo(projectId: string | number): void {
-  if (typeof window === 'undefined') return
-  localStorage.removeItem(`github_project_${projectId}`)
+/** @deprecated Use disconnectRepository() instead. Has no effect. */
+export function clearProjectGitHubRepo(_projectId: string | number): void {
+  // no-op
 }

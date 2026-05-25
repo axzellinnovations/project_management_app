@@ -366,4 +366,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
      */
     @Query("SELECT t FROM Task t WHERE t.githubBranch = :branch AND t.archived = false")
     List<Task> findByGithubBranch(@Param("branch") String branch);
+
+    @Query("SELECT t FROM Task t WHERE t.project.id = :projectId AND t.githubBranch IS NOT NULL AND t.archived = false")
+    List<Task> findByProjectIdAndGithubBranchNotNull(@Param("projectId") Long projectId);
 }
