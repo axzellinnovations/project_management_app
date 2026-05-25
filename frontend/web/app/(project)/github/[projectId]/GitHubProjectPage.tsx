@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   GitBranch, Globe, Lock, RefreshCw, Search, X, Check, Link2,
   LogOut, User, ExternalLink, GitPullRequest, ChevronDown, AlertCircle, GitCommit,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -444,29 +445,80 @@ function SkeletonList() {
   );
 }
 
+// ── Pagination controls ───────────────────────────────────────────────────────
+function PaginationControls({
+  page,
+  hasMore,
+  loading,
+  onPrev,
+  onNext,
+}: {
+  page: number;
+  hasMore: boolean;
+  loading: boolean;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between pt-1">
+      <button
+        onClick={onPrev}
+        disabled={page === 1 || loading}
+        className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-outfit font-semibold text-slate-600 border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+      >
+        <ChevronLeft size={13} />
+        Prev
+      </button>
+      <span className="text-xs font-outfit text-slate-400 tabular-nums">Page {page}</span>
+      <button
+        onClick={onNext}
+        disabled={!hasMore || loading}
+        className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-outfit font-semibold text-slate-600 border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+      >
+        Next
+        <ChevronRight size={13} />
+      </button>
+    </div>
+  );
+}
+
 // ── Connected dashboard ───────────────────────────────────────────────────────
 function ConnectedDashboard({
   connection,
   prs,
   commits,
-  loading,
+  prLoading,
+  commitLoading,
   prError,
   commitError,
   user,
+  prPage,
+  commitPage,
+  prHasMore,
+  commitHasMore,
   onRefresh,
   onLogout,
   onChangeRepo,
+  onPRPageChange,
+  onCommitPageChange,
 }: {
   connection: ProjectGitHubConnection;
   prs: GitHubPullRequest[];
   commits: GitHubCommit[];
-  loading: boolean;
+  prLoading: boolean;
+  commitLoading: boolean;
   prError: string | null;
   commitError: string | null;
   user: GitHubUser | null;
+  prPage: number;
+  commitPage: number;
+  prHasMore: boolean;
+  commitHasMore: boolean;
   onRefresh: () => void;
   onLogout: () => void;
   onChangeRepo: () => void;
+  onPRPageChange: (page: number) => void;
+  onCommitPageChange: (page: number) => void;
 }) {
   return (
     <motion.div
@@ -498,11 +550,11 @@ function ConnectedDashboard({
         <div className="flex items-center gap-2">
           <button
             onClick={onRefresh}
-            disabled={loading}
+            disabled={prLoading || commitLoading}
             title="Refresh"
             className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm text-slate-500 hover:text-slate-700 disabled:opacity-40"
           >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={prLoading || commitLoading ? 'animate-spin' : ''} />
           </button>
           <button
             onClick={onChangeRepo}
@@ -524,7 +576,7 @@ function ConnectedDashboard({
             <GitPullRequest size={15} className="text-slate-500 shrink-0" />
             <h2 className="text-sm font-outfit font-bold text-slate-700">
               Pull Requests
-              {!loading && !prError && (
+              {!prLoading && !prError && (
                 <span className="ml-1.5 text-slate-400 font-normal">({prs.length})</span>
               )}
             </h2>
@@ -538,9 +590,9 @@ function ConnectedDashboard({
             </a>
           </div>
 
-          {loading && <SkeletonList />}
+          {prLoading && <SkeletonList />}
 
-          {!loading && prError && (
+          {!prLoading && prError && (
             <div className="flex flex-col items-center gap-2 py-10 text-center">
               <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center">
                 <AlertCircle size={16} className="text-red-500" />
@@ -550,14 +602,14 @@ function ConnectedDashboard({
             </div>
           )}
 
-          {!loading && !prError && prs.length === 0 && (
+          {!prLoading && !prError && prs.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-10">
               <GitPullRequest size={20} className="text-slate-300" />
               <p className="text-xs text-slate-400 font-outfit">No pull requests found</p>
             </div>
           )}
 
-          {!loading && !prError && prs.length > 0 && (
+          {!prLoading && !prError && prs.length > 0 && (
             <div className="flex flex-col gap-3">
               {prs.map((pr, i) => (
                 <motion.div key={pr.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
@@ -565,6 +617,16 @@ function ConnectedDashboard({
                 </motion.div>
               ))}
             </div>
+          )}
+
+          {!prError && (
+            <PaginationControls
+              page={prPage}
+              hasMore={prHasMore}
+              loading={prLoading}
+              onPrev={() => onPRPageChange(prPage - 1)}
+              onNext={() => onPRPageChange(prPage + 1)}
+            />
           )}
         </div>
 
@@ -574,7 +636,7 @@ function ConnectedDashboard({
             <GitCommit size={15} className="text-slate-500 shrink-0" />
             <h2 className="text-sm font-outfit font-bold text-slate-700">
               Commits
-              {!loading && !commitError && (
+              {!commitLoading && !commitError && (
                 <span className="ml-1.5 text-slate-400 font-normal">({commits.length})</span>
               )}
             </h2>
@@ -588,9 +650,9 @@ function ConnectedDashboard({
             </a>
           </div>
 
-          {loading && <SkeletonList />}
+          {commitLoading && <SkeletonList />}
 
-          {!loading && commitError && (
+          {!commitLoading && commitError && (
             <div className="flex flex-col items-center gap-2 py-10 text-center">
               <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center">
                 <AlertCircle size={16} className="text-red-500" />
@@ -600,14 +662,14 @@ function ConnectedDashboard({
             </div>
           )}
 
-          {!loading && !commitError && commits.length === 0 && (
+          {!commitLoading && !commitError && commits.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-10">
               <GitCommit size={20} className="text-slate-300" />
               <p className="text-xs text-slate-400 font-outfit">No commits found</p>
             </div>
           )}
 
-          {!loading && !commitError && commits.length > 0 && (
+          {!commitLoading && !commitError && commits.length > 0 && (
             <div className="flex flex-col gap-3">
               {commits.map((commit, i) => (
                 <motion.div key={commit.sha} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
@@ -615,6 +677,16 @@ function ConnectedDashboard({
                 </motion.div>
               ))}
             </div>
+          )}
+
+          {!commitError && (
+            <PaginationControls
+              page={commitPage}
+              hasMore={commitHasMore}
+              loading={commitLoading}
+              onPrev={() => onCommitPageChange(commitPage - 1)}
+              onNext={() => onCommitPageChange(commitPage + 1)}
+            />
           )}
         </div>
 
@@ -632,9 +704,14 @@ export default function GitHubProjectPage({ projectId }: { projectId: string }) 
   const [user, setUser] = useState<GitHubUser | null>(null);
   const [prs, setPRs] = useState<GitHubPullRequest[]>([]);
   const [commits, setCommits] = useState<GitHubCommit[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [prLoading, setPRLoading] = useState(false);
+  const [commitLoading, setCommitLoading] = useState(false);
   const [prError, setPRError] = useState<string | null>(null);
   const [commitError, setCommitError] = useState<string | null>(null);
+  const [prPage, setPRPage] = useState(1);
+  const [commitPage, setCommitPage] = useState(1);
+  const [prHasMore, setPRHasMore] = useState(false);
+  const [commitHasMore, setCommitHasMore] = useState(false);
 
   // Repo modal state
   const [showModal, setShowModal] = useState(false);
@@ -647,24 +724,50 @@ export default function GitHubProjectPage({ projectId }: { projectId: string }) 
     setConnection(getProjectGitHubRepo(projectId));
   }, [projectId]);
 
-  const loadData = useCallback(async (conn: ProjectGitHubConnection) => {
+  const loadPRPage = useCallback(async (conn: ProjectGitHubConnection, page: number) => {
     const token = getGitHubToken();
     if (!token) return;
-    setLoading(true);
+    setPRLoading(true);
     setPRError(null);
-    setCommitError(null);
-    const [prResult, commitResult, userResult] = await Promise.allSettled([
-      fetchPullRequests(token, conn.ownerLogin, conn.repoName),
-      fetchCommits(token, conn.ownerLogin, conn.repoName),
-      fetchGitHubUser(token),
-    ]);
-    if (prResult.status === 'fulfilled') setPRs(prResult.value);
-    else setPRError(prResult.reason instanceof Error ? prResult.reason.message : 'Failed to load pull requests');
-    if (commitResult.status === 'fulfilled') setCommits(commitResult.value);
-    else setCommitError(commitResult.reason instanceof Error ? commitResult.reason.message : 'Failed to load commits');
-    if (userResult.status === 'fulfilled') setUser(userResult.value);
-    setLoading(false);
+    try {
+      const { items, hasMore } = await fetchPullRequests(token, conn.ownerLogin, conn.repoName, page);
+      setPRs(items);
+      setPRHasMore(hasMore);
+    } catch (err) {
+      setPRError(err instanceof Error ? err.message : 'Failed to load pull requests');
+    } finally {
+      setPRLoading(false);
+    }
   }, []);
+
+  const loadCommitPage = useCallback(async (conn: ProjectGitHubConnection, page: number) => {
+    const token = getGitHubToken();
+    if (!token) return;
+    setCommitLoading(true);
+    setCommitError(null);
+    try {
+      const { items, hasMore } = await fetchCommits(token, conn.ownerLogin, conn.repoName, page);
+      setCommits(items);
+      setCommitHasMore(hasMore);
+    } catch (err) {
+      setCommitError(err instanceof Error ? err.message : 'Failed to load commits');
+    } finally {
+      setCommitLoading(false);
+    }
+  }, []);
+
+  const loadData = useCallback(async (conn: ProjectGitHubConnection) => {
+    const token = getGitHubToken();
+    setPRPage(1);
+    setCommitPage(1);
+    void loadPRPage(conn, 1);
+    void loadCommitPage(conn, 1);
+    if (!token) return;
+    try {
+      const u = await fetchGitHubUser(token);
+      setUser(u);
+    } catch { /* ignore */ }
+  }, [loadPRPage, loadCommitPage]);
 
   // Auto-load data when connection is set
   useEffect(() => {
@@ -755,13 +858,20 @@ export default function GitHubProjectPage({ projectId }: { projectId: string }) 
             connection={connection}
             prs={prs}
             commits={commits}
-            loading={loading}
+            prLoading={prLoading}
+            commitLoading={commitLoading}
             prError={prError}
             commitError={commitError}
             user={user}
+            prPage={prPage}
+            commitPage={commitPage}
+            prHasMore={prHasMore}
+            commitHasMore={commitHasMore}
             onRefresh={() => void loadData(connection)}
             onLogout={() => void handleLogout()}
             onChangeRepo={handleOpenModal}
+            onPRPageChange={(page) => { setPRPage(page); void loadPRPage(connection, page); }}
+            onCommitPageChange={(page) => { setCommitPage(page); void loadCommitPage(connection, page); }}
           />
         ) : (
           <DisconnectedView key="disconnected" onConnect={handleConnectGitHub} />

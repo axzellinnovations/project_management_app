@@ -14,7 +14,7 @@ const config: Config = {
         cu: {
           primary: 'var(--cu-primary)',
           'primary-hover': 'var(--cu-primary-hover)',
-          'primary-dark': '#0042A3',
+          'primary-dark': '#032f72',
           'primary-light': 'var(--cu-primary-light)',
           'primary-muted': 'var(--cu-primary-muted)',
           purple: 'var(--cu-purple)',

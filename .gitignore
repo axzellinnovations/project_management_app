@@ -10,3 +10,7 @@ frontend\mobile\.expo
 .claude/
 
 
+
+# Local IDE and Expo metadata
+.expo/
+.idea/

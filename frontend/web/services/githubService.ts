@@ -109,13 +109,16 @@ export async function fetchGitHubUser(token: string): Promise<GitHubUser> {
   return response.json()
 }
 
+export const GITHUB_PER_PAGE = 10
+
 export async function fetchPullRequests(
   token: string,
   owner: string,
   repo: string,
-): Promise<GitHubPullRequest[]> {
+  page = 1,
+): Promise<{ items: GitHubPullRequest[]; hasMore: boolean }> {
   const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/pulls?state=all&per_page=10&sort=updated&direction=desc`,
+    `https://api.github.com/repos/${owner}/${repo}/pulls?state=all&per_page=${GITHUB_PER_PAGE}&page=${page}&sort=updated&direction=desc`,
     {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -125,7 +128,9 @@ export async function fetchPullRequests(
   )
   if (response.status === 404) throw new Error('Repository not found or no access')
   if (!response.ok) throw new Error('Failed to fetch pull requests')
-  return response.json()
+  const items: GitHubPullRequest[] = await response.json()
+  const hasMore = (response.headers.get('Link') ?? '').includes('rel="next"')
+  return { items, hasMore }
 }
 
 export interface GitHubCommit {
@@ -142,9 +147,10 @@ export async function fetchCommits(
   token: string,
   owner: string,
   repo: string,
-): Promise<GitHubCommit[]> {
+  page = 1,
+): Promise<{ items: GitHubCommit[]; hasMore: boolean }> {
   const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/commits?per_page=10`,
+    `https://api.github.com/repos/${owner}/${repo}/commits?per_page=${GITHUB_PER_PAGE}&page=${page}`,
     {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -154,7 +160,9 @@ export async function fetchCommits(
   )
   if (response.status === 404) throw new Error('Repository not found or no access')
   if (!response.ok) throw new Error('Failed to fetch commits')
-  return response.json()
+  const items: GitHubCommit[] = await response.json()
+  const hasMore = (response.headers.get('Link') ?? '').includes('rel="next"')
+  return { items, hasMore }
 }
 
 // ── GitHub token (stored per browser session) ────────────────────────────────
