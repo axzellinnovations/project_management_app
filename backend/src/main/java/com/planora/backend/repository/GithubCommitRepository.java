@@ -35,4 +35,19 @@ public interface GithubCommitRepository extends JpaRepository<GithubCommit, Long
     @Modifying
     @Query("DELETE FROM GithubCommit c WHERE c.task.id = :taskId")
     void deleteAllByTaskId(@Param("taskId") Long taskId);
+
+    /**
+     * Finds all commit rows matching a full 40-char SHA.
+     * Used by the webhook handler to locate the DB row(s) for a given check-run event.
+     */
+    @Query("SELECT c FROM GithubCommit c WHERE c.sha = :sha")
+    List<GithubCommit> findBySha(@Param("sha") String sha);
+
+    /**
+     * Updates the ci_status for every commit row with the given SHA.
+     * Used by the webhook handler for real-time CI status updates.
+     */
+    @Modifying
+    @Query("UPDATE GithubCommit c SET c.ciStatus = :status WHERE c.sha = :sha")
+    void updateCiStatusBySha(@Param("sha") String sha, @Param("status") String status);
 }

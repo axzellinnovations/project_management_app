@@ -43,6 +43,7 @@ public class SecurityConfig {
             "/api/auth/forgot",
             "/api/auth/reset",
             "/api/auth/refresh",
+            "/api/github/webhooks",   // GitHub webhook deliveries carry no JWT
             "/ws/**",
             "/ws-native/**",
             "/v3/api-docs/**",

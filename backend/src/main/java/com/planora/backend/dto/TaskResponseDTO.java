@@ -57,7 +57,7 @@ public class TaskResponseDTO {
     // GitHub integration fields (V8)
     private String githubBranch;
     private Integer githubPrCount;
-    private String ciStatus;
+    private String ciStatus;        // "PASSING" | "FAILED" | "RUNNING" | null  (CiStatus enum name)
     private List<LinkedPrDTO> linkedPrs;
     private List<RecentCommitDTO> recentCommits;
 

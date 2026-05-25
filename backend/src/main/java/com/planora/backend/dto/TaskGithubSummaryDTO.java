@@ -22,7 +22,7 @@ public class TaskGithubSummaryDTO {
     private Long   taskId;
     private String githubBranch;
     private int    prCount;
-    private String ciStatus;        // "success" | "failure" | "pending" | null
+    private String ciStatus;        // "PASSING" | "FAILED" | "RUNNING" | null  (CiStatus enum name; null = no CI data)
 
     private List<PullRequestItem> pullRequests;
     private List<CommitItem>      commits;
@@ -57,6 +57,6 @@ public class TaskGithubSummaryDTO {
         private String author;
         private String committedAt;
         private String htmlUrl;
-        private String ciStatus;        // commit-level CI result
+        private String ciStatus;        // "PASSING" | "FAILED" | "RUNNING" | null
     }
 }

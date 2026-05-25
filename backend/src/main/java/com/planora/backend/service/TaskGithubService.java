@@ -3,6 +3,7 @@ package com.planora.backend.service;
 import com.planora.backend.dto.GitHubTaskData;
 import com.planora.backend.dto.TaskGithubSummaryDTO;
 import com.planora.backend.exception.ResourceNotFoundException;
+import com.planora.backend.model.CiStatus;
 import com.planora.backend.model.GithubCommit;
 import com.planora.backend.model.GithubPullRequest;
 import com.planora.backend.model.Task;
@@ -54,6 +55,9 @@ public class TaskGithubService {
 
     @Autowired
     private TaskActivityService taskActivityService;
+
+    @Autowired
+    private CiStatusResolver ciStatusResolver;
 
     // ── 1. READ — DB-backed aggregation ──────────────────────────────────────────
 
@@ -234,6 +238,33 @@ public class TaskGithubService {
         return buildSummary(task, prs, commits);
     }
 
+    // ── 5. WEBHOOK — real-time CI status updates from GitHub events ───────────────
+
+    /**
+     * Applies a resolved CI status to all commit rows that match the given SHA.
+     * Called by {@link com.planora.backend.controller.GitHubWebhookController} when a
+     * {@code check_run} event arrives from GitHub.
+     *
+     * Uses a bulk JPQL UPDATE so no entities need to be loaded into memory.
+     *
+     * @param fullSha        full 40-char commit SHA from the webhook payload
+     * @param resolvedStatus the normalized status to persist
+     */
+    @Transactional
+    public void updateCiStatusBySha(String fullSha, CiStatus resolvedStatus) {
+        if (isBlank(fullSha) || resolvedStatus == null) return;
+        commitRepository.updateCiStatusBySha(fullSha, resolvedStatus.name());
+    }
+
+    /**
+     * Returns true when at least one commit row in the DB matches the given SHA.
+     * Used by the webhook controller to skip events for commits not linked to any task.
+     */
+    @Transactional(readOnly = true)
+    public boolean hasCommitWithSha(String sha) {
+        return !commitRepository.findBySha(sha).isEmpty();
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────────
 
     private void persistPullRequests(Task task, List<GitHubTaskData.LinkedPr> incoming) {
@@ -292,10 +323,16 @@ public class TaskGithubService {
     private TaskGithubSummaryDTO buildSummary(Task task,
                                                List<GithubPullRequest> prs,
                                                List<GithubCommit> commits) {
+        // Normalize the stored raw value to the canonical CiStatus name.
+        // Returns null (no CI data) rather than "UNKNOWN" (CI exists but unclear)
+        // so the frontend can distinguish "CI not configured" from "CI inconclusive".
         String ciStatus = commits.stream()
                 .filter(c -> c.getCiStatus() != null)
                 .findFirst()
-                .map(GithubCommit::getCiStatus)
+                .map(c -> {
+                    CiStatus normalized = ciStatusResolver.resolveFromStoredValue(c.getCiStatus());
+                    return (normalized == CiStatus.UNKNOWN) ? null : normalized.name();
+                })
                 .orElse(null);
 
         return TaskGithubSummaryDTO.builder()
@@ -326,6 +363,14 @@ public class TaskGithubService {
     private TaskGithubSummaryDTO.CommitItem toCommitItem(GithubCommit c) {
         String sha = c.getSha();
         String shortSha = (sha != null && sha.length() >= 7) ? sha.substring(0, 7) : sha;
+
+        // Normalize per-commit CI status — handles both old raw values and new enum names.
+        String normalizedCiStatus = null;
+        if (c.getCiStatus() != null) {
+            CiStatus resolved = ciStatusResolver.resolveFromStoredValue(c.getCiStatus());
+            normalizedCiStatus = (resolved == CiStatus.UNKNOWN) ? null : resolved.name();
+        }
+
         return TaskGithubSummaryDTO.CommitItem.builder()
                 .id(c.getId())
                 .sha(shortSha)
@@ -333,7 +378,7 @@ public class TaskGithubService {
                 .author(c.getAuthor())
                 .committedAt(c.getCommittedAt())
                 .htmlUrl(c.getHtmlUrl())
-                .ciStatus(c.getCiStatus())
+                .ciStatus(normalizedCiStatus)
                 .build();
     }
 

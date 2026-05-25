@@ -2,6 +2,8 @@ package com.planora.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.planora.backend.dto.GitHubTaskData;
+import com.planora.backend.model.CiStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -21,8 +23,8 @@ import java.util.List;
  *  - Uses RestTemplate for simplicity; swap for WebClient if async/reactive is needed later.
  *  - Every GitHub API call is wrapped in a try/catch so a rate-limit or network hiccup
  *    never breaks the task-detail response — GitHub fields degrade gracefully to null/empty.
- *  - No Spring beans are injected here, so there is zero risk of circular dependency.
- *  - The caller (TaskService) is responsible for providing the per-user GitHub token;
+ *  - CiStatusResolver is injected for all status mapping — raw GitHub strings never leak out.
+ *  - The caller (TaskGithubService) is responsible for providing the per-user GitHub token;
  *    this service is stateless and token-agnostic.
  */
 @Service
@@ -32,6 +34,9 @@ public class GitHubIntegrationService {
     private static final int MAX_ITEMS = 5;
 
     private final RestTemplate restTemplate = new RestTemplate();
+
+    @Autowired
+    private CiStatusResolver ciStatusResolver;
 
     /**
      * Returns a populated {@link GitHubTaskData} for the given repo + branch, or
@@ -141,8 +146,13 @@ public class GitHubIntegrationService {
     }
 
     /**
-     * Derives a single CI status string from the GitHub Check Runs API for the
-     * latest commit on the branch. Returns one of: "success", "failure", "pending", or null.
+     * Resolves a normalized {@link CiStatus} for the latest commit on the branch.
+     *
+     * Strategy (two-source resolution):
+     *  1. GitHub Check Runs API  (modern Checks API — preferred)
+     *  2. GitHub Commit Statuses API  (legacy — used as fallback when check-runs returns UNKNOWN)
+     *
+     * Returns the normalized status name (e.g. "PASSING") or null when no CI data exists.
      */
     private String resolveCiStatus(String owner, String repo,
                                     List<GitHubTaskData.RecentCommit> commits,
@@ -150,37 +160,45 @@ public class GitHubIntegrationService {
         if (commits.isEmpty() || isBlank(commits.get(0).getSha())) return null;
 
         String latestSha = commits.get(0).getSha();
-        String url = GITHUB_API + "/repos/" + owner + "/" + repo
-                + "/commits/" + latestSha + "/check-runs";
 
+        CiStatus fromCheckRuns = fetchAndResolveCheckRuns(owner, repo, latestSha, headers);
+        CiStatus fromStatuses  = CiStatus.UNKNOWN;
+
+        // Only call the legacy Statuses API when check-runs gave us nothing — saves a round-trip.
+        if (fromCheckRuns == CiStatus.UNKNOWN) {
+            fromStatuses = fetchAndResolveCommitStatuses(owner, repo, latestSha, headers);
+        }
+
+        CiStatus resolved = ciStatusResolver.combine(fromCheckRuns, fromStatuses);
+
+        // Return null (no CI data) rather than "UNKNOWN" (indeterminate CI data) so the
+        // frontend can distinguish "CI not configured" from "CI result unclear".
+        return (resolved == CiStatus.UNKNOWN) ? null : resolved.name();
+    }
+
+    private CiStatus fetchAndResolveCheckRuns(String owner, String repo,
+                                               String sha, HttpHeaders headers) {
+        String url = GITHUB_API + "/repos/" + owner + "/" + repo
+                + "/commits/" + sha + "/check-runs";
         try {
             ResponseEntity<JsonNode> response = restTemplate.exchange(
                     url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
-            JsonNode body = response.getBody();
-            if (body == null) return null;
-
-            JsonNode runs = body.path("check_runs");
-            if (!runs.isArray() || runs.isEmpty()) return null;
-
-            boolean anyPending = false;
-            for (JsonNode run : runs) {
-                String status     = run.path("status").asText("");
-                String conclusion = run.path("conclusion").asText("");
-
-                // Any hard failure short-circuits the whole status.
-                if ("failure".equals(conclusion) || "cancelled".equals(conclusion)
-                        || "timed_out".equals(conclusion) || "action_required".equals(conclusion)) {
-                    return "failure";
-                }
-                if ("in_progress".equals(status) || "queued".equals(status)
-                        || "waiting".equals(status) || "pending".equals(status)) {
-                    anyPending = true;
-                }
-            }
-            return anyPending ? "pending" : "success";
-
+            return ciStatusResolver.resolveFromCheckRuns(response.getBody());
         } catch (RestClientException ignored) {
-            return null;
+            return CiStatus.UNKNOWN;
+        }
+    }
+
+    private CiStatus fetchAndResolveCommitStatuses(String owner, String repo,
+                                                    String sha, HttpHeaders headers) {
+        String url = GITHUB_API + "/repos/" + owner + "/" + repo
+                + "/commits/" + sha + "/statuses";
+        try {
+            ResponseEntity<JsonNode> response = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
+            return ciStatusResolver.resolveFromCommitStatuses(response.getBody());
+        } catch (RestClientException ignored) {
+            return CiStatus.UNKNOWN;
         }
     }
 

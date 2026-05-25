@@ -359,4 +359,11 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     @org.springframework.data.jpa.repository.Modifying
     @Query("UPDATE Task t SET t.githubBranch = :branch WHERE t.id = :taskId")
     void updateGithubBranch(@Param("taskId") Long taskId, @Param("branch") String branch);
+
+    /**
+     * Finds all non-archived tasks linked to the given GitHub branch name.
+     * Used by the webhook handler to locate tasks affected by a check-run event.
+     */
+    @Query("SELECT t FROM Task t WHERE t.githubBranch = :branch AND t.archived = false")
+    List<Task> findByGithubBranch(@Param("branch") String branch);
 }

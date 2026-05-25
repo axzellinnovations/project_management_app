@@ -49,7 +49,7 @@ public class GithubCommit {
     private String htmlUrl;
 
     @Column(name = "ci_status", length = 20)
-    private String ciStatus;        // "success" | "failure" | "pending" | null
+    private String ciStatus;        // "PASSING" | "FAILED" | "RUNNING" | null (normalized CiStatus name)
 
     @Column(name = "synced_at", nullable = false)
     private LocalDateTime syncedAt;
