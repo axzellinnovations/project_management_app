@@ -25,10 +25,13 @@ public class GitHubTaskData {
     public static class LinkedPr {
         int number;
         String title;
-        String state;       // "open" | "closed" | "merged"
+        String state;           // "open" | "closed" | "merged"
         String htmlUrl;
         String author;
-        String createdAt;
+        String createdAt;       // ISO-8601 string from GitHub API
+        String mergedAt;        // ISO-8601 string, null when not merged
+        String headBranch;      // source branch
+        String baseBranch;      // target branch
     }
 
     /** Lightweight commit summary — full SHA stored internally, display-truncated by the mapper. */

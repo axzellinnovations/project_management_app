@@ -87,8 +87,8 @@ public class GitHubIntegrationService {
             List<GitHubTaskData.LinkedPr> result = new ArrayList<>();
             for (JsonNode pr : body) {
                 // Treat merged PRs as "merged" rather than "closed" for display clarity.
-                String state = !pr.path("merged_at").isNull() ? "merged"
-                             : pr.path("state").asText("open");
+                boolean isMerged = !pr.path("merged_at").isNull();
+                String state = isMerged ? "merged" : pr.path("state").asText("open");
                 result.add(GitHubTaskData.LinkedPr.builder()
                         .number(pr.path("number").asInt())
                         .title(pr.path("title").asText(""))
@@ -96,6 +96,9 @@ public class GitHubIntegrationService {
                         .htmlUrl(pr.path("html_url").asText(""))
                         .author(pr.path("user").path("login").asText(""))
                         .createdAt(pr.path("created_at").asText(""))
+                        .mergedAt(isMerged ? pr.path("merged_at").asText(null) : null)
+                        .headBranch(pr.path("head").path("ref").asText(""))
+                        .baseBranch(pr.path("base").path("ref").asText(""))
                         .build());
             }
             return result;

@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.planora.backend.dto.CommentRequestDTO;
-import com.planora.backend.dto.GitHubTaskData;
+import com.planora.backend.dto.TaskGithubSummaryDTO;
 import com.planora.backend.dto.TaskRequestDTO;
 import com.planora.backend.dto.TaskResponseDTO;
 import com.planora.backend.dto.TaskResponseDTO.DependencyDTO;
@@ -92,7 +92,7 @@ public class TaskService {
     private TeamMembershipLookupService teamMembershipLookupService;
 
     @Autowired
-    private GitHubIntegrationService gitHubIntegrationService;
+    private TaskGithubService taskGithubService;
 
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
@@ -217,20 +217,20 @@ public class TaskService {
     }
 
     /**
-     * Enriched overload: identical to {@link #getTaskById(Long)} but additionally
-     * fetches live GitHub data (PRs, commits, CI status) when a token and repo are provided.
-     * Passing null for either parameter safely falls back to the base method behaviour.
+     * Enriched overload: syncs fresh GitHub data (PRs, commits, CI status) via
+     * TaskGithubService, then returns a TaskResponseDTO with all GitHub fields populated.
+     * Falls back to the base getTaskById behaviour when either argument is null/blank.
      *
      * @param repoFullName "owner/repo" of the connected GitHub repository
      * @param githubToken  per-user GitHub OAuth or PAT token from the request header
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public TaskResponseDTO getTaskById(Long taskId, String repoFullName, String githubToken) {
         Task task = taskRepository.findByIdFullyFetched(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
-        GitHubTaskData githubData = gitHubIntegrationService.fetchTaskGitHubData(
-                repoFullName, task.getGithubBranch(), githubToken);
-        return mapToDTO(task, buildDependencyMap(List.of(taskId)), githubData);
+        TaskGithubSummaryDTO githubSummary = taskGithubService.syncAndGetSummary(
+                taskId, repoFullName, githubToken);
+        return mapToDTO(task, buildDependencyMap(List.of(taskId)), githubSummary);
     }
 
     // ── 3. UPDATE TASK ──────────────────────────────────────────────────────────
@@ -1136,13 +1136,13 @@ public class TaskService {
     }
 
     /**
-     * Master mapper. The {@code githubData} parameter is optional (nullable):
+     * Master mapper. The {@code githubSummary} parameter is optional (nullable):
      * when null all GitHub fields in the DTO are left null, preserving full
      * backward compatibility with every existing caller.
      */
     private TaskResponseDTO mapToDTO(Task task,
                                      java.util.Map<Long, List<DependencyDTO>> dependencyMap,
-                                     GitHubTaskData githubData) {
+                                     TaskGithubSummaryDTO githubSummary) {
         TaskResponseDTO dto = new TaskResponseDTO();
         dto.setId(task.getId());
         dto.setProjectTaskNumber(task.getProjectTaskNumber());
@@ -1243,30 +1243,26 @@ public class TaskService {
         }
 
         // Map GitHub integration fields (V8)
-        // githubBranch is persisted on the task row; the rest come from the live GitHub API.
+        // githubBranch is persisted on the task entity; the rest come from TaskGithubService.
         dto.setGithubBranch(task.getGithubBranch());
-        if (githubData != null) {
-            dto.setGithubPrCount(githubData.getPrCount());
-            dto.setCiStatus(githubData.getCiStatus());
+        if (githubSummary != null) {
+            dto.setGithubPrCount(githubSummary.getPrCount());
+            dto.setCiStatus(githubSummary.getCiStatus());
 
-            if (githubData.getLinkedPrs() != null) {
-                dto.setLinkedPrs(githubData.getLinkedPrs().stream()
+            if (githubSummary.getPullRequests() != null) {
+                dto.setLinkedPrs(githubSummary.getPullRequests().stream()
                         .map(pr -> new TaskResponseDTO.LinkedPrDTO(
-                                pr.getNumber(), pr.getTitle(), pr.getState(),
+                                pr.getPrNumber(), pr.getTitle(), pr.getState(),
                                 pr.getHtmlUrl(), pr.getAuthor(), pr.getCreatedAt()))
                         .collect(Collectors.toList()));
             }
 
-            if (githubData.getRecentCommits() != null) {
-                dto.setRecentCommits(githubData.getRecentCommits().stream()
-                        .map(c -> {
-                            // Trim full SHA to 7-char short SHA for the response display.
-                            String shortSha = c.getSha() != null && c.getSha().length() >= 7
-                                    ? c.getSha().substring(0, 7) : c.getSha();
-                            return new TaskResponseDTO.RecentCommitDTO(
-                                    shortSha, c.getMessage(), c.getAuthor(),
-                                    c.getDate(), c.getHtmlUrl());
-                        })
+            if (githubSummary.getCommits() != null) {
+                // CommitItem.sha is already the 7-char short SHA — trimmed by TaskGithubService.
+                dto.setRecentCommits(githubSummary.getCommits().stream()
+                        .map(c -> new TaskResponseDTO.RecentCommitDTO(
+                                c.getSha(), c.getMessage(), c.getAuthor(),
+                                c.getCommittedAt(), c.getHtmlUrl()))
                         .collect(Collectors.toList()));
             }
         }

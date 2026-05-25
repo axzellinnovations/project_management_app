@@ -2,11 +2,13 @@ package com.planora.backend.controller;
 
 import com.planora.backend.dto.CommentRequestDTO;
 import com.planora.backend.dto.TaskActivityResponseDTO;
+import com.planora.backend.dto.TaskGithubSummaryDTO;
 import com.planora.backend.dto.TaskRequestDTO;
 import com.planora.backend.dto.TaskResponseDTO;
 import com.planora.backend.dto.TaskTemplateDTO;
 import com.planora.backend.model.UserPrincipal;
 import com.planora.backend.service.TaskActivityService;
+import com.planora.backend.service.TaskGithubService;
 import com.planora.backend.service.TaskService;
 import com.planora.backend.service.TaskTemplateService;
 import jakarta.validation.Valid;
@@ -38,6 +40,9 @@ public class TaskController {
 
     @Autowired
     TaskTemplateService templateService;
+
+    @Autowired
+    TaskGithubService taskGithubService;
 
     // Spring's WebSocket messaging template used for real-time push notifications.
     @Autowired
@@ -82,6 +87,30 @@ public class TaskController {
                 ? service.getTaskById(taskId, repoFullName, githubToken)
                 : service.getTaskById(taskId);
         return new ResponseEntity<>(dto, HttpStatus.OK);
+    }
+
+    /**
+     * Returns the full GitHub summary (PRs, commits, CI status, branch) for a task.
+     *
+     * When X-GitHub-Token and repoFullName are both provided the service syncs fresh
+     * data from the GitHub API before responding. Omit them to get the last cached data.
+     *
+     * GET /api/tasks/{taskId}/github
+     *     ?repoFullName=owner/repo          (optional)
+     *     Header: X-GitHub-Token: <token>   (optional)
+     */
+    @GetMapping("/{taskId}/github")
+    public ResponseEntity<TaskGithubSummaryDTO> getTaskGithubSummary(
+            @PathVariable Long taskId,
+            @RequestHeader(value = "X-GitHub-Token", required = false) String githubToken,
+            @RequestParam(required = false) String repoFullName,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+
+        TaskGithubSummaryDTO summary = (githubToken != null && repoFullName != null)
+                ? taskGithubService.syncAndGetSummary(taskId, repoFullName, githubToken)
+                : taskGithubService.getTaskGithubSummary(taskId);
+
+        return ResponseEntity.ok(summary);
     }
 
     @PutMapping("/{taskId}")
