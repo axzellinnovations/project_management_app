@@ -23,15 +23,18 @@ public class GitHubTaskData {
     @Value
     @Builder
     public static class LinkedPr {
-        int number;
+        int    number;
         String title;
         String state;           // "open" | "closed" | "merged"
         String htmlUrl;
         String author;
         String createdAt;       // ISO-8601 string from GitHub API
+        String updatedAt;       // ISO-8601 string — used for sort order
         String mergedAt;        // ISO-8601 string, null when not merged
         String headBranch;      // source branch
         String baseBranch;      // target branch
+        String headSha;         // full 40-char SHA of PR's head commit
+        String reviewStatus;    // "APPROVED"|"CHANGES_REQUESTED"|"REVIEW_REQUIRED"|"COMMENTED"|null
     }
 
     /** Lightweight commit summary — full SHA stored internally, display-truncated by the mapper. */

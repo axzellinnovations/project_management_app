@@ -61,4 +61,18 @@ public class GithubPullRequest {
 
     @Column(name = "synced_at", nullable = false)
     private LocalDateTime syncedAt;
+
+    // ── Enrichment fields added in V24 ───────────────────────────────────────────
+
+    @Column(name = "head_sha", length = 40)
+    private String headSha;          // full SHA of PR's head commit — used for CI cross-reference
+
+    @Column(name = "updated_at", length = 30)
+    private String updatedAt;        // ISO-8601 string from GitHub — used for sort order
+
+    @Column(name = "ci_status", length = 20)
+    private String ciStatus;         // "PASSING" | "FAILED" | "RUNNING" | null
+
+    @Column(name = "review_status", length = 30)
+    private String reviewStatus;     // "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | "COMMENTED" | null
 }

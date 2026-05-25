@@ -1,6 +1,7 @@
 package com.planora.backend.controller;
 
 import com.planora.backend.dto.CommentRequestDTO;
+import com.planora.backend.dto.LinkedPrResponseDTO;
 import com.planora.backend.dto.TaskActivityResponseDTO;
 import com.planora.backend.dto.TaskBranchUpdateDTO;
 import com.planora.backend.dto.TaskGithubSummaryDTO;
@@ -112,6 +113,29 @@ public class TaskController {
                 : taskGithubService.getTaskGithubSummary(taskId);
 
         return ResponseEntity.ok(summary);
+    }
+
+    /**
+     * Returns all pull requests linked to a task, sorted by most-recently-updated.
+     *
+     * GET /api/tasks/{taskId}/pull-requests
+     *     ?repoFullName=owner/repo          (optional — triggers a fresh GitHub sync first)
+     *     Header: X-GitHub-Token: <token>   (optional — required when repoFullName is set)
+     *
+     * Without token+repo the endpoint returns the last cached PR data from the DB.
+     * With token+repo it syncs fresh data from GitHub before responding.
+     */
+    @GetMapping("/{taskId}/pull-requests")
+    public ResponseEntity<List<LinkedPrResponseDTO>> getLinkedPullRequests(
+            @PathVariable Long taskId,
+            @RequestHeader(value = "X-GitHub-Token", required = false) String githubToken,
+            @RequestParam(required = false) String repoFullName) {
+
+        List<LinkedPrResponseDTO> prs = (githubToken != null && repoFullName != null)
+                ? taskGithubService.syncAndGetLinkedPrs(taskId, repoFullName, githubToken)
+                : taskGithubService.getLinkedPrs(taskId);
+
+        return ResponseEntity.ok(prs);
     }
 
     /**

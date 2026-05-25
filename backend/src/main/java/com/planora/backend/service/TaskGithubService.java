@@ -1,6 +1,7 @@
 package com.planora.backend.service;
 
 import com.planora.backend.dto.GitHubTaskData;
+import com.planora.backend.dto.LinkedPrResponseDTO;
 import com.planora.backend.dto.TaskGithubSummaryDTO;
 import com.planora.backend.exception.ResourceNotFoundException;
 import com.planora.backend.model.CiStatus;
@@ -219,8 +220,12 @@ public class TaskGithubService {
 
         if (data == null) return;
 
-        persistPullRequests(task, data.getLinkedPrs());
+        // Commits first so their CI status can be cross-referenced when persisting PRs.
         persistCommits(task, data.getRecentCommits(), data.getCiStatus());
+        String latestCommitSha = (data.getRecentCommits() != null && !data.getRecentCommits().isEmpty())
+                ? data.getRecentCommits().get(0).getSha()
+                : null;
+        persistPullRequests(task, data.getLinkedPrs(), latestCommitSha, data.getCiStatus());
     }
 
     /**
@@ -267,7 +272,16 @@ public class TaskGithubService {
 
     // ── Private helpers ───────────────────────────────────────────────────────────
 
-    private void persistPullRequests(Task task, List<GitHubTaskData.LinkedPr> incoming) {
+    /**
+     * @param latestCommitSha SHA of the most-recently synced commit (already in DB).
+     *                        When a PR's headSha matches this, the task's overall CI
+     *                        status is copied onto the PR row — avoids an extra API call.
+     * @param latestCiStatus  resolved CI status string for {@code latestCommitSha}, or null.
+     */
+    private void persistPullRequests(Task task,
+                                     List<GitHubTaskData.LinkedPr> incoming,
+                                     String latestCommitSha,
+                                     String latestCiStatus) {
         if (incoming == null || incoming.isEmpty()) return;
 
         // Delete-then-insert keeps the table in sync without complex diff logic.
@@ -275,13 +289,32 @@ public class TaskGithubService {
         prRepository.flush();
 
         LocalDateTime now = LocalDateTime.now();
-        List<GithubPullRequest> entities = incoming.stream()
-                .map(pr -> new GithubPullRequest(
-                        null, task, pr.getNumber(), pr.getTitle(),
-                        pr.getState(), pr.getHtmlUrl(), pr.getAuthor(),
-                        pr.getCreatedAt(), pr.getMergedAt(),
-                        pr.getHeadBranch(), pr.getBaseBranch(), now))
-                .collect(Collectors.toList());
+        List<GithubPullRequest> entities = new ArrayList<>();
+        for (GitHubTaskData.LinkedPr dto : incoming) {
+            // CI status: copy from already-persisted commit when head SHAs match.
+            String prCiStatus = null;
+            if (!isBlank(dto.getHeadSha()) && dto.getHeadSha().equals(latestCommitSha)) {
+                prCiStatus = latestCiStatus;
+            }
+
+            GithubPullRequest entity = new GithubPullRequest();
+            entity.setTask(task);
+            entity.setPrNumber(dto.getNumber());
+            entity.setTitle(dto.getTitle());
+            entity.setState(dto.getState());
+            entity.setHtmlUrl(dto.getHtmlUrl());
+            entity.setAuthor(dto.getAuthor());
+            entity.setCreatedAt(dto.getCreatedAt());
+            entity.setUpdatedAt(dto.getUpdatedAt());
+            entity.setMergedAt(dto.getMergedAt());
+            entity.setHeadBranch(dto.getHeadBranch());
+            entity.setBaseBranch(dto.getBaseBranch());
+            entity.setHeadSha(dto.getHeadSha());
+            entity.setReviewStatus(dto.getReviewStatus());
+            entity.setCiStatus(prCiStatus);
+            entity.setSyncedAt(now);
+            entities.add(entity);
+        }
         prRepository.saveAll(entities);
 
         // Auto-assign the task's branch from the most-recent PR's head branch,
@@ -346,18 +379,78 @@ public class TaskGithubService {
     }
 
     private TaskGithubSummaryDTO.PullRequestItem toPrItem(GithubPullRequest pr) {
+        String normalizedCiStatus = null;
+        if (pr.getCiStatus() != null) {
+            CiStatus resolved = ciStatusResolver.resolveFromStoredValue(pr.getCiStatus());
+            normalizedCiStatus = (resolved == CiStatus.UNKNOWN) ? null : resolved.name();
+        }
         return TaskGithubSummaryDTO.PullRequestItem.builder()
                 .id(pr.getId())
                 .prNumber(pr.getPrNumber())
                 .title(pr.getTitle())
                 .state(pr.getState())
+                .ciStatus(normalizedCiStatus)
+                .reviewStatus(pr.getReviewStatus())
                 .htmlUrl(pr.getHtmlUrl())
                 .author(pr.getAuthor())
                 .createdAt(pr.getCreatedAt())
+                .updatedAt(pr.getUpdatedAt())
                 .mergedAt(pr.getMergedAt())
                 .headBranch(pr.getHeadBranch())
                 .baseBranch(pr.getBaseBranch())
                 .build();
+    }
+
+    /**
+     * Converts a {@link GithubPullRequest} entity to the standalone
+     * {@link LinkedPrResponseDTO} used by the dedicated PR-list endpoint.
+     */
+    public LinkedPrResponseDTO toLinkedPrResponseDTO(GithubPullRequest pr) {
+        String normalizedCiStatus = null;
+        if (pr.getCiStatus() != null) {
+            CiStatus resolved = ciStatusResolver.resolveFromStoredValue(pr.getCiStatus());
+            normalizedCiStatus = (resolved == CiStatus.UNKNOWN) ? null : resolved.name();
+        }
+        return LinkedPrResponseDTO.builder()
+                .id(pr.getId())
+                .prNumber(pr.getPrNumber())
+                .title(pr.getTitle())
+                .state(pr.getState())
+                .ciStatus(normalizedCiStatus)
+                .reviewStatus(pr.getReviewStatus())
+                .headBranch(pr.getHeadBranch())
+                .baseBranch(pr.getBaseBranch())
+                .htmlUrl(pr.getHtmlUrl())
+                .author(pr.getAuthor())
+                .createdAt(pr.getCreatedAt())
+                .updatedAt(pr.getUpdatedAt())
+                .mergedAt(pr.getMergedAt())
+                .build();
+    }
+
+    /**
+     * Returns all PRs linked to a task, sorted by most-recently-updated, as
+     * {@link LinkedPrResponseDTO} objects. DB-only — no GitHub API call.
+     */
+    @Transactional(readOnly = true)
+    public List<LinkedPrResponseDTO> getLinkedPrs(Long taskId) {
+        if (!taskRepository.existsById(taskId)) {
+            throw new ResourceNotFoundException("Task not found");
+        }
+        return prRepository.findByTaskId(taskId).stream()
+                .map(this::toLinkedPrResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Syncs fresh PR data from GitHub then returns the updated PR list.
+     * Used by the endpoint when a token + repo are provided.
+     */
+    public List<LinkedPrResponseDTO> syncAndGetLinkedPrs(Long taskId,
+                                                          String repoFullName,
+                                                          String githubToken) {
+        syncFromGitHub(taskId, repoFullName, githubToken);
+        return getLinkedPrs(taskId);
     }
 
     private TaskGithubSummaryDTO.CommitItem toCommitItem(GithubCommit c) {

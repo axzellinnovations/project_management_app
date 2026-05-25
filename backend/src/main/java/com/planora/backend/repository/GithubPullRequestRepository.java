@@ -12,15 +12,20 @@ import java.util.List;
 @Repository
 public interface GithubPullRequestRepository extends JpaRepository<GithubPullRequest, Long> {
 
-    /** All PRs for a single task, ordered most-recent first. */
-    @Query("SELECT p FROM GithubPullRequest p WHERE p.task.id = :taskId ORDER BY p.createdAt DESC")
+    /**
+     * All PRs for a single task, sorted by most-recently updated.
+     * Falls back to createdAt when updatedAt is null (rows written before V24).
+     */
+    @Query("SELECT p FROM GithubPullRequest p WHERE p.task.id = :taskId " +
+           "ORDER BY COALESCE(p.updatedAt, p.createdAt) DESC")
     List<GithubPullRequest> findByTaskId(@Param("taskId") Long taskId);
 
     /**
      * Batch fetch for multiple tasks — issues one SQL query instead of N.
      * Used by TaskGithubService.getTaskGithubSummaries to avoid N+1.
      */
-    @Query("SELECT p FROM GithubPullRequest p WHERE p.task.id IN :taskIds ORDER BY p.createdAt DESC")
+    @Query("SELECT p FROM GithubPullRequest p WHERE p.task.id IN :taskIds " +
+           "ORDER BY COALESCE(p.updatedAt, p.createdAt) DESC")
     List<GithubPullRequest> findAllByTaskIds(@Param("taskIds") List<Long> taskIds);
 
     /** Wipes all PR rows for a task before a fresh sync write. */

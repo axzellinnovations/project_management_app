@@ -14,7 +14,9 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Fetches live GitHub data (pull requests, commits, CI status) for a single task.
@@ -91,24 +93,95 @@ public class GitHubIntegrationService {
 
             List<GitHubTaskData.LinkedPr> result = new ArrayList<>();
             for (JsonNode pr : body) {
-                // Treat merged PRs as "merged" rather than "closed" for display clarity.
                 boolean isMerged = !pr.path("merged_at").isNull();
-                String state = isMerged ? "merged" : pr.path("state").asText("open");
+                String  state    = isMerged ? "merged" : pr.path("state").asText("open");
+                int     number   = pr.path("number").asInt();
+                String  headSha  = pr.path("head").path("sha").asText(null);
+
+                // Fetch the review status for each PR (one extra API call per PR).
+                String reviewStatus = fetchReviewStatus(owner, repo, number, headers);
+
                 result.add(GitHubTaskData.LinkedPr.builder()
-                        .number(pr.path("number").asInt())
+                        .number(number)
                         .title(pr.path("title").asText(""))
                         .state(state)
                         .htmlUrl(pr.path("html_url").asText(""))
                         .author(pr.path("user").path("login").asText(""))
                         .createdAt(pr.path("created_at").asText(""))
+                        .updatedAt(pr.path("updated_at").asText(null))
                         .mergedAt(isMerged ? pr.path("merged_at").asText(null) : null)
                         .headBranch(pr.path("head").path("ref").asText(""))
                         .baseBranch(pr.path("base").path("ref").asText(""))
+                        .headSha(headSha)
+                        .reviewStatus(reviewStatus)
                         .build());
             }
             return result;
         } catch (RestClientException ignored) {
             return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Derives the overall review status for a single PR by inspecting its review history.
+     *
+     * Algorithm:
+     *  1. Group reviews by reviewer login, keeping only the most-recent per reviewer
+     *     (the GitHub API returns reviews in chronological order, oldest first).
+     *  2. CHANGES_REQUESTED from any reviewer that wasn't later resolved → "CHANGES_REQUESTED"
+     *  3. All active reviewers approved → "APPROVED"
+     *  4. Only comment-only reviews → "COMMENTED"
+     *  5. No reviews at all → "REVIEW_REQUIRED"
+     *
+     * Note: DISMISSED reviews are excluded from the aggregation (they are effectively revoked).
+     *
+     * @return one of "APPROVED", "CHANGES_REQUESTED", "COMMENTED", "REVIEW_REQUIRED", or null on error
+     */
+    private String fetchReviewStatus(String owner, String repo, int prNumber, HttpHeaders headers) {
+        String url = GITHUB_API + "/repos/" + owner + "/" + repo
+                + "/pulls/" + prNumber + "/reviews";
+        try {
+            ResponseEntity<JsonNode> response = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
+            JsonNode body = response.getBody();
+            if (body == null || !body.isArray() || body.isEmpty()) return "REVIEW_REQUIRED";
+
+            // Iterate chronologically (oldest first) and overwrite per-reviewer state
+            // so the map ends up holding each reviewer's most-recent effective review.
+            Map<String, String> latestByReviewer = new LinkedHashMap<>();
+            for (JsonNode review : body) {
+                String reviewer = review.path("user").path("login").asText("");
+                String state    = review.path("state").asText("");
+                if (reviewer.isEmpty() || state.isEmpty()) continue;
+                // DISMISSED means the review was explicitly dismissed — treat as no vote.
+                if ("DISMISSED".equalsIgnoreCase(state)) {
+                    latestByReviewer.remove(reviewer);
+                } else {
+                    latestByReviewer.put(reviewer, state.toUpperCase());
+                }
+            }
+
+            if (latestByReviewer.isEmpty()) return "REVIEW_REQUIRED";
+
+            boolean anyChangesRequested = false;
+            boolean anyApproved         = false;
+            boolean anyCommented        = false;
+
+            for (String state : latestByReviewer.values()) {
+                switch (state) {
+                    case "CHANGES_REQUESTED" -> anyChangesRequested = true;
+                    case "APPROVED"          -> anyApproved         = true;
+                    case "COMMENTED"         -> anyCommented        = true;
+                }
+            }
+
+            if (anyChangesRequested) return "CHANGES_REQUESTED";
+            if (anyApproved)         return "APPROVED";
+            if (anyCommented)        return "COMMENTED";
+            return "REVIEW_REQUIRED";
+
+        } catch (RestClientException ignored) {
+            return null;
         }
     }
 
