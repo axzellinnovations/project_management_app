@@ -177,6 +177,17 @@ const CiStatusIcon: React.FC<{ status: CiStatus; size?: number; className?: stri
   return null;
 };
 
+const CiBadge: React.FC<{ status: CiStatus }> = ({ status }) => {
+  const props = ciBadgeProps(status);
+  if (!props) return null;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${props.cls}`}>
+      <CiStatusIcon status={status} size={9} />
+      {props.label}
+    </span>
+  );
+};
+
 interface CollapseSectionProps {
   title: string;
   icon: React.ReactNode;
@@ -610,65 +621,89 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
               >
                 <div className="space-y-2 px-4 pb-4 pt-2">
                   {loadingPrs ? (
+                    /* ── Skeletons ── */
                     <>
-                      <Skeleton className="h-[76px] w-full" />
-                      <Skeleton className="h-[76px] w-full" />
+                      <Skeleton className="h-[90px] w-full" />
+                      <Skeleton className="h-[82px] w-full" />
+                      <Skeleton className="h-[90px] w-full" />
                     </>
                   ) : prs.length === 0 ? (
-                    <EmptyState
-                      icon={<GitPullRequest size={14} />}
-                      title="No pull requests linked"
-                      description="PRs referencing this task will appear here"
-                    />
+                    /* ── Empty state ── */
+                    <div className="flex flex-col items-center gap-2.5 py-6 text-center">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F2F4F7]">
+                        <GitPullRequest size={18} className="text-[#9CA3AF]" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold text-[#6A7282]">
+                          No pull requests linked
+                        </p>
+                        <p className="mt-0.5 text-[10px] leading-snug text-[#98A2B3]">
+                          PRs that reference this task will appear here
+                        </p>
+                      </div>
+                    </div>
                   ) : (
+                    /* ── PR cards ── */
                     prs.map((pr) => {
                       const stateInfo = prStateMeta(pr.state, pr.mergedAt);
-                      const ci        = ciBadgeProps(pr.ciStatus);
                       const review    = reviewBadgeProps(pr.reviewStatus);
+                      const accentCls =
+                        pr.mergedAt || pr.state === 'merged' ? 'border-l-purple-400' :
+                        pr.state === 'closed'                ? 'border-l-red-400'    :
+                                                               'border-l-green-400';
                       return (
                         <a
                           key={pr.id}
                           href={pr.htmlUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="group block rounded-lg border border-[#E5E7EB] bg-[#F7F8FA] px-3 py-2.5 transition-all hover:border-[#155DFC] hover:bg-blue-50/30 hover:shadow-sm"
+                          className={`group block overflow-hidden rounded-lg border border-l-2 border-[#E5E7EB] bg-white transition-all hover:bg-[#FAFBFF] hover:shadow-sm ${accentCls}`}
                         >
-                          {/* PR title row */}
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex min-w-0 items-start gap-1.5">
-                              {stateInfo.icon}
-                              <span className="line-clamp-2 text-xs font-semibold leading-tight text-[#374151] transition-colors group-hover:text-[#155DFC]">
-                                {pr.title}
-                              </span>
+                          <div className="px-3 pb-2.5 pt-2.5">
+
+                            {/* ── Row 1: state icon + PR number + title + link ── */}
+                            <div className="flex items-start gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="mb-0.5 flex items-center gap-1.5">
+                                  {stateInfo.icon}
+                                  <span className="font-mono text-[10px] font-bold text-[#9CA3AF]">
+                                    #{pr.prNumber}
+                                  </span>
+                                </div>
+                                <p className="line-clamp-2 text-[11px] font-semibold leading-snug text-[#374151] transition-colors group-hover:text-[#155DFC]">
+                                  {pr.title}
+                                </p>
+                              </div>
+                              <ExternalLink
+                                size={11}
+                                className="mt-0.5 flex-shrink-0 text-[#C4C9D4] transition-colors group-hover:text-[#155DFC]"
+                              />
                             </div>
-                            <ExternalLink
-                              size={11}
-                              className="mt-0.5 flex-shrink-0 text-[#C4C9D4] transition-colors group-hover:text-[#155DFC]"
-                            />
-                          </div>
 
-                          {/* Badges row */}
-                          <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                            <Badge label={stateInfo.label} cls={stateInfo.badgeCls} />
-                            {ci     && <Badge label={ci.label}     cls={ci.cls}     pulse={ci.pulse} />}
-                            {review && <Badge label={review.label} cls={review.cls} />}
-                            <span className="ml-auto whitespace-nowrap text-[10px] text-[#98A2B3]">
-                              #{pr.prNumber} · {formatRelative(pr.updatedAt)}
-                            </span>
-                          </div>
+                            {/* ── Row 2: PR state · CI · review badges ── */}
+                            <div className="mt-2 flex flex-wrap items-center gap-1">
+                              <Badge label={stateInfo.label} cls={stateInfo.badgeCls} />
+                              <CiBadge status={pr.ciStatus} />
+                              {review && <Badge label={review.label} cls={review.cls} />}
+                            </div>
 
-                          {/* Branch flow + author */}
-                          <div className="mt-1.5 flex items-center gap-1 font-mono text-[10px] text-[#B0B7C3]">
-                            <GitBranch size={9} className="flex-shrink-0" />
-                            <span className="truncate">{pr.headBranch}</span>
-                            <span className="flex-shrink-0">→</span>
-                            <span className="truncate">{pr.baseBranch}</span>
-                            {pr.author && (
-                              <>
-                                <span className="flex-shrink-0 px-0.5">·</span>
-                                <span className="truncate font-sans not-italic">{pr.author}</span>
-                              </>
-                            )}
+                            {/* ── Row 3: branch flow ── */}
+                            <div className="mt-2 flex min-w-0 items-center gap-1 font-mono text-[10px] text-[#B0B7C3]">
+                              <GitBranch size={9} className="flex-shrink-0" />
+                              <span className="truncate">{pr.headBranch}</span>
+                              <span className="flex-shrink-0 opacity-50">→</span>
+                              <span className="truncate">{pr.baseBranch}</span>
+                            </div>
+
+                            {/* ── Row 4: author · updated time ── */}
+                            <div className="mt-1 flex items-center justify-between text-[10px] text-[#C4C9D4]">
+                              {pr.author
+                                ? <span className="truncate">{pr.author}</span>
+                                : <span />
+                              }
+                              <span className="flex-shrink-0 pl-2">{formatRelative(pr.updatedAt)}</span>
+                            </div>
+
                           </div>
                         </a>
                       );
