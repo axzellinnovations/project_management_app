@@ -1,6 +1,7 @@
 package com.planora.backend.controller;
 
 import com.planora.backend.dto.CommentRequestDTO;
+import com.planora.backend.dto.LinkedCommitResponseDTO;
 import com.planora.backend.dto.LinkedPrResponseDTO;
 import com.planora.backend.dto.TaskActivityResponseDTO;
 import com.planora.backend.dto.TaskBranchUpdateDTO;
@@ -136,6 +137,36 @@ public class TaskController {
                 : taskGithubService.getLinkedPrs(taskId);
 
         return ResponseEntity.ok(prs);
+    }
+
+    /**
+     * Returns commits linked to a task, sorted by committed_at descending.
+     *
+     * GET /api/tasks/{taskId}/commits
+     *     ?limit=20                          (optional, 1-50, default 20)
+     *     ?repoFullName=owner/repo           (optional — triggers a fresh GitHub sync first)
+     *     Header: X-GitHub-Token: <token>   (optional — required when repoFullName is set)
+     *
+     * Each commit includes:
+     *   - sha (7-char), fullSha (40-char), message, author, committedAt, htmlUrl, ciStatus
+     *   - referencedTaskNumbers: task project-numbers extracted from the commit message
+     *     using the patterns "#<number>" and "TASK-<number>" (case-insensitive)
+     *
+     * Without token+repo the endpoint returns cached data from the DB.
+     * With token+repo it syncs fresh data from GitHub before responding.
+     */
+    @GetMapping("/{taskId}/commits")
+    public ResponseEntity<List<LinkedCommitResponseDTO>> getLinkedCommits(
+            @PathVariable Long taskId,
+            @RequestHeader(value = "X-GitHub-Token", required = false) String githubToken,
+            @RequestParam(required = false) String repoFullName,
+            @RequestParam(defaultValue = "20") int limit) {
+
+        List<LinkedCommitResponseDTO> commits = (githubToken != null && repoFullName != null)
+                ? taskGithubService.syncAndGetLinkedCommits(taskId, repoFullName, githubToken, limit)
+                : taskGithubService.getLinkedCommits(taskId, limit);
+
+        return ResponseEntity.ok(commits);
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.planora.backend.service;
 
 import com.planora.backend.dto.GitHubTaskData;
+import com.planora.backend.dto.LinkedCommitResponseDTO;
 import com.planora.backend.dto.LinkedPrResponseDTO;
 import com.planora.backend.dto.TaskGithubSummaryDTO;
 import com.planora.backend.exception.ResourceNotFoundException;
@@ -16,11 +17,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.data.domain.PageRequest;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -41,6 +46,18 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 public class TaskGithubService {
+
+    /** Maximum number of commits returned by the list endpoint to prevent large payloads. */
+    private static final int MAX_COMMIT_RESULTS = 50;
+
+    /**
+     * Matches task key references inside commit messages.
+     * Supported patterns (case-insensitive):
+     *   #<number>    — most common GitHub/GitLab convention
+     *   TASK-<number> — explicit Planora task key style
+     */
+    private static final Pattern TASK_KEY_PATTERN =
+            Pattern.compile("(?:#|TASK-)([0-9]+)", Pattern.CASE_INSENSITIVE);
 
     @Autowired
     private GithubPullRequestRepository prRepository;
@@ -186,12 +203,18 @@ public class TaskGithubService {
     // ── 3. CI STATUS — derived from the most-recent stored commit ────────────────
 
     /**
-     * Returns the CI status of the most-recently synced commit for the task,
+     * Returns the CI status of the most-recently committed (not synced) commit for the task,
      * or null when no commits have been synced yet.
+     *
+     * Uses findRecentByTaskId with a page size of 1 — avoids the
+     * IncorrectResultSizeDataAccessException that the old Optional-returning method
+     * would throw when multiple commit rows exist for the same task.
      */
     @Transactional(readOnly = true)
     public String getLatestCiStatus(Long taskId) {
-        return commitRepository.findLatestByTaskId(taskId)
+        return commitRepository.findRecentByTaskId(taskId, PageRequest.of(0, 1))
+                .stream()
+                .findFirst()
                 .map(GithubCommit::getCiStatus)
                 .orElse(null);
     }
@@ -451,6 +474,110 @@ public class TaskGithubService {
                                                           String githubToken) {
         syncFromGitHub(taskId, repoFullName, githubToken);
         return getLinkedPrs(taskId);
+    }
+
+    // ── 6. COMMIT RETRIEVAL — paginated, commit-linked, task-key-aware ────────────
+
+    /**
+     * Returns the latest {@code limit} commits for a task, sorted by committed_at descending.
+     * DB-only — no GitHub API call. Uses {@link #MAX_COMMIT_RESULTS} as an upper bound.
+     *
+     * @param taskId DB id of the Planora task
+     * @param limit  number of commits to return; clamped to [1, MAX_COMMIT_RESULTS]
+     */
+    @Transactional(readOnly = true)
+    public List<LinkedCommitResponseDTO> getLinkedCommits(Long taskId, int limit) {
+        if (!taskRepository.existsById(taskId)) {
+            throw new ResourceNotFoundException("Task not found");
+        }
+        int effectiveLimit = Math.max(1, Math.min(limit, MAX_COMMIT_RESULTS));
+        return commitRepository
+                .findRecentByTaskId(taskId, PageRequest.of(0, effectiveLimit))
+                .stream()
+                .map(this::toLinkedCommitResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Overload with the default limit of {@link #MAX_COMMIT_RESULTS}.
+     */
+    @Transactional(readOnly = true)
+    public List<LinkedCommitResponseDTO> getLinkedCommits(Long taskId) {
+        return getLinkedCommits(taskId, MAX_COMMIT_RESULTS);
+    }
+
+    /**
+     * Syncs fresh commit data from GitHub then returns the updated commit list.
+     * Used by the endpoint when a token + repo are provided.
+     */
+    public List<LinkedCommitResponseDTO> syncAndGetLinkedCommits(Long taskId,
+                                                                   String repoFullName,
+                                                                   String githubToken,
+                                                                   int limit) {
+        syncFromGitHub(taskId, repoFullName, githubToken);
+        return getLinkedCommits(taskId, limit);
+    }
+
+    /**
+     * Converts a {@link GithubCommit} entity to the standalone
+     * {@link LinkedCommitResponseDTO} used by the dedicated commit-list endpoint.
+     *
+     * Performs two enrichments beyond the raw entity:
+     *  1. Normalizes the stored ciStatus string via {@link CiStatusResolver}.
+     *  2. Extracts task-number references from the commit message.
+     */
+    public LinkedCommitResponseDTO toLinkedCommitResponseDTO(GithubCommit c) {
+        String sha      = c.getSha();
+        String shortSha = (sha != null && sha.length() >= 7) ? sha.substring(0, 7) : sha;
+
+        String normalizedCiStatus = null;
+        if (c.getCiStatus() != null) {
+            CiStatus resolved = ciStatusResolver.resolveFromStoredValue(c.getCiStatus());
+            normalizedCiStatus = (resolved == CiStatus.UNKNOWN) ? null : resolved.name();
+        }
+
+        return LinkedCommitResponseDTO.builder()
+                .id(c.getId())
+                .sha(shortSha)
+                .fullSha(sha)
+                .message(c.getMessage())
+                .author(c.getAuthor())
+                .committedAt(c.getCommittedAt())
+                .htmlUrl(c.getHtmlUrl())
+                .ciStatus(normalizedCiStatus)
+                .referencedTaskNumbers(extractTaskNumbers(c.getMessage()))
+                .build();
+    }
+
+    /**
+     * Scans a commit message for task key references and returns the matched
+     * task numbers as a list of integers.
+     *
+     * Recognised patterns (case-insensitive):
+     *   #<number>    — e.g. "Fixes #42"
+     *   TASK-<number> — e.g. "Resolves TASK-42"
+     *
+     * Numbers are project-scoped task numbers (projectTaskNumber), not DB IDs.
+     * Duplicates are removed; order matches appearance in the message.
+     *
+     * @param message commit message string, may be null or blank
+     * @return deduplicated list of referenced task numbers, or empty list
+     */
+    private List<Integer> extractTaskNumbers(String message) {
+        if (message == null || message.isBlank()) return Collections.emptyList();
+        List<Integer> result = new ArrayList<>();
+        Matcher matcher = TASK_KEY_PATTERN.matcher(message);
+        while (matcher.find()) {
+            try {
+                int taskNum = Integer.parseInt(matcher.group(1));
+                if (!result.contains(taskNum)) {
+                    result.add(taskNum);
+                }
+            } catch (NumberFormatException ignored) {
+                // group(1) is all digits so this should never happen
+            }
+        }
+        return result;
     }
 
     private TaskGithubSummaryDTO.CommitItem toCommitItem(GithubCommit c) {
