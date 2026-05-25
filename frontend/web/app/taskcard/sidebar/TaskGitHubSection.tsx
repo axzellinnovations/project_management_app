@@ -14,6 +14,7 @@ import {
   GitMerge,
   GitPullRequest,
   Loader2,
+  Pencil,
   Plus,
   RefreshCw,
   XCircle,
@@ -88,6 +89,18 @@ function formatRelative(iso: string | null | undefined): string {
   const days  = Math.floor(hours / 24);
   if (days  < 30) return `${days}d ago`;
   return new Date(iso).toLocaleDateString();
+}
+
+function validateBranchName(name: string): string | null {
+  const t = name.trim();
+  if (!t) return 'Branch name cannot be empty';
+  if (t.length > 255) return 'Branch name is too long (max 255 characters)';
+  if (/\s/.test(t)) return 'Branch name cannot contain spaces';
+  if (t.startsWith('.') || t.startsWith('-')) return 'Branch name cannot start with "." or "-"';
+  if (t.endsWith('.lock')) return 'Branch name cannot end with ".lock"';
+  if (t.includes('..')) return 'Branch name cannot contain ".."';
+  if (!/^[a-zA-Z0-9._/\-]+$/.test(t)) return 'Only letters, numbers, ., _, -, / are allowed';
+  return null;
 }
 
 interface PrStateMeta {
@@ -253,6 +266,12 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
   const [error, setError]                     = useState<string | null>(null);
   const [copied, setCopied]                   = useState(false);
 
+  const [branchEditing, setBranchEditing] = useState(false);
+  const [branchInput, setBranchInput]     = useState('');
+  const [branchError, setBranchError]     = useState<string | null>(null);
+  const [savingBranch, setSavingBranch]   = useState(false);
+  const [branchSaved, setBranchSaved]     = useState(false);
+
   // Restore per-task collapse prefs
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -340,6 +359,51 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
     } catch { /* clipboard unavailable */ }
   };
 
+  const startBranchEdit = () => {
+    setBranchInput(summary?.githubBranch ?? '');
+    setBranchError(null);
+    setBranchEditing(true);
+  };
+
+  const cancelBranchEdit = () => {
+    setBranchEditing(false);
+    setBranchError(null);
+  };
+
+  const handleBranchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter')  { e.preventDefault(); saveBranch(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancelBranchEdit(); }
+  };
+
+  const saveBranch = async () => {
+    const trimmed = branchInput.trim();
+    const validationError = validateBranchName(trimmed);
+    if (validationError) { setBranchError(validationError); return; }
+
+    setBranchError(null);
+    setSavingBranch(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks/${taskId}/github/branch`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch: trimmed }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null) as { message?: string } | null;
+        throw new Error(data?.message ?? 'Failed to save branch name');
+      }
+      setSummary(prev => prev ? { ...prev, githubBranch: trimmed } : prev);
+      setBranchEditing(false);
+      setBranchSaved(true);
+      setTimeout(() => setBranchSaved(false), 2500);
+    } catch (err) {
+      setBranchError(err instanceof Error ? err.message : 'Failed to save branch name');
+    } finally {
+      setSavingBranch(false);
+    }
+  };
+
   const ciSummaryBadge = ciBadgeProps(summary?.latestCiStatus ?? null);
   const openPrCount    = prs.filter(p => !p.mergedAt && p.state === 'open').length;
 
@@ -398,12 +462,78 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
               <SidebarField label="Branch">
                 {loadingSummary ? (
                   <Skeleton className="h-8 w-full" />
+                ) : branchEditing ? (
+                  /* ── Edit / Create mode ─────────────────────────────────── */
+                  <div className="space-y-1.5">
+                    <div className={`flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 transition-colors ${
+                      branchError
+                        ? 'border-red-300 ring-1 ring-red-200'
+                        : 'border-[#155DFC] ring-1 ring-[#155DFC]/20'
+                    }`}>
+                      <GitBranch size={12} className="flex-shrink-0 text-[#6A7282]" />
+                      <input
+                        type="text"
+                        value={branchInput}
+                        onChange={e => { setBranchInput(e.target.value); setBranchError(null); }}
+                        onKeyDown={handleBranchKeyDown}
+                        placeholder="e.g. feature/task-123"
+                        autoFocus
+                        spellCheck={false}
+                        disabled={savingBranch}
+                        className="min-w-0 flex-1 bg-transparent font-mono text-xs text-[#374151] outline-none placeholder:text-[#C4C9D4] disabled:opacity-60"
+                      />
+                      {savingBranch && (
+                        <Loader2 size={11} className="flex-shrink-0 animate-spin text-[#9CA3AF]" />
+                      )}
+                    </div>
+
+                    {branchError && (
+                      <p className="flex items-center gap-1 text-[10px] text-red-600">
+                        <AlertCircle size={9} className="flex-shrink-0" />
+                        {branchError}
+                      </p>
+                    )}
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={saveBranch}
+                        disabled={savingBranch || !branchInput.trim()}
+                        className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-[#155DFC] px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-[#1248CC] disabled:opacity-50"
+                      >
+                        {savingBranch ? (
+                          <><Loader2 size={10} className="animate-spin" /> Saving…</>
+                        ) : summary?.githubBranch ? (
+                          <><Check size={10} /> Update Branch</>
+                        ) : (
+                          <><GitBranch size={10} /> Set Branch</>
+                        )}
+                      </button>
+                      <button
+                        onClick={cancelBranchEdit}
+                        disabled={savingBranch}
+                        className="flex items-center justify-center rounded-lg border border-[#E5E7EB] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#374151] transition-colors hover:bg-[#F9FAFB] disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 ) : summary?.githubBranch ? (
-                  <div className="group flex items-center gap-2 rounded-lg border border-[#E5E7EB] bg-[#F7F8FA] px-3 py-1.5 transition-colors hover:border-[#D1D5DB]">
+                  /* ── View mode (branch exists) ──────────────────────────── */
+                  <div className="group flex items-center gap-1.5 rounded-lg border border-[#E5E7EB] bg-[#F7F8FA] px-3 py-1.5 transition-colors hover:border-[#D1D5DB]">
                     <GitBranch size={12} className="flex-shrink-0 text-[#6A7282]" />
                     <span className="min-w-0 flex-1 truncate font-mono text-xs text-[#374151]">
                       {summary.githubBranch}
                     </span>
+                    {branchSaved && (
+                      <Check size={11} className="flex-shrink-0 text-green-500" />
+                    )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); startBranchEdit(); }}
+                      title="Edit branch name"
+                      className="flex-shrink-0 rounded p-0.5 text-[#C4C9D4] transition-colors hover:text-[#374151]"
+                    >
+                      <Pencil size={11} />
+                    </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); copyBranch(); }}
                       title={copied ? 'Copied!' : 'Copy branch name'}
@@ -416,7 +546,14 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
                     </button>
                   </div>
                 ) : (
-                  <span className="text-xs text-[#98A2B3]">No branch linked</span>
+                  /* ── Empty state (no branch) ────────────────────────────── */
+                  <button
+                    onClick={startBranchEdit}
+                    className="flex w-full items-center gap-2 rounded-lg border border-dashed border-[#D0D5DD] bg-[#FAFAFA] px-3 py-2 text-[11px] font-medium text-[#9CA3AF] transition-colors hover:border-[#155DFC] hover:bg-blue-50/30 hover:text-[#155DFC]"
+                  >
+                    <GitBranch size={12} />
+                    Set branch name…
+                  </button>
                 )}
               </SidebarField>
 
