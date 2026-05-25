@@ -5,7 +5,8 @@ import Image from 'next/image';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task, Subtask } from '../../(project)/kanban/types';
-import { Calendar, Trash2, Edit2 } from 'lucide-react';
+import { Calendar, GitPullRequest, Trash2, Edit2 } from 'lucide-react';
+import { CIStatusBadge } from '@/components/ui';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
@@ -114,6 +115,21 @@ export default function KanbanCard({ task, onDelete, onEdit, onOpenTask, usersMa
       {task.storyPoint && task.storyPoint > 0 && (
         <div className="inline-block px-2 py-1 rounded text-[11px] sm:text-xs font-semibold bg-blue-100 text-blue-700 mb-2">
           {task.storyPoint}
+        </div>
+      )}
+
+      {/* GitHub: CI status + open PR count */}
+      {(task.ciStatus || (task.openPrCount ?? 0) > 0) && (
+        <div className="flex items-center gap-1.5 mb-2">
+          {task.ciStatus && (
+            <CIStatusBadge status={task.ciStatus} size="sm" showLabel={false} />
+          )}
+          {(task.openPrCount ?? 0) > 0 && (
+            <span className="inline-flex items-center gap-0.5 rounded-full border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
+              <GitPullRequest size={9} aria-hidden="true" />
+              {task.openPrCount}
+            </span>
+          )}
         </div>
       )}
 

@@ -69,6 +69,8 @@ export interface Task {
   subtasks?: Subtask[];
   commentCount?: number;     // number of comments on this task
   attachmentCount?: number;  // number of attachments on this task
+  ciStatus?: string | null;  // CI/CD pipeline status from GitHub (PASSING | FAILED | RUNNING | null)
+  openPrCount?: number;      // number of open pull requests linked to this task
 }
 
 // Subtask interface

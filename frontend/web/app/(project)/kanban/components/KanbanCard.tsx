@@ -5,7 +5,8 @@ import Image from 'next/image';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task, Label } from '../types';
-import { Calendar, GitBranch, MessageSquare, Paperclip, Check, X, Tag, Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Calendar, GitBranch, GitPullRequest, MessageSquare, Paperclip, Check, X, Tag, Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { CIStatusBadge } from '@/components/ui';
 
 interface KanbanCardProps {
   task: Task;
@@ -389,6 +390,17 @@ export default function KanbanCard({ task, onDelete, onEdit: _onEdit, onOpenTask
             {/* Attachment count */}
             {task.attachmentCount != null && task.attachmentCount > 0 && (
               <div className="flex items-center gap-0.5 text-[11px] text-gray-400"><Paperclip size={10} /><span>{task.attachmentCount}</span></div>
+            )}
+
+            {/* GitHub: CI status (icon-only) + open PR count */}
+            {task.ciStatus && (
+              <CIStatusBadge status={task.ciStatus} size="sm" showLabel={false} />
+            )}
+            {(task.openPrCount ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-0.5 rounded-full border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700">
+                <GitPullRequest size={9} aria-hidden="true" />
+                {task.openPrCount}
+              </span>
             )}
           </div>
 
