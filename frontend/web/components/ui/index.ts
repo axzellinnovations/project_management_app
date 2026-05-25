@@ -4,6 +4,9 @@ export type { ButtonProps } from './Button';
 export { Badge, StatusBadge, PriorityBadge } from './Badge';
 export type { BadgeProps } from './Badge';
 
+export { CIStatusBadge } from './CIStatusBadge';
+export type { CIStatusBadgeProps, CIStatus } from './CIStatusBadge';
+
 export { Avatar, AvatarStack } from './Avatar';
 export type { AvatarProps, AvatarStackProps } from './Avatar';
 

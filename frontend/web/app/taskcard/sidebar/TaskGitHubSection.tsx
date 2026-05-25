@@ -20,6 +20,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { getGitHubToken, getProjectGitHubRepo } from '@/services/githubService';
+import { CIStatusBadge } from '@/components/ui';
 import SidebarField from './SidebarField';
 
 // ── Backend DTO shapes ────────────────────────────────────────────────────────
@@ -131,15 +132,6 @@ function prStateMeta(state: PrState, mergedAt: string | null): PrStateMeta {
 
 interface BadgeProps { label: string; cls: string; pulse?: boolean }
 
-function ciBadgeProps(status: CiStatus): BadgeProps | null {
-  switch (status) {
-    case 'PASSING': return { label: 'Passing', cls: 'text-green-700 bg-green-50 border-green-200',   pulse: false };
-    case 'FAILED':  return { label: 'Failed',  cls: 'text-red-700 bg-red-50 border-red-200',         pulse: false };
-    case 'RUNNING': return { label: 'Running', cls: 'text-amber-700 bg-amber-50 border-amber-200',   pulse: true };
-    default:        return null;
-  }
-}
-
 function reviewBadgeProps(status: ReviewStatus): BadgeProps | null {
   switch (status) {
     case 'APPROVED':          return { label: 'Approved',          cls: 'text-green-700 bg-green-50 border-green-200' };
@@ -175,17 +167,6 @@ const CiStatusIcon: React.FC<{ status: CiStatus; size?: number; className?: stri
   if (status === 'FAILED')  return <XCircle      size={size} className={`text-red-500 ${className}`} />;
   if (status === 'RUNNING') return <Loader2      size={size} className={`animate-spin text-amber-500 ${className}`} />;
   return null;
-};
-
-const CiBadge: React.FC<{ status: CiStatus }> = ({ status }) => {
-  const props = ciBadgeProps(status);
-  if (!props) return null;
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${props.cls}`}>
-      <CiStatusIcon status={status} size={9} />
-      {props.label}
-    </span>
-  );
 };
 
 interface CollapseSectionProps {
@@ -415,8 +396,7 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
     }
   };
 
-  const ciSummaryBadge = ciBadgeProps(summary?.latestCiStatus ?? null);
-  const openPrCount    = prs.filter(p => !p.mergedAt && p.state === 'open').length;
+  const openPrCount = prs.filter(p => !p.mergedAt && p.state === 'open').length;
 
   return (
     <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
@@ -436,8 +416,8 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
           )}
         </span>
         <div className="flex items-center gap-2">
-          {!loadingSummary && ciSummaryBadge && (
-            <Badge label={ciSummaryBadge.label} cls={ciSummaryBadge.cls} pulse={ciSummaryBadge.pulse} />
+          {!loadingSummary && summary?.latestCiStatus && (
+            <CIStatusBadge status={summary.latestCiStatus} size="sm" />
           )}
           <ChevronDown
             size={14}
@@ -572,15 +552,7 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
               {!loadingSummary && summary?.latestCiStatus && (
                 <SidebarField label="CI Status">
                   <div className="flex items-center gap-2">
-                    <CiStatusIcon status={summary.latestCiStatus} size={14} />
-                    <span className={`text-xs font-semibold ${
-                      summary.latestCiStatus === 'PASSING' ? 'text-green-700' :
-                      summary.latestCiStatus === 'FAILED'  ? 'text-red-700'   :
-                                                             'text-amber-700'
-                    }`}>
-                      {summary.latestCiStatus === 'PASSING' ? 'Passing' :
-                       summary.latestCiStatus === 'FAILED'  ? 'Failed'  : 'Running'}
-                    </span>
+                    <CIStatusBadge status={summary.latestCiStatus} size="md" />
                     {summary.latestCommitSha && (
                       <span className="ml-auto font-mono text-[10px] text-[#98A2B3]">
                         {summary.latestCommitSha}
@@ -683,7 +655,7 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
                             {/* ── Row 2: PR state · CI · review badges ── */}
                             <div className="mt-2 flex flex-wrap items-center gap-1">
                               <Badge label={stateInfo.label} cls={stateInfo.badgeCls} />
-                              <CiBadge status={pr.ciStatus} />
+                              <CIStatusBadge status={pr.ciStatus} size="sm" />
                               {review && <Badge label={review.label} cls={review.cls} />}
                             </div>
 
@@ -737,7 +709,6 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
                     />
                   ) : (
                     commits.map((commit) => {
-                      const ci = ciBadgeProps(commit.ciStatus);
                       return (
                         <a
                           key={commit.id}
@@ -760,7 +731,7 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
                               <span className="font-mono text-[10px] font-semibold text-[#155DFC]">
                                 {commit.sha}
                               </span>
-                              {ci && <Badge label={ci.label} cls={ci.cls} pulse={ci.pulse} />}
+                              <CIStatusBadge status={commit.ciStatus} size="sm" />
                             </div>
 
                             {/* Commit message */}
