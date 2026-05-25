@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertCircle,
   Check,
-  CheckCircle2,
   ChevronDown,
   Clock,
   Copy,
@@ -159,15 +158,6 @@ const Badge: React.FC<BadgeProps> = ({ label, cls, pulse = false }) => (
     {label}
   </span>
 );
-
-const CiStatusIcon: React.FC<{ status: CiStatus; size?: number; className?: string }> = ({
-  status, size = 12, className = '',
-}) => {
-  if (status === 'PASSING') return <CheckCircle2 size={size} className={`text-green-500 ${className}`} />;
-  if (status === 'FAILED')  return <XCircle      size={size} className={`text-red-500 ${className}`} />;
-  if (status === 'RUNNING') return <Loader2      size={size} className={`animate-spin text-amber-500 ${className}`} />;
-  return null;
-};
 
 interface CollapseSectionProps {
   title: string;
@@ -694,68 +684,83 @@ const TaskGitHubSection: React.FC<TaskGitHubSectionProps> = ({ taskId, projectId
                 onToggle={() => toggle('commits')}
                 count={commits.length}
               >
-                <div className="space-y-1.5 px-4 pb-4 pt-2">
+                <div className="space-y-2 px-4 pb-4 pt-2">
                   {loadingCommits ? (
+                    /* ── Loading skeletons ── */
                     <>
-                      <Skeleton className="h-[54px] w-full" />
-                      <Skeleton className="h-[54px] w-full" />
-                      <Skeleton className="h-[54px] w-full" />
+                      <Skeleton className="h-[78px] w-full" />
+                      <Skeleton className="h-[70px] w-full" />
+                      <Skeleton className="h-[78px] w-full" />
+                      <Skeleton className="h-[70px] w-full" />
                     </>
                   ) : commits.length === 0 ? (
-                    <EmptyState
-                      icon={<GitCommit size={14} />}
-                      title="No commits linked"
-                      description="Commits mentioning this task number will appear here"
-                    />
+                    /* ── Empty state ── */
+                    <div className="flex flex-col items-center gap-2.5 py-6 text-center">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F2F4F7]">
+                        <GitCommit size={18} className="text-[#9CA3AF]" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold text-[#6A7282]">No commits linked</p>
+                        <p className="mt-0.5 text-[10px] leading-snug text-[#98A2B3]">
+                          Commits mentioning this task number will appear here
+                        </p>
+                      </div>
+                    </div>
                   ) : (
+                    /* ── Commit cards ── */
                     commits.map((commit) => {
+                      const ciAccent =
+                        commit.ciStatus === 'PASSING' ? 'border-l-green-400' :
+                        commit.ciStatus === 'FAILED'  ? 'border-l-red-400'   :
+                        commit.ciStatus === 'RUNNING' ? 'border-l-amber-400' :
+                                                        'border-l-[#D1D5DB]';
                       return (
                         <a
                           key={commit.id}
                           href={commit.htmlUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="group flex items-start gap-2.5 rounded-lg border border-[#E5E7EB] bg-[#F7F8FA] px-3 py-2 transition-all hover:border-[#155DFC] hover:bg-blue-50/30 hover:shadow-sm"
+                          aria-label={`Commit ${commit.sha}: ${commit.message}`}
+                          className={`group block overflow-hidden rounded-lg border border-l-2 border-[#E5E7EB] bg-white transition-all hover:bg-[#FAFBFF] hover:shadow-sm ${ciAccent}`}
                         >
-                          {/* CI icon or fallback commit icon */}
-                          <div className="mt-0.5 flex-shrink-0">
-                            {commit.ciStatus
-                              ? <CiStatusIcon status={commit.ciStatus} size={13} />
-                              : <GitCommit size={13} className="text-[#9CA3AF]" />
-                            }
-                          </div>
+                          <div className="px-3 pb-2.5 pt-2.5">
 
-                          <div className="min-w-0 flex-1">
-                            {/* SHA + CI badge */}
+                            {/* ── Row 1: SHA chip · CI badge · external link ── */}
                             <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-[10px] font-semibold text-[#155DFC]">
+                              <code className="inline-flex items-center gap-1 rounded bg-[#F0F4FF] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#155DFC]">
+                                <GitCommit size={9} aria-hidden="true" />
                                 {commit.sha}
-                              </span>
+                              </code>
                               <CIStatusBadge status={commit.ciStatus} size="sm" />
+                              <ExternalLink
+                                size={10}
+                                aria-hidden="true"
+                                className="ml-auto flex-shrink-0 text-[#C4C9D4] transition-colors group-hover:text-[#155DFC]"
+                              />
                             </div>
 
-                            {/* Commit message */}
-                            <p className="mt-0.5 truncate text-[11px] leading-tight text-[#374151] transition-colors group-hover:text-[#155DFC]">
+                            {/* ── Row 2: commit message, 2-line clamp ── */}
+                            <p className="mt-1.5 line-clamp-2 text-[11px] font-medium leading-snug text-[#374151] transition-colors group-hover:text-[#155DFC]">
                               {commit.message}
                             </p>
 
-                            {/* Meta: time · author */}
-                            <div className="mt-0.5 flex items-center gap-1 text-[10px] text-[#B0B7C3]">
-                              <Clock size={9} className="flex-shrink-0" />
-                              <span className="flex-shrink-0">{formatRelative(commit.committedAt)}</span>
+                            {/* ── Row 3: author · timestamp ── */}
+                            <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-[#B0B7C3]">
                               {commit.author && (
-                                <>
-                                  <span>·</span>
-                                  <span className="truncate">{commit.author}</span>
-                                </>
+                                <span className="max-w-[100px] truncate">{commit.author}</span>
+                              )}
+                              {commit.author && commit.committedAt && (
+                                <span className="flex-shrink-0">·</span>
+                              )}
+                              {commit.committedAt && (
+                                <span className="flex flex-shrink-0 items-center gap-1">
+                                  <Clock size={9} aria-hidden="true" />
+                                  <span>{formatRelative(commit.committedAt)}</span>
+                                </span>
                               )}
                             </div>
-                          </div>
 
-                          <ExternalLink
-                            size={10}
-                            className="mt-1 flex-shrink-0 text-[#C4C9D4] transition-colors group-hover:text-[#155DFC]"
-                          />
+                          </div>
                         </a>
                       );
                     })
