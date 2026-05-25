@@ -6,6 +6,7 @@ import com.planora.backend.exception.ResourceNotFoundException;
 import com.planora.backend.model.GithubCommit;
 import com.planora.backend.model.GithubPullRequest;
 import com.planora.backend.model.Task;
+import com.planora.backend.model.TaskActivityType;
 import com.planora.backend.repository.GithubCommitRepository;
 import com.planora.backend.repository.GithubPullRequestRepository;
 import com.planora.backend.repository.TaskRepository;
@@ -50,6 +51,9 @@ public class TaskGithubService {
 
     @Autowired
     private GitHubIntegrationService gitHubIntegrationService;
+
+    @Autowired
+    private TaskActivityService taskActivityService;
 
     // ── 1. READ — DB-backed aggregation ──────────────────────────────────────────
 
@@ -105,7 +109,7 @@ public class TaskGithubService {
         ));
     }
 
-    // ── 2. BRANCH — direct access to the persisted branch name ───────────────────
+    // ── 2. BRANCH — management of the task's linked GitHub branch ───────────────
 
     /**
      * Returns the branch name stored on the task entity.
@@ -116,6 +120,62 @@ public class TaskGithubService {
         return taskRepository.findById(taskId)
                 .map(Task::getGithubBranch)
                 .orElse(null);
+    }
+
+    /**
+     * Public alias for getBranchForTask — used by external callers that want
+     * the simple name without the "ForTask" suffix.
+     */
+    @Transactional(readOnly = true)
+    public String getBranch(Long taskId) {
+        return getBranchForTask(taskId);
+    }
+
+    /**
+     * Manually sets (or replaces) the GitHub branch linked to a task.
+     * Validates the branch name format, persists it, logs a
+     * GITHUB_BRANCH_UPDATED activity, and returns the refreshed summary.
+     *
+     * @param taskId    Planora task to update
+     * @param branch    new branch name — must be non-blank, ≤255 chars, valid git chars
+     * @param actorName display name of the user making the change (for the activity log)
+     */
+    @Transactional
+    public TaskGithubSummaryDTO updateBranch(Long taskId, String branch, String actorName) {
+        validateBranch(branch);
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        task.setGithubBranch(branch);
+        taskRepository.save(task);
+        taskActivityService.logActivity(
+                taskId,
+                TaskActivityType.GITHUB_BRANCH_UPDATED,
+                actorName,
+                "GitHub branch set to: " + branch);
+        List<GithubPullRequest> prs     = prRepository.findByTaskId(taskId);
+        List<GithubCommit>      commits = commitRepository.findByTaskId(taskId);
+        return buildSummary(task, prs, commits);
+    }
+
+    /**
+     * Silently sets the task's branch to {@code branch} when it has not been
+     * set yet (auto-assign from a linked PR's head branch).
+     * Does nothing if the task already has a branch, keeping manual assignments intact.
+     * Not exposed as an API endpoint — called internally during PR sync.
+     */
+    @Transactional
+    public void setBranch(Long taskId, String branch) {
+        if (isBlank(branch)) return;
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+        if (!isBlank(task.getGithubBranch())) return;   // already set — honour the existing value
+        try {
+            validateBranch(branch);
+        } catch (IllegalArgumentException e) {
+            return;  // invalid branch name from GitHub — skip silently
+        }
+        task.setGithubBranch(branch);
+        taskRepository.save(task);
     }
 
     // ── 3. CI STATUS — derived from the most-recent stored commit ────────────────
@@ -192,6 +252,19 @@ public class TaskGithubService {
                         pr.getHeadBranch(), pr.getBaseBranch(), now))
                 .collect(Collectors.toList());
         prRepository.saveAll(entities);
+
+        // Auto-assign the task's branch from the most-recent PR's head branch,
+        // but only when the task doesn't already have one set manually.
+        GitHubTaskData.LinkedPr first = incoming.get(0);
+        if (!isBlank(first.getHeadBranch()) && isBlank(task.getGithubBranch())) {
+            try {
+                validateBranch(first.getHeadBranch());
+                task.setGithubBranch(first.getHeadBranch());
+                taskRepository.save(task);
+            } catch (IllegalArgumentException ignored) {
+                // Invalid branch name from GitHub — skip silently
+            }
+        }
     }
 
     private void persistCommits(Task task,
@@ -266,5 +339,24 @@ public class TaskGithubService {
 
     private boolean isBlank(String s) {
         return s == null || s.isBlank();
+    }
+
+    /**
+     * Validates that a branch name is non-blank, within the 255-char column limit,
+     * and contains only characters that are legal in Git branch names.
+     *
+     * @throws IllegalArgumentException when the branch name is invalid
+     */
+    private void validateBranch(String branch) {
+        if (isBlank(branch)) {
+            throw new IllegalArgumentException("Branch name must not be blank");
+        }
+        if (branch.length() > 255) {
+            throw new IllegalArgumentException("Branch name must not exceed 255 characters");
+        }
+        if (!branch.matches("[a-zA-Z0-9._/\\-]+")) {
+            throw new IllegalArgumentException(
+                    "Branch name may only contain letters, digits, hyphens, underscores, dots, and forward slashes");
+        }
     }
 }

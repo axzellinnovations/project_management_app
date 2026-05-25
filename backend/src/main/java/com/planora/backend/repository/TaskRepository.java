@@ -355,4 +355,8 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     @org.springframework.data.jpa.repository.Modifying
     @Query(value = "DELETE FROM task_assignees WHERE member_id = :memberId", nativeQuery = true)
     void removeFromTaskAssignees(@Param("memberId") Long memberId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Task t SET t.githubBranch = :branch WHERE t.id = :taskId")
+    void updateGithubBranch(@Param("taskId") Long taskId, @Param("branch") String branch);
 }

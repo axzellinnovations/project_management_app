@@ -2,6 +2,7 @@ package com.planora.backend.controller;
 
 import com.planora.backend.dto.CommentRequestDTO;
 import com.planora.backend.dto.TaskActivityResponseDTO;
+import com.planora.backend.dto.TaskBranchUpdateDTO;
 import com.planora.backend.dto.TaskGithubSummaryDTO;
 import com.planora.backend.dto.TaskRequestDTO;
 import com.planora.backend.dto.TaskResponseDTO;
@@ -110,6 +111,25 @@ public class TaskController {
                 ? taskGithubService.syncAndGetSummary(taskId, repoFullName, githubToken)
                 : taskGithubService.getTaskGithubSummary(taskId);
 
+        return ResponseEntity.ok(summary);
+    }
+
+    /**
+     * Manually sets or updates the GitHub branch linked to a task.
+     *
+     * PATCH /api/tasks/{taskId}/github/branch
+     * Body: { "branch": "feature/my-branch" }
+     *
+     * Returns the refreshed TaskGithubSummaryDTO so the frontend can
+     * update its state without a separate GET.
+     */
+    @PatchMapping("/{taskId}/github/branch")
+    public ResponseEntity<TaskGithubSummaryDTO> updateTaskBranch(
+            @PathVariable Long taskId,
+            @Valid @RequestBody TaskBranchUpdateDTO request,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        String actorName = (currentUser != null) ? currentUser.getUsername() : "System";
+        TaskGithubSummaryDTO summary = taskGithubService.updateBranch(taskId, request.getBranch(), actorName);
         return ResponseEntity.ok(summary);
     }
 
