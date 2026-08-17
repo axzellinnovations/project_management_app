@@ -1818,6 +1818,9 @@
             "format": "int32",
             "type": "integer"
           },
+          "pull_request": {
+            "$ref": "#/components/schemas/JsonNode"
+          },
           "state": {
             "type": "string"
           },
@@ -5812,6 +5815,24 @@
     "/api/auth/login": {
       "post": {
         "operationId": "login",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Sec-Fetch-Site",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {

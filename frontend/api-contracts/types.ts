@@ -4370,6 +4370,7 @@ export interface components {
             linkedTaskId?: number;
             /** Format: int32 */
             number?: number;
+            pull_request?: components["schemas"]["JsonNode"];
             state?: string;
             title?: string;
             /** Format: date-time */
@@ -5812,7 +5813,10 @@ export interface operations {
     login: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                Origin?: string;
+                "Sec-Fetch-Site"?: string;
+            };
             path?: never;
             cookie?: never;
         };
