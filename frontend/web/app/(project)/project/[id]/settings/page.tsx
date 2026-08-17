@@ -31,6 +31,7 @@ import CustomFieldsManager from './CustomFieldsManager';
 import NotificationPreferencesPanel from '@/components/settings/NotificationPreferencesPanel';
 import RecurringSchedulesManager from './RecurringSchedulesManager';
 import { formatDate } from '@/lib/date-time';
+import { getProjectFigmaPath } from '@/lib/figma';
 type ProjectType = 'AGILE' | 'KANBAN';
 
 interface ProjectData {
@@ -835,16 +836,14 @@ export default function ProjectSettingsPage() {
                   <div className="space-y-4">
                     {/* Show current link for everyone */}
                     {project?.figmaUrl && (
-                      <div className="flex items-center gap-2 rounded-xl border border-cu-border bg-cu-bg-secondary px-3.5 py-2.5">
+                      <div className="flex min-w-0 items-center gap-2 rounded-xl border border-cu-border bg-cu-bg-secondary px-3.5 py-2.5">
                         <Figma size={14} className="text-[#F24E1E] shrink-0" />
-                        <a
-                          href={project.figmaUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-cu-primary hover:underline truncate flex-1 font-medium"
+                        <Link
+                          href={getProjectFigmaPath(projectId)}
+                          className="min-w-0 flex-1 truncate text-sm font-medium text-cu-primary hover:underline"
                         >
                           {project.figmaUrl}
-                        </a>
+                        </Link>
                       </div>
                     )}
                     {!project?.figmaUrl && !isOwner && (

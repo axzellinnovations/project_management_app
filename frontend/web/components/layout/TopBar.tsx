@@ -17,6 +17,7 @@ import { SpacesDropdown } from './sidebar/SpacesDropdown';
 import GlobalSearch from './topbar/GlobalSearch';
 import { ProjectTypeIcon } from '@/components/shared/ProjectTypeIcon';
 import { Modal } from '@/components/ui/Modal';
+import { getProjectFigmaPath } from '@/lib/figma';
 
 // Extracted hooks for cleaner logic separation
 import { useProjectContext, subscribeToBrowserStorage } from '@/hooks/useProjectContext';
@@ -108,7 +109,7 @@ function TopBarContent() {
   const handleOpenFigma = () => {
     if (!projectId) return;
     if (figmaUrl) {
-      window.open(figmaUrl, '_blank', 'noopener,noreferrer');
+      router.push(getProjectFigmaPath(projectId));
     } else {
       // No Figma link set yet — owner can set one via the edit modal, others see a hint
       if (isProjectOwner) {
@@ -138,7 +139,7 @@ function TopBarContent() {
     try {
       await projectsApi.updateProjectDetails(Number(projectId), { figmaUrl: normalized || null });
       setFigmaModalOpen(false);
-      if (normalized) window.open(normalized, '_blank', 'noopener,noreferrer');
+      if (normalized) router.push(getProjectFigmaPath(projectId));
       // Force SWR revalidation by dispatching a storage event (useProjectContext will pick it up on next poll)
       window.dispatchEvent(new Event('storage'));
     } catch {
@@ -282,7 +283,7 @@ function TopBarContent() {
                       ? 'text-[#F24E1E] hover:bg-[#F24E1E]/10'
                       : 'text-cu-text-muted hover:text-cu-text-secondary hover:bg-cu-hover'
                   }`}
-                  title={figmaUrl ? 'Open Figma' : isProjectOwner ? 'Add Figma link' : 'No Figma link set'}
+                  title={figmaUrl ? 'Open Figma in Planora' : isProjectOwner ? 'Add Figma link' : 'No Figma link set'}
                   aria-label="Figma"
                 >
                   <Figma size={18} strokeWidth={figmaUrl ? 2.2 : 2} />
