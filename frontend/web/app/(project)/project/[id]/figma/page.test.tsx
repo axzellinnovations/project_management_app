@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ProjectFigmaPage from './page';
 import { fetchProjectDetails } from '@/services/projects-service';
 
@@ -14,6 +14,7 @@ const mockedFetchProjectDetails = fetchProjectDetails as jest.MockedFunction<typ
 
 describe('ProjectFigmaPage', () => {
   beforeEach(() => {
+    jest.useRealTimers();
     mockedFetchProjectDetails.mockReset();
   });
 
@@ -35,6 +36,10 @@ describe('ProjectFigmaPage', () => {
       `https://www.figma.com/embed?embed_host=planora&url=${encodeURIComponent(figmaUrl)}`,
     );
     expect(screen.getByRole('link', { name: /open in figma/i })).toHaveAttribute('href', figmaUrl);
+
+    expect(await screen.findByText(/loading figma preview/i)).toBeInTheDocument();
+    fireEvent.load(frame);
+    expect(screen.queryByText(/loading figma preview/i)).not.toBeInTheDocument();
   });
 
   it('shows an explicit open button when the saved URL cannot be embedded', async () => {
@@ -47,7 +52,28 @@ describe('ProjectFigmaPage', () => {
 
     render(<ProjectFigmaPage />);
 
-    expect(await screen.findByText(/cannot be embedded/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /open in figma/i })).toHaveAttribute('href', figmaUrl);
+    expect(await screen.findByText(/cannot be displayed here/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /open in figma/i }).at(-1)).toHaveAttribute('href', figmaUrl);
+  });
+
+  it('falls back to a Planora message when the iframe does not load', async () => {
+    jest.useFakeTimers();
+    const figmaUrl = 'https://www.figma.com/file/abc123/My-Design?node-id=1%3A2';
+    mockedFetchProjectDetails.mockResolvedValue({
+      id: 42,
+      name: 'Atlas',
+      figmaUrl,
+    });
+
+    render(<ProjectFigmaPage />);
+
+    expect(await screen.findByText(/loading figma preview/i)).toBeInTheDocument();
+
+    act(() => {
+      jest.advanceTimersByTime(8000);
+    });
+
+    expect(await screen.findByText(/cannot be displayed here/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /open in figma/i }).at(-1)).toHaveAttribute('href', figmaUrl);
   });
 });

@@ -32,6 +32,7 @@ const awsS3Sources = [
 ];
 const githubAvatarImageSource = 'https://avatars.githubusercontent.com';
 const diceBearImageSource = 'https://api.dicebear.com';
+const figmaFrameSources = ['https://www.figma.com', 'https://embed.figma.com'];
 
 function originsFromCsv(rawValue) {
   if (!rawValue) return [];
@@ -172,6 +173,7 @@ const nextConfig = {
       "'self'",
       ...awsS3Sources,
       'blob:',
+      ...figmaFrameSources,
       ...backendSources,
     ]);
 

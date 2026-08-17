@@ -163,6 +163,19 @@ async function validateServiceWorkerHeaders() {
   if (csp !== "default-src 'none'; script-src 'self'; connect-src 'self';") fail('/sw.js CSP is not the expected strict policy');
 }
 
+async function validateApplicationCspHeaders() {
+  const headers = await nextConfig.headers();
+  const appRule = headers.find((rule) => rule.source === '/:path*');
+  if (!appRule) fail('next.config.mjs is missing the application headers rule');
+
+  const headerMap = new Map(appRule.headers.map((header) => [header.key.toLowerCase(), header.value]));
+  const csp = headerMap.get('content-security-policy') || '';
+  const frameSrc = csp.match(/frame-src\s+([^;]+)/)?.[1] || '';
+
+  if (!frameSrc.includes('https://www.figma.com')) fail('Application CSP frame-src must include https://www.figma.com');
+  if (!frameSrc.includes('https://embed.figma.com')) fail('Application CSP frame-src must include https://embed.figma.com');
+}
+
 function validateMetadata() {
   const rootHead = readText('.next/server/app/index.segments/_head.segment.rsc');
   requiredMetadataTokens.forEach((token) => {
@@ -179,6 +192,7 @@ async function main() {
   validateServiceWorker();
   validateServiceWorkerRegistration();
   await validateServiceWorkerHeaders();
+  await validateApplicationCspHeaders();
   validateMetadata();
   console.log('PWA validation passed.');
 }
