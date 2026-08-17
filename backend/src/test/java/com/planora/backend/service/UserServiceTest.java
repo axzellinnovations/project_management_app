@@ -559,6 +559,7 @@ public class UserServiceTest {
         testUser.setVerified(true);
 
         VerificationToken storedToken = new VerificationToken();
+        storedToken.setUser(testUser);
         storedToken.setToken("old-jti");
         storedToken.setExpiry(Instant.now().plusSeconds(600));
         storedToken.setUsed(false);
@@ -568,7 +569,8 @@ public class UserServiceTest {
         when(userRepository.findFirstByEmailIgnoreCase("test@example.com")).thenReturn(Optional.of(testUser));
         when(jwtService.extractJti("old-refresh")).thenReturn("old-jti");
         when(jwtService.extractJti("new-refresh")).thenReturn("new-jti");
-        when(tokenRepository.findByUserAndTokenTypeForUpdate(testUser, VerificationToken.TokenType.REFRESH_TOKEN)).thenReturn(storedToken);
+        when(tokenRepository.findByTokenOrPreviousTokenAndTokenTypeForUpdate("old-jti", VerificationToken.TokenType.REFRESH_TOKEN))
+                .thenReturn(Optional.of(storedToken));
         when(jwtService.generateToken(anyString(), anyString(), any())).thenReturn("new-access");
         when(jwtService.generateRefreshToken(anyString())).thenReturn("new-refresh");
 
@@ -578,7 +580,10 @@ public class UserServiceTest {
         assertTrue(result.isSuccess());
         assertEquals("new-access", result.getToken());
         assertEquals("new-refresh", result.getRefreshToken());
-        verify(tokenRepository).deleteByUserAndTokenType(testUser, VerificationToken.TokenType.REFRESH_TOKEN);
+        verify(tokenRepository).save(storedToken);
+        assertEquals("new-jti", storedToken.getToken());
+        assertEquals("old-jti", storedToken.getPreviousToken());
+        assertNotNull(storedToken.getPreviousTokenExpiresAt());
     }
 
     @Test
@@ -594,21 +599,16 @@ public class UserServiceTest {
     void testRefreshTokens_JtiMismatch_ReturnsNullWithoutRevokingCurrentToken() {
         testUser.setVerified(true);
 
-        VerificationToken storedToken = new VerificationToken();
-        storedToken.setToken("expected-jti");
-        storedToken.setExpiry(Instant.now().plusSeconds(600));
-        storedToken.setUsed(false);
-        storedToken.setTokenType(VerificationToken.TokenType.REFRESH_TOKEN);
-
         when(jwtService.validateRefreshToken("tampered-token")).thenReturn("test@example.com");
         when(userRepository.findFirstByEmailIgnoreCase("test@example.com")).thenReturn(Optional.of(testUser));
         when(jwtService.extractJti("tampered-token")).thenReturn("attacker-jti");
-        when(tokenRepository.findByUserAndTokenTypeForUpdate(testUser, VerificationToken.TokenType.REFRESH_TOKEN)).thenReturn(storedToken);
+        when(tokenRepository.findByTokenOrPreviousTokenAndTokenTypeForUpdate("attacker-jti", VerificationToken.TokenType.REFRESH_TOKEN))
+                .thenReturn(Optional.empty());
 
         LoginResponse result = userService.refreshTokens("tampered-token");
 
         assertNull(result);
-        verify(tokenRepository, never()).deleteByUserAndTokenType(testUser, VerificationToken.TokenType.REFRESH_TOKEN);
+        verify(tokenRepository, never()).delete(any());
     }
 
     @Test
@@ -616,6 +616,7 @@ public class UserServiceTest {
         testUser.setVerified(true);
 
         VerificationToken storedToken = new VerificationToken();
+        storedToken.setUser(testUser);
         storedToken.setToken("current-jti");
         storedToken.setPreviousToken("old-jti");
         storedToken.setPreviousTokenExpiresAt(Instant.now().plusSeconds(5));
@@ -627,7 +628,8 @@ public class UserServiceTest {
         when(userRepository.findFirstByEmailIgnoreCase("test@example.com")).thenReturn(Optional.of(testUser));
         when(jwtService.extractJti("old-refresh")).thenReturn("old-jti");
         when(jwtService.extractJti("new-refresh")).thenReturn("new-jti");
-        when(tokenRepository.findByUserAndTokenTypeForUpdate(testUser, VerificationToken.TokenType.REFRESH_TOKEN)).thenReturn(storedToken);
+        when(tokenRepository.findByTokenOrPreviousTokenAndTokenTypeForUpdate("old-jti", VerificationToken.TokenType.REFRESH_TOKEN))
+                .thenReturn(Optional.of(storedToken));
         when(jwtService.generateToken(anyString(), anyString(), any())).thenReturn("new-access");
         when(jwtService.generateRefreshToken(anyString())).thenReturn("new-refresh");
 
@@ -637,11 +639,9 @@ public class UserServiceTest {
         assertTrue(result.isSuccess());
         assertEquals("new-access", result.getToken());
         assertEquals("new-refresh", result.getRefreshToken());
-        verify(tokenRepository).deleteByUserAndTokenType(testUser, VerificationToken.TokenType.REFRESH_TOKEN);
         verify(tokenRepository).save(argThat(token ->
                 "new-jti".equals(token.getToken())
-                        && token.getPreviousToken() == null
-                        && token.getPreviousTokenExpiresAt() == null));
+                        && "old-jti".equals(token.getPreviousToken())));
     }
 
     @Test
@@ -649,6 +649,7 @@ public class UserServiceTest {
         testUser.setVerified(true);
 
         VerificationToken storedToken = new VerificationToken();
+        storedToken.setUser(testUser);
         storedToken.setToken("jti-123");
         storedToken.setExpiry(Instant.now().plusSeconds(600));
         storedToken.setUsed(true);
@@ -657,11 +658,25 @@ public class UserServiceTest {
         when(jwtService.validateRefreshToken("used-token")).thenReturn("test@example.com");
         when(userRepository.findFirstByEmailIgnoreCase("test@example.com")).thenReturn(Optional.of(testUser));
         when(jwtService.extractJti("used-token")).thenReturn("jti-123");
-        when(tokenRepository.findByUserAndTokenTypeForUpdate(testUser, VerificationToken.TokenType.REFRESH_TOKEN)).thenReturn(storedToken);
+        when(tokenRepository.findByTokenOrPreviousTokenAndTokenTypeForUpdate("jti-123", VerificationToken.TokenType.REFRESH_TOKEN))
+                .thenReturn(Optional.of(storedToken));
 
         LoginResponse result = userService.refreshTokens("used-token");
 
         assertNull(result);
+    }
+
+    @Test
+    void testRevokeRefreshToken_WithToken_DeletesSpecificSession() {
+        when(jwtService.extractJti("refresh-token-1")).thenReturn("jti-1");
+        VerificationToken storedToken = new VerificationToken();
+        storedToken.setToken("jti-1");
+        when(tokenRepository.findByTokenOrPreviousTokenAndTokenTypeForUpdate("jti-1", VerificationToken.TokenType.REFRESH_TOKEN))
+                .thenReturn(Optional.of(storedToken));
+
+        userService.revokeRefreshToken("test@example.com", "refresh-token-1");
+
+        verify(tokenRepository).delete(storedToken);
     }
 
     @Test
@@ -679,6 +694,7 @@ public class UserServiceTest {
 
         userService.revokeRefreshToken("test@example.com");
 
+        verify(tokenRepository, never()).delete(any());
         verify(tokenRepository, never()).deleteByUserAndTokenType(any(), any());
     }
 

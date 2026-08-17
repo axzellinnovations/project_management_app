@@ -13,7 +13,7 @@ import { useSprintVelocity } from './hooks/useSprintVelocity';
 import { getUserFromToken } from '@/lib/auth';
 
 import { toast } from '@/components/ui';
-import { getProjectLabels, createLabel } from '@/services/labels-service';
+import { getProjectLabels, createLabel, updateLabel, deleteLabel } from '@/services/labels-service';
 import type { TaskItem, SprintItem, Label } from '@/types';
 import { useTaskWebSocket } from '@/hooks/useTaskWebSocket';
 import { RouteLoadingState } from '@/components/shared/RouteBoundaryState';
@@ -44,7 +44,16 @@ type RawTask = {
   storyPoint: number;
   assigneeName?: string;
   assigneePhotoUrl?: string | null;
-  assignees?: Array<{ id: number; name: string; email?: string; avatar?: string; profilePicUrl?: string | null }>;
+  assignees?: Array<{
+    id?: number;
+    userId?: number;
+    memberId?: number;
+    name: string;
+    email?: string;
+    avatar?: string;
+    photoUrl?: string | null;
+    profilePicUrl?: string | null;
+  }>;
   sprintId?: number | null;
   status?: string;
   startDate?: string;
@@ -137,10 +146,14 @@ function SprintBacklogPageContent() {
     assigneeName: raw.assigneeName ?? 'Unassigned',
     assigneePhotoUrl: raw.assigneePhotoUrl ?? null,
     assignees: raw.assignees?.map((a) => ({
-      id: a.id,
+      id: a.userId ?? a.memberId ?? a.id,
+      userId: a.userId ?? a.id,
+      memberId: a.memberId ?? a.id,
       name: a.name,
       email: a.email,
-      avatar: a.avatar ?? a.profilePicUrl ?? undefined,
+      avatar: a.photoUrl ?? a.avatar ?? a.profilePicUrl ?? undefined,
+      photoUrl: a.photoUrl ?? a.avatar ?? a.profilePicUrl ?? null,
+      profilePicUrl: a.photoUrl ?? a.avatar ?? a.profilePicUrl ?? null,
     })) ?? [],
     sprintId: raw.sprintId ?? null,
     status: raw.status ?? 'TODO',
@@ -545,9 +558,43 @@ function SprintBacklogPageContent() {
       if (cKey) removeSessionCache(cKey);
     } catch {
       toast('Failed to update due date.', 'error');
-      void fetchData({ showSpinner: false, forceNetwork: true });
     }
-  }, [projectId, fetchData]);
+  }, [projectId]);
+
+  const handleAssignTaskInState = useCallback((
+    taskId: number,
+    assigneeName: string,
+    assigneePhotoUrl: string | null,
+    assignees?: TaskItem['assignees']
+  ) => {
+    setProductTasks((prev) =>
+      prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              assigneeName,
+              assigneePhotoUrl,
+              ...(assignees !== undefined ? { assignees } : {}),
+            }
+          : t
+      )
+    );
+    setSprints((prev) =>
+      prev.map((s) => ({
+        ...s,
+        tasks: s.tasks.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                assigneeName,
+                assigneePhotoUrl,
+                ...(assignees !== undefined ? { assignees } : {}),
+              }
+            : t
+        ),
+      }))
+    );
+  }, []);
 
   const handleSprintDeleted = useCallback((sprintId: number, tasks: SprintItem['tasks']) => {
     setSprints(prev => prev.filter(s => s.id !== sprintId));
@@ -560,12 +607,54 @@ function SprintBacklogPageContent() {
     void fetchData({ showSpinner: false, forceNetwork: true });
   }, [projectId, fetchData]);
 
-  const handleCreateLabel = useCallback(async (name: string) => {
-    const color = LABEL_PALETTE[Math.floor(Math.random() * LABEL_PALETTE.length)];
-    const newLabel = await createLabel(Number(projectId), name, color);
+  const handleCreateLabel = useCallback(async (name: string, color?: string) => {
+    const chosenColor = color || LABEL_PALETTE[Math.floor(Math.random() * LABEL_PALETTE.length)];
+    const newLabel = await createLabel(Number(projectId), name, chosenColor);
     setProjectLabels((prev) => [...prev, newLabel]);
     return newLabel;
   }, [projectId]);
+
+  const handleUpdateLabel = useCallback(async (id: number, name: string, color: string) => {
+    const updated = await updateLabel(id, name, color);
+    setProjectLabels((prev) => prev.map((l) => (l.id === id ? updated : l)));
+    const updateTaskLabels = (t: TaskItem) => {
+      const hasLabel = t.labels?.some((l) => l.id === id);
+      if (!hasLabel) return t;
+      return {
+        ...t,
+        labels: t.labels?.map((l) => (l.id === id ? updated : l)),
+      };
+    };
+    setProductTasks((prev) => prev.map(updateTaskLabels));
+    setSprints((prev) =>
+      prev.map((s) => ({
+        ...s,
+        tasks: s.tasks.map(updateTaskLabels),
+      }))
+    );
+    return updated;
+  }, []);
+
+  const handleDeleteLabel = useCallback(async (id: number) => {
+    await deleteLabel(id);
+    setProjectLabels((prev) => prev.filter((l) => l.id !== id));
+    const filterTaskLabels = (t: TaskItem) => {
+      const hasLabel = t.labels?.some((l) => l.id === id);
+      if (!hasLabel) return t;
+      return {
+        ...t,
+        labels: t.labels?.filter((l) => l.id !== id),
+      };
+    };
+    setProductTasks((prev) => prev.map(filterTaskLabels));
+    setSprints((prev) =>
+      prev.map((s) => ({
+        ...s,
+        tasks: s.tasks.map(filterTaskLabels),
+      }))
+    );
+    return true;
+  }, []);
 
   const getSelectedTaskIds = useCallback((): number[] => {
     const ids: number[] = [];
@@ -910,12 +999,7 @@ function SprintBacklogPageContent() {
                           }}
                           onStatusChange={handleTaskStatusChange}
                           onStoryPointsChange={updateTaskStoryPoints}
-                          onAssignTask={(taskId, name, photo) => {
-                            setSprints(prev => prev.map(s => ({
-                              ...s,
-                              tasks: s.tasks.map(t => t.id === taskId ? { ...t, assigneeName: name, assigneePhotoUrl: photo } : t)
-                            })));
-                          }}
+                          onAssignTask={handleAssignTaskInState}
                           onRenameTask={async (taskId, title) => {
                             try {
                               await tasksApi.update(taskId, { title });
@@ -927,6 +1011,8 @@ function SprintBacklogPageContent() {
                           }}
                           projectLabels={projectLabels}
                           onCreateLabel={handleCreateLabel}
+                          onUpdateLabel={handleUpdateLabel}
+                          onDeleteLabel={handleDeleteLabel}
                           onDueDateChange={handleTaskDueDateChange}
                           extraStatuses={sprint.status === 'ACTIVE' ? activeBoardStatuses : []}
                           existingSprintNames={sprints.map((s) => s.name)}
@@ -963,9 +1049,7 @@ function SprintBacklogPageContent() {
                   onDropTask={moveTaskToBacklog}
                   onStatusChange={handleTaskStatusChange}
                   onDueDateChange={handleTaskDueDateChange}
-                  onAssignTask={(taskId, assigneeName, assigneePhotoUrl) => {
-                    setProductTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, assigneeName, assigneePhotoUrl } : t)));
-                  }}
+                  onAssignTask={handleAssignTaskInState}
                   onRenameTask={async (taskId, title) => {
                     try {
                       await tasksApi.update(taskId, { title });
@@ -976,6 +1060,8 @@ function SprintBacklogPageContent() {
                   onCloseCreateModal={() => setShowCreateTaskModal(false)}
                   projectLabels={projectLabels}
                   onCreateLabel={handleCreateLabel}
+                  onUpdateLabel={handleUpdateLabel}
+                  onDeleteLabel={handleDeleteLabel}
                 />
               </motion.div>
 

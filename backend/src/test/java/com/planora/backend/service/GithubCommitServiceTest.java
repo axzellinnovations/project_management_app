@@ -122,7 +122,7 @@ class GithubCommitServiceTest {
     void getCommits_triggersProactiveSyncWhenEmpty() throws Exception {
         when(integrationRepository.findByProjectIdAndActiveTrue(16L))
                 .thenReturn(List.of(integration));
-        when(commitRepository.countByIntegrationIdIn(List.of(100L)))
+        when(commitRepository.countByIntegrationId(100L))
                 .thenReturn(0L);
         when(githubTokenService.hasValidToken(integration)).thenReturn(true);
         when(githubTokenService.resolveToken(integration)).thenReturn("gh-token");
@@ -158,5 +158,21 @@ class GithubCommitServiceTest {
         assertEquals(1, page.getTotalElements());
         assertEquals("initial commit", page.getContent().get(0).getMessage());
         verify(githubApiClient).fetchCommits("testowner/testrepo", "gh-token", 1, 100);
+    }
+
+    @Test
+    void resolveTaskRef_handlesExceptionFromProxyGracefully() {
+        Project mockProject = mock(Project.class);
+        when(mockProject.getProjectKey()).thenThrow(new org.hibernate.LazyInitializationException("no session"));
+
+        Task task = commitService.resolveTaskRef(mockProject, "feat: PLAN-123");
+        assertNull(task);
+    }
+
+    @Test
+    void resolveTaskRef_returnsNullForNullProjectOrEmptyText() {
+        assertNull(commitService.resolveTaskRef(null, "feat: PLAN-123"));
+        assertNull(commitService.resolveTaskRef(project, ""));
+        assertNull(commitService.resolveTaskRef(project, null));
     }
 }

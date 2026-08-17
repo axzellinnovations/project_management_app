@@ -48,6 +48,12 @@ public class GithubIssueDTO {
     @JsonProperty("html_url")
     private String htmlUrl;
     private Integer comments;
+    @JsonProperty("pull_request")
+    private JsonNode pullRequest;
+
+    public boolean isPullRequest() {
+        return pullRequest != null && !pullRequest.isNull() && !pullRequest.isMissingNode();
+    }
 
     public static class AssigneeLoginDeserializer extends StdDeserializer<String> {
         public AssigneeLoginDeserializer() {

@@ -44,14 +44,30 @@ public class GithubApiClient {
             + "?state=" + state
             + "&per_page=" + Math.min(perPage, MAX_PER_PAGE)
             + "&page=" + page;
-        return getList(url, token);
+        try {
+            return getList(url, token);
+        } catch (GithubApiException e) {
+            if (e.getStatusCode() == 404 || e.getStatusCode() == 409) {
+                log.info("Repository '{}' returned status {} from pulls API", repoFullName, e.getStatusCode());
+                return List.of();
+            }
+            throw e;
+        }
     }
 
     public List<JsonNode> fetchCommits(String repoFullName, String token, int page, int perPage) {
         String url = githubApiBaseUrl + "/repos/" + repoFullName + "/commits"
             + "?per_page=" + Math.min(perPage, MAX_PER_PAGE)
             + "&page=" + page;
-        return getList(url, token);
+        try {
+            return getList(url, token);
+        } catch (GithubApiException e) {
+            if (e.getStatusCode() == 409 || e.getStatusCode() == 404) {
+                log.info("Repository '{}' returned status {} (empty or uninitialized) from commits API", repoFullName, e.getStatusCode());
+                return List.of();
+            }
+            throw e;
+        }
     }
 
     public List<JsonNode> fetchIssues(String repoFullName, String token, String state, int page, int perPage) {
@@ -60,7 +76,15 @@ public class GithubApiClient {
             + "?state=" + state
             + "&per_page=" + Math.min(perPage, MAX_PER_PAGE)
             + "&page=" + page;
-        return getList(url, token);
+        try {
+            return getList(url, token);
+        } catch (GithubApiException e) {
+            if (e.getStatusCode() == 404 || e.getStatusCode() == 409) {
+                log.info("Repository '{}' returned status {} from issues API", repoFullName, e.getStatusCode());
+                return List.of();
+            }
+            throw e;
+        }
     }
 
     public JsonNode fetchRepository(String repoFullName, String token) {
@@ -168,7 +192,7 @@ public class GithubApiClient {
             .header("Authorization", "Bearer " + token)
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
-            .timeout(Duration.ofSeconds(30));
+            .timeout(Duration.ofSeconds(10));
     }
 
     private String encodePathSegment(String value) {

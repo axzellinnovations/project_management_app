@@ -38,14 +38,20 @@ public class GithubCommitService {
 
     @Transactional
     public Page<GithubCommitDTO> getCommits(Long projectId, int page, int size) {
+        return getCommits(projectId, page, size, null);
+    }
+
+    @Transactional
+    public Page<GithubCommitDTO> getCommits(Long projectId, int page, int size, Long userId) {
         List<GithubIntegration> integrations = integrationRepository.findByProjectIdAndActiveTrue(projectId);
         if (integrations.isEmpty()) return Page.empty();
 
         List<Long> ids = integrations.stream().map(GithubIntegration::getId).collect(Collectors.toList());
 
-        // Proactive sync if no commits cached yet
-        if (commitRepository.countByIntegrationIdIn(ids) == 0) {
-            for (GithubIntegration integration : integrations) {
+        // Proactive sync for any integration that has no commits cached yet
+        for (GithubIntegration integration : integrations) {
+            if (commitRepository.countByIntegrationId(integration.getId()) == 0) {
+                ensureIntegrationToken(integration, userId);
                 if (githubTokenService.hasValidToken(integration)) {
                     try {
                         syncCommits(integration);
@@ -60,16 +66,39 @@ public class GithubCommitService {
         return commitRepository.findByIntegrationIdIn(ids, pageRequest).map(this::toDTO);
     }
 
+    private void ensureIntegrationToken(GithubIntegration integration, Long userId) {
+        if (!githubTokenService.hasValidToken(integration) && userId != null) {
+            try {
+                String userToken = githubTokenService.getToken(userId);
+                if (userToken != null && !userToken.isBlank()) {
+                    integration.setEncryptedAccessToken(githubTokenService.encryptToken(userToken));
+                    integrationRepository.save(integration);
+                }
+            } catch (Exception e) {
+                log.debug("Could not backfill integration token from user {}: {}", userId, e.getMessage());
+            }
+        }
+    }
+
     @Transactional
     public void syncCommits(GithubIntegration integration) {
         String token = githubTokenService.resolveToken(integration);
         String repo = integration.getRepositoryFullName();
         log.info("Syncing commits for {}", repo);
 
-        List<JsonNode> commits = githubApiClient.fetchCommits(repo, token, 1, 100);
-        commits.forEach(node -> upsertCommit(integration, node));
-
-        log.info("Commit sync complete for {} ({} fetched)", repo, commits.size());
+        try {
+            List<JsonNode> commits = githubApiClient.fetchCommits(repo, token, 1, 100);
+            commits.forEach(node -> {
+                try {
+                    upsertCommit(integration, node);
+                } catch (Exception ex) {
+                    log.warn("Failed to upsert commit for {}: {}", repo, ex.getMessage());
+                }
+            });
+            log.info("Commit sync complete for {} ({} fetched)", repo, commits.size());
+        } catch (Exception e) {
+            log.warn("Commit sync failed for {}: {}", repo, e.getMessage());
+        }
     }
 
     @Transactional
@@ -83,22 +112,39 @@ public class GithubCommitService {
         commit.setSha(sha);
 
         JsonNode commitNode = node.path("commit");
-        String message = commitNode.path("message").asText(null);
+        String message = commitNode.path("message").asText("No commit message");
         commit.setMessage(message);
 
         String authorName = commitNode.path("author").path("name").asText(null);
+        if (authorName == null || authorName.isBlank()) {
+            authorName = commitNode.path("committer").path("name").asText(null);
+        }
         String authorLogin = node.path("author").path("login").asText(null);
-        String finalAuthor = (authorLogin != null && !authorLogin.isBlank()) ? authorLogin : authorName;
-        commit.setAuthorName(authorName);
+        if (authorLogin == null || authorLogin.isBlank()) {
+            authorLogin = node.path("committer").path("login").asText(null);
+        }
+        String finalAuthor = (authorLogin != null && !authorLogin.isBlank())
+                ? authorLogin
+                : (authorName != null && !authorName.isBlank() ? authorName : "unknown");
+        commit.setAuthorName(authorName != null ? authorName : finalAuthor);
         commit.setAuthor(finalAuthor);
 
         String authorEmail = commitNode.path("author").path("email").asText(null);
+        if (authorEmail == null || authorEmail.isBlank()) {
+            authorEmail = commitNode.path("committer").path("email").asText(null);
+        }
         commit.setAuthorEmail(authorEmail);
 
         String dateStr = commitNode.path("author").path("date").asText(null);
+        if (dateStr == null || dateStr.isBlank()) {
+            dateStr = commitNode.path("committer").path("date").asText(null);
+        }
         LocalDateTime authoredAt = parseDateTime(dateStr);
+        if (authoredAt == null) {
+            authoredAt = LocalDateTime.now();
+        }
         commit.setAuthoredAt(authoredAt);
-        commit.setCommittedAt(dateStr);
+        commit.setCommittedAt(dateStr != null ? dateStr : authoredAt.toString());
 
         String htmlUrl = node.path("html_url").asText(null);
         commit.setCommitUrl(htmlUrl);
@@ -124,7 +170,17 @@ public class GithubCommitService {
     public Task resolveTaskRef(Project project, String text) {
         if (project == null || text == null || text.isBlank()) return null;
 
-        String projectKey = project.getProjectKey() != null ? project.getProjectKey() : "TASK";
+        Long projectId;
+        String projectKey;
+        try {
+            projectId = project.getId();
+            projectKey = project.getProjectKey() != null ? project.getProjectKey() : "TASK";
+        } catch (Exception e) {
+            log.debug("Could not resolve project details from proxy: {}", e.getMessage());
+            return null;
+        }
+        if (projectId == null) return null;
+
         Pattern pattern = Pattern.compile(
             "(?:#|" + Pattern.quote(projectKey) + "-|TASK-|task/|issue/|feature/)(\\d+)",
             Pattern.CASE_INSENSITIVE
@@ -134,14 +190,14 @@ public class GithubCommitService {
             try {
                 long num = Long.parseLong(matcher.group(1));
                 // 1. Try project-scoped task number
-                Optional<Task> taskByNum = taskRepository.findByProjectIdAndProjectTaskNumber(project.getId(), num);
+                Optional<Task> taskByNum = taskRepository.findByProjectIdAndProjectTaskNumber(projectId, num);
                 if (taskByNum.isPresent()) {
                     return taskByNum.get();
                 }
                 // 2. Try global task ID if it belongs to this project
                 Optional<Task> taskById = taskRepository.findById(num);
                 if (taskById.isPresent() && taskById.get().getProject() != null
-                        && project.getId().equals(taskById.get().getProject().getId())) {
+                        && projectId.equals(taskById.get().getProject().getId())) {
                     return taskById.get();
                 }
             } catch (NumberFormatException ignored) {

@@ -36,7 +36,8 @@ interface ProductBacklogSectionProps {
   onDeleteTask?: (id: number) => void;
   onCreateSprint: () => void;
   onDropTask: (taskId: number, targetIndex?: number) => void;
-  onAssignTask: (taskId: number, assigneeName: string, assigneePhotoUrl: string | null) => void;
+  onAssignTask: (taskId: number, assigneeName: string, assigneePhotoUrl: string | null, assignees?: TaskItem['assignees']) => void;
+  onAssignMultiple?: (taskId: number, userIds: number[], assignees?: TaskItem['assignees']) => Promise<void> | void;
   onStatusChange: (taskId: number, status: string) => void;
   onDueDateChange?: (taskId: number, dueDate: string) => Promise<void>;
   onRenameTask?: (taskId: number, title: string) => void;
@@ -44,6 +45,8 @@ interface ProductBacklogSectionProps {
   onCloseCreateModal?: () => void;
   projectLabels?: Array<{ id: number; name: string; color?: string }>;
   onCreateLabel?: (name: string) => Promise<{ id: number; name: string; color?: string }>;
+  onUpdateLabel?: (id: number, name: string, color: string) => Promise<{ id: number; name: string; color?: string }>;
+  onDeleteLabel?: (id: number) => Promise<boolean>;
 }
 
 
@@ -61,6 +64,7 @@ export default function ProductBacklogSection({
   onCreateSprint,
   onDropTask,
   onAssignTask,
+  onAssignMultiple,
   onStatusChange,
   onDueDateChange,
   onRenameTask,
@@ -68,6 +72,8 @@ export default function ProductBacklogSection({
   onCloseCreateModal,
   projectLabels = [],
   onCreateLabel,
+  onUpdateLabel,
+  onDeleteLabel,
 }: ProductBacklogSectionProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [showCreateModalInternal, setShowCreateModalInternal] = useState(false);
@@ -143,9 +149,48 @@ export default function ProductBacklogSection({
     try {
       await tasksApi.assignTaskSingle(taskId, userId);
       const member = teamMembers.find((m) => m.user.userId === userId);
-      if (member) {
-        onAssignTask(taskId, getMemberDisplayName(member), member.user.profilePicUrl || null);
-      }
+      const name = member ? getMemberDisplayName(member) : 'Unassigned';
+      const photo = member?.user?.profilePicUrl || null;
+      const newAssignees = member ? [{
+        id: member.user.userId,
+        userId: member.user.userId,
+        memberId: member.id,
+        name,
+        avatar: photo || undefined,
+        photoUrl: photo,
+        profilePicUrl: photo,
+      }] : [];
+      onAssignTask(taskId, name, photo, newAssignees);
+    } catch {
+      toast('Failed to assign task.', 'error');
+    }
+  };
+
+  const handleAssignMultiple = async (taskId: number, userIds: number[]) => {
+    const assignedMembers = teamMembers.filter((m) => userIds.includes(m.user.userId));
+    const first = assignedMembers[0];
+    const newAssignees = assignedMembers.map((m) => ({
+      id: m.user.userId,
+      userId: m.user.userId,
+      memberId: m.id,
+      name: getMemberDisplayName(m),
+      avatar: m.user.profilePicUrl || undefined,
+      photoUrl: m.user.profilePicUrl || null,
+      profilePicUrl: m.user.profilePicUrl || null,
+    }));
+
+    if (onAssignMultiple) {
+      await onAssignMultiple(taskId, userIds, newAssignees);
+      return;
+    }
+    try {
+      await tasksApi.assignTaskMultiple(taskId, { assigneeIds: userIds });
+      onAssignTask(
+        taskId,
+        first ? getMemberDisplayName(first) : 'Unassigned',
+        first?.user?.profilePicUrl || null,
+        newAssignees
+      );
     } catch {
       toast('Failed to assign task.', 'error');
     }
@@ -365,6 +410,7 @@ export default function ProductBacklogSection({
                         onStoryPointsChange={onStoryPointsChange}
                         onRenameTask={handleRenameTask}
                         onAssignTask={handleAssignTask}
+                        onAssignMultiple={handleAssignMultiple}
                         onDueDateChange={(taskId, dueDate) => { void onDueDateChange?.(taskId, dueDate); }}
                         onDeleteTask={(id) => setTaskToDeleteId(id)}
                         onOpenTask={(id) => setSelectedTaskId(id)}
@@ -372,6 +418,8 @@ export default function ProductBacklogSection({
                       onAddLabel={handleAddLabel}
                       onRemoveLabel={handleRemoveLabel}
                       onCreateLabel={onCreateLabel}
+                      onUpdateLabel={onUpdateLabel}
+                      onDeleteLabel={onDeleteLabel}
                       onMoveUp={() => onDropTask(task.id, Math.max(0, index - 1))}
                       onMoveDown={() => onDropTask(task.id, Math.min(tasks.length, index + 2))}
                       projectKey={projectKey}

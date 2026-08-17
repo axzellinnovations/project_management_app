@@ -47,6 +47,11 @@ export default function AssigneeAvatar({
   fallbackClassName,
 }: AssigneeAvatarProps) {
   const [imgError, setImgError] = useState(false);
+
+  React.useEffect(() => {
+    setImgError(false);
+  }, [profilePicUrl, name]);
+
   const resolvedProfilePic = resolveProfilePic(profilePicUrl, name);
   const initials = getInitials(name);
   const showInitials = (!resolvedProfilePic || imgError) && !!initials && name !== 'Unassigned';

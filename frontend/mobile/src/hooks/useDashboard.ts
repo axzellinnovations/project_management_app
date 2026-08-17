@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/axios';
 import { taskService, sprintboardService } from '../services/task-service';
-import { getValidToken } from '../auth/storage';
+import { getValidToken, getUserFromToken } from '../lib/auth';
 import { offlineSyncManager } from '../services/offlineSyncManager';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -196,12 +196,12 @@ export function useDashboard(): UseDashboardReturn {
         router.replace('/(auth)/login');
         return;
       }
-      // Decode username from JWT payload
+      // Decode username from JWT payload using safe base64url decoder
       try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const username = payload.sub || payload.username;
-        setUser({ username, email: payload.email, profilePicUrl: null });
-        
+        const decodedUser = await getUserFromToken();
+        const username = decodedUser?.username || decodedUser?.email;
+        setUser({ username, email: decodedUser?.email, profilePicUrl: null });
+
         // Fetch user profile to get the S3 presigned URL for the profile photo
         api.get('/api/user/profile')
           .then((res) => {

@@ -127,7 +127,7 @@ export async function getProjectGitHubRepo(projectId: string): Promise<ProjectGi
   const cacheKey = await projectRepoCacheKey(projectId);
   try {
     const { data } = await api.get<BackendProjectGitHubRepository[]>(`/api/github/project/${projectId}/repos`);
-    const active = (data ?? []).find(repo => repo.active) ?? data?.[0];
+    const active = (data ?? []).find(repo => repo.active);
     if (active) {
       const connection = connectionFromBackend(active);
       await AsyncStorage.setItem(cacheKey, JSON.stringify(connection));
@@ -240,18 +240,20 @@ interface BackendProjectPullRequest {
 }
 
 function normalizePullRequest(pr: BackendProjectPullRequest): GitHubPullRequest {
+  const prLike = pr as unknown as { author?: string };
+  const authorLogin = pr.authorLogin ?? prLike.author ?? pr.user?.login ?? 'unknown';
   return {
     id: pr.id,
     number: pr.githubPrNumber ?? pr.number ?? 0,
-    title: pr.title,
-    state: pr.state,
+    title: pr.title || 'Untitled PR',
+    state: pr.state === 'merged' ? 'closed' : (pr.state || 'open'),
     merged_at: pr.mergedAt ?? pr.merged_at ?? null,
     draft: pr.draft ?? false,
     updated_at: pr.githubUpdatedAt ?? pr.updated_at ?? pr.githubCreatedAt ?? pr.created_at ?? '',
     html_url: pr.githubUrl ?? pr.html_url ?? '',
     head: { ref: pr.headBranch ?? pr.head?.ref ?? '' },
     base: { ref: pr.baseBranch ?? pr.base?.ref ?? '' },
-    user: pr.user ?? { login: pr.authorLogin ?? 'unknown', avatar_url: '' },
+    user: pr.user ?? { login: authorLogin, avatar_url: '' },
     labels: (pr.labels ?? []).map((label, index) => ({ id: label.id ?? index, name: label.name, color: label.color })),
   };
 }
@@ -278,14 +280,16 @@ interface BackendProjectCommit {
 }
 
 function normalizeCommit(commit: BackendProjectCommit): GitHubCommit {
+  const commitLike = commit as BackendProjectCommit & { author?: string };
+  const authorLogin = commit.authorName ?? commitLike.author ?? commit.author?.login ?? 'unknown';
   return {
     sha: commit.sha,
     html_url: commit.commitUrl ?? commit.html_url ?? '',
     commit: commit.commit ?? {
       message: commit.message ?? '',
-      author: { name: commit.authorName ?? 'unknown', date: commit.authoredAt ?? '' },
+      author: { name: authorLogin, date: commit.authoredAt ?? '' },
     },
-    author: commit.author ?? (commit.authorName ? { login: commit.authorName, avatar_url: '' } : null),
+    author: commit.author ?? (authorLogin !== 'unknown' ? { login: authorLogin, avatar_url: '' } : null),
   };
 }
 

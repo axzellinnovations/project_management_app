@@ -21,6 +21,8 @@ public interface GithubCommitRepository extends JpaRepository<GithubCommit, Long
 
     List<GithubCommit> findByLinkedTaskId(Long taskId);
 
+    long countByIntegrationId(Long integrationId);
+
     long countByIntegrationIdIn(List<Long> integrationIds);
 
     @Query("SELECT c FROM GithubCommit c WHERE (c.task.id = :taskId OR c.linkedTaskId = :taskId) "

@@ -134,7 +134,7 @@ export function CreateChannelModal({ isOpen, onClose, users, onCreate }: {
       icon={<Hash size={18} className="text-cu-primary" strokeWidth={2.5} />}
       onSubmit={handleSubmit}
       submitLabel="Create"
-      submitDisabled={!name.trim() || selectedUsers.size === 0}
+      submitDisabled={!name.trim()}
     >
       <div className="space-y-4">
         {/* Channel name */}
@@ -153,7 +153,7 @@ export function CreateChannelModal({ isOpen, onClose, users, onCreate }: {
         {/* Members section */}
         <div>
           <label className="block text-[12px] font-bold text-cu-text-secondary uppercase tracking-wide mb-1.5">
-            Add Members {selectedUsers.size > 0 && <span className="text-cu-primary">({selectedUsers.size} selected)</span>}
+            Add Members (Optional) {selectedUsers.size > 0 && <span className="text-cu-primary">({selectedUsers.size} selected)</span>}
           </label>
 
           {/* Selected chips row */}

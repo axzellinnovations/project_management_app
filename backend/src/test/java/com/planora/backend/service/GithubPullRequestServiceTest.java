@@ -127,7 +127,7 @@ class GithubPullRequestServiceTest {
     void getPullRequests_triggersProactiveSyncWhenEmpty() throws Exception {
         when(integrationRepository.findByProjectIdAndActiveTrue(16L))
                 .thenReturn(List.of(integration));
-        when(pullRequestRepository.countByIntegrationIdIn(List.of(100L)))
+        when(pullRequestRepository.countByIntegrationId(100L))
                 .thenReturn(0L);
         when(githubTokenService.hasValidToken(integration)).thenReturn(true);
         when(githubTokenService.resolveToken(integration)).thenReturn("gh-token");
@@ -165,5 +165,21 @@ class GithubPullRequestServiceTest {
         assertEquals(1, page.getTotalElements());
         assertEquals("PR 1", page.getContent().get(0).getTitle());
         verify(githubApiClient).fetchPullRequests("testowner/testrepo", "gh-token", "all", 1, 100);
+    }
+
+    @Test
+    void resolveTaskRef_handlesExceptionFromProxyGracefully() {
+        Project mockProject = mock(Project.class);
+        when(mockProject.getProjectKey()).thenThrow(new org.hibernate.LazyInitializationException("no session"));
+
+        Task task = pullRequestService.resolveTaskRef(mockProject, "fix: #123");
+        assertNull(task);
+    }
+
+    @Test
+    void resolveTaskRef_returnsNullForNullProjectOrEmptyText() {
+        assertNull(pullRequestService.resolveTaskRef(null, "fix: #123"));
+        assertNull(pullRequestService.resolveTaskRef(project, ""));
+        assertNull(pullRequestService.resolveTaskRef(project, null));
     }
 }

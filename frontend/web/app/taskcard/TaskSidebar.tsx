@@ -12,7 +12,7 @@ import RecurrenceSection from './sidebar/RecurrenceSection';
 import TaskGitHubSection from './sidebar/TaskGitHubSection';
 import SidebarField from './sidebar/SidebarField';
 import CustomFieldsSection from './sidebar/CustomFieldsSection';
-import { Check, ChevronDown, Link2, Plus } from 'lucide-react';
+import { Check, ChevronDown, Edit2, Link2, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
 import GitHubIssueBadge from '@/components/github/GitHubIssueBadge';
 import GitHubMark from '@/components/github/GitHubMark';
 import { projectsApi } from '@/services/projects-contract';
@@ -75,6 +75,9 @@ interface TaskSidebarProps {
   onUpdateReporter?: (reporterId: number | null) => void;
   onUpdateSprint?: (sprintId: number | null) => void;
   onUpdateLabels?: (labelIds: number[]) => void;
+  onCreateLabel?: (name: string, color: string) => Promise<{ id: number; name: string; color?: string | null } | null>;
+  onUpdateLabel?: (id: number, name: string, color: string) => Promise<{ id: number; name: string; color?: string | null } | null>;
+  onDeleteLabel?: (id: number) => Promise<boolean>;
   onUnassign?: () => void;
   onAssigneesChanged?: () => void;
   canEdit?: boolean;
@@ -85,12 +88,19 @@ interface TaskSidebarProps {
   onCreateGitHubIssue?: () => void;
 }
 
+const LABEL_PALETTE = [
+  '#EF4444', '#F97316', '#F59E0B', '#84CC16',
+  '#22C55E', '#14B8A6', '#06B6D4', '#3B82F6',
+  '#6366F1', '#8B5CF6', '#EC4899', '#6B7280',
+];
+
 const TaskSidebar: React.FC<TaskSidebarProps> = ({
   taskId, projectId, taskTitle, taskDescription, status, assignee, assigneePhotoUrl, reporter, labels, labelIds = [], priority, sprint, storyPoint,
   milestoneId, milestoneName, githubIssueNumber = null, githubRepoFullName = null, projectGitHubRepo = null, assignees,
   recurrenceRule, recurrenceEnd, customInterval, recurrenceLimit, dates, reporterId, sprintId,
   onUpdateStatus, onUpdatePriority, onUpdateStoryPoint, onUpdateDueDate, onUpdateMilestone,
   onUpdateRecurrence, onUnassign, onAssigneesChanged, onUpdateReporter, onUpdateSprint, onUpdateLabels, onUpdateStartDate,
+  onCreateLabel, onUpdateLabel, onDeleteLabel,
   canEdit = true, canChangeReporter = false, members = [], allLabels = [], sprints = [], onCreateGitHubIssue,
 }) => {
   const [sections, setSections] = React.useState<Record<string, boolean>>({
@@ -102,6 +112,20 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
   const [selectedLabelIds, setSelectedLabelIds] = React.useState<number[]>(labelIds);
   const labelMenuRef = React.useRef<HTMLDivElement>(null);
   const [projectCustomFields, setProjectCustomFields] = React.useState<ProjectCustomField[]>([]);
+
+  // Search, Create, Edit & Delete label states inside sidebar
+  const [labelSearch, setLabelSearch] = React.useState('');
+  const [newLabelColor, setNewLabelColor] = React.useState(LABEL_PALETTE[0]);
+  const [showColorPicker, setShowColorPicker] = React.useState(false);
+  const [isCreatingLabel, setIsCreatingLabel] = React.useState(false);
+
+  const [editingLabelId, setEditingLabelId] = React.useState<number | null>(null);
+  const [editLabelName, setEditLabelName] = React.useState('');
+  const [editLabelColor, setEditLabelColor] = React.useState(LABEL_PALETTE[0]);
+  const [isSavingEdit, setIsSavingEdit] = React.useState(false);
+
+  const [deletingLabelId, setDeletingLabelId] = React.useState<number | null>(null);
+  const [isDeletingLabel, setIsDeletingLabel] = React.useState(false);
 
   React.useEffect(() => {
     if (projectId == null) return;
@@ -236,41 +260,313 @@ const TaskSidebar: React.FC<TaskSidebarProps> = ({
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setLabelMenuOpen((prev) => !prev)}
+                    onClick={() => {
+                      setLabelMenuOpen((prev) => !prev);
+                      setEditingLabelId(null);
+                      setDeletingLabelId(null);
+                      setShowColorPicker(false);
+                    }}
                     className="w-full h-9 rounded-xl border border-cu-border bg-cu-bg px-3 text-[12px] font-semibold text-cu-text-primary hover:bg-cu-hover flex items-center justify-between"
                   >
                     <span className="inline-flex items-center gap-1.5">
                       <Plus size={12} />
-                      {selectedLabelIds.length > 0 ? `Edit labels (${selectedLabelIds.length})` : 'Add labels'}
+                      {selectedLabelIds.length > 0 ? `Manage labels (${selectedLabelIds.length})` : 'Add labels'}
                     </span>
                     <ChevronDown size={13} className={`transition-transform ${labelMenuOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {labelMenuOpen && (
-                    <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-xl border border-cu-border bg-cu-bg shadow-cu-xl p-1">
-                      {allLabels.length === 0 ? (
-                        <p className="px-2 py-2 text-[12px] text-cu-text-muted">No labels available</p>
-                      ) : (
-                        allLabels.map((label) => {
-                          const active = selectedLabelIds.includes(label.id);
-                          return (
+                    <div className="absolute z-50 mt-1 w-full max-h-72 overflow-y-auto rounded-xl border border-cu-border bg-cu-bg shadow-cu-xl p-1.5 space-y-1.5 animate-in fade-in zoom-in-95 duration-100">
+                      {/* Search / Quick Create Input */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5 bg-cu-bg-secondary/60 border border-cu-border rounded-lg px-2 py-1 focus-within:border-cu-primary focus-within:ring-1 focus-within:ring-cu-primary/20 transition-all">
+                          <Search size={12} className="text-cu-text-muted shrink-0" />
+                          <input
+                            type="text"
+                            value={labelSearch}
+                            onChange={(e) => setLabelSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const trimmed = labelSearch.trim();
+                                if (trimmed && !allLabels.some((l) => l.name.toLowerCase() === trimmed.toLowerCase())) {
+                                  if (onCreateLabel) {
+                                    setIsCreatingLabel(true);
+                                    onCreateLabel(trimmed, newLabelColor)
+                                      .then((created) => {
+                                        if (created) {
+                                          const next = [...selectedLabelIds, created.id];
+                                          setSelectedLabelIds(next);
+                                          onUpdateLabels?.(next);
+                                          setLabelSearch('');
+                                          setShowColorPicker(false);
+                                        }
+                                      })
+                                      .finally(() => setIsCreatingLabel(false));
+                                  }
+                                }
+                              }
+                            }}
+                            placeholder="Search or new label…"
+                            className="flex-1 text-[11px] bg-transparent outline-none text-cu-text-primary placeholder:text-cu-text-muted min-w-0"
+                          />
+                          {/* Color swatch trigger */}
+                          <button
+                            type="button"
+                            onClick={() => setShowColorPicker((p) => !p)}
+                            title="Pick color"
+                            className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0 hover:scale-110 transition-transform shadow-xs"
+                            style={{ backgroundColor: newLabelColor }}
+                          />
+                          {labelSearch.trim() && !allLabels.some((l) => l.name.toLowerCase() === labelSearch.trim().toLowerCase()) && onCreateLabel && (
                             <button
-                              key={label.id}
                               type="button"
                               onClick={() => {
-                                const nextIds = active
-                                  ? selectedLabelIds.filter((id) => id !== label.id)
-                                  : [...selectedLabelIds, label.id];
-                                setSelectedLabelIds(nextIds);
-                                onUpdateLabels?.(nextIds);
+                                const trimmed = labelSearch.trim();
+                                if (!trimmed) return;
+                                setIsCreatingLabel(true);
+                                onCreateLabel(trimmed, newLabelColor)
+                                  .then((created) => {
+                                    if (created) {
+                                      const next = [...selectedLabelIds, created.id];
+                                      setSelectedLabelIds(next);
+                                      onUpdateLabels?.(next);
+                                      setLabelSearch('');
+                                      setShowColorPicker(false);
+                                    }
+                                  })
+                                  .finally(() => setIsCreatingLabel(false));
                               }}
-                              className="w-full rounded-lg px-2.5 py-2 text-left text-[12px] hover:bg-cu-hover flex items-center justify-between gap-2"
+                              disabled={isCreatingLabel}
+                              title="Create label"
+                              className="p-1 rounded bg-cu-primary text-white hover:bg-cu-primary/90 disabled:opacity-50 transition-colors shrink-0"
                             >
-                              <span className={`${active ? 'font-semibold text-cu-primary' : 'text-cu-text-primary'}`}>{label.name}</span>
-                              {active ? <Check size={13} className="text-cu-primary" /> : null}
+                              {isCreatingLabel ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
                             </button>
-                          );
-                        })
-                      )}
+                          )}
+                        </div>
+
+                        {/* Color palette selector */}
+                        {showColorPicker && (
+                          <div className="p-1 bg-cu-bg-secondary border border-cu-border rounded-lg shadow-xs">
+                            <div className="flex flex-wrap gap-1">
+                              {LABEL_PALETTE.map((c) => (
+                                <button
+                                  key={c}
+                                  type="button"
+                                  onClick={() => {
+                                    setNewLabelColor(c);
+                                    setShowColorPicker(false);
+                                  }}
+                                  className={`w-4 h-4 rounded-full transition-transform hover:scale-110 ${
+                                    newLabelColor === c ? 'ring-2 ring-offset-1 ring-cu-primary scale-110' : ''
+                                  }`}
+                                  style={{ backgroundColor: c }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Labels List */}
+                      <div className="divide-y divide-cu-border/40 max-h-48 overflow-y-auto">
+                        {(() => {
+                          const term = labelSearch.toLowerCase().trim();
+                          const filtered = term
+                            ? allLabels.filter((l) => l.name.toLowerCase().includes(term))
+                            : allLabels;
+
+                          if (filtered.length === 0) {
+                            return (
+                              <p className="px-2 py-3 text-[11px] text-center text-cu-text-muted">
+                                {term ? `No labels matching "${labelSearch}"` : 'No labels available'}
+                              </p>
+                            );
+                          }
+
+                          return filtered.map((label) => {
+                            const active = selectedLabelIds.includes(label.id);
+                            const isEditing = editingLabelId === label.id;
+                            const isDeleting = deletingLabelId === label.id;
+
+                            // Inline Edit
+                            if (isEditing) {
+                              return (
+                                <div key={label.id} className="p-1.5 bg-cu-primary/10 rounded-lg space-y-1.5 my-0.5 border border-cu-primary/30">
+                                  <div className="flex items-center gap-1">
+                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: editLabelColor }} />
+                                    <input
+                                      autoFocus
+                                      type="text"
+                                      value={editLabelName}
+                                      onChange={(e) => setEditLabelName(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          if (onUpdateLabel && editLabelName.trim()) {
+                                            setIsSavingEdit(true);
+                                            onUpdateLabel(label.id, editLabelName.trim(), editLabelColor)
+                                              .then(() => setEditingLabelId(null))
+                                              .finally(() => setIsSavingEdit(false));
+                                          }
+                                        }
+                                        if (e.key === 'Escape') setEditingLabelId(null);
+                                      }}
+                                      className="flex-1 text-[11px] px-1.5 py-0.5 bg-cu-bg border border-cu-border rounded outline-none focus:border-cu-primary text-cu-text-primary"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (onUpdateLabel && editLabelName.trim()) {
+                                          setIsSavingEdit(true);
+                                          onUpdateLabel(label.id, editLabelName.trim(), editLabelColor)
+                                            .then(() => setEditingLabelId(null))
+                                            .finally(() => setIsSavingEdit(false));
+                                        }
+                                      }}
+                                      disabled={!editLabelName.trim() || isSavingEdit}
+                                      className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                                      title="Save"
+                                    >
+                                      {isSavingEdit ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingLabelId(null)}
+                                      className="p-1 rounded bg-cu-bg-secondary text-cu-text-secondary hover:bg-cu-hover"
+                                      title="Cancel"
+                                    >
+                                      <X size={11} />
+                                    </button>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {LABEL_PALETTE.map((c) => (
+                                      <button
+                                        key={c}
+                                        type="button"
+                                        onClick={() => setEditLabelColor(c)}
+                                        className={`w-3.5 h-3.5 rounded-full transition-transform hover:scale-110 ${
+                                          editLabelColor === c ? 'ring-2 ring-offset-1 ring-cu-primary scale-110' : ''
+                                        }`}
+                                        style={{ backgroundColor: c }}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            // Inline Delete Confirmation
+                            if (isDeleting) {
+                              return (
+                                <div key={label.id} className="p-1.5 bg-red-500/10 rounded-lg flex items-center justify-between gap-1.5 my-0.5 border border-red-500/30">
+                                  <span className="text-[11px] font-medium text-red-500 truncate">
+                                    Delete &quot;{label.name}&quot;?
+                                  </span>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (onDeleteLabel) {
+                                          setIsDeletingLabel(true);
+                                          onDeleteLabel(label.id)
+                                            .then((success) => {
+                                              if (success) {
+                                                const next = selectedLabelIds.filter((id) => id !== label.id);
+                                                setSelectedLabelIds(next);
+                                                onUpdateLabels?.(next);
+                                                setDeletingLabelId(null);
+                                              }
+                                            })
+                                            .finally(() => setIsDeletingLabel(false));
+                                        }
+                                      }}
+                                      disabled={isDeletingLabel}
+                                      className="px-2 py-0.5 text-[10px] font-semibold bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                                    >
+                                      {isDeletingLabel ? <Loader2 size={10} className="animate-spin" /> : 'Delete'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeletingLabelId(null)}
+                                      className="px-2 py-0.5 text-[10px] bg-cu-bg-secondary text-cu-text-secondary rounded hover:bg-cu-hover"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            // Normal Item
+                            return (
+                              <div
+                                key={label.id}
+                                className={`group flex items-center justify-between gap-1 px-2 py-1 rounded-lg hover:bg-cu-hover transition-colors ${
+                                  active ? 'bg-cu-primary/10' : ''
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const nextIds = active
+                                      ? selectedLabelIds.filter((id) => id !== label.id)
+                                      : [...selectedLabelIds, label.id];
+                                    setSelectedLabelIds(nextIds);
+                                    onUpdateLabels?.(nextIds);
+                                  }}
+                                  className="flex-1 flex items-center gap-2 text-left min-w-0 py-0.5"
+                                >
+                                  <span
+                                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                                    style={{ backgroundColor: label.color || '#6366F1' }}
+                                  />
+                                  <span
+                                    className={`text-[12px] truncate ${
+                                      active ? 'font-semibold text-cu-primary' : 'text-cu-text-primary'
+                                    }`}
+                                  >
+                                    {label.name}
+                                  </span>
+                                </button>
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  {active && <Check size={13} className="text-cu-primary mr-1" />}
+                                  {onUpdateLabel && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingLabelId(label.id);
+                                        setEditLabelName(label.name);
+                                        setEditLabelColor(label.color || LABEL_PALETTE[0]);
+                                        setDeletingLabelId(null);
+                                      }}
+                                      title="Edit label"
+                                      className="p-1 text-cu-text-muted hover:text-cu-primary hover:bg-cu-bg rounded opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                                    >
+                                      <Edit2 size={11} />
+                                    </button>
+                                  )}
+                                  {onDeleteLabel && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeletingLabelId(label.id);
+                                        setEditingLabelId(null);
+                                      }}
+                                      title="Delete label"
+                                      className="p-1 text-cu-text-muted hover:text-red-500 hover:bg-cu-bg rounded opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                                    >
+                                      <Trash2 size={11} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
                     </div>
                   )}
                 </div>

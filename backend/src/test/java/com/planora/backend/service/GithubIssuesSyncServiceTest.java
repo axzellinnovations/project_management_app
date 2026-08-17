@@ -83,6 +83,41 @@ class GithubIssuesSyncServiceTest {
     }
 
     @Test
+    void syncIssues_filtersOutPullRequests() {
+        String response = """
+                [
+                  {
+                    "id": 12,
+                    "number": 34,
+                    "title": "Real issue",
+                    "state": "open"
+                  },
+                  {
+                    "id": 13,
+                    "number": 35,
+                    "title": "Pull Request entry",
+                    "state": "open",
+                    "pull_request": {
+                      "url": "https://api.github.com/repos/planora/app/pulls/35",
+                      "html_url": "https://github.com/planora/app/pull/35"
+                    }
+                  }
+                ]
+                """;
+
+        server.expect(requestTo("https://api.github.com/repos/planora/app/issues?state=all&per_page=100"))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer github-token"))
+                .andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
+
+        List<GithubIssueDTO> result = service.syncIssues("planora/app", "github-token");
+
+        assertEquals(1, result.size());
+        assertEquals(34, result.get(0).getNumber());
+        assertEquals("Real issue", result.get(0).getTitle());
+        server.verify();
+    }
+
+    @Test
     void syncIssues_throwsAuthenticationExceptionForUnauthorizedToken() {
         server.expect(requestTo("https://api.github.com/repos/planora/app/issues?state=all&per_page=100"))
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED));

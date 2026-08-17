@@ -24,49 +24,37 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Add request interceptor to include auth token (exclude auth endpoints)
+// Unified request interceptor to handle auth token attachment and proactive refresh
 api.interceptors.request.use(
   async (config) => {
     const authEndpoints = ['/api/auth/login', '/api/auth/register', '/api/auth/forgot', '/api/auth/reset', '/api/auth/reg/verify', '/api/auth/resend', '/api/auth/refresh'];
     const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint));
-    
+
     if (!isAuthEndpoint) {
-      const token = await getValidToken();
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+      try {
+        let token = await getValidToken();
+        const refreshToken = await getRefreshToken();
+        const user = await getUserFromToken();
+        const needsRefresh = !token || (user?.exp && (user.exp - Date.now() / 1000) < 60);
+
+        if (needsRefresh && refreshToken) {
+          token = await refreshAccessToken();
+        }
+
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      } catch {
+        const token = await getValidToken();
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
       }
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
-
-// Proactively refresh the access token if it expires within 60 seconds
-api.interceptors.request.use(async (config) => {
-  const authEndpoints = ['/api/auth/login', '/api/auth/register', '/api/auth/forgot', '/api/auth/reset', '/api/auth/reg/verify', '/api/auth/resend', '/api/auth/refresh'];
-  const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint));
-  if (!isAuthEndpoint) {
-    try {
-      const token = await getValidToken();
-      const refreshToken = await getRefreshToken();
-      if (!token && refreshToken) {
-        const newToken = await refreshAccessToken();
-        config.headers['Authorization'] = `Bearer ${newToken}`;
-        return config;
-      }
-
-      const user = await getUserFromToken();
-      if (user?.exp && (user.exp - Date.now() / 1000) < 60) {
-        const newToken = await refreshAccessToken();
-        config.headers['Authorization'] = `Bearer ${newToken}`;
-        return config;
-      }
-    } catch { /* token expired or invalid — let the 401 handler deal with it */ }
-  }
-  return config;
-});
 
 // Track whether a token refresh is in progress to avoid infinite loop
 let isRefreshing = false;
@@ -123,9 +111,12 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        await clearTokens();
-        // 500ms delay lets toast notifications render before navigation
-        setTimeout(() => { router.replace('/(auth)/login'); }, 500);
+        const message = refreshError instanceof Error ? refreshError.message : '';
+        if (message.includes('session expired')) {
+          await clearTokens();
+          // 500ms delay lets toast notifications render before navigation
+          setTimeout(() => { router.replace('/(auth)/login'); }, 500);
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

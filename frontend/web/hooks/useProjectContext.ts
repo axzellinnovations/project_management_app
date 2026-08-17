@@ -94,7 +94,7 @@ export function useProjectContext() {
       : null),
     [projectCacheKey],
   );
-  const { data: projectData } = useSWR(
+  const { data: projectData, mutate: mutateProject } = useSWR(
     projectId ? `/api/projects/${projectId}` : null,
     fetchProject,
     {
@@ -103,6 +103,8 @@ export function useProjectContext() {
           name: cachedProject.name,
           type: cachedProject.type,
           isFavorite: cachedProject.isFavorite,
+          figmaUrl: cachedProject.figmaUrl ?? null,
+          ownerId: cachedProject.ownerId ?? null,
         }
         : undefined,
       dedupingInterval: 60_000,
@@ -119,7 +121,11 @@ export function useProjectContext() {
     }
 
     if (!projectId) {
-      startTransition(() => { setIsFavorite(false); });
+      startTransition(() => {
+        setIsFavorite(false);
+        setFigmaUrl(null);
+        setProjectOwnerId(null);
+      });
     }
   }, [projectId]);
 
@@ -152,6 +158,26 @@ export function useProjectContext() {
     }
   }, [projectData, projectCacheKey]);
 
+  useEffect(() => {
+    const handleProjectUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ projectId?: string | number; figmaUrl?: string | null; name?: string }>;
+      if (customEvent.detail?.projectId && String(customEvent.detail.projectId) !== String(projectId)) {
+        return;
+      }
+      if (customEvent.detail && 'figmaUrl' in customEvent.detail) {
+        setFigmaUrl(customEvent.detail.figmaUrl ?? null);
+      }
+      void mutateProject();
+    };
+
+    window.addEventListener('planora:project-updated', handleProjectUpdated);
+    window.addEventListener('planora:figma-updated', handleProjectUpdated);
+    return () => {
+      window.removeEventListener('planora:project-updated', handleProjectUpdated);
+      window.removeEventListener('planora:figma-updated', handleProjectUpdated);
+    };
+  }, [projectId, mutateProject]);
+
   const toggleFavorite = async () => {
     if (!projectId) return;
     const nextState = !isFavorite;
@@ -179,6 +205,8 @@ export function useProjectContext() {
     isFavorite,
     figmaUrl,
     projectOwnerId,
+    setFigmaUrl,
+    mutateProject,
     toggleFavorite,
     switchProject
   };

@@ -55,7 +55,8 @@ public class UserService {
 
     private static final Logger logger = LoggerFactory.getLogger(UserService.class);
     public static final long MAX_PROFILE_PHOTO_SIZE_BYTES = 25L * 1024 * 1024;
-    private static final Duration REFRESH_TOKEN_RETRY_GRACE = Duration.ofSeconds(10);
+    private static final Duration REFRESH_TOKEN_RETRY_GRACE = Duration.ofSeconds(30);
+    private static final int MAX_ACTIVE_REFRESH_SESSIONS_PER_USER = 10;
     private static final SecureRandom OTP_RANDOM = new SecureRandom();
     private static final String HASHED_OTP_PREFIX = "v2:";
     private final UserRepository userRepository;
@@ -378,11 +379,29 @@ public class UserService {
             return null; // Token is structurally valid, but user is gone/disabled.
         }
 
-        // Look up the expected JTI in our database for this user.
-        VerificationToken storedToken = tokenRepository.findByUserAndTokenTypeForUpdate(user, VerificationToken.TokenType.REFRESH_TOKEN);
+        // Look up the token record by current JTI or previous JTI
+        java.util.Optional<VerificationToken> storedTokenOpt =
+                tokenRepository.findByTokenOrPreviousTokenAndTokenTypeForUpdate(jti, VerificationToken.TokenType.REFRESH_TOKEN);
 
-        if (storedToken == null || storedToken.isUsed() || storedToken.isExpired()) {
-            logger.warn("Refresh token JTI not found or already used for user: {}", email);
+        if (storedTokenOpt.isEmpty()) {
+            logger.warn("Refresh token JTI not found for user: {}", email);
+            return null;
+        }
+
+        VerificationToken storedToken = storedTokenOpt.get();
+
+        boolean userMatches = (storedToken.getUser() != null)
+                && ((storedToken.getUser().getUserId() != null && user.getUserId() != null)
+                        ? storedToken.getUser().getUserId().equals(user.getUserId())
+                        : storedToken.getUser().getEmail() != null && storedToken.getUser().getEmail().equalsIgnoreCase(user.getEmail()));
+
+        if (!userMatches) {
+            logger.warn("Refresh token owner mismatch for user: {}", email);
+            return null;
+        }
+
+        if (storedToken.isUsed() || storedToken.isExpired()) {
+            logger.warn("Refresh token JTI is expired or already marked used for user: {}", email);
             return null;
         }
 
@@ -398,11 +417,30 @@ public class UserService {
             return null;
         }
 
-        // Rotate refresh token on every use. Keep the previous JTI briefly so
-        // legitimate duplicate refresh requests do not revoke the active session.
-        String newAccessToken  = jwtService.generateToken(email, user.getUsername(), user.getUserId());
-        String newRefreshToken = jwtService.generateRefreshToken(email);
-        storeRefreshTokenJti(user, newRefreshToken, matchesCurrentToken ? jti : null);
+        String newAccessToken = jwtService.generateToken(email, user.getUsername(), user.getUserId());
+        String newRefreshToken;
+
+        if (matchesCurrentToken) {
+            // Standard rotation: advance session to new JTI, keeping previous token valid for grace period
+            newRefreshToken = jwtService.generateRefreshToken(email);
+            String newJti = jwtService.extractJti(newRefreshToken);
+
+            storedToken.setPreviousToken(jti);
+            storedToken.setPreviousTokenExpiresAt(now.plus(REFRESH_TOKEN_RETRY_GRACE));
+            storedToken.setToken(newJti);
+            storedToken.setExpiry(now.plus(Duration.ofDays(30)));
+            storedToken.setUsed(false);
+            tokenRepository.save(storedToken);
+        } else {
+            // Concurrent / retry request within grace period:
+            // Issue new access token and return a fresh refresh token without breaking the grace chain for other in-flight requests
+            newRefreshToken = jwtService.generateRefreshToken(email);
+            String newJti = jwtService.extractJti(newRefreshToken);
+
+            storedToken.setToken(newJti);
+            storedToken.setExpiry(now.plus(Duration.ofDays(30)));
+            tokenRepository.save(storedToken);
+        }
 
         LoginResponse response = new LoginResponse();
         response.setSuccess(true);
@@ -413,41 +451,57 @@ public class UserService {
     }
 
     /**
-     * Stores the JTI of the given refresh token for the user, replacing any existing refresh token record.
-     * The JTI is a UUID extracted from the JWT claims — short enough to store in the token column.
+     * Stores a new refresh token for a user session, pruning older sessions if the active count exceeds limit.
      */
     private void storeRefreshTokenJti(User user, String refreshToken) {
-        storeRefreshTokenJti(user, refreshToken, null);
-    }
-
-    private void storeRefreshTokenJti(User user, String refreshToken, String previousJti) {
         String jti = jwtService.extractJti(refreshToken);
-        if (jti == null) return;
+        if (jti == null || user == null) return;
 
-        // Step 1. Remove the existing REFRESH_TOKEN record. The bulk delete is
-        // idempotent, so stale cleanup/logout races do not poison this transaction.
-        tokenRepository.deleteByUserAndTokenType(user, VerificationToken.TokenType.REFRESH_TOKEN);
+        List<VerificationToken> existingTokens = tokenRepository.findByUserAndTokenTypeOrderByExpiryAsc(user, VerificationToken.TokenType.REFRESH_TOKEN);
+        if (existingTokens != null && existingTokens.size() >= MAX_ACTIVE_REFRESH_SESSIONS_PER_USER) {
+            int toRemove = existingTokens.size() - MAX_ACTIVE_REFRESH_SESSIONS_PER_USER + 1;
+            for (int i = 0; i < toRemove && i < existingTokens.size(); i++) {
+                tokenRepository.delete(existingTokens.get(i));
+            }
+        }
 
-        // Step 2. Build and save the new record tracking this specific JTI.
         VerificationToken jtiRecord = new VerificationToken();
         jtiRecord.setUser(user);
         jtiRecord.setToken(jti);
-        jtiRecord.setPreviousToken(previousJti);
-        jtiRecord.setPreviousTokenExpiresAt(previousJti == null ? null : Instant.now().plus(REFRESH_TOKEN_RETRY_GRACE));
+        jtiRecord.setPreviousToken(null);
+        jtiRecord.setPreviousTokenExpiresAt(null);
         jtiRecord.setTokenType(VerificationToken.TokenType.REFRESH_TOKEN);
-        jtiRecord.setExpiry(java.time.Instant.now().plus(java.time.Duration.ofDays(30)));
+        jtiRecord.setExpiry(Instant.now().plus(Duration.ofDays(30)));
         jtiRecord.setUsed(false);
         tokenRepository.save(jtiRecord);
     }
 
     @Transactional
-    public void revokeRefreshToken(String email) {
+    public void revokeRefreshToken(String email, String refreshToken) {
         if (email == null || email.isBlank()) {
             return;
         }
 
+        if (refreshToken != null && !refreshToken.isBlank()) {
+            try {
+                String jti = jwtService.extractJti(refreshToken);
+                if (jti != null) {
+                    tokenRepository.findByTokenOrPreviousTokenAndTokenTypeForUpdate(jti, VerificationToken.TokenType.REFRESH_TOKEN)
+                            .ifPresent(tokenRepository::delete);
+                    return;
+                }
+            } catch (Exception ignored) {
+                // Fallback to email-based revocation
+            }
+        }
+
         userRepository.findFirstByEmailIgnoreCase(email)
                 .ifPresent(user -> tokenRepository.deleteByUserAndTokenType(user, VerificationToken.TokenType.REFRESH_TOKEN));
+    }
+
+    @Transactional
+    public void revokeRefreshToken(String email) {
+        revokeRefreshToken(email, null);
     }
 
     // Generates and dispatches a new OTP for account verification.

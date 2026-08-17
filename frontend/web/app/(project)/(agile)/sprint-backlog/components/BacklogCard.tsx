@@ -35,11 +35,14 @@ interface BacklogCardProps {
   onSprintUpdated: (sprintId: number, updates: Partial<SprintItem>) => void;
   onStatusChange?: (taskId: number, status: string) => void;
   onStoryPointsChange?: (taskId: number, points: number) => void;
-  onAssignTask?: (taskId: number, name: string, photo: string | null) => void;
+  onAssignTask?: (taskId: number, name: string, photo: string | null, assignees?: TaskItem['assignees']) => void;
+  onAssignMultiple?: (taskId: number, userIds: number[], assignees?: TaskItem['assignees']) => Promise<void> | void;
   onRenameTask?: (taskId: number, title: string) => void;
   onDueDateChange?: (taskId: number, dueDate: string) => Promise<void>;
   projectLabels?: Array<{ id: number; name: string; color?: string }>;
   onCreateLabel?: (name: string) => Promise<{ id: number; name: string; color?: string }>;
+  onUpdateLabel?: (id: number, name: string, color: string) => Promise<{ id: number; name: string; color?: string }>;
+  onDeleteLabel?: (id: number) => Promise<boolean>;
   extraStatuses?: Array<{ value: string; label: string }>;
   existingSprintNames?: string[];
 }
@@ -50,7 +53,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-function BacklogCard({ sprint, projectId, projectKey, currentUserRole, availableSprintsForMove = [], onDropTask, onCreateTask, onDeleteTask, onToggleTask, onSprintDeleted, onSprintUpdated, onStatusChange, onStoryPointsChange, onAssignTask, onRenameTask, onDueDateChange, projectLabels = [], onCreateLabel, extraStatuses = [], existingSprintNames = [] }: BacklogCardProps) {
+function BacklogCard({ sprint, projectId, projectKey, currentUserRole, availableSprintsForMove = [], onDropTask, onCreateTask, onDeleteTask, onToggleTask, onSprintDeleted, onSprintUpdated, onStatusChange, onStoryPointsChange, onAssignTask, onAssignMultiple, onRenameTask, onDueDateChange, projectLabels = [], onCreateLabel, onUpdateLabel, onDeleteLabel, extraStatuses = [], existingSprintNames = [] }: BacklogCardProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [showCreateTaskBox, setShowCreateTaskBox] = useState(false);
   const [newTaskName, setNewTaskName] = useState('');
@@ -74,6 +77,7 @@ function BacklogCard({ sprint, projectId, projectKey, currentUserRole, available
     onStatusChange,
     onStoryPointsChange,
     onAssignTask,
+    onAssignMultiple,
     onRenameTask,
     onDueDateChange,
     projectLabels,
@@ -261,15 +265,18 @@ function BacklogCard({ sprint, projectId, projectKey, currentUserRole, available
                           onToggle={onToggleTask}
                           onStatusChange={(id, status) => handlers.handleStatusChange(id, status as SprintStatus)}
                           onStoryPointsChange={handlers.handleStoryPointChange}
-                        onRenameTask={handlers.handleRenameTask}
-                        onAssignTask={handlers.handleAssignTask}
-                        onDueDateChange={handlers.handleDueDateChange}
+                          onRenameTask={handlers.handleRenameTask}
+                          onAssignTask={handlers.handleAssignTask}
+                          onAssignMultiple={handlers.handleAssignMultiple}
+                          onDueDateChange={handlers.handleDueDateChange}
                         onDeleteTask={(id) => handlers.setTaskToDeleteId(id)}
                         onOpenTask={(id) => handlers.setSelectedTaskId(id)}
                         projectLabels={projectLabels}
                         onAddLabel={handlers.handleAddLabel}
                         onRemoveLabel={handlers.handleRemoveLabel}
                         onCreateLabel={onCreateLabel}
+                        onUpdateLabel={onUpdateLabel}
+                        onDeleteLabel={onDeleteLabel}
                         extraStatuses={extraStatuses}
                         onMoveUp={() => onDropTask(task.id, sprint.id, Math.max(0, index - 1))}
                         onMoveDown={() => onDropTask(task.id, sprint.id, Math.min(handlers.localTasks.length, index + 2))}

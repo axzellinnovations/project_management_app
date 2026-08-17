@@ -48,6 +48,8 @@ interface KanbanColumnProps {
   usersMap?: Record<string, string | null>;
   labels?: Label[];
   onCreateLabel?: (name: string, color: string) => Promise<Label | null>;
+  onUpdateLabel?: (id: number, name: string, color: string) => Promise<Label | null>;
+  onDeleteLabel?: (id: number) => Promise<boolean>;
   onColumnRenamed?: (columnId: number, name: string) => void;
   onColumnSettingsChanged?: (columnId: number, settings: { color?: string; wipLimit?: number }) => void;
   onDeleteColumn?: (columnId: number) => Promise<void> | void;
@@ -70,6 +72,8 @@ export default function KanbanColumn({
   usersMap,
   labels: allLabels,
   onCreateLabel,
+  onUpdateLabel,
+  onDeleteLabel,
   onColumnRenamed,
   onColumnSettingsChanged,
   onDeleteColumn,
@@ -338,6 +342,8 @@ export default function KanbanColumn({
                 usersMap={usersMap}
                 labels={allLabels}
                 onCreateLabel={onCreateLabel}
+                onUpdateLabel={onUpdateLabel}
+                onDeleteLabel={onDeleteLabel}
                 isSyncing={updatingTaskId === task.id}
               />
             ))

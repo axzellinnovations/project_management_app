@@ -59,12 +59,13 @@ interface BacklogTaskRowProps {
     onToggleSelect?: (id: number) => void;
     onDateChange?: (id: number, dueDate: string | null) => void;
     onAssigneeChange?: (id: number, assigneeId: number | null) => void | Promise<void>;
+    onAssignMultiple?: (id: number, assigneeIds: number[]) => void | Promise<void>;
     teamMembers?: TeamMemberOption[];
 }
 
 export default function BacklogTaskRow({
     task, onDelete, onClick, onStatusChange, onOpenModal,
-    onArchive, onUnarchive, selected, onToggleSelect, onDateChange, onAssigneeChange, teamMembers = [], isArchived = false,
+    onArchive, onUnarchive, selected, onToggleSelect, onDateChange, onAssigneeChange, onAssignMultiple, teamMembers = [], isArchived = false,
 }: BacklogTaskRowProps) {
     const PriorityIcon = task.priority ? (PRIORITY_CONFIG[task.priority]?.icon ?? Minus) : Minus;
     const priorityColor = task.priority ? (PRIORITY_CONFIG[task.priority]?.color ?? '#9CA3AF') : '#9CA3AF';
@@ -73,6 +74,8 @@ export default function BacklogTaskRow({
     const statusClass = STATUS_COLOR[normalizedStatus] ?? 'bg-cu-bg-tertiary text-cu-text-secondary';
     const [statusOpen, setStatusOpen] = useState(false);
     const [assigneeOpen, setAssigneeOpen] = useState(false);
+    const [assignSearch, setAssignSearch] = useState('');
+    const [assignMode, setAssignMode] = useState<'single' | 'multi'>('multi');
     const [menuOpen, setMenuOpen] = useState(false);
     const statusRef = useRef<HTMLDivElement>(null);
     const assigneeRef = useRef<HTMLDivElement>(null);
@@ -84,7 +87,10 @@ export default function BacklogTaskRow({
     useEffect(() => {
         const handler = (e: MouseEvent) => {
             if (statusRef.current && !statusRef.current.contains(e.target as Node)) setStatusOpen(false);
-            if (assigneeRef.current && !assigneeRef.current.contains(e.target as Node)) setAssigneeOpen(false);
+            if (assigneeRef.current && !assigneeRef.current.contains(e.target as Node)) {
+                setAssigneeOpen(false);
+                setAssignSearch('');
+            }
             if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
         };
         document.addEventListener('mousedown', handler);
@@ -103,10 +109,62 @@ export default function BacklogTaskRow({
         }
     };
 
-    const handleAssigneeChange = async (assigneeId: number | null) => {
-        await onAssigneeChange?.(task.id, assigneeId);
+    const currentAssigneeUserIds = React.useMemo(() => {
+        if (task.assignees && task.assignees.length > 0) {
+            return task.assignees
+                .map((a) => a.userId ?? a.memberId ?? a.id)
+                .filter((id): id is number => typeof id === 'number');
+        }
+        if (task.assigneeId != null) {
+            return [task.assigneeId];
+        }
+        return [];
+    }, [task.assignees, task.assigneeId]);
+
+    const handleSingleAssign = async (memberId: number | null) => {
+        if (memberId == null) {
+            if (onAssignMultiple) {
+                await onAssignMultiple(task.id, []);
+            } else {
+                await onAssigneeChange?.(task.id, null);
+            }
+        } else {
+            const member = teamMembers.find(m => m.id === memberId || m.memberId === memberId || m.userId === memberId);
+            const uid = member?.userId ?? member?.id ?? memberId;
+            if (onAssignMultiple) {
+                await onAssignMultiple(task.id, [uid]);
+            } else {
+                await onAssigneeChange?.(task.id, memberId);
+            }
+        }
         setAssigneeOpen(false);
+        setAssignSearch('');
     };
+
+    const handleToggleMultiAssign = async (memberUserId: number) => {
+        const isAlready = currentAssigneeUserIds.includes(memberUserId);
+        const updated = isAlready
+            ? currentAssigneeUserIds.filter(id => id !== memberUserId)
+            : [...currentAssigneeUserIds, memberUserId];
+
+        if (onAssignMultiple) {
+            await onAssignMultiple(task.id, updated);
+        } else if (onAssigneeChange) {
+            await onAssigneeChange(task.id, updated.length > 0 ? updated[0] : null);
+        }
+    };
+
+    const filteredTeamMembers = React.useMemo(() => {
+        if (!assignSearch.trim()) return teamMembers;
+        const q = assignSearch.toLowerCase();
+        return teamMembers.filter(m => m.name.toLowerCase().includes(q) || (m.email && m.email.toLowerCase().includes(q)));
+    }, [teamMembers, assignSearch]);
+
+    const displayAssignees = task.assignees && task.assignees.length > 0
+        ? task.assignees
+        : task.assigneeName
+            ? [{ id: task.assigneeId, name: task.assigneeName, photoUrl: task.assigneePhotoUrl, avatar: task.assigneePhotoUrl, profilePicUrl: task.assigneePhotoUrl }]
+            : [];
 
     return (
         <div
@@ -202,65 +260,115 @@ export default function BacklogTaskRow({
                 <button
                     type="button"
                     onClick={() => setAssigneeOpen(open => !open)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-transparent px-1.5 py-1 text-[11px] text-cu-text-muted hover:border-cu-primary/30 hover:bg-cu-primary/10 hover:text-cu-primary transition-colors"
-                    title={task.assigneeName || 'Assign task'}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-transparent px-1.5 py-1 text-[11px] text-cu-text-muted hover:border-cu-primary/30 hover:bg-cu-primary/10 hover:text-cu-primary transition-colors max-w-[140px]"
+                    title={displayAssignees.map(a => a.name).join(', ') || 'Assign task'}
                 >
-                    {task.assignees && task.assignees.length > 0 ? (
-                        <div className="flex items-center" title={task.assignees.map(a => a.name).join(', ')}>
-                            {task.assignees.slice(0, 3).map((a, idx) => (
+                    {displayAssignees.length > 1 ? (
+                        <div className="flex items-center">
+                            {displayAssignees.slice(0, 3).map((a, idx) => (
                                 <span
-                                    key={a.id}
+                                    key={a.userId ?? a.memberId ?? a.id ?? idx}
                                     className="inline-block ring-2 ring-cu-bg rounded-full"
-                                    style={{ marginLeft: idx === 0 ? 0 : -6, zIndex: task.assignees!.length - idx }}
+                                    style={{ marginLeft: idx === 0 ? 0 : -7, zIndex: displayAssignees.length - idx }}
                                 >
-                                    <AssigneeAvatar name={a.name} profilePicUrl={a.avatar} size={22} />
+                                    <AssigneeAvatar name={a.name} profilePicUrl={a.photoUrl || a.avatar || a.profilePicUrl} size={22} />
                                 </span>
                             ))}
-                            {task.assignees.length > 3 && (
+                            {displayAssignees.length > 3 && (
                                 <span
-                                    className="inline-flex items-center justify-center w-[22px] h-[22px] rounded-full bg-cu-bg-tertiary ring-2 ring-cu-bg text-[9px] font-bold text-cu-text-secondary"
-                                    style={{ marginLeft: -6 }}
+                                    className="inline-flex items-center justify-center w-[22px] h-[22px] rounded-full bg-cu-primary/10 ring-2 ring-cu-bg text-[9px] font-bold text-cu-primary"
+                                    style={{ marginLeft: -7, zIndex: 0 }}
                                 >
-                                    +{task.assignees.length - 3}
+                                    +{displayAssignees.length - 3}
                                 </span>
                             )}
-                            <ChevronDown size={10} className="shrink-0" />
+                            <ChevronDown size={10} className="shrink-0 ml-1 opacity-70" />
                         </div>
-                    ) : task.assigneeName ? (
+                    ) : displayAssignees.length === 1 ? (
                         <>
-                            <AssigneeAvatar name={task.assigneeName} profilePicUrl={task.assigneePhotoUrl} size={22} />
-                            <ChevronDown size={10} className="shrink-0" />
+                            <AssigneeAvatar name={displayAssignees[0].name} profilePicUrl={displayAssignees[0].photoUrl || displayAssignees[0].avatar || displayAssignees[0].profilePicUrl} size={22} />
+                            <span className="truncate hidden sm:inline max-w-[65px] text-[11px] text-cu-text-secondary">{displayAssignees[0].name}</span>
+                            <ChevronDown size={10} className="shrink-0 opacity-70" />
                         </>
                     ) : (
                         <>
-                            <span>Unassigned</span>
-                            <ChevronDown size={10} className="shrink-0" />
+                            <span className="truncate">Unassigned</span>
+                            <ChevronDown size={10} className="shrink-0 opacity-70" />
                         </>
                     )}
                 </button>
                 {assigneeOpen && (
-                    <div className="absolute right-0 top-full mt-1 z-[var(--cu-z-modal-popover)] bg-cu-bg border border-cu-border rounded-xl shadow-cu-lg py-1 min-w-[220px] max-h-80 overflow-y-auto">
-                        <button
-                            type="button"
-                            onClick={() => void handleAssigneeChange(null)}
-                            className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-cu-hover transition-colors ${!task.assigneeName ? 'font-semibold text-cu-primary' : 'text-cu-text-primary'}`}
-                        >
-                            Unassigned
-                        </button>
-                        {teamMembers.map((member) => {
-                            const isSelected = task.assigneeId === member.id || task.assigneeId === member.memberId;
-                            return (
+                    <div className="absolute right-0 top-full mt-1 z-[var(--cu-z-modal-popover)] bg-cu-bg border border-cu-border rounded-xl shadow-cu-xl p-2 min-w-[240px] max-w-[280px]">
+                        <div className="mb-2 flex items-center justify-between border-b border-cu-border pb-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-cu-text-secondary">Assignees</span>
+                            <div className="flex gap-1">
                                 <button
-                                    key={member.id}
                                     type="button"
-                                    onClick={() => void handleAssigneeChange(member.id)}
-                                    className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-cu-hover transition-colors flex items-center gap-2 ${isSelected ? 'font-semibold text-cu-primary bg-cu-primary/5' : 'text-cu-text-primary'}`}
+                                    onClick={() => setAssignMode('single')}
+                                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors ${assignMode === 'single' ? 'bg-cu-primary text-white' : 'bg-cu-bg-secondary text-cu-text-secondary hover:text-cu-text-primary'}`}
                                 >
-                                    <AssigneeAvatar name={member.name} profilePicUrl={member.photoUrl} size={20} />
-                                    <span className="truncate">{member.name}</span>
+                                    Single
                                 </button>
-                            );
-                        })}
+                                <button
+                                    type="button"
+                                    onClick={() => setAssignMode('multi')}
+                                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors ${assignMode === 'multi' ? 'bg-cu-primary text-white' : 'bg-cu-bg-secondary text-cu-text-secondary hover:text-cu-text-primary'}`}
+                                >
+                                    Multi
+                                </button>
+                            </div>
+                        </div>
+
+                        {teamMembers.length > 5 && (
+                            <div className="mb-1.5">
+                                <input
+                                    type="text"
+                                    placeholder="Search members..."
+                                    value={assignSearch}
+                                    onChange={(e) => setAssignSearch(e.target.value)}
+                                    className="w-full text-[11px] px-2 py-1 rounded-lg border border-cu-border bg-cu-bg-secondary text-cu-text-primary placeholder:text-cu-text-muted focus:outline-none focus:border-cu-primary"
+                                />
+                            </div>
+                        )}
+
+                        <div className="max-h-60 overflow-y-auto space-y-0.5 pr-0.5">
+                            <button
+                                type="button"
+                                onClick={() => void handleSingleAssign(null)}
+                                className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] hover:bg-cu-hover transition-colors flex items-center justify-between ${currentAssigneeUserIds.length === 0 ? 'font-semibold text-cu-primary bg-cu-primary/5' : 'text-cu-text-secondary'}`}
+                            >
+                                <span>Unassigned</span>
+                                {currentAssigneeUserIds.length === 0 && <span className="w-1.5 h-1.5 rounded-full bg-cu-primary" />}
+                            </button>
+
+                            {filteredTeamMembers.map((member) => {
+                                const memberUserId = member.userId ?? member.id;
+                                const isSelected = currentAssigneeUserIds.includes(memberUserId) || currentAssigneeUserIds.includes(member.id);
+
+                                return (
+                                    <button
+                                        key={member.id}
+                                        type="button"
+                                        onClick={() => {
+                                            if (assignMode === 'single') {
+                                                void handleSingleAssign(member.id);
+                                            } else {
+                                                void handleToggleMultiAssign(memberUserId);
+                                            }
+                                        }}
+                                        className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] hover:bg-cu-hover transition-colors flex items-center justify-between gap-2 ${isSelected ? 'font-semibold text-cu-primary bg-cu-primary/10' : 'text-cu-text-primary'}`}
+                                    >
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <AssigneeAvatar name={member.name} profilePicUrl={member.photoUrl} size={22} />
+                                            <span className="truncate text-[12px]">{member.name}</span>
+                                        </div>
+                                        {isSelected && (
+                                            <span className="flex-shrink-0 text-cu-primary text-[11px] font-bold">✓</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
             </div>

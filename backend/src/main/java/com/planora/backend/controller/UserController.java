@@ -71,12 +71,22 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(
+            @Valid @RequestBody LoginRequest request,
+            @RequestHeader(value = "Origin", required = false) String origin,
+            @RequestHeader(value = "Sec-Fetch-Site", required = false) String fetchSite) {
         User user = new User();
         user.setEmail(request.getEmail());
         user.setPassword(request.getPassword());
         LoginResponse response = service.loginUser(user);
         if (response.isSuccess()) {
+            boolean browserRequest = origin != null || (fetchSite != null && !fetchSite.isBlank());
+            if (!browserRequest) {
+                // Preserve the established native response shape: the app stores
+                // the rotated token in platform secure storage.
+                return ResponseEntity.ok(response);
+            }
+
             ResponseCookie cookie = ResponseCookie.from("planora_refresh_token", response.getRefreshToken())
                     .httpOnly(true)
                     .secure(cookieSecure)
@@ -173,7 +183,7 @@ public class UserController {
             try {
                 jwtService.validateRefreshToken(refreshToken);
                 String email = jwtService.extractEmail(refreshToken);
-                service.revokeRefreshToken(email);
+                service.revokeRefreshToken(email, refreshToken);
             } catch (Exception ignored) {
                 // Logout remains idempotent: always clear the client cookie even if the
                 // submitted refresh token is malformed, expired, or already invalid.

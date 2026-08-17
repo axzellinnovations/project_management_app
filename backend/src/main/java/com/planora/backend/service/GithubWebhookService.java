@@ -44,18 +44,21 @@ public class GithubWebhookService {
         String action = root.path("action").asText();
         log.info("pull_request '{}' on {}", action, repoFullName);
 
-        resolveIntegration(repoFullName).ifPresent(integration ->
-            pullRequestService.upsertPullRequest(integration, prNode));
+        List<GithubIntegration> integrations = resolveIntegrations(repoFullName);
+        for (GithubIntegration integration : integrations) {
+            pullRequestService.upsertPullRequest(integration, prNode);
+        }
     }
 
     private void handlePushEvent(JsonNode root) {
         String repoFullName = root.path("repository").path("full_name").asText();
         log.info("push event on {}", repoFullName);
 
-        resolveIntegration(repoFullName).ifPresent(integration -> {
+        List<GithubIntegration> integrations = resolveIntegrations(repoFullName);
+        for (GithubIntegration integration : integrations) {
             root.path("commits").forEach(commitNode ->
                 commitService.upsertCommit(integration, wrapCommitNode(commitNode)));
-        });
+        }
     }
 
     private void handleIssuesEvent(JsonNode root) {
@@ -64,15 +67,17 @@ public class GithubWebhookService {
         String action = root.path("action").asText();
         log.info("issues '{}' on {}", action, repoFullName);
 
-        resolveIntegration(repoFullName).ifPresent(integration ->
-            issueService.upsertIssue(integration, issueNode));
+        List<GithubIntegration> integrations = resolveIntegrations(repoFullName);
+        for (GithubIntegration integration : integrations) {
+            issueService.upsertIssue(integration, issueNode);
+        }
     }
 
-    private Optional<GithubIntegration> resolveIntegration(String repoFullName) {
-        List<GithubIntegration> integrations = integrationRepository.findAllByActiveTrue();
-        return integrations.stream()
-            .filter(i -> repoFullName.equals(i.getRepositoryFullName()))
-            .findFirst();
+    private List<GithubIntegration> resolveIntegrations(String repoFullName) {
+        if (repoFullName == null || repoFullName.isBlank()) {
+            return List.of();
+        }
+        return integrationRepository.findByRepositoryFullNameIgnoreCaseAndActiveTrue(repoFullName.trim());
     }
 
     /**

@@ -27,8 +27,6 @@ import type { SprintVelocityPoint } from '@/services/tasks-contract';
 import type { SprintVelocityStatus } from '../hooks/useSprintVelocity';
 import {
   calculateVelocityMetrics,
-  selectVelocityRange,
-  type VelocityRange,
 } from './velocity-model';
 
 export type { SprintVelocityPoint } from '@/services/tasks-contract';
@@ -53,7 +51,6 @@ export const VELOCITY_CHART_LAYOUT = {
   maxBarSize: 30,
 } as const;
 
-const ranges: VelocityRange[] = [6, 12, 'all'];
 const dateFormatter = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' });
 
 const formatPoints = (value: number) => Number.isInteger(value) ? String(value) : value.toFixed(1);
@@ -128,16 +125,9 @@ export default function VelocityChart({
   onRetry,
   onClose,
 }: VelocityChartProps) {
-  const [range, setRange] = useState<VelocityRange>(() => (
-    typeof window !== 'undefined'
-      && typeof window.matchMedia === 'function'
-      && window.matchMedia('(max-width: 639px)').matches
-      ? 6
-      : 12
-  ));
   const [showTable, setShowTable] = useState(false);
 
-  const displayedSprints = useMemo(() => selectVelocityRange(sprints, range), [range, sprints]);
+  const displayedSprints = sprints;
   const metrics = useMemo(() => calculateVelocityMetrics(displayedSprints), [displayedSprints]);
   const hasLegacyData = displayedSprints.some((sprint) => !sprint.commitmentCaptured);
   const chartData = useMemo<ChartDatum[]>(() => displayedSprints.map((sprint) => ({
@@ -164,33 +154,13 @@ export default function VelocityChart({
             <p className="mt-0.5 text-[12px] text-cu-text-secondary">Committed versus delivered story points across completed sprints.</p>
           </div>
         </div>
-        <div className="flex items-center justify-between gap-2 sm:justify-end">
-          <div className="flex rounded-lg border border-cu-border bg-cu-bg-secondary p-1" aria-label="Velocity range">
-            {ranges.map((option) => {
-              const unavailable = (option === 12 && sprints.length <= 6)
-                || (option === 'all' && sprints.length <= 12);
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  aria-pressed={range === option}
-                  disabled={unavailable && range !== option}
-                  onClick={() => setRange(option)}
-                  className={`min-h-8 rounded-md px-3 text-[11px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                    range === option ? 'bg-cu-bg text-cu-primary shadow-cu-sm' : 'text-cu-text-secondary hover:text-cu-text-primary'
-                  }`}
-                >
-                  {option === 'all' ? 'All' : option}
-                </button>
-              );
-            })}
-          </div>
-          {onClose ? (
+        {onClose ? (
+          <div className="flex items-center justify-end">
             <button type="button" onClick={onClose} aria-label="Hide sprint velocity" className="flex h-9 w-9 items-center justify-center rounded-lg text-cu-text-muted transition-colors hover:bg-cu-hover hover:text-cu-text-primary">
               <X size={17} aria-hidden="true" />
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </header>
 
       <div className="p-4 sm:p-5">

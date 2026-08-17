@@ -24,14 +24,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.planora.backend.model.ChatMessage;
 import com.planora.backend.model.ChatReaction;
 import com.planora.backend.model.ChatReadState;
+import com.planora.backend.model.ChatRoomMember;
 import com.planora.backend.model.ChatRoom;
 import com.planora.backend.model.ChatThread;
 import com.planora.backend.model.User;
 import com.planora.backend.repository.ChatMessageRepository;
 import com.planora.backend.repository.ChatReactionRepository;
 import com.planora.backend.repository.ChatReadStateRepository;
+import com.planora.backend.repository.ChatRoomMemberRepository;
 import com.planora.backend.repository.ChatRoomRepository;
 import com.planora.backend.repository.ChatThreadRepository;
+import com.planora.backend.repository.TeamMemberRepository;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("null")
@@ -45,6 +48,10 @@ class ChatServiceTest {
     private ChatThreadRepository chatThreadRepository;
     @Mock
     private ChatRoomRepository chatRoomRepository;
+    @Mock
+    private ChatRoomMemberRepository chatRoomMemberRepository;
+    @Mock
+    private TeamMemberRepository teamMemberRepository;
     @Mock
     private ChatReactionRepository chatReactionRepository;
     @Mock
@@ -313,6 +320,44 @@ class ChatServiceTest {
                 eq(List.of("alice")),
                 eq(List.of("bob")));
         verify(chatReadStateRepository).save(any(ChatReadState.class));
+    }
+
+    @Test
+    void getChatRoomsForProject_matchesCreatorByEmailOrUsername() {
+        User alice = user(101L, "alice", "alice@example.com");
+        ChatRoom room = new ChatRoom();
+        room.setId(55L);
+        room.setName("frontend");
+        room.setCreatedBy("alice");
+        room.setArchived(false);
+
+        when(chatRoomMemberRepository.findRoomIdsByUserId(101L)).thenReturn(List.of());
+        when(chatRoomRepository.findByProjectId(10L)).thenReturn(List.of(room));
+
+        // When queried with email instead of username, it should still match via isRoomCreator
+        List<ChatRoom> rooms = chatService.getChatRoomsForProject(10L, "alice@example.com", false, alice);
+
+        assertEquals(1, rooms.size());
+        assertEquals(55L, rooms.get(0).getId());
+    }
+
+    @Test
+    void createRoom_allowsZeroExtraMembers_andAddsCreatorAsOwner() {
+        User alice = user(101L, "alice", "alice@example.com");
+        when(userCacheService.resolveUserByEmailOrUsername("alice")).thenReturn(alice);
+        when(teamMemberRepository.findByTeamId(99L)).thenReturn(List.of());
+        when(chatRoomRepository.save(any(ChatRoom.class))).thenAnswer(inv -> {
+            ChatRoom r = inv.getArgument(0);
+            r.setId(77L);
+            return r;
+        });
+
+        ChatService.CreatedRoomResult result = chatService.createRoom(10L, 99L, "alice", "general", List.of());
+
+        assertNotNull(result.room());
+        assertEquals(77L, result.room().getId());
+        assertEquals("general", result.room().getName());
+        verify(chatRoomMemberRepository).save(any(com.planora.backend.model.ChatRoomMember.class));
     }
 
     private User user(Long id, String username, String email) {

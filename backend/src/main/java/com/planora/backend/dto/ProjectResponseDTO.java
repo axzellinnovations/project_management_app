@@ -26,9 +26,9 @@ public class ProjectResponseDTO {
     private Long teamId;
     private String teamName;
     private Boolean isFavorite;
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
     private LocalDateTime favoriteMarkedAt;
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
     private LocalDateTime lastAccessedAt;
     private String figmaUrl;
 }

@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import org.springframework.test.context.TestPropertySource;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -34,6 +35,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(UserController.class)
+@TestPropertySource(properties = {
+        "app.cookie.secure=true",
+        "app.cookie.samesite=None"
+})
 public class UserControllerTest {
 
     @Autowired
@@ -100,6 +105,7 @@ public class UserControllerTest {
 
         mockMvc.perform(post("/api/auth/login")
                 .with(csrf())
+                .header("Origin", "http://localhost:3000")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(testUser)))
                 .andExpect(status().isOk())
@@ -109,6 +115,27 @@ public class UserControllerTest {
                 .andExpect(header().exists("Set-Cookie"))
                 .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("planora_refresh_token=mock-refresh-token")))
                 .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("SameSite=None")));
+    }
+
+    @Test
+    @WithMockUserPrincipal
+    void testLogin_NativeClient_ReturnsRefreshTokenInBodyWithoutCookie() throws Exception {
+        LoginResponse response = new LoginResponse();
+        response.setSuccess(true);
+        response.setMessage("Login successful");
+        response.setToken("mock-access-token");
+        response.setRefreshToken("mock-refresh-token");
+        when(userService.loginUser(any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/auth/login")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(testUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.token").value("mock-access-token"))
+                .andExpect(jsonPath("$.refreshToken").value("mock-refresh-token"))
+                .andExpect(header().doesNotExist("Set-Cookie"));
     }
 
     // (d) Login with unverified account returns 403 with UNVERIFIED_EMAIL errorCode
@@ -302,7 +329,7 @@ public class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("planora_refresh_token=;")));
 
-        verify(userService).revokeRefreshToken("test@example.com");
+        verify(userService).revokeRefreshToken("test@example.com", "old-refresh-token");
     }
 
     @Test
@@ -317,7 +344,7 @@ public class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.containsString("planora_refresh_token=;")));
 
-        verify(userService, never()).revokeRefreshToken(anyString());
+        verify(userService, never()).revokeRefreshToken(anyString(), anyString());
     }
 
     @Test
@@ -335,6 +362,7 @@ public class UserControllerTest {
 
         MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
                 .with(csrf())
+                .header("Origin", "http://localhost:3000")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(testUser)))
                 .andExpect(status().isOk())
@@ -356,7 +384,7 @@ public class UserControllerTest {
                 .cookie(oldRefreshCookie))
                 .andExpect(status().isUnauthorized());
 
-        verify(userService).revokeRefreshToken("test@example.com");
+        verify(userService).revokeRefreshToken("test@example.com", "old-refresh-token");
     }
 
     @Test

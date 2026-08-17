@@ -60,7 +60,8 @@ public class GithubDataController {
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        Page<GithubPrDTO> result = pullRequestService.getPullRequests(projectId, state, page, size);
+        Long userId = principal != null ? principal.getUserId() : null;
+        Page<GithubPrDTO> result = pullRequestService.getPullRequests(projectId, state, page, size, userId);
         return ResponseEntity.ok(PageResponseDto.from(result));
     }
 
@@ -71,7 +72,8 @@ public class GithubDataController {
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        Page<GithubCommitDTO> result = commitService.getCommits(projectId, page, size);
+        Long userId = principal != null ? principal.getUserId() : null;
+        Page<GithubCommitDTO> result = commitService.getCommits(projectId, page, size, userId);
         return ResponseEntity.ok(PageResponseDto.from(result));
     }
 
@@ -83,7 +85,8 @@ public class GithubDataController {
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        Page<GithubIssueDTO> result = issueService.getIssues(projectId, state, page, size);
+        Long userId = principal != null ? principal.getUserId() : null;
+        Page<GithubIssueDTO> result = issueService.getIssues(projectId, state, page, size, userId);
         return ResponseEntity.ok(PageResponseDto.from(result));
     }
 

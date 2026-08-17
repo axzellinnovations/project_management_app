@@ -127,10 +127,8 @@ public class GithubSyncService {
         while (cause != null) {
             if (cause instanceof GithubApiException apiException) {
                 if (apiException.getStatusCode() == 401) {
-                    log.warn("Unauthorized (401) response from GitHub API. Deactivating integration {} ({})",
+                    log.warn("Unauthorized (401) response from GitHub API for integration {} ({}). Skipping sync cycle.",
                             integration.getId(), integration.getRepositoryFullName());
-                    integration.setActive(false);
-                    integrationRepository.save(integration);
                     return true;
                 }
             }

@@ -4,10 +4,10 @@ import { classifyDue, STATUS_LABELS, STATUS_COLORS, STATUS_BORDER, PRIORITY_STYL
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'canDelete' | 'onDeleteTask' | 'onRenameTask' | 'onAddLabel' | 'onRemoveLabel' | 'onCreateLabel' | 'extraStatuses' | 'projectLabels'>) {
+export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'canDelete' | 'onDeleteTask' | 'onRenameTask' | 'onAddLabel' | 'onRemoveLabel' | 'onCreateLabel' | 'onUpdateLabel' | 'onDeleteLabel' | 'extraStatuses' | 'projectLabels'>) {
   const {
     canDelete: _canDelete, onDeleteTask: _onDeleteTask, onRenameTask, onAddLabel,
-    onRemoveLabel, onCreateLabel, extraStatuses, projectLabels: _projectLabels
+    onRemoveLabel, onCreateLabel, onUpdateLabel, onDeleteLabel, extraStatuses, projectLabels: _projectLabels
   } = props;
 
   const [statusOpen, setStatusOpen] = useState(false);
@@ -17,6 +17,12 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
   const [renameValue, setRenameValue] = useState('');
   const [labelInput, setLabelInput] = useState('');
   const [creatingLabel, setCreatingLabel] = useState(false);
+  const [editingLabelId, setEditingLabelId] = useState<number | null>(null);
+  const [editLabelName, setEditLabelName] = useState('');
+  const [editLabelColor, setEditLabelColor] = useState('#6366F1');
+  const [isSavingLabelEdit, setIsSavingLabelEdit] = useState(false);
+  const [deletingLabelId, setDeletingLabelId] = useState<number | null>(null);
+  const [isDeletingLabel, setIsDeletingLabel] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   // Layout positions to avoid ref access during render
@@ -168,6 +174,28 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
     } finally { setCreatingLabel(false); }
   }, [labelInput, creatingLabel, onCreateLabel, onAddLabel, task.id]);
 
+  const handleSaveLabelEdit = useCallback(async (id: number, name: string, color: string) => {
+    if (!name.trim() || isSavingLabelEdit || !onUpdateLabel) return;
+    setIsSavingLabelEdit(true);
+    try {
+      await onUpdateLabel(id, name.trim(), color);
+      setEditingLabelId(null);
+    } finally {
+      setIsSavingLabelEdit(false);
+    }
+  }, [isSavingLabelEdit, onUpdateLabel]);
+
+  const handleConfirmDeleteLabel = useCallback(async (id: number) => {
+    if (isDeletingLabel || !onDeleteLabel) return;
+    setIsDeletingLabel(true);
+    try {
+      await onDeleteLabel(id);
+      setDeletingLabelId(null);
+    } finally {
+      setIsDeletingLabel(false);
+    }
+  }, [isDeletingLabel, onDeleteLabel]);
+
   const openStatus = useCallback(() => {
     setStatusOpen((p) => !p);
   }, []);
@@ -202,6 +230,12 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
     renameValue, setRenameValue,
     labelInput, setLabelInput,
     creatingLabel,
+    editingLabelId, setEditingLabelId,
+    editLabelName, setEditLabelName,
+    editLabelColor, setEditLabelColor,
+    isSavingLabelEdit,
+    deletingLabelId, setDeletingLabelId,
+    isDeletingLabel,
     statusPosition, assignPosition, labelPosition,
     isMobile,
     // Refs
@@ -212,6 +246,8 @@ export function useTaskRowState(task: TaskRowTask, props: Pick<TaskRowProps, 'ca
     onTouchStartInternal, onTouchEndInternal, onTouchMoveInternal,
     startRename, updateLastTap, commitRename, cancelRename,
     taskLabelIds, openLabel, handleLabelToggle, handleCreateLabelFromInput,
+    handleSaveLabelEdit, handleConfirmDeleteLabel,
+    onUpdateLabel, onDeleteLabel,
     openStatus, openAssign, openDatePicker,
     // Derived
     canonicalStatus, validStatus, displayLabel, displayStyle,

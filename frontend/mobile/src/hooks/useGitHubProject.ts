@@ -170,19 +170,19 @@ export function useGitHubProject(projectId: string) {
 
   const selectRepository = useCallback(async (repository: GitHubRepository) => {
     setLoadingRepositories(true);
+    setPullRequests([]);
+    setCommits([]);
+    setIssues([]);
+    setActivityError(null);
     try {
-      const previous = connection;
       const repo = await setProjectGitHubRepo(projectId, repository);
-      if (previous?.integrationId && previous.integrationId !== repo.integrationId) {
-        await unlinkProjectGitHubRepository(projectId, previous.integrationId).catch(() => undefined);
-      }
       setConnection(repo);
       setRouteState('connected');
       await loadActivity(repo, true);
     } finally {
       setLoadingRepositories(false);
     }
-  }, [connection, loadActivity, projectId]);
+  }, [loadActivity, projectId]);
 
   const disconnectAccount = useCallback(async () => {
     await clearGitHubToken();

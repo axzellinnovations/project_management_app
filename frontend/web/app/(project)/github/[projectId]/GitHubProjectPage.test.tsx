@@ -271,7 +271,7 @@ describe('GitHubProjectPage', () => {
     expect(await screen.findByText('planora/web')).toBeInTheDocument();
     expect(screen.getByTestId('github-automations-panel')).toBeInTheDocument();
     expect(mockedSetProjectGitHubConnection).toHaveBeenCalledWith('7', backendConnection);
-    await waitFor(() => expect(mockedFetchProjectPullRequests).toHaveBeenCalledWith('7'));
+    await waitFor(() => expect(mockedFetchProjectPullRequests).toHaveBeenCalledWith('7', 'planora/web'));
   });
 
   it('migrates a legacy localStorage repository into the backend integration', async () => {
@@ -436,6 +436,59 @@ describe('GitHubProjectPage', () => {
     fireEvent.click(inviteButtons[inviteButtons.length - 1]);
 
     expect(await screen.findByText('GitHub username required for private-email accounts.')).toBeInTheDocument();
+  });
+
+  it('renders pull requests with status badges and filters by state', async () => {
+    mockedFetchProjectPullRequests.mockResolvedValue([
+      {
+        id: 101,
+        number: 1,
+        title: 'Open Feature PR',
+        state: 'open',
+        merged_at: null,
+        created_at: '2026-07-06T10:00:00Z',
+        updated_at: '2026-07-06T10:00:00Z',
+        html_url: 'https://github.com/planora/web/pull/1',
+        draft: false,
+        user: { login: 'alice', avatar_url: 'https://github.com/alice.png', html_url: 'https://github.com/alice' },
+        labels: [],
+        head: { ref: 'feat/open' },
+        base: { ref: 'main' },
+      },
+      {
+        id: 102,
+        number: 2,
+        title: 'Merged Fix PR',
+        state: 'closed',
+        merged_at: '2026-07-06T11:00:00Z',
+        created_at: '2026-07-06T09:00:00Z',
+        updated_at: '2026-07-06T11:00:00Z',
+        html_url: 'https://github.com/planora/web/pull/2',
+        draft: false,
+        user: { login: 'bob', avatar_url: 'https://github.com/bob.png', html_url: 'https://github.com/bob' },
+        labels: [],
+        head: { ref: 'fix/merged' },
+        base: { ref: 'main' },
+      },
+    ]);
+
+    render(<GitHubProjectPage projectId="7" />);
+
+    expect(await screen.findByText('Open Feature PR')).toBeInTheDocument();
+    expect(screen.getByText('Merged Fix PR')).toBeInTheDocument();
+    expect(screen.getAllByText('Open').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Merged').length).toBeGreaterThan(0);
+
+    // Filter to merged
+    fireEvent.click(screen.getByRole('button', { name: /^merged$/i }));
+    expect(screen.queryByText('Open Feature PR')).not.toBeInTheDocument();
+    expect(screen.getByText('Merged Fix PR')).toBeInTheDocument();
+
+    // Filter to open
+    const openFilterButtons = screen.getAllByRole('button', { name: /^open$/i });
+    fireEvent.click(openFilterButtons[0]);
+    expect(screen.getByText('Open Feature PR')).toBeInTheDocument();
+    expect(screen.queryByText('Merged Fix PR')).not.toBeInTheDocument();
   });
 
   it('hides collaborator invite controls for regular project members', async () => {

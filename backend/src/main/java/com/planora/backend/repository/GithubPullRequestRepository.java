@@ -23,6 +23,8 @@ public interface GithubPullRequestRepository extends JpaRepository<GithubPullReq
 
     List<GithubPullRequest> findByLinkedTaskId(Long taskId);
 
+    long countByIntegrationId(Long integrationId);
+
     long countByIntegrationIdIn(List<Long> integrationIds);
 
     long countByIntegrationIdInAndState(List<Long> integrationIds, String state);

@@ -39,7 +39,7 @@ function KanbanPageContent() {
     handleInlineUpdate, handleCompleteBoard,
     handleAssigneeChange,
     handleColumnRenamed, handleColumnSettingsChanged, handleDeleteColumn,
-    handleAddColumn, handleCreateLabel, forceRefresh,
+    handleAddColumn, handleCreateLabel, handleUpdateLabel, handleDeleteLabel, forceRefresh,
   } = useKanbanBoard(projectId);
 
   const [showAddColumn, setShowAddColumn] = useState(false);
@@ -237,6 +237,8 @@ function KanbanPageContent() {
                         usersMap={usersMap}
                         labels={labels}
                         onCreateLabel={handleCreateLabel}
+                        onUpdateLabel={handleUpdateLabel}
+                        onDeleteLabel={handleDeleteLabel}
                         onColumnRenamed={handleColumnRenamed}
                         onColumnSettingsChanged={handleColumnSettingsChanged}
                         onDeleteColumn={handleDeleteColumn}

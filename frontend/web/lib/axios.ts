@@ -11,9 +11,9 @@ function resolveBaseUrl(configBaseUrl?: string): string {
     return configBaseUrl || getApiBaseUrl();
 }
 
-// Add request interceptor to include auth token (exclude auth endpoints)
+// Unified request interceptor to handle auth token attachment and proactive refresh
 api.interceptors.request.use(
-    (config) => {
+    async (config) => {
         config.baseURL = resolveBaseUrl(config.baseURL);
 
         // When data is FormData, remove Content-Type so Axios/browser automatically creates multipart/form-data with boundary
@@ -31,7 +31,7 @@ api.interceptors.request.use(
         // Don't add token to auth endpoints
         const authEndpoints = ['/api/auth/login', '/api/auth/register', '/api/auth/forgot', '/api/auth/reset', '/api/auth/reg/verify', '/api/auth/resend', '/api/auth/refresh'];
         const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint));
-        
+
         if (!isAuthEndpoint && typeof window !== 'undefined') {
             if (hasRedirectedToLogin || (!getValidToken() && !getRefreshToken())) {
                 // Short-circuit background polling/requests during logout/redirect to prevent 401 cascades
@@ -41,9 +41,24 @@ api.interceptors.request.use(
                 return config;
             }
 
-            const token = getValidToken();
-            if (token) {
-                config.headers.Authorization = `Bearer ${token}`;
+            try {
+                let token = getValidToken();
+                const user = getUserFromToken();
+                const needsRefresh = !token || (user?.exp && (user.exp - Date.now() / 1000) < 60);
+
+                if (needsRefresh && getRefreshToken()) {
+                    token = await refreshAccessToken({ allowCookieRefresh: true });
+                }
+
+                if (token) {
+                    config.headers.Authorization = `Bearer ${token}`;
+                }
+            } catch {
+                // If refresh fails due to network or lock, proceed; response 401 handler will catch if server rejects
+                const token = getValidToken();
+                if (token) {
+                    config.headers.Authorization = `Bearer ${token}`;
+                }
             }
         }
         return config;
@@ -52,37 +67,6 @@ api.interceptors.request.use(
         return Promise.reject(error);
     }
 );
-
-// Proactively refresh the access token if it expires within 60 seconds
-api.interceptors.request.use(async (config) => {
-    config.baseURL = resolveBaseUrl(config.baseURL);
-
-    const authEndpoints = ['/api/auth/login', '/api/auth/register', '/api/auth/forgot', '/api/auth/reset', '/api/auth/reg/verify', '/api/auth/resend', '/api/auth/refresh'];
-    const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint));
-    if (!isAuthEndpoint && typeof window !== 'undefined' && !hasRedirectedToLogin) {
-        try {
-            if (!getValidToken()) {
-                if (!getRefreshToken()) {
-                    return config;
-                }
-                const newToken = await refreshAccessToken({ allowCookieRefresh: true });
-                config.headers['Authorization'] = `Bearer ${newToken}`;
-                return config;
-            }
-
-            const user = getUserFromToken();
-            if (user?.exp && (user.exp - Date.now() / 1000) < 60) {
-                if (!getRefreshToken()) {
-                    return config;
-                }
-                const newToken = await refreshAccessToken({ allowCookieRefresh: true });
-                config.headers['Authorization'] = `Bearer ${newToken}`;
-                return config;
-            }
-        } catch { /* token expired or invalid — let the 401 handler deal with it */ }
-    }
-    return config;
-});
 
 // Track whether a token refresh is in progress to avoid infinite loop
 let isRefreshing = false;

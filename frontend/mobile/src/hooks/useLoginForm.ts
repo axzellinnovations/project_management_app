@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../lib/axios';
 import { buildLoginRequest, login as loginBuilder, type LoginRequest } from '@planora/contracts';
 import { getValidToken, saveRefreshToken, saveToken, setRememberMe } from '../lib/auth';
@@ -84,7 +85,10 @@ export function useLoginForm() {
       const errorMessage = apiErrorMessage(err, 'Login failed. Please try again.');
 
       if (e.response?.status === 403) {
-        setError(errorMessage || 'Email is not verified. Please check your email.');
+        const normalizedEmail = email.toLowerCase();
+        AsyncStorage.setItem('pendingVerificationEmail', normalizedEmail).catch(() => {});
+        router.push({ pathname: '/(auth)/verify-email', params: { email: normalizedEmail } } as never);
+        return;
       } else if (e.response?.status === 401) {
         setError(errorMessage || 'Incorrect email or password.');
       } else {

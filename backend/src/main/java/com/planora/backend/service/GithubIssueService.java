@@ -41,14 +41,20 @@ public class GithubIssueService {
 
     @Transactional
     public Page<GithubIssueDTO> getIssues(Long projectId, String state, int page, int size) {
+        return getIssues(projectId, state, page, size, null);
+    }
+
+    @Transactional
+    public Page<GithubIssueDTO> getIssues(Long projectId, String state, int page, int size, Long userId) {
         List<GithubIntegration> integrations = integrationRepository.findByProjectIdAndActiveTrue(projectId);
         if (integrations.isEmpty()) return Page.empty();
 
         List<Long> ids = integrations.stream().map(GithubIntegration::getId).collect(Collectors.toList());
 
-        // Proactive sync if no issues cached yet
-        if (issueRepository.countByIntegrationIdIn(ids) == 0) {
-            for (GithubIntegration integration : integrations) {
+        // Proactive sync for any integration that has no issues cached yet
+        for (GithubIntegration integration : integrations) {
+            if (issueRepository.countByIntegrationId(integration.getId()) == 0) {
+                ensureIntegrationToken(integration, userId);
                 if (githubTokenService.hasValidToken(integration)) {
                     try {
                         syncIssues(integration);
@@ -67,6 +73,20 @@ public class GithubIssueService {
         return issues.map(this::toDTO);
     }
 
+    private void ensureIntegrationToken(GithubIntegration integration, Long userId) {
+        if (!githubTokenService.hasValidToken(integration) && userId != null) {
+            try {
+                String userToken = githubTokenService.getToken(userId);
+                if (userToken != null && !userToken.isBlank()) {
+                    integration.setEncryptedAccessToken(githubTokenService.encryptToken(userToken));
+                    integrationRepository.save(integration);
+                }
+            } catch (Exception e) {
+                log.debug("Could not backfill integration token from user {}: {}", userId, e.getMessage());
+            }
+        }
+    }
+
     @Transactional
     public void syncIssues(GithubIntegration integration) {
         String token = githubTokenService.resolveToken(integration);
@@ -76,7 +96,7 @@ public class GithubIssueService {
         List<JsonNode> nodes = githubApiClient.fetchIssues(repo, token, "all", 1, 100);
         for (JsonNode node : nodes) {
             // GitHub issues endpoint also returns PRs; skip them
-            if (!node.path("pull_request").isMissingNode()) continue;
+            if (node.hasNonNull("pull_request") || !node.path("pull_request").isMissingNode()) continue;
             upsertIssue(integration, node);
         }
 
@@ -102,7 +122,13 @@ public class GithubIssueService {
 
     @Transactional
     public void upsertIssue(GithubIntegration integration, JsonNode node) {
+        if (node == null) return;
+        // Do not upsert pull requests into the issues table
+        if (node.hasNonNull("pull_request") || !node.path("pull_request").isMissingNode()) return;
+
         int issueNumber = node.path("number").asInt();
+        if (issueNumber <= 0) return;
+
         Optional<GithubIssue> existing = issueRepository
             .findByIntegrationIdAndGithubIssueNumber(integration.getId(), issueNumber);
 
@@ -118,9 +144,15 @@ public class GithubIssueService {
         issue.setGithubUpdatedAt(parseDateTime(node.path("updated_at").asText(null)));
         issue.setSyncedAt(LocalDateTime.now());
 
-        List<String> labelNames = new ArrayList<>();
-        node.path("labels").forEach(label -> labelNames.add(label.path("name").asText()));
-        issue.setLabelNames(String.join(",", labelNames));
+        List<String> labelEntries = new ArrayList<>();
+        node.path("labels").forEach(label -> {
+            String name = label.path("name").asText("");
+            String color = label.path("color").asText("");
+            if (!name.isBlank()) {
+                labelEntries.add(color.isBlank() ? name : name + ":" + color);
+            }
+        });
+        issue.setLabelNames(String.join(",", labelEntries));
 
         if (issue.getLinkedTaskId() == null) {
             Task task = resolveTaskRef(integration.getProject(), issue.getTitle() + " " + issue.getBody());
@@ -141,7 +173,17 @@ public class GithubIssueService {
     public Task resolveTaskRef(Project project, String text) {
         if (project == null || text == null || text.isBlank()) return null;
 
-        String projectKey = project.getProjectKey() != null ? project.getProjectKey() : "TASK";
+        Long projectId;
+        String projectKey;
+        try {
+            projectId = project.getId();
+            projectKey = project.getProjectKey() != null ? project.getProjectKey() : "TASK";
+        } catch (Exception e) {
+            log.debug("Could not resolve project details from proxy: {}", e.getMessage());
+            return null;
+        }
+        if (projectId == null) return null;
+
         Pattern pattern = Pattern.compile(
             "(?:#|" + Pattern.quote(projectKey) + "-|TASK-|task/|issue/|feature/)(\\d+)",
             Pattern.CASE_INSENSITIVE
@@ -151,14 +193,14 @@ public class GithubIssueService {
             try {
                 long num = Long.parseLong(matcher.group(1));
                 // 1. Try project-scoped task number
-                Optional<Task> taskByNum = taskRepository.findByProjectIdAndProjectTaskNumber(project.getId(), num);
+                Optional<Task> taskByNum = taskRepository.findByProjectIdAndProjectTaskNumber(projectId, num);
                 if (taskByNum.isPresent()) {
                     return taskByNum.get();
                 }
                 // 2. Try global task ID if it belongs to this project
                 Optional<Task> taskById = taskRepository.findById(num);
                 if (taskById.isPresent() && taskById.get().getProject() != null
-                        && project.getId().equals(taskById.get().getProject().getId())) {
+                        && projectId.equals(taskById.get().getProject().getId())) {
                     return taskById.get();
                 }
             } catch (NumberFormatException ignored) {
@@ -170,12 +212,19 @@ public class GithubIssueService {
     private GithubIssueDTO toDTO(GithubIssue issue) {
         List<GithubLabelDTO> labels = (issue.getLabelNames() != null && !issue.getLabelNames().isBlank())
             ? List.of(issue.getLabelNames().split(",")).stream()
-                .map(name -> new GithubLabelDTO(name, null))
+                .filter(s -> !s.isBlank())
+                .map(entry -> {
+                    if (entry.contains(":")) {
+                        String[] parts = entry.split(":", 2);
+                        return new GithubLabelDTO(parts[0], parts[1].isBlank() ? null : parts[1]);
+                    }
+                    return new GithubLabelDTO(entry, null);
+                })
                 .toList()
             : List.of();
         return GithubIssueDTO.builder()
             .id(issue.getId())
-            .integrationId(issue.getIntegration().getId())
+            .integrationId(issue.getIntegration() != null ? issue.getIntegration().getId() : null)
             .githubIssueNumber(issue.getGithubIssueNumber())
             .number(issue.getGithubIssueNumber())
             .title(issue.getTitle())

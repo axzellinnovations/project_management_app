@@ -50,23 +50,6 @@ public class ProjectGithubIntegrationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + request.getProjectId()));
         requireOwnerOrAdmin(project, userId);
 
-        Optional<GithubIntegration> existing = integrationRepository.findByProjectIdAndRepositoryFullName(
-                request.getProjectId(), request.getRepositoryFullName());
-        if (existing.isPresent()) {
-            GithubIntegration integration = existing.get();
-            if (!integration.isActive()) {
-                integration.setActive(true);
-                integration = integrationRepository.save(integration);
-            }
-            project.setGithubRepoFullName(request.getRepositoryFullName());
-            projectRepository.save(project);
-
-            triggerInitialSync(integration);
-            log.info("Repository '{}' already linked to project {}, reactivated and synced",
-                    request.getRepositoryFullName(), request.getProjectId());
-            return toDTO(integration);
-        }
-
         String accessToken = githubTokenService.getToken(userId);
         if (accessToken == null || accessToken.isBlank()) {
             throw new GithubAuthenticationException("GitHub account is not connected");
@@ -78,39 +61,65 @@ public class ProjectGithubIntegrationService {
             throw mapGithubRepositoryAccessException(e);
         }
 
-        GithubIntegration integration = new GithubIntegration();
-        integration.setProject(project);
-        integration.setRepositoryFullName(request.getRepositoryFullName());
-        integration.setRepositoryUrl("https://github.com/" + request.getRepositoryFullName());
-        integration.setEncryptedAccessToken(githubTokenService.encryptToken(accessToken));
-        integration.setTokenType(GithubIntegration.TokenType.OAUTH);
-        integration.setActive(true);
+        // Deactivate any other active integrations for this project so only one repository is active at a time
+        List<GithubIntegration> currentActive = integrationRepository.findByProjectIdAndActiveTrue(request.getProjectId());
+        for (GithubIntegration activeInt : currentActive) {
+            if (!activeInt.getRepositoryFullName().equalsIgnoreCase(request.getRepositoryFullName())) {
+                activeInt.setActive(false);
+                integrationRepository.save(activeInt);
+                log.info("Deactivated previous GitHub integration {} ({}) for project {}",
+                        activeInt.getId(), activeInt.getRepositoryFullName(), request.getProjectId());
+            }
+        }
 
-        GithubIntegration saved = integrationRepository.save(integration);
+        Optional<GithubIntegration> existing = integrationRepository.findByProjectIdAndRepositoryFullName(
+                request.getProjectId(), request.getRepositoryFullName());
+        GithubIntegration integration;
+        if (existing.isPresent()) {
+            integration = existing.get();
+            integration.setActive(true);
+            integration.setEncryptedAccessToken(githubTokenService.encryptToken(accessToken));
+            integration.setRepositoryUrl("https://github.com/" + request.getRepositoryFullName());
+            integration = integrationRepository.save(integration);
+            log.info("Repository '{}' already linked to project {}, reactivated and synced",
+                    request.getRepositoryFullName(), request.getProjectId());
+        } else {
+            integration = new GithubIntegration();
+            integration.setProject(project);
+            integration.setRepositoryFullName(request.getRepositoryFullName());
+            integration.setRepositoryUrl("https://github.com/" + request.getRepositoryFullName());
+            integration.setEncryptedAccessToken(githubTokenService.encryptToken(accessToken));
+            integration.setTokenType(GithubIntegration.TokenType.OAUTH);
+            integration.setActive(true);
+            integration = integrationRepository.save(integration);
+            log.info("Linked GitHub repo '{}' to project {}", request.getRepositoryFullName(), request.getProjectId());
+        }
+
         project.setGithubRepoFullName(request.getRepositoryFullName());
         projectRepository.save(project);
 
-        log.info("Linked GitHub repo '{}' to project {}", request.getRepositoryFullName(), request.getProjectId());
-        triggerInitialSync(saved);
-        return toDTO(saved);
+        triggerInitialSync(integration);
+        return toDTO(integration);
     }
 
     private void triggerInitialSync(GithubIntegration integration) {
-        try {
-            pullRequestService.syncPullRequests(integration);
-        } catch (Exception e) {
-            log.warn("Initial PR sync failed for {}: {}", integration.getRepositoryFullName(), e.getMessage());
-        }
-        try {
-            commitService.syncCommits(integration);
-        } catch (Exception e) {
-            log.warn("Initial commit sync failed for {}: {}", integration.getRepositoryFullName(), e.getMessage());
-        }
-        try {
-            issueService.syncIssues(integration);
-        } catch (Exception e) {
-            log.warn("Initial issue sync failed for {}: {}", integration.getRepositoryFullName(), e.getMessage());
-        }
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                pullRequestService.syncPullRequests(integration);
+            } catch (Exception e) {
+                log.warn("Initial PR sync failed for {}: {}", integration.getRepositoryFullName(), e.getMessage());
+            }
+            try {
+                commitService.syncCommits(integration);
+            } catch (Exception e) {
+                log.warn("Initial commit sync failed for {}: {}", integration.getRepositoryFullName(), e.getMessage());
+            }
+            try {
+                issueService.syncIssues(integration);
+            } catch (Exception e) {
+                log.warn("Initial issue sync failed for {}: {}", integration.getRepositoryFullName(), e.getMessage());
+            }
+        });
     }
 
     @Transactional
@@ -123,6 +132,12 @@ public class ProjectGithubIntegrationService {
                 .findByIdAndProjectId(integrationId, projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Integration not found: " + integrationId));
         integrationRepository.delete(integration);
+
+        Optional<GithubIntegration> remainingActive = integrationRepository.findByProjectIdAndActiveTrue(projectId)
+                .stream().filter(i -> !i.getId().equals(integrationId)).findFirst();
+        project.setGithubRepoFullName(remainingActive.map(GithubIntegration::getRepositoryFullName).orElse(null));
+        projectRepository.save(project);
+
         log.info("Unlinked GitHub integration {} from project {}", integrationId, projectId);
     }
 

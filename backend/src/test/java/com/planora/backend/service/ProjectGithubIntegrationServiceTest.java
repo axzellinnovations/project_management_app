@@ -35,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -91,9 +92,9 @@ class ProjectGithubIntegrationServiceTest {
 
         assertEquals("planora/web", service.linkRepository(request, 1L).getRepositoryFullName());
         verify(githubApiClient).fetchRepository("planora/web", "token");
-        verify(pullRequestService).syncPullRequests(any(GithubIntegration.class));
-        verify(commitService).syncCommits(any(GithubIntegration.class));
-        verify(issueService).syncIssues(any(GithubIntegration.class));
+        verify(pullRequestService, timeout(2000)).syncPullRequests(any(GithubIntegration.class));
+        verify(commitService, timeout(2000)).syncCommits(any(GithubIntegration.class));
+        verify(issueService, timeout(2000)).syncIssues(any(GithubIntegration.class));
     }
 
     @Test
@@ -368,6 +369,57 @@ class ProjectGithubIntegrationServiceTest {
                 .thenThrow(new GithubApiClient.GithubApiException(429, "rate limit"));
 
         assertThrows(GithubRateLimitException.class, () -> service.inviteCollaborator(7L, request, 1L));
+    }
+
+    @Test
+    void linkRepository_deactivatesPreviousActiveIntegrations() {
+        Project project = project();
+        project.setGithubRepoFullName("planora/old-repo");
+        GithubIntegration oldIntegration = integration(project);
+        oldIntegration.setId(10L);
+        oldIntegration.setRepositoryFullName("planora/old-repo");
+        oldIntegration.setActive(true);
+
+        when(projectRepository.findById(7L)).thenReturn(Optional.of(project));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(11L, 1L)).thenReturn(Optional.of(member(TeamRole.OWNER, 1L, "owner")));
+        when(githubTokenService.getToken(1L)).thenReturn("token");
+        when(integrationRepository.findByProjectIdAndActiveTrue(7L)).thenReturn(List.of(oldIntegration));
+        when(integrationRepository.findByProjectIdAndRepositoryFullName(7L, "planora/new-repo")).thenReturn(Optional.empty());
+        when(integrationRepository.save(any(GithubIntegration.class))).thenAnswer(invocation -> {
+            GithubIntegration arg = invocation.getArgument(0);
+            if (arg.getId() == null) arg.setId(20L);
+            return arg;
+        });
+
+        GithubLinkRequestDTO request = new GithubLinkRequestDTO();
+        request.setProjectId(7L);
+        request.setRepositoryFullName("planora/new-repo");
+
+        var result = service.linkRepository(request, 1L);
+
+        assertEquals("planora/new-repo", result.getRepositoryFullName());
+        assertEquals("planora/new-repo", project.getGithubRepoFullName());
+        org.junit.jupiter.api.Assertions.assertFalse(oldIntegration.isActive());
+        verify(integrationRepository).save(oldIntegration);
+        verify(projectRepository).save(project);
+    }
+
+    @Test
+    void unlinkRepository_clearsProjectGithubRepoFullNameWhenNoActiveRemain() {
+        Project project = project();
+        project.setGithubRepoFullName("planora/web");
+        GithubIntegration integration = integration(project);
+
+        when(projectRepository.findById(7L)).thenReturn(Optional.of(project));
+        when(teamMemberRepository.findByTeamIdAndUserUserId(11L, 1L)).thenReturn(Optional.of(member(TeamRole.OWNER, 1L, "owner")));
+        when(integrationRepository.findByIdAndProjectId(42L, 7L)).thenReturn(Optional.of(integration));
+        when(integrationRepository.findByProjectIdAndActiveTrue(7L)).thenReturn(List.of(integration));
+
+        service.unlinkRepository(42L, 7L, 1L);
+
+        verify(integrationRepository).delete(integration);
+        org.junit.jupiter.api.Assertions.assertNull(project.getGithubRepoFullName());
+        verify(projectRepository).save(project);
     }
 
     private Project project() {

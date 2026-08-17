@@ -51,7 +51,7 @@ public class GithubIssuesSyncService {
     public List<GithubIssueDTO> syncIssues(String repoFullName, String accessToken) {
         String[] repositoryParts = repositoryParts(repoFullName);
 
-        return githubClient.get()
+        List<GithubIssueDTO> issues = githubClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/repos/{owner}/{repo}/issues")
                         .queryParam("state", "all")
@@ -70,6 +70,14 @@ public class GithubIssuesSyncService {
                 })
                 .body(new ParameterizedTypeReference<List<GithubIssueDTO>>() {
                 });
+
+        if (issues == null) {
+            return List.of();
+        }
+
+        return issues.stream()
+                .filter(issue -> !issue.isPullRequest())
+                .toList();
     }
 
     public List<GithubLabelDTO> syncLabels(String repoFullName, String accessToken) {

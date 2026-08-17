@@ -414,7 +414,7 @@ class TaskServiceTest {
         Task task = buildTask(70L);
 
         when(taskRepository.findById(70L)).thenReturn(Optional.of(task));
-        when(taskRepository.findByIdWithProjectTeam(70L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdWithProjectTeamForUpdate(70L)).thenReturn(Optional.of(task));
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
 
@@ -433,7 +433,7 @@ class TaskServiceTest {
     void assignUser_doesNotNotifyWhenActorAssignsSelf() {
         Task task = buildTask(71L);
 
-        when(taskRepository.findByIdWithProjectTeam(71L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdWithProjectTeamForUpdate(71L)).thenReturn(Optional.of(task));
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
 
@@ -459,7 +459,7 @@ class TaskServiceTest {
         newMember.setUser(newUser);
         newMember.setTeam(team);
 
-        when(taskRepository.findByIdWithProjectTeam(72L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdWithProjectTeamForUpdate(72L)).thenReturn(Optional.of(task));
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(taskRepository.findByIdFullyFetched(72L)).thenReturn(Optional.of(task));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));
@@ -487,7 +487,7 @@ class TaskServiceTest {
         task.getAssignees().add(assignee);
         task.getAssignees().add(actorMember);
 
-        when(taskRepository.findByIdWithProjectTeam(73L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdWithProjectTeamForUpdate(73L)).thenReturn(Optional.of(task));
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(taskRepository.findByIdFullyFetched(73L)).thenReturn(Optional.of(task));
         when(userRepository.findById(500L)).thenReturn(Optional.of(actorUser));

@@ -3,6 +3,7 @@
 import React from 'react';
 import { Task } from '../../kanban/types';
 import { Check, Trash2 } from 'lucide-react';
+import AssigneeAvatar from '../../(agile)/sprint-backlog/components/AssigneeAvatar';
 
 const PRIORITY_CONFIG: Record<string, { label: string }> = {
     HIGH:   { label: 'High'   },
@@ -49,18 +50,32 @@ export default function BacklogTaskDetail({
             {task.description && (
                 <p className="text-[14px] text-cu-text-primary leading-relaxed">{task.description}</p>
             )}
-            <div className="grid grid-cols-2 gap-3">
-                {task.assigneeName && (
-                    <div className="bg-cu-bg-secondary rounded-xl p-3">
-                        <p className="text-[11px] text-cu-text-muted mb-1">Assignee</p>
-                        <p className="text-[13px] font-medium text-cu-text-primary">{task.assigneeName}</p>
-                    </div>
-                )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-cu-bg-secondary rounded-xl p-3">
+                    <p className="text-[11px] text-cu-text-muted mb-1.5 font-medium">Assignees</p>
+                    {task.assignees && task.assignees.length > 0 ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                            {task.assignees.map((a, idx) => (
+                                <div key={a.userId ?? a.memberId ?? a.id ?? idx} className="inline-flex items-center gap-1.5 bg-cu-bg border border-cu-border rounded-lg px-2 py-1">
+                                    <AssigneeAvatar name={a.name} profilePicUrl={a.photoUrl || a.avatar || a.profilePicUrl} size={20} />
+                                    <span className="text-[12px] font-medium text-cu-text-primary truncate max-w-[120px]">{a.name}</span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : task.assigneeName ? (
+                        <div className="inline-flex items-center gap-1.5 bg-cu-bg border border-cu-border rounded-lg px-2 py-1">
+                            <AssigneeAvatar name={task.assigneeName} profilePicUrl={task.assigneePhotoUrl} size={20} />
+                            <span className="text-[12px] font-medium text-cu-text-primary truncate">{task.assigneeName}</span>
+                        </div>
+                    ) : (
+                        <span className="text-[12px] text-cu-text-muted italic">Unassigned</span>
+                    )}
+                </div>
                 {task.dueDate && (
                     <div className="bg-cu-bg-secondary rounded-xl p-3">
-                        <p className="text-[11px] text-cu-text-muted mb-1">Due Date</p>
+                        <p className="text-[11px] text-cu-text-muted mb-1 font-medium">Due Date</p>
                         <p className="text-[13px] font-medium text-cu-text-primary">
-                            {new Date(task.dueDate).toLocaleDateString()}
+                            {new Date(task.dueDate.length === 10 ? `${task.dueDate}T00:00:00` : task.dueDate).toLocaleDateString()}
                         </p>
                     </div>
                 )}

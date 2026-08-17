@@ -20,6 +20,8 @@ public interface GithubIssueRepository extends JpaRepository<GithubIssue, Long> 
 
     List<GithubIssue> findByLinkedTaskId(Long taskId);
 
+    long countByIntegrationId(Long integrationId);
+
     long countByIntegrationIdIn(List<Long> integrationIds);
 
     long countByIntegrationIdInAndState(List<Long> integrationIds, String state);

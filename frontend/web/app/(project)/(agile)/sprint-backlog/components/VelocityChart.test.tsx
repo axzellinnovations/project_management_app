@@ -71,13 +71,13 @@ describe('VelocityChart', () => {
     expect(screen.getAllByText('40 pts').length).toBeGreaterThan(0);
   });
 
-  it('keeps the newest twelve sprint comparisons visible until All is selected', () => {
+  it('renders all completed sprints in the velocity chart', () => {
     const sprints = Array.from({ length: 14 }, (_, index) => (
       makeVelocityPoint(index + 1, `Sprint ${index + 1}`, 20, 18)
     ));
     render(<VelocityChart sprints={sprints} />);
 
-    expect(screen.getByRole('img', { name: 'Sprint velocity chart for 12 completed sprints' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Sprint velocity chart for 14 completed sprints' })).toBeInTheDocument();
   });
 
   it('shows an honest warning for historical sprints without a commitment baseline', () => {

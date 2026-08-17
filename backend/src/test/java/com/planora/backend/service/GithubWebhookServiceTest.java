@@ -38,7 +38,7 @@ class GithubWebhookServiceTest {
                  "pull_request":{"number":42,"title":"Improve tests"}}
                 """);
         when(objectMapper.readTree(any(String.class))).thenReturn(root);
-        when(integrationRepository.findAllByActiveTrue()).thenReturn(List.of(integration));
+        when(integrationRepository.findByRepositoryFullNameIgnoreCaseAndActiveTrue("planora/app")).thenReturn(List.of(integration));
 
         webhookService.handleEvent("pull_request", "payload");
 
@@ -61,7 +61,7 @@ class GithubWebhookServiceTest {
         when(objectMapper.readTree("payload")).thenReturn(root);
         when(objectMapper.readTree(org.mockito.ArgumentMatchers.startsWith("{\"sha\"")))
                 .thenAnswer(invocation -> mapper.readTree(invocation.getArgument(0, String.class)));
-        when(integrationRepository.findAllByActiveTrue()).thenReturn(List.of(integration));
+        when(integrationRepository.findByRepositoryFullNameIgnoreCaseAndActiveTrue("planora/app")).thenReturn(List.of(integration));
 
         webhookService.handleEvent("push", "payload");
 
@@ -78,7 +78,7 @@ class GithubWebhookServiceTest {
                 {"action":"closed","repository":{"full_name":"other/app"},"issue":{"number":7}}
                 """);
         when(objectMapper.readTree(any(String.class))).thenReturn(root);
-        when(integrationRepository.findAllByActiveTrue()).thenReturn(List.of(integration("planora/app")));
+        when(integrationRepository.findByRepositoryFullNameIgnoreCaseAndActiveTrue("other/app")).thenReturn(List.of());
 
         webhookService.handleEvent("issues", "payload");
 
@@ -91,7 +91,7 @@ class GithubWebhookServiceTest {
 
         webhookService.handleEvent("release", "payload");
 
-        verify(integrationRepository, never()).findAllByActiveTrue();
+        verify(integrationRepository, never()).findByRepositoryFullNameIgnoreCaseAndActiveTrue(any());
     }
 
     private GithubIntegration integration(String repositoryFullName) {

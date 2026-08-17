@@ -900,7 +900,7 @@ public class TaskService {
 
     @Transactional
     public void assignUser(Long taskId, Long userId, Long currentUserId) {
-        Task task = findTaskWithProjectTeam(taskId);
+        Task task = findTaskWithProjectTeamForUpdate(taskId);
 
         //permission check
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
@@ -927,7 +927,7 @@ public class TaskService {
     // Dedicated PATCH endpoint logic for managing multiple assignees seamlessly.
     @Transactional
     public TaskResponseDTO updateAssignees(Long taskId, List<Long> userIds, Long currentUserId) {
-        Task task = findTaskWithProjectTeam(taskId);
+        Task task = findTaskWithProjectTeamForUpdate(taskId);
 
         Long teamId = task.getProject().getTeam().getId();
         requireMinimumRole(teamId, currentUserId, TeamRole.MEMBER);
@@ -1141,7 +1141,7 @@ public class TaskService {
     //18. UNASSIGN TASK
     @Transactional
     public void unassignTask(Long taskId, Long currentUserId) {
-        Task task = findTaskWithProjectTeam(taskId);
+        Task task = findTaskWithProjectTeamForUpdate(taskId);
         requireMinimumRole(task.getProject().getTeam().getId(), currentUserId, TeamRole.MEMBER);
 
         task.setAssignee(null);
@@ -1287,6 +1287,11 @@ public class TaskService {
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
     }
 
+    private Task findTaskWithProjectTeamForUpdate(Long taskId) {
+        return taskRepository.findByIdWithProjectTeamForUpdate(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
+    }
+
     // Extracts unique team IDs from a list of tasks and fetches membership data in one query.
     private java.util.Map<Long, TeamMember> preloadMembershipByTeamIds(List<Task> tasks, Long userId) {
         java.util.Set<Long> teamIds = tasks.stream()
@@ -1369,11 +1374,15 @@ public class TaskService {
             dto.setAssignees(new ArrayList<>(task.getAssignees()).stream()
                 .map(m -> {
                     if (m.getUser() == null) return null;
+                    String fullName = m.getUser().getFullName();
+                    String name = (fullName != null && !fullName.isBlank())
+                            ? fullName
+                            : m.getUser().getUsername();
                     return new TaskResponseDTO.AssigneeDTO(
-                    m.getId(),
-                    m.getUser().getUserId(),
-                    m.getUser().getUsername(),
-                    userService.generatePresignedUrl(m.getUser().getProfilePicUrl()));
+                        m.getId(),
+                        m.getUser().getUserId(),
+                        name,
+                        userService.generatePresignedUrl(m.getUser().getProfilePicUrl()));
                 })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList()));

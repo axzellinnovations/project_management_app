@@ -21,6 +21,8 @@ interface KanbanCardProps {
   usersMap?: Record<string, string | null>;
   labels?: Label[];
   onCreateLabel?: (name: string, color: string) => Promise<Label | null>;
+  onUpdateLabel?: (id: number, name: string, color: string) => Promise<Label | null>;
+  onDeleteLabel?: (id: number) => Promise<boolean>;
   isSyncing?: boolean;
 }
 
@@ -35,7 +37,20 @@ const PRIORITY_LIST = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
 
 const LABEL_COLORS = ['#6366F1', '#EF4444', '#F59E0B', '#22C55E', '#3B82F6', '#EC4899', '#8B5CF6', '#14B8A6'];
 
-export default function KanbanCard({ task, onDelete, onOpenTask, onInlineUpdate, onAssigneeChange, teamMembers = [], usersMap, labels: allLabels, onCreateLabel, isSyncing }: KanbanCardProps) {
+export default function KanbanCard({
+  task,
+  onDelete,
+  onOpenTask,
+  onInlineUpdate,
+  onAssigneeChange,
+  teamMembers = [],
+  usersMap,
+  labels: allLabels,
+  onCreateLabel,
+  onUpdateLabel,
+  onDeleteLabel,
+  isSyncing,
+}: KanbanCardProps) {
   const avatarUrl =
     resolveProfilePhotoUrl(task.assigneePhotoUrl, task.assigneeId) ??
     (task.assigneeName ? resolveProfilePhotoUrl(usersMap?.[task.assigneeName]) : null);
@@ -63,6 +78,12 @@ export default function KanbanCard({ task, onDelete, onOpenTask, onInlineUpdate,
   const [showAssigneePicker, setShowAssigneePicker] = useState(false);
   const [newLabelName, setNewLabelName] = useState('');
   const [newLabelColor, setNewLabelColor] = useState(LABEL_COLORS[0]);
+  const [editingLabelId, setEditingLabelId] = useState<number | null>(null);
+  const [editLabelName, setEditLabelName] = useState('');
+  const [editLabelColor, setEditLabelColor] = useState(LABEL_COLORS[0]);
+  const [isSavingLabelEdit, setIsSavingLabelEdit] = useState(false);
+  const [deletingLabelId, setDeletingLabelId] = useState<number | null>(null);
+  const [isDeletingLabel, setIsDeletingLabel] = useState(false);
   const labelPickerRef = useRef<HTMLDivElement>(null);
   const assigneePickerRef = useRef<HTMLDivElement>(null);
   const assigneeMenuRef = useRef<HTMLDivElement>(null);
@@ -84,7 +105,11 @@ export default function KanbanCard({ task, onDelete, onOpenTask, onInlineUpdate,
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) setShowDatePicker(false);
-      if (labelPickerRef.current && !labelPickerRef.current.contains(e.target as Node)) setShowLabelPicker(false);
+      if (labelPickerRef.current && !labelPickerRef.current.contains(e.target as Node)) {
+        setShowLabelPicker(false);
+        setEditingLabelId(null);
+        setDeletingLabelId(null);
+      }
       if (
         assigneePickerRef.current &&
         !assigneePickerRef.current.contains(e.target as Node) &&
@@ -130,6 +155,34 @@ export default function KanbanCard({ task, onDelete, onOpenTask, onInlineUpdate,
     }
     setNewLabelName('');
     setShowLabelPicker(false);
+  };
+
+  const handleSaveLabelEdit = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!editingLabelId || !editLabelName.trim() || isSavingLabelEdit || !onUpdateLabel) return;
+    setIsSavingLabelEdit(true);
+    try {
+      await onUpdateLabel(editingLabelId, editLabelName.trim(), editLabelColor);
+      setEditingLabelId(null);
+    } catch (err) {
+      console.error('Failed to update label:', err);
+    } finally {
+      setIsSavingLabelEdit(false);
+    }
+  };
+
+  const handleConfirmDeleteLabel = async (e: React.MouseEvent, labelId: number) => {
+    e.stopPropagation();
+    if (isDeletingLabel || !onDeleteLabel) return;
+    setIsDeletingLabel(true);
+    try {
+      await onDeleteLabel(labelId);
+      setDeletingLabelId(null);
+    } catch (err) {
+      console.error('Failed to delete label:', err);
+    } finally {
+      setIsDeletingLabel(false);
+    }
   };
 
   const handleSetAssignee = async (assigneeId: number | null) => {
@@ -479,21 +532,143 @@ export default function KanbanCard({ task, onDelete, onOpenTask, onInlineUpdate,
               </button>
 
               {showLabelPicker && (
-                <div className="absolute bottom-full left-0 mb-1 bg-cu-bg border border-cu-border rounded-xl shadow-cu-xl z-50 p-2 w-52" onClick={e => e.stopPropagation()}>
-                  <p className="text-[10px] font-medium text-cu-text-muted mb-1.5">Labels</p>
-                  <div className="max-h-32 overflow-y-auto space-y-0.5 mb-1.5">
+                <div className="absolute bottom-full left-0 mb-1 bg-cu-bg border border-cu-border rounded-xl shadow-cu-xl z-50 p-2 w-60" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-[10px] font-semibold text-cu-text-muted uppercase tracking-wider">Labels</p>
+                  </div>
+                  <div className="max-h-40 overflow-y-auto space-y-0.5 mb-1.5">
                     {/* No label option */}
                     <button onClick={() => void handleSetLabel(undefined)}
-                      className={`w-full text-left px-2 py-1.5 text-xs rounded hover:bg-cu-hover transition-colors ${!task.labelId ? 'font-semibold text-cu-primary' : 'text-cu-text-secondary'}`}>
+                      className={`w-full text-left px-2 py-1.5 text-xs rounded-lg hover:bg-cu-hover transition-colors ${!task.labelId && (!task.labels || task.labels.length === 0) ? 'font-semibold text-cu-primary' : 'text-cu-text-secondary'}`}>
                       None
                     </button>
-                    {allLabels?.map(l => (
-                      <button key={l.id} onClick={() => void handleSetLabel(l.id)}
-                        className={`w-full text-left px-2 py-1.5 text-xs rounded hover:bg-cu-hover transition-colors flex items-center gap-2 ${task.labelId === l.id ? 'font-semibold text-cu-primary bg-cu-primary/5' : 'text-cu-text-secondary'}`}>
-                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color ?? '#6366F1' }} />
-                        <span className="min-w-0 truncate">{l.name}</span>
-                      </button>
-                    ))}
+                    {allLabels?.map(l => {
+                      const isAssigned = task.labelId === l.id || task.labels?.some(tl => tl.id === l.id);
+                      const isEditing = editingLabelId === l.id;
+                      const isDeleting = deletingLabelId === l.id;
+
+                      if (isEditing) {
+                        return (
+                          <div key={l.id} className="p-1.5 bg-cu-primary/10 rounded-lg space-y-1 my-0.5 border border-cu-primary/30" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: editLabelColor }} />
+                              <input
+                                autoFocus
+                                type="text"
+                                value={editLabelName}
+                                onChange={e => setEditLabelName(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') void handleSaveLabelEdit();
+                                  if (e.key === 'Escape') setEditingLabelId(null);
+                                }}
+                                className="flex-1 text-[11px] px-1 py-0.5 bg-cu-bg border border-cu-border rounded outline-none focus:border-cu-primary text-cu-text-primary min-w-0"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleSaveLabelEdit}
+                                disabled={!editLabelName.trim() || isSavingLabelEdit}
+                                className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                                title="Save"
+                              >
+                                <Check size={10} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingLabelId(null)}
+                                className="p-1 rounded bg-cu-bg-secondary text-cu-text-secondary hover:bg-cu-hover"
+                                title="Cancel"
+                              >
+                                <X size={10} />
+                              </button>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {LABEL_COLORS.map(c => (
+                                <button
+                                  key={c}
+                                  type="button"
+                                  onClick={() => setEditLabelColor(c)}
+                                  className={`w-3 h-3 rounded-full transition-transform ${editLabelColor === c ? 'ring-2 ring-offset-1 ring-cu-primary scale-110' : ''}`}
+                                  style={{ backgroundColor: c }}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      if (isDeleting) {
+                        return (
+                          <div key={l.id} className="p-1.5 bg-red-500/10 rounded-lg flex items-center justify-between gap-1 my-0.5 border border-red-500/30" onClick={e => e.stopPropagation()}>
+                            <span className="text-[10px] font-medium text-red-500 truncate">
+                              Delete &quot;{l.name}&quot;?
+                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => void handleConfirmDeleteLabel(e, l.id)}
+                                disabled={isDeletingLabel}
+                                className="px-1.5 py-0.5 text-[9px] font-semibold bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                              >
+                                Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeletingLabelId(null)}
+                                className="px-1.5 py-0.5 text-[9px] bg-cu-bg-secondary text-cu-text-secondary rounded hover:bg-cu-hover"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={l.id} className={`group flex items-center justify-between gap-1 px-2 py-1 rounded-lg hover:bg-cu-hover transition-colors ${isAssigned ? 'font-semibold text-cu-primary bg-cu-primary/5' : 'text-cu-text-secondary'}`}>
+                          <button
+                            type="button"
+                            onClick={() => void handleSetLabel(l.id)}
+                            className="flex-1 flex items-center gap-2 text-left min-w-0 text-xs py-0.5"
+                          >
+                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color ?? '#6366F1' }} />
+                            <span className="truncate">{l.name}</span>
+                          </button>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            {isAssigned && <Check size={11} className="text-cu-primary mr-1" />}
+                            {onUpdateLabel && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingLabelId(l.id);
+                                  setEditLabelName(l.name);
+                                  setEditLabelColor(l.color || LABEL_COLORS[0]);
+                                  setDeletingLabelId(null);
+                                }}
+                                title="Edit label"
+                                className="p-0.5 text-cu-text-muted hover:text-cu-primary hover:bg-cu-bg rounded opacity-0 group-hover:opacity-100 transition-all"
+                              >
+                                <Pencil size={10} />
+                              </button>
+                            )}
+                            {onDeleteLabel && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingLabelId(l.id);
+                                  setEditingLabelId(null);
+                                }}
+                                title="Delete label"
+                                className="p-0.5 text-cu-text-muted hover:text-red-500 hover:bg-cu-bg rounded opacity-0 group-hover:opacity-100 transition-all"
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* Create new label */}

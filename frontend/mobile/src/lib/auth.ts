@@ -192,8 +192,11 @@ async function requestRefreshAccessToken(): Promise<string> {
   }
 
   if (!res.ok) {
-    await clearTokens();
-    throw new Error('Token refresh failed');
+    if (res.status === 401 || res.status === 403) {
+      await clearTokens();
+      throw new Error('Token refresh failed: session expired');
+    }
+    throw new Error(`Token refresh failed: server returned ${res.status}`);
   }
 
   const data = await res.json();

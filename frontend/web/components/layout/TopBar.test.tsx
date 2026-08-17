@@ -78,6 +78,8 @@ describe('TopBar Figma navigation', () => {
       isFavorite: false,
       figmaUrl: 'https://www.figma.com/file/abc123/My-Design',
       projectOwnerId: 7,
+      setFigmaUrl: jest.fn(),
+      mutateProject: jest.fn(),
       toggleFavorite: jest.fn(),
       switchProject: jest.fn(),
     });
@@ -88,7 +90,7 @@ describe('TopBar Figma navigation', () => {
 
     render(<TopBar />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Figma' }));
+    fireEvent.click(screen.getByRole('button', { name: /open figma in planora/i }));
 
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/project/42/figma'));
     expect(openSpy).not.toHaveBeenCalled();

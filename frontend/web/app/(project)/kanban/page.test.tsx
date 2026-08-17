@@ -95,6 +95,8 @@ function mockBoard(handleDeleteTask = jest.fn()) {
     handleDeleteColumn: jest.fn(),
     handleAddColumn: jest.fn(),
     handleCreateLabel: jest.fn(),
+    handleUpdateLabel: jest.fn(),
+    handleDeleteLabel: jest.fn(),
     forceRefresh: jest.fn(),
   });
 }

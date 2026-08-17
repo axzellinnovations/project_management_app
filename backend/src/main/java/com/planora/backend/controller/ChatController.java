@@ -282,6 +282,7 @@ public class ChatController {
             var roomMember = new com.planora.backend.model.ChatRoomMember();
             roomMember.setChatRoom(room);
             roomMember.setUser(user);
+            roomMember.setRole(com.planora.backend.model.ChatRoomMember.RoomRole.OWNER);
             chatRoomMemberRepository.save(roomMember);
             return;
         }
@@ -515,10 +516,10 @@ public class ChatController {
             return List.of();
         }
 
-        var memberRoomIds = chatRoomMemberRepository.findRoomIdsByUserId(currentUser.getUserId());
+        var memberRoomIds = new LinkedHashSet<>(chatRoomMemberRepository.findRoomIdsByUserId(currentUser.getUserId()));
 
         return chatRoomRepository.findByProjectId(projectId).stream()
-                .filter(room -> room.getCreatedBy() != null && room.getCreatedBy().equalsIgnoreCase(username)
+                .filter(room -> isRoomCreator(room, currentUser, username)
                         || memberRoomIds.contains(room.getId()))
                 .filter(room -> includeArchived || !Boolean.TRUE.equals(room.getArchived()))
                 .toList();

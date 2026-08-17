@@ -9,7 +9,7 @@ import type {
   ChatRoom,
   UnreadBadgeSummary,
 } from '@/app/(project)/project/[id]/chat/components/chat';
-import { buildSessionCacheKey, getSessionCache, setSessionCache } from '@/lib/session-cache';
+import { buildSessionCacheKey, getSessionCache, setSessionCache, initializeSessionCacheForCurrentAuth } from '@/lib/session-cache';
 import { resolveProfilePhotoUrl } from '@/lib/profile-photo';
 import { isSameIdentity, mergeMessage, normalizeRoom } from './chat-utils';
 
@@ -78,7 +78,6 @@ export function restoreSelectionState(args: SelectionRestoreArgs): void {
   const {
     selectionStorageKey,
     availableUsers,
-    availableRooms,
     setSelectedUser,
     setSelectedRoomId,
     hasRestoredSelectionRef,
@@ -103,12 +102,12 @@ export function restoreSelectionState(args: SelectionRestoreArgs): void {
     if (
       parsed.type === 'private' &&
       typeof parsed.value === 'string' &&
-      availableUsers.includes(parsed.value)
+      (availableUsers.length === 0 || availableUsers.includes(parsed.value))
     ) {
       setSelectedUser(parsed.value);
     } else if (parsed.type === 'room') {
       const rid = Number(parsed.value);
-      if (Number.isFinite(rid) && availableRooms.some((room) => room.id === rid)) {
+      if (Number.isFinite(rid) && rid > 0) {
         setSelectedRoomId(rid);
       }
     }
@@ -188,7 +187,7 @@ export interface ChatInitializationArgs {
   setCurrentUser: SetState<string>;
   setCurrentUserAliases: SetState<string[]>;
   fetchAllUsers: () => Promise<string[]>;
-  loadRooms: () => Promise<ChatRoom[]>;
+  loadRooms: (options?: { forceRefresh?: boolean }) => Promise<ChatRoom[]>;
   loadSummaries: (
     setPrivateLastMessages: SetState<Record<string, ChatMessage | null>>,
     setRoomLastMessages: SetState<Record<number, ChatMessage | null>>,
@@ -232,6 +231,7 @@ export async function initializeChatState(args: ChatInitializationArgs): Promise
     routerPush('/login');
     return;
   }
+  initializeSessionCacheForCurrentAuth(token);
 
   // Resolve identity before any cache short-circuit so realtime subscriptions
   // always receive a stable current user and alias set.
@@ -257,22 +257,27 @@ export async function initializeChatState(args: ChatInitializationArgs): Promise
       if (cached.data.pics) setUserProfilePics(cached.data.pics);
       if (cached.data.rooms) setRooms(cached.data.rooms);
       setIsLoading(false);
-    if (!cached.isStale) {
+      if (!cached.isStale) {
         restoreSelection(cached.data.users || [], cached.data.rooms || []);
         await loadHistory(hydrateReactions);
 
-        // Stale-while-revalidate: even on a fresh cache hit, revalidate the
-        // users list in the background so a member added during this session
-        // appears in the DM sidebar without waiting for the 30-minute TTL.
+        // Stale-while-revalidate: even on a fresh cache hit, revalidate
+        // users and rooms in the background so additions/updates during the session
+        // appear in the sidebar without waiting for the 30-minute TTL.
         void (async () => {
           try {
-            const freshUsers = await fetchAllUsers();
+            const [freshUsers, freshRooms] = await Promise.all([
+              fetchAllUsers(),
+              loadRooms({ forceRefresh: true }),
+            ]);
+            setUsers(freshUsers);
+            setRooms(freshRooms);
             if (cacheKey) {
               const existing = getSessionCache<ChatInitCache>(cacheKey, { allowStale: true });
               if (existing.data) {
                 setSessionCache(
                   cacheKey,
-                  { ...existing.data, users: freshUsers },
+                  { ...existing.data, users: freshUsers, rooms: freshRooms },
                   30 * 60_000,
                 );
               }
@@ -502,11 +507,21 @@ export function setupBaseRealtimeSubscriptions(args: BaseRealtimeSubscriptionsAr
         const normalizedRoom = normalizeRoom(event.room as unknown as Record<string, unknown>);
         if (!Number.isFinite(normalizedRoom.id)) return;
 
-        setRooms((prev) =>
-          prev.some((room) => room.id === normalizedRoom.id)
+        setRooms((prev) => {
+          const next = prev.some((room) => room.id === normalizedRoom.id)
             ? prev.map((room) => (room.id === normalizedRoom.id ? normalizedRoom : room))
-            : [...prev, normalizedRoom],
-        );
+            : [...prev, normalizedRoom];
+          const roomsKey = buildSessionCacheKey('chat-rooms', [projectId]);
+          if (roomsKey) setSessionCache(roomsKey, next, 30 * 60_000);
+          const initKey = buildSessionCacheKey('chat-init', [projectId]);
+          if (initKey) {
+            const existing = getSessionCache<ChatInitCache>(initKey, { allowStale: true });
+            if (existing.data) {
+              setSessionCache(initKey, { ...existing.data, rooms: next }, 30 * 60_000);
+            }
+          }
+          return next;
+        });
         setRoomUnseenCounts((prev) => ({ ...prev, [normalizedRoom.id]: prev[normalizedRoom.id] || 0 }));
         setRoomLastMessages((prev) => ({ ...prev, [normalizedRoom.id]: prev[normalizedRoom.id] || null }));
         return;
@@ -514,7 +529,19 @@ export function setupBaseRealtimeSubscriptions(args: BaseRealtimeSubscriptionsAr
 
       if (event.action === 'DELETED') {
         const roomId = Number(event.roomId);
-        setRooms((prev) => prev.filter((room) => room.id !== roomId));
+        setRooms((prev) => {
+          const next = prev.filter((room) => room.id !== roomId);
+          const roomsKey = buildSessionCacheKey('chat-rooms', [projectId]);
+          if (roomsKey) setSessionCache(roomsKey, next, 30 * 60_000);
+          const initKey = buildSessionCacheKey('chat-init', [projectId]);
+          if (initKey) {
+            const existing = getSessionCache<ChatInitCache>(initKey, { allowStale: true });
+            if (existing.data) {
+              setSessionCache(initKey, { ...existing.data, rooms: next }, 30 * 60_000);
+            }
+          }
+          return next;
+        });
         setRoomMessages((prev) => {
           const next = { ...prev };
           delete next[roomId];

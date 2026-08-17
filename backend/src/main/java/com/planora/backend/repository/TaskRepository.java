@@ -152,6 +152,13 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
            "WHERE t.id = :taskId")
     java.util.Optional<Task> findByIdWithProjectTeam(@Param("taskId") Long taskId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM Task t " +
+           "LEFT JOIN FETCH t.project p " +
+           "LEFT JOIN FETCH p.team pt " +
+           "WHERE t.id = :taskId")
+    java.util.Optional<Task> findByIdWithProjectTeamForUpdate(@Param("taskId") Long taskId);
+
     /**
      * Serializes partial task updates so independent fields changed at nearly the
      * same time are applied to the latest row version instead of racing on @Version.

@@ -15,7 +15,15 @@ export interface TaskRowTask {
   assigneeName?: string;
   assigneePhotoUrl?: string | null;
   /** Multi-assignee array. When present, takes precedence over assigneeName/assigneePhotoUrl for display. */
-  assignees?: Array<{ id: number; name: string; avatar?: string }>;
+  assignees?: Array<{
+    id?: number;
+    userId?: number;
+    memberId?: number;
+    name: string;
+    avatar?: string | null;
+    photoUrl?: string | null;
+    profilePicUrl?: string | null;
+  }>;
   status: string;
   dueDate?: string;
   priority?: string;
@@ -47,6 +55,7 @@ export interface TaskRowProps {
   onStoryPointsChange: (id: number, points: number) => void;
   onRenameTask: (id: number, title: string) => Promise<void>;
   onAssignTask: (id: number, userId: number) => Promise<void>;
+  onAssignMultiple?: (id: number, userIds: number[]) => Promise<void> | void;
   onDueDateChange?: (id: number, date: string) => void;
   onDeleteTask: (id: number) => void;
   onOpenTask?: (id: number) => void;
@@ -54,6 +63,8 @@ export interface TaskRowProps {
   onAddLabel?: (taskId: number, labelId: number) => Promise<void>;
   onRemoveLabel?: (taskId: number, labelId: number) => Promise<void>;
   onCreateLabel?: (name: string) => Promise<{ id: number; name: string; color?: string }>;
+  onUpdateLabel?: (id: number, name: string, color: string) => Promise<{ id: number; name: string; color?: string }>;
+  onDeleteLabel?: (id: number) => Promise<boolean>;
   extraStatuses?: Array<{ value: string; label: string }>;
   onMoveUp?: () => void;
   onMoveDown?: () => void;

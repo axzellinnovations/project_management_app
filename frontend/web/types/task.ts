@@ -15,11 +15,14 @@ export enum TaskPriority {
 }
 
 export interface Assignee {
-  id: number;
+  id?: number;
+  memberId?: number;
+  userId?: number;
   name: string;
-  email?: string;
-  avatar?: string;
-  profilePicUrl?: string;
+  email?: string | null;
+  avatar?: string | null;
+  photoUrl?: string | null;
+  profilePicUrl?: string | null;
 }
 
 export interface Label {

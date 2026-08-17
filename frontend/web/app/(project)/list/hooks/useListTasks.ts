@@ -500,6 +500,56 @@ export function useListTasks() {
     }
   }, [patchTaskOptimistic, tasks]);
 
+  const handleCreateLabel = useCallback(async (name: string, color: string) => {
+    if (!projectId || !name.trim()) return null;
+    try {
+      const created = await labelsApi.create({ projectId, name: name.trim(), color });
+      setLabels((prev) => [...prev, created]);
+      return created;
+    } catch {
+      return null;
+    }
+  }, [projectId]);
+
+  const handleUpdateLabel = useCallback(async (id: number, name: string, color: string) => {
+    if (!name.trim()) return null;
+    try {
+      const updated = await labelsApi.update(id, { name: name.trim(), color });
+      setLabels((prev) => prev.map((l) => (l.id === id ? updated : l)));
+      setTasks((prev) =>
+        prev.map((t) => {
+          if (!t.labels?.some((l) => l.id === id)) return t;
+          return {
+            ...t,
+            labels: t.labels.map((l) => (l.id === id ? updated : l)),
+          };
+        })
+      );
+      return updated;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const handleDeleteLabel = useCallback(async (id: number) => {
+    try {
+      await labelsApi.delete(id);
+      setLabels((prev) => prev.filter((l) => l.id !== id));
+      setTasks((prev) =>
+        prev.map((t) => {
+          if (!t.labels?.some((l) => l.id === id)) return t;
+          return {
+            ...t,
+            labels: t.labels.filter((l) => l.id !== id),
+          };
+        })
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const handleAddTask = useCallback((data: CreateTaskData) => {
     if (!projectId) return;
     const result = taskMutations.create({
@@ -551,6 +601,9 @@ export function useListTasks() {
     handleAssigneeChange,
     handleAssigneesChange,
     handleToggleTaskLabel,
+    handleCreateLabel,
+    handleUpdateLabel,
+    handleDeleteLabel,
     handleMilestoneChange,
     handlePriorityChange,
   };

@@ -2,46 +2,136 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, ChevronDown, Pencil, Tag, Trash2, UserPlus, RefreshCw } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, Loader2, Pencil, Plus, Tag, Trash2, UserPlus, RefreshCw, X } from 'lucide-react';
 import AssigneeAvatar from '../AssigneeAvatar';
 import { hexToLabelStyle } from '@/components/shared/LabelPicker';
 import { STATUS_LABELS, DUE_CHIP_STYLES, type TaskStatus, formatDate } from './TaskRowConstants';
 import type { TaskRowProps } from '../TaskRow';
 import { useTaskRowState } from './useTaskRowState';
 
+const LABEL_PALETTE = [
+  '#EF4444', '#F97316', '#F59E0B', '#84CC16',
+  '#22C55E', '#14B8A6', '#06B6D4', '#3B82F6',
+  '#6366F1', '#8B5CF6', '#EC4899', '#6B7280',
+];
+
+function getMemberName(m: NonNullable<TaskRowProps['teamMembers']>[number]) {
+  return m.user.fullName || m.user.username;
+}
+
 export default function DesktopTaskRow(props: TaskRowProps) {
   const {
     task, projectKey, teamMembers = [], loadingMembers = false,
     canDelete = true, showCheckbox = false, onToggle, onStatusChange,
-    onStoryPointsChange, onAssignTask, onDueDateChange, onDeleteTask,
-    onOpenTask, projectLabels = [], onAddLabel, onRemoveLabel, onCreateLabel,
+    onStoryPointsChange, onAssignTask, onAssignMultiple, onDueDateChange, onDeleteTask,
+    onOpenTask, projectLabels = [], onAddLabel, onCreateLabel,
+    onUpdateLabel, onDeleteLabel,
     extraStatuses = [], hideStatus = false,
   } = props;
 
+  const [assignMode, setAssignMode] = React.useState<'single' | 'multi'>('multi');
+  const [assignSearch, setAssignSearch] = React.useState('');
+
+  const state = useTaskRowState(task, props);
   const {
+    statusOpen, setStatusOpen, assignOpen, setAssignOpen,
+    labelOpen, setLabelOpen, renaming, renameValue, setRenameValue,
+    labelInput, setLabelInput, creatingLabel,
+    editingLabelId, setEditingLabelId, editLabelName, setEditLabelName,
+    editLabelColor, setEditLabelColor, isSavingLabelEdit,
+    deletingLabelId, setDeletingLabelId, isDeletingLabel,
+    statusPosition, assignPosition, labelPosition,
     statusRef, assignRef, labelRef, dateRef,
     statusPortalRef, assignPortalRef, labelPortalRef,
     lastTapRef,
-    statusOpen, setStatusOpen,
-    assignOpen, setAssignOpen,
-    labelOpen, setLabelOpen,
-    renaming,
-    renameValue, setRenameValue,
-    labelInput, setLabelInput,
-    creatingLabel,
-    statusPosition, assignPosition, labelPosition,
     onTouchStartInternal, onTouchEndInternal, onTouchMoveInternal,
     startRename, updateLastTap, commitRename, cancelRename,
     taskLabelIds, openLabel, handleLabelToggle, handleCreateLabelFromInput,
+    handleSaveLabelEdit, handleConfirmDeleteLabel,
     openStatus, openAssign, openDatePicker,
     displayLabel, displayStyle, dueClass, statusBorderColor, priorityKey, priorityStyle,
-  } = useTaskRowState(task, {
-    canDelete, onDeleteTask, onRenameTask: props.onRenameTask,
-    onAddLabel, onRemoveLabel, onCreateLabel, extraStatuses, projectLabels,
+  } = state;
+
+  const [localAssigneeUserIds, setLocalAssigneeUserIds] = React.useState<number[]>(() => {
+    if (task.assignees && task.assignees.length > 0) {
+      return task.assignees
+        .map((a) => a.userId ?? a.memberId ?? a.id)
+        .filter((id): id is number => typeof id === 'number');
+    }
+    return [];
   });
+  const [isAssigning, setIsAssigning] = React.useState(false);
+
+  React.useEffect(() => {
+    if (task.assignees) {
+      const ids = task.assignees
+        .map((a) => a.userId ?? a.memberId ?? a.id)
+        .filter((id): id is number => typeof id === 'number');
+      setLocalAssigneeUserIds(ids);
+    }
+  }, [task.assignees]);
+
+  const currentAssigneeUserIds = localAssigneeUserIds;
+
+  const handleToggleMember = async (userId: number) => {
+    if (isAssigning) return;
+    if (assignMode === 'single') {
+      setIsAssigning(true);
+      setLocalAssigneeUserIds([userId]);
+      try {
+        if (onAssignMultiple) {
+          await onAssignMultiple(task.id, [userId]);
+        } else {
+          await onAssignTask(task.id, userId);
+        }
+      } finally {
+        setIsAssigning(false);
+        setAssignOpen(false);
+      }
+      return;
+    }
+
+    const isAlready = currentAssigneeUserIds.includes(userId);
+    const updated = isAlready
+      ? currentAssigneeUserIds.filter((id) => id !== userId)
+      : [...currentAssigneeUserIds, userId];
+
+    setLocalAssigneeUserIds(updated);
+    setIsAssigning(true);
+    try {
+      if (onAssignMultiple) {
+        await onAssignMultiple(task.id, updated);
+      } else {
+        await onAssignTask(task.id, updated.length > 0 ? updated[0] : 0);
+      }
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  const handleClearAssignees = async () => {
+    if (isAssigning) return;
+    setLocalAssigneeUserIds([]);
+    setIsAssigning(true);
+    try {
+      if (onAssignMultiple) {
+        await onAssignMultiple(task.id, []);
+      } else {
+        await onAssignTask(task.id, 0);
+      }
+    } finally {
+      setIsAssigning(false);
+      setAssignOpen(false);
+    }
+  };
+
+  const filteredMembers = React.useMemo(() => {
+    if (!assignSearch.trim()) return teamMembers;
+    const q = assignSearch.toLowerCase();
+    return teamMembers.filter((m) => getMemberName(m).toLowerCase().includes(q) || m.user.username.toLowerCase().includes(q));
+  }, [teamMembers, assignSearch]);
 
   const displayTaskKey = projectKey ? `#${projectKey}-${task.taskNo || task.id}` : `#${task.taskNo || task.id}`;
-  const getMemberName = (m: NonNullable<typeof teamMembers>[number]) => m.user.fullName || m.user.username;
 
   const rowBg =
     dueClass === 'five_days' ? 'bg-amber-50 dark:bg-amber-900/15'
@@ -165,16 +255,16 @@ export default function DesktopTaskRow(props: TaskRowProps) {
             <div className="flex items-center">
               {task.assignees.slice(0, 3).map((a, idx) => (
                 <span
-                  key={a.id}
+                  key={a.userId ?? a.memberId ?? a.id ?? idx}
                   className="inline-block ring-2 ring-cu-bg rounded-full"
                   style={{ marginLeft: idx === 0 ? 0 : -6, zIndex: task.assignees!.length - idx }}
                 >
-                  <AssigneeAvatar name={a.name} profilePicUrl={a.avatar} size={20} />
+                  <AssigneeAvatar name={a.name} profilePicUrl={a.photoUrl || a.avatar || a.profilePicUrl} size={20} />
                 </span>
               ))}
               {task.assignees.length > 3 && (
                 <span
-                  className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-cu-bg-tertiary ring-2 ring-cu-bg text-[9px] font-bold text-cu-text-secondary"
+                  className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-cu-primary/10 ring-2 ring-cu-bg text-[9px] font-bold text-cu-primary"
                   style={{ marginLeft: -6 }}
                 >
                   +{task.assignees.length - 3}
@@ -190,20 +280,71 @@ export default function DesktopTaskRow(props: TaskRowProps) {
           )}
         </button>
         {assignOpen && typeof document !== 'undefined' && createPortal(
-          <div ref={assignPortalRef} className="fixed z-[var(--cu-z-dropdown)] w-52 overflow-hidden rounded-xl border border-cu-border bg-cu-bg shadow-cu-xl" style={{ top: assignPosition.top, left: assignPosition.left }}>
-            <div className="px-3 py-2 text-[10px] font-bold text-cu-text-secondary uppercase tracking-wider border-b border-cu-border bg-cu-bg-secondary">Assign To</div>
+          <div ref={assignPortalRef} className="fixed z-[var(--cu-z-dropdown)] w-56 overflow-hidden rounded-xl border border-cu-border bg-cu-bg shadow-cu-xl" style={{ top: assignPosition.top, left: assignPosition.left }}>
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-cu-border bg-cu-bg-secondary">
+              <span className="text-[10px] font-bold text-cu-text-secondary uppercase tracking-wider">Assign To</span>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => setAssignMode('single')}
+                  className={`rounded px-1.5 py-0.5 text-[9px] font-semibold transition-colors ${assignMode === 'single' ? 'bg-cu-primary text-white' : 'bg-cu-bg text-cu-text-secondary hover:text-cu-text-primary'}`}
+                >
+                  Single
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAssignMode('multi')}
+                  className={`rounded px-1.5 py-0.5 text-[9px] font-semibold transition-colors ${assignMode === 'multi' ? 'bg-cu-primary text-white' : 'bg-cu-bg text-cu-text-secondary hover:text-cu-text-primary'}`}
+                >
+                  Multi
+                </button>
+              </div>
+            </div>
+
+            {teamMembers.length > 5 && (
+              <div className="p-1.5 border-b border-cu-border">
+                <input
+                  type="text"
+                  placeholder="Search members..."
+                  value={assignSearch}
+                  onChange={(e) => setAssignSearch(e.target.value)}
+                  className="w-full text-[11px] px-2 py-1 rounded-md border border-cu-border bg-cu-bg-secondary text-cu-text-primary placeholder:text-cu-text-muted focus:outline-none focus:border-cu-primary"
+                />
+              </div>
+            )}
+
             {loadingMembers ? (
               <div className="px-3 py-3 text-[12px] text-cu-text-secondary">Loading…</div>
-            ) : teamMembers.length > 0 ? (
-              <div className="max-h-52 overflow-y-auto">
-                {teamMembers.map((m) => (
-                  <button key={m.user.userId} onClick={() => { void onAssignTask(task.id, m.user.userId); setAssignOpen(false); }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-[12px] font-medium text-cu-text-primary hover:bg-cu-hover"
-                  >
-                    <AssigneeAvatar name={getMemberName(m)} profilePicUrl={m.user.profilePicUrl} size={20} />
-                    <span className="truncate">{getMemberName(m)}</span>
-                  </button>
-                ))}
+            ) : filteredMembers.length > 0 ? (
+              <div className="max-h-52 overflow-y-auto py-1">
+                <button
+                  type="button"
+                  onClick={() => void handleClearAssignees()}
+                  className={`flex w-full items-center justify-between px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-cu-hover ${currentAssigneeUserIds.length === 0 ? 'text-cu-primary font-semibold' : 'text-cu-text-secondary'}`}
+                >
+                  <span>Unassigned</span>
+                  {currentAssigneeUserIds.length === 0 && <span className="text-cu-primary font-bold">✓</span>}
+                </button>
+
+                {filteredMembers.map((m) => {
+                  const isSelected = currentAssigneeUserIds.includes(m.user.userId);
+                  return (
+                    <button
+                      key={m.user.userId}
+                      type="button"
+                      onClick={() => void handleToggleMember(m.user.userId)}
+                      className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-cu-hover ${isSelected ? 'text-cu-primary bg-cu-primary/5 font-semibold' : 'text-cu-text-primary'}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <AssigneeAvatar name={getMemberName(m)} profilePicUrl={m.user.profilePicUrl} size={20} />
+                        <span className="truncate">{getMemberName(m)}</span>
+                      </div>
+                      {isSelected && (
+                        <span className="flex-shrink-0 text-cu-primary font-bold text-[11px]">✓</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               <div className="px-3 py-3 text-[12px] text-cu-text-secondary">No members found</div>
@@ -280,34 +421,205 @@ export default function DesktopTaskRow(props: TaskRowProps) {
             <Tag size={12} />
           </button>
           {labelOpen && typeof document !== 'undefined' && createPortal(
-            <div ref={labelPortalRef} className="fixed z-[var(--cu-z-dropdown)] w-56 overflow-hidden rounded-xl border border-cu-border bg-cu-bg shadow-cu-xl" style={{ top: labelPosition.top, left: labelPosition.left }}>
-              <div className="px-3 py-2 border-b border-cu-border">
-                <input autoFocus type="text" value={labelInput}
-                  onChange={(e) => setLabelInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleCreateLabelFromInput(); } if (e.key === 'Escape') { setLabelOpen(false); setLabelInput(''); } }}
-                  onClick={(e) => e.stopPropagation()}
-                  placeholder="New label name + Enter" disabled={creatingLabel}
-                  className="w-full text-[12px] text-cu-text-primary placeholder:text-cu-text-tertiary bg-transparent outline-none"
-                />
-              </div>
-              <div className="max-h-48 overflow-y-auto">
-                {projectLabels.length === 0 && <div className="px-3 py-3 text-[12px] text-cu-text-tertiary">No labels yet</div>}
-                {projectLabels.map((label) => {
-                  const active = taskLabelIds.has(label.id);
-                  return (
-                    <button key={label.id} type="button" onClick={(e) => { e.stopPropagation(); void handleLabelToggle(label); }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-[12px] hover:bg-cu-hover transition-colors"
+            <div ref={labelPortalRef} className="fixed z-[var(--cu-z-dropdown)] w-60 overflow-hidden rounded-xl border border-cu-border bg-cu-bg shadow-cu-xl" style={{ top: labelPosition.top, left: labelPosition.left }}>
+              {/* Search or Create input */}
+              <div className="p-2 border-b border-cu-border bg-cu-bg-secondary/40 space-y-1.5">
+                <div className="flex items-center gap-1 bg-cu-bg border border-cu-border rounded-lg px-2 py-1 focus-within:border-cu-primary focus-within:ring-1 focus-within:ring-cu-primary/20 transition-all">
+                  <input autoFocus type="text" value={labelInput}
+                    onChange={(e) => setLabelInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void handleCreateLabelFromInput();
+                      }
+                      if (e.key === 'Escape') {
+                        setLabelOpen(false);
+                        setLabelInput('');
+                        setEditingLabelId(null);
+                        setDeletingLabelId(null);
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="Search or new label…" disabled={creatingLabel}
+                    className="flex-1 text-[11px] text-cu-text-primary placeholder:text-cu-text-tertiary bg-transparent outline-none min-w-0"
+                  />
+                  {labelInput.trim() && !projectLabels.some(l => l.name.toLowerCase() === labelInput.trim().toLowerCase()) && onCreateLabel && (
+                    <button
+                      type="button"
+                      onClick={() => void handleCreateLabelFromInput()}
+                      disabled={creatingLabel}
+                      className="p-1 rounded bg-cu-primary text-white hover:bg-cu-primary/90 transition-colors"
+                      title="Create label"
                     >
-                      <span className="inline-block h-3 w-3 rounded-full flex-shrink-0" style={{ backgroundColor: label.color ?? '#6B7280' }} />
-                      <span className="flex-1 text-left truncate text-cu-text-primary font-medium">{label.name}</span>
-                      {active && (
-                        <span className="h-4 w-4 rounded-full bg-cu-primary flex items-center justify-center flex-shrink-0">
-                          <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1.5 4L3 5.5L6.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                        </span>
-                      )}
+                      {creatingLabel ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />}
                     </button>
-                  );
-                })}
+                  )}
+                </div>
+              </div>
+
+              {/* Labels list */}
+              <div className="max-h-52 overflow-y-auto p-1 divide-y divide-cu-border/30">
+                {(() => {
+                  const term = labelInput.toLowerCase().trim();
+                  const filtered = term
+                    ? projectLabels.filter(l => l.name.toLowerCase().includes(term))
+                    : projectLabels;
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="px-3 py-3 text-[11px] text-center text-cu-text-tertiary">
+                        {term ? `No labels matching "${labelInput}"` : 'No labels yet'}
+                      </div>
+                    );
+                  }
+
+                  return filtered.map((label) => {
+                    const active = taskLabelIds.has(label.id);
+                    const isEditing = editingLabelId === label.id;
+                    const isDeleting = deletingLabelId === label.id;
+
+                    // Inline Edit
+                    if (isEditing) {
+                      return (
+                        <div key={label.id} className="p-1.5 bg-cu-primary/10 rounded-lg space-y-1 my-0.5 border border-cu-primary/30" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: editLabelColor }} />
+                            <input
+                              autoFocus
+                              type="text"
+                              value={editLabelName}
+                              onChange={(e) => setEditLabelName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  void handleSaveLabelEdit(label.id, editLabelName, editLabelColor);
+                                }
+                                if (e.key === 'Escape') setEditingLabelId(null);
+                              }}
+                              className="flex-1 text-[11px] px-1 py-0.5 bg-cu-bg border border-cu-border rounded outline-none focus:border-cu-primary text-cu-text-primary min-w-0"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => void handleSaveLabelEdit(label.id, editLabelName, editLabelColor)}
+                              disabled={!editLabelName.trim() || isSavingLabelEdit}
+                              className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                              title="Save"
+                            >
+                              <Check size={10} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingLabelId(null)}
+                              className="p-1 rounded bg-cu-bg-secondary text-cu-text-secondary hover:bg-cu-hover"
+                              title="Cancel"
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {LABEL_PALETTE.map((c) => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => setEditLabelColor(c)}
+                                className={`w-3.5 h-3.5 rounded-full transition-transform hover:scale-110 ${
+                                  editLabelColor === c ? 'ring-2 ring-offset-1 ring-cu-primary scale-110' : ''
+                                }`}
+                                style={{ backgroundColor: c }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Inline Delete Confirmation
+                    if (isDeleting) {
+                      return (
+                        <div key={label.id} className="p-1.5 bg-red-500/10 rounded-lg flex items-center justify-between gap-1 my-0.5 border border-red-500/30" onClick={(e) => e.stopPropagation()}>
+                          <span className="text-[10px] font-medium text-red-500 truncate">
+                            Delete &quot;{label.name}&quot;?
+                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => void handleConfirmDeleteLabel(label.id)}
+                              disabled={isDeletingLabel}
+                              className="px-1.5 py-0.5 text-[9px] font-semibold bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                            >
+                              Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingLabelId(null)}
+                              className="px-1.5 py-0.5 text-[9px] bg-cu-bg-secondary text-cu-text-secondary rounded hover:bg-cu-hover"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Normal row
+                    return (
+                      <div
+                        key={label.id}
+                        className={`group flex items-center justify-between gap-1 px-2 py-1 rounded-lg hover:bg-cu-hover transition-colors ${
+                          active ? 'bg-cu-primary/5' : ''
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); void handleLabelToggle(label); }}
+                          className="flex-1 flex items-center gap-2 text-left min-w-0 py-0.5"
+                        >
+                          <span className="inline-block h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: label.color ?? '#6B7280' }} />
+                          <span className={`flex-1 truncate text-[11px] ${active ? 'text-cu-primary font-bold' : 'text-cu-text-primary font-medium'}`}>
+                            {label.name}
+                          </span>
+                          {active && (
+                            <span className="h-3.5 w-3.5 rounded-full bg-cu-primary flex items-center justify-center flex-shrink-0 mr-1">
+                              <svg width="7" height="7" viewBox="0 0 8 8" fill="none"><path d="M1.5 4L3 5.5L6.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </span>
+                          )}
+                        </button>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          {onUpdateLabel && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingLabelId(label.id);
+                                setEditLabelName(label.name);
+                                setEditLabelColor(label.color || LABEL_PALETTE[0]);
+                                setDeletingLabelId(null);
+                              }}
+                              title="Edit label"
+                              className="p-0.5 text-cu-text-muted hover:text-cu-primary hover:bg-cu-bg rounded opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                            >
+                              <Pencil size={10} />
+                            </button>
+                          )}
+                          {onDeleteLabel && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeletingLabelId(label.id);
+                                setEditingLabelId(null);
+                              }}
+                              title="Delete label"
+                              className="p-0.5 text-cu-text-muted hover:text-red-500 hover:bg-cu-bg rounded opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>,
             document.body

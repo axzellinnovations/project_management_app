@@ -16,10 +16,85 @@ function hexToLabelStyle(hex: string): React.CSSProperties {
 export default function MobileTaskRow(props: TaskRowProps) {
   const {
     task, teamMembers = [], onStatusChange, onStoryPointsChange,
-    onAssignTask, onDueDateChange, onDeleteTask,
+    onAssignTask, onAssignMultiple, onDueDateChange, onDeleteTask,
     canDelete = true, projectLabels = [], onAddLabel, onRemoveLabel, onCreateLabel, extraStatuses = [],
     hideStatus = false, projectKey, onMoveUp, onMoveDown,
   } = props;
+
+  const [assignMode, setAssignMode] = React.useState<'single' | 'multi'>('multi');
+
+  const [localAssigneeUserIds, setLocalAssigneeUserIds] = React.useState<number[]>(() => {
+    if (task.assignees && task.assignees.length > 0) {
+      return task.assignees
+        .map((a) => a.userId ?? a.memberId ?? a.id)
+        .filter((id): id is number => typeof id === 'number');
+    }
+    return [];
+  });
+  const [isAssigning, setIsAssigning] = React.useState(false);
+
+  React.useEffect(() => {
+    if (task.assignees) {
+      const ids = task.assignees
+        .map((a) => a.userId ?? a.memberId ?? a.id)
+        .filter((id): id is number => typeof id === 'number');
+      setLocalAssigneeUserIds(ids);
+    }
+  }, [task.assignees]);
+
+  const currentAssigneeUserIds = localAssigneeUserIds;
+
+  const handleToggleMember = async (userId: number) => {
+    if (isAssigning) return;
+    if (assignMode === 'single') {
+      setIsAssigning(true);
+      setLocalAssigneeUserIds([userId]);
+      try {
+        if (onAssignMultiple) {
+          await onAssignMultiple(task.id, [userId]);
+        } else {
+          await onAssignTask(task.id, userId);
+        }
+      } finally {
+        setIsAssigning(false);
+        setAssignOpen(false);
+      }
+      return;
+    }
+
+    const isAlready = currentAssigneeUserIds.includes(userId);
+    const updated = isAlready
+      ? currentAssigneeUserIds.filter((id) => id !== userId)
+      : [...currentAssigneeUserIds, userId];
+
+    setLocalAssigneeUserIds(updated);
+    setIsAssigning(true);
+    try {
+      if (onAssignMultiple) {
+        await onAssignMultiple(task.id, updated);
+      } else {
+        await onAssignTask(task.id, updated.length > 0 ? updated[0] : 0);
+      }
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  const handleClearAssignees = async () => {
+    if (isAssigning) return;
+    setLocalAssigneeUserIds([]);
+    setIsAssigning(true);
+    try {
+      if (onAssignMultiple) {
+        await onAssignMultiple(task.id, []);
+      } else {
+        await onAssignTask(task.id, 0);
+      }
+    } finally {
+      setIsAssigning(false);
+      setAssignOpen(false);
+    }
+  };
 
   const {
     statusRef, assignRef, dateRef,
@@ -193,16 +268,16 @@ export default function MobileTaskRow(props: TaskRowProps) {
                 <div className="flex items-center">
                   {task.assignees.slice(0, 3).map((a, idx) => (
                     <span
-                      key={a.id}
+                      key={a.userId ?? a.memberId ?? a.id ?? idx}
                       className="inline-block ring-2 ring-cu-bg rounded-full"
                       style={{ marginLeft: idx === 0 ? 0 : -7, zIndex: task.assignees!.length - idx }}
                     >
-                      <AssigneeAvatar name={a.name} profilePicUrl={a.avatar} size={22} />
+                      <AssigneeAvatar name={a.name} profilePicUrl={a.photoUrl || a.avatar || a.profilePicUrl} size={22} />
                     </span>
                   ))}
                   {task.assignees.length > 3 && (
                     <span
-                      className="inline-flex items-center justify-center w-[22px] h-[22px] rounded-full bg-cu-bg-tertiary ring-2 ring-cu-bg text-[9px] font-bold text-cu-text-secondary"
+                      className="inline-flex items-center justify-center w-[22px] h-[22px] rounded-full bg-cu-primary/10 ring-2 ring-cu-bg text-[9px] font-bold text-cu-primary"
                       style={{ marginLeft: -7 }}
                     >
                       +{task.assignees.length - 3}
@@ -286,19 +361,56 @@ export default function MobileTaskRow(props: TaskRowProps) {
       {assignOpen && typeof document !== 'undefined' && createPortal(
         <div
           ref={assignPortalRef}
-          style={{ position: 'fixed', top: `${assignPosition.top}px`, left: `${assignPosition.left}px`, width: 'max-content', minWidth: '200px' }}
+          style={{ position: 'fixed', top: `${assignPosition.top}px`, left: `${assignPosition.left}px`, width: 'max-content', minWidth: '220px' }}
           className="z-[var(--cu-z-dropdown)] overflow-hidden rounded-xl border border-cu-border bg-cu-bg shadow-cu-xl animate-in fade-in zoom-in-95 duration-200"
         >
-          <div className="px-4 py-2 text-[11px] font-bold text-cu-text-secondary border-b border-cu-border uppercase tracking-wider">Assign Member</div>
-          <div className="max-h-[240px] overflow-y-auto p-1">
-            {teamMembers.map((m) => (
-              <button key={m.user.userId} onClick={() => { void onAssignTask(task.id, m.user.userId); setAssignOpen(false); }}
-                className="flex w-full items-center gap-3 px-3 py-2 text-[13px] font-medium text-cu-text-primary hover:bg-cu-hover rounded-lg transition-colors"
+          <div className="flex items-center justify-between px-3 py-2 border-b border-cu-border bg-cu-bg-secondary">
+            <span className="text-[11px] font-bold text-cu-text-secondary uppercase tracking-wider">Assign Member</span>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setAssignMode('single')}
+                className={`rounded px-1.5 py-0.5 text-[9px] font-semibold transition-colors ${assignMode === 'single' ? 'bg-cu-primary text-white' : 'bg-cu-bg text-cu-text-secondary hover:text-cu-text-primary'}`}
               >
-                <AssigneeAvatar name={m.user.fullName || m.user.username} profilePicUrl={m.user.profilePicUrl} size={22} />
-                <span className="truncate">{m.user.fullName || m.user.username}</span>
+                Single
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => setAssignMode('multi')}
+                className={`rounded px-1.5 py-0.5 text-[9px] font-semibold transition-colors ${assignMode === 'multi' ? 'bg-cu-primary text-white' : 'bg-cu-bg text-cu-text-secondary hover:text-cu-text-primary'}`}
+              >
+                Multi
+              </button>
+            </div>
+          </div>
+          <div className="max-h-[240px] overflow-y-auto p-1">
+            <button
+              type="button"
+              onClick={() => void handleClearAssignees()}
+              className={`flex w-full items-center justify-between px-3 py-2 text-[13px] font-medium transition-colors hover:bg-cu-hover rounded-lg ${currentAssigneeUserIds.length === 0 ? 'text-cu-primary font-semibold' : 'text-cu-text-secondary'}`}
+            >
+              <span>Unassigned</span>
+              {currentAssigneeUserIds.length === 0 && <span className="text-cu-primary font-bold">✓</span>}
+            </button>
+
+            {teamMembers.map((m) => {
+              const isSelected = currentAssigneeUserIds.includes(m.user.userId);
+              return (
+                <button
+                  key={m.user.userId}
+                  onClick={() => void handleToggleMember(m.user.userId)}
+                  className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-[13px] font-medium hover:bg-cu-hover rounded-lg transition-colors ${isSelected ? 'text-cu-primary bg-cu-primary/5 font-semibold' : 'text-cu-text-primary'}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <AssigneeAvatar name={m.user.fullName || m.user.username} profilePicUrl={m.user.profilePicUrl} size={22} />
+                    <span className="truncate">{m.user.fullName || m.user.username}</span>
+                  </div>
+                  {isSelected && (
+                    <span className="flex-shrink-0 text-cu-primary font-bold text-[11px]">✓</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>,
         document.body

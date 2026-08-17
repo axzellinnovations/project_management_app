@@ -6,9 +6,10 @@ import Link from 'next/link';
 import {
   AlertTriangle, Trash2, LogOut, Settings2,
   FileText, Shield, Loader2, CheckCircle2,
-  X, Info, ArrowRight, Github, RefreshCw, Figma,
+  X, Info, ArrowRight, Github, RefreshCw, Figma, Copy, Check, ExternalLink,
 } from 'lucide-react';
 import * as projectsApi from '@/services/projects-service';
+import { normalizeExternalUrl, openSafeExternalUrl } from '@/lib/url-utils';
 import { toast } from '@/components/ui';
 import OverlayPortal from '@/components/ui/OverlayPortal';
 import GitHubMark from '@/components/github/GitHubMark';
@@ -606,6 +607,7 @@ export default function ProjectSettingsPage() {
   const [isSavingFigma, setIsSavingFigma] = useState(false);
   const [figmaSaved, setFigmaSaved] = useState(false);
   const [figmaError, setFigmaError] = useState('');
+  const [copiedFigma, setCopiedFigma] = useState(false);
 
   // Delete
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -653,6 +655,18 @@ export default function ProjectSettingsPage() {
 
   useEffect(() => { queueMicrotask(() => void fetchProject()); }, [fetchProject]);
 
+  const handleCopyFigmaLink = async () => {
+    if (!project?.figmaUrl) return;
+    try {
+      await navigator.clipboard.writeText(project.figmaUrl);
+      setCopiedFigma(true);
+      setTimeout(() => setCopiedFigma(false), 2000);
+      toast('Figma link copied to clipboard', 'success');
+    } catch {
+      // Ignore clipboard write error
+    }
+  };
+
   const handleSaveGeneral = async () => {
     if (!project || !isDirtyGeneral) return;
     setIsSavingGeneral(true);
@@ -678,20 +692,22 @@ export default function ProjectSettingsPage() {
 
   const handleSaveFigmaUrl = async () => {
     setFigmaError('');
-    const trimmed = figmaInput.trim();
+    const rawTrimmed = figmaInput.trim();
     let normalized: string | null = null;
-    if (trimmed) {
-      const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-      try {
-        const url = new URL(withProtocol);
-        normalized = url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
-      } catch { /* fall through */ }
-      if (!normalized) { setFigmaError('Enter a valid URL.'); return; }
+    if (rawTrimmed) {
+      normalized = normalizeExternalUrl(rawTrimmed);
+      if (!normalized) {
+        setFigmaError('Enter a valid URL (e.g. https://www.figma.com/file/...).');
+        return;
+      }
     }
     setIsSavingFigma(true);
     try {
       await projectsApi.updateProjectDetails(projectId, { figmaUrl: normalized });
       setProject((prev) => prev ? { ...prev, figmaUrl: normalized } : null);
+      window.dispatchEvent(new CustomEvent('planora:figma-updated', {
+        detail: { projectId, figmaUrl: normalized },
+      }));
       window.dispatchEvent(new Event('storage'));
       setFigmaSaved(true);
       setTimeout(() => setFigmaSaved(false), 3000);
@@ -835,16 +851,43 @@ export default function ProjectSettingsPage() {
                 >
                   <div className="space-y-4">
                     {/* Show current link for everyone */}
-                    {project?.figmaUrl && (
-                      <div className="flex min-w-0 items-center gap-2 rounded-xl border border-cu-border bg-cu-bg-secondary px-3.5 py-2.5">
-                        <Figma size={14} className="text-[#F24E1E] shrink-0" />
-                        <Link
-                          href={getProjectFigmaPath(projectId)}
-                          className="min-w-0 flex-1 truncate text-sm font-medium text-cu-primary hover:underline"
-                        >
-                          {project.figmaUrl}
-                        </Link>
+                    {project?.figmaUrl ? (
+                      <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-cu-border bg-cu-bg-secondary p-3">
+                        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                          <Figma size={16} className="text-[#F24E1E] shrink-0" />
+                          <Link
+                            href={getProjectFigmaPath(projectId)}
+                            className="min-w-0 flex-1 truncate text-left text-sm font-medium text-cu-primary hover:underline"
+                            title="Open Figma integration in Planora"
+                          >
+                            {project.figmaUrl}
+                          </Link>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={handleCopyFigmaLink}
+                            className="p-1.5 rounded-lg border border-cu-border bg-cu-bg hover:bg-cu-hover text-cu-text-secondary transition-colors"
+                            title="Copy link"
+                            aria-label="Copy Figma link"
+                          >
+                            {copiedFigma ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openSafeExternalUrl(project.figmaUrl)}
+                            className="p-1.5 rounded-lg bg-[#F24E1E]/10 hover:bg-[#F24E1E]/20 text-[#F24E1E] transition-colors"
+                            title="Open in Figma"
+                            aria-label="Open in Figma"
+                          >
+                            <ExternalLink size={14} />
+                          </button>
+                        </div>
                       </div>
+                    ) : (
+                      isOwner ? (
+                        <p className="text-xs text-cu-text-muted">Connect a Figma file or prototype URL to make it accessible from the TopBar for all project members.</p>
+                      ) : null
                     )}
                     {!project?.figmaUrl && !isOwner && (
                       <p className="text-sm text-cu-text-muted italic">No Figma link configured for this project.</p>

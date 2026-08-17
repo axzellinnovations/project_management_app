@@ -96,7 +96,10 @@ describe('github-service adapters', () => {
       state: 'closed',
       merged_at: '2026-07-06T11:30:00',
       html_url: 'https://github.com/planora/web/pull/123',
-      user: { login: 'octo' },
+      user: {
+        login: 'octo',
+        avatar_url: 'https://github.com/octo.png',
+      },
       head: { ref: 'fix/github-page' },
       base: { ref: 'main' },
     });

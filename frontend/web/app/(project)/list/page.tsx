@@ -57,6 +57,9 @@ function ListPageContent() {
     handleDueDateChange,
     handleAssigneesChange,
     handleToggleTaskLabel,
+    handleCreateLabel,
+    handleUpdateLabel,
+    handleDeleteLabel,
     handleMilestoneChange,
     handlePriorityChange,
   } = useListTasks();
@@ -288,6 +291,9 @@ function ListPageContent() {
                           task={task}
                           members={members}
                           availableLabels={labels}
+                          onCreateLabel={handleCreateLabel}
+                          onUpdateLabel={handleUpdateLabel}
+                          onDeleteLabel={handleDeleteLabel}
                           milestones={milestones}
                           onDueDateChange={handleDueDateChange}
                           onAssigneesChange={handleAssigneesChange}

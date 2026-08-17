@@ -5,14 +5,18 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  Loader2,
   Lock,
   MoreHorizontal,
+  Pencil,
   Plus,
   RefreshCw,
+  Search,
   Tag,
   Target,
   Trash2,
   UserPlus,
+  X,
 } from 'lucide-react';
 import { hexToLabelStyle } from '@/components/shared/LabelPicker';
 import { AvatarStack } from '@/components/ui/Avatar';
@@ -20,7 +24,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu';
@@ -39,6 +42,12 @@ import { resolveProfilePhotoUrl } from '@/lib/profile-photo';
 
 export type ListProjectStatus = { name: string; status: string; color: string };
 
+const LABEL_PALETTE = [
+  '#EF4444', '#F97316', '#F59E0B', '#84CC16',
+  '#22C55E', '#14B8A6', '#06B6D4', '#3B82F6',
+  '#6366F1', '#8B5CF6', '#EC4899', '#6B7280',
+];
+
 export interface TaskRowProps {
   task: Task;
   onOpenModal: (id: number) => void;
@@ -46,6 +55,9 @@ export interface TaskRowProps {
   onDelete: (id: number) => void;
   members: Array<{ id: number; name: string; photoUrl?: string | null }>;
   availableLabels: Label[];
+  onCreateLabel?: (name: string, color: string) => Promise<Label | null>;
+  onUpdateLabel?: (id: number, name: string, color: string) => Promise<Label | null>;
+  onDeleteLabel?: (id: number) => Promise<boolean>;
   milestones: MilestoneResponse[];
   onDueDateChange: (taskId: number, dueDate: string | null) => void;
   onAssigneesChange: (taskId: number, assigneeIds: number[]) => void;
@@ -180,7 +192,304 @@ function PriorityControl({ task, onPriorityChange }: Pick<TaskRowProps, 'task' |
   );
 }
 
-function LabelControl({ task, availableLabels, onToggleLabel }: Pick<TaskRowProps, 'task' | 'availableLabels' | 'onToggleLabel'>) {
+function LabelDropdownList({
+  task,
+  availableLabels,
+  onToggleLabel,
+  onCreateLabel,
+  onUpdateLabel,
+  onDeleteLabel,
+}: Pick<TaskRowProps, 'task' | 'availableLabels' | 'onToggleLabel' | 'onCreateLabel' | 'onUpdateLabel' | 'onDeleteLabel'>) {
+  const [labelInput, setLabelInput] = React.useState('');
+  const [newLabelColor, setNewLabelColor] = React.useState(LABEL_PALETTE[0]);
+  const [showColorPicker, setShowColorPicker] = React.useState(false);
+  const [isCreating, setIsCreating] = React.useState(false);
+
+  const [editingLabelId, setEditingLabelId] = React.useState<number | null>(null);
+  const [editLabelName, setEditLabelName] = React.useState('');
+  const [editLabelColor, setEditLabelColor] = React.useState(LABEL_PALETTE[0]);
+  const [isSavingEdit, setIsSavingEdit] = React.useState(false);
+
+  const [deletingLabelId, setDeletingLabelId] = React.useState<number | null>(null);
+  const [isDeletingLabel, setIsDeletingLabel] = React.useState(false);
+
+  const handleCreate = async () => {
+    const trimmed = labelInput.trim();
+    if (!trimmed || !onCreateLabel || isCreating) return;
+    setIsCreating(true);
+    try {
+      const created = await onCreateLabel(trimmed, newLabelColor);
+      if (created) {
+        onToggleLabel(task.id, created, true);
+        setLabelInput('');
+        setShowColorPicker(false);
+      }
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const filteredLabels = React.useMemo(() => {
+    const term = labelInput.toLowerCase().trim();
+    if (!term) return availableLabels;
+    return availableLabels.filter((l) => l.name.toLowerCase().includes(term));
+  }, [availableLabels, labelInput]);
+
+  return (
+    <div className="p-1 space-y-1 w-64 max-h-72 overflow-y-auto">
+      {/* Search / Create Bar */}
+      <div className="p-1.5 bg-cu-bg-secondary/50 rounded-lg space-y-1">
+        <div className="flex items-center gap-1.5 bg-cu-bg border border-cu-border rounded-md px-2 py-1 focus-within:border-cu-primary">
+          <Search size={12} className="text-cu-text-muted shrink-0" />
+          <input
+            type="text"
+            value={labelInput}
+            onChange={(e) => setLabelInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void handleCreate();
+              }
+            }}
+            placeholder="Search or create…"
+            className="flex-1 text-[11px] bg-transparent outline-none text-cu-text-primary placeholder:text-cu-text-muted min-w-0"
+          />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowColorPicker((p) => !p);
+            }}
+            className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0 hover:scale-110 transition-transform"
+            style={{ backgroundColor: newLabelColor }}
+            title="Choose color"
+          />
+          {labelInput.trim() && !availableLabels.some((l) => l.name.toLowerCase() === labelInput.trim().toLowerCase()) && onCreateLabel && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void handleCreate();
+              }}
+              disabled={isCreating}
+              className="p-0.5 rounded bg-cu-primary text-white hover:bg-cu-primary/90 disabled:opacity-50"
+              title="Create"
+            >
+              {isCreating ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+            </button>
+          )}
+        </div>
+        {showColorPicker && (
+          <div className="flex flex-wrap gap-1 p-1 bg-cu-bg rounded border border-cu-border">
+            {LABEL_PALETTE.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setNewLabelColor(c);
+                  setShowColorPicker(false);
+                }}
+                className={`w-3.5 h-3.5 rounded-full transition-transform ${
+                  newLabelColor === c ? 'ring-2 ring-offset-1 ring-cu-primary scale-110' : ''
+                }`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* List */}
+      <div className="divide-y divide-cu-border/30">
+        {filteredLabels.length === 0 ? (
+          <div className="px-2.5 py-3 text-[11px] text-center text-cu-text-muted">
+            {labelInput.trim() ? `No labels matching "${labelInput}"` : 'No labels yet'}
+          </div>
+        ) : (
+          filteredLabels.map((label) => {
+            const attached = Boolean(task.labels?.some((item) => item.id === label.id));
+            const isEditing = editingLabelId === label.id;
+            const isDeleting = deletingLabelId === label.id;
+
+            if (isEditing) {
+              return (
+                <div key={label.id} className="p-1.5 bg-cu-primary/10 rounded-md space-y-1 my-0.5" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: editLabelColor }} />
+                    <input
+                      autoFocus
+                      type="text"
+                      value={editLabelName}
+                      onChange={(e) => setEditLabelName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (onUpdateLabel && editLabelName.trim()) {
+                            setIsSavingEdit(true);
+                            void onUpdateLabel(label.id, editLabelName.trim(), editLabelColor)
+                              .then(() => setEditingLabelId(null))
+                              .finally(() => setIsSavingEdit(false));
+                          }
+                        }
+                        if (e.key === 'Escape') setEditingLabelId(null);
+                      }}
+                      className="flex-1 text-[11px] px-1 py-0.5 bg-cu-bg border border-cu-border rounded outline-none text-cu-text-primary min-w-0"
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onUpdateLabel && editLabelName.trim()) {
+                          setIsSavingEdit(true);
+                          void onUpdateLabel(label.id, editLabelName.trim(), editLabelColor)
+                            .then(() => setEditingLabelId(null))
+                            .finally(() => setIsSavingEdit(false));
+                        }
+                      }}
+                      disabled={!editLabelName.trim() || isSavingEdit}
+                      className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                      title="Save"
+                    >
+                      <Check size={10} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingLabelId(null);
+                      }}
+                      className="p-1 rounded bg-cu-bg-secondary text-cu-text-secondary hover:bg-cu-hover"
+                      title="Cancel"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {LABEL_PALETTE.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditLabelColor(c);
+                        }}
+                        className={`w-3 h-3 rounded-full transition-transform ${
+                          editLabelColor === c ? 'ring-2 ring-offset-1 ring-cu-primary scale-110' : ''
+                        }`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+
+            if (isDeleting) {
+              return (
+                <div key={label.id} className="p-1.5 bg-red-500/10 rounded-md flex items-center justify-between gap-1 my-0.5" onClick={(e) => e.stopPropagation()}>
+                  <span className="text-[10px] font-medium text-red-500 truncate">
+                    Delete &quot;{label.name}&quot;?
+                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onDeleteLabel) {
+                          setIsDeletingLabel(true);
+                          void onDeleteLabel(label.id)
+                            .then(() => setDeletingLabelId(null))
+                            .finally(() => setIsDeletingLabel(false));
+                        }
+                      }}
+                      disabled={isDeletingLabel}
+                      className="px-1.5 py-0.5 text-[9px] font-semibold bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingLabelId(null);
+                      }}
+                      className="px-1.5 py-0.5 text-[9px] bg-cu-bg-secondary text-cu-text-secondary rounded hover:bg-cu-hover"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div
+                key={label.id}
+                className={`group flex items-center justify-between gap-1 px-2 py-1.5 rounded-md hover:bg-cu-hover transition-colors ${
+                  attached ? 'bg-cu-primary/5 font-semibold text-cu-primary' : 'text-cu-text-primary'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onToggleLabel(task.id, label, !attached);
+                  }}
+                  className="flex-1 flex items-center gap-2 text-left min-w-0 py-0.5 text-[11px]"
+                >
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: label.color ?? '#6366F1' }} />
+                  <span className="truncate">{label.name}</span>
+                </button>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  {attached && <Check size={12} className="text-cu-primary mr-1" />}
+                  {onUpdateLabel && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setEditingLabelId(label.id);
+                        setEditLabelName(label.name);
+                        setEditLabelColor(label.color || LABEL_PALETTE[0]);
+                        setDeletingLabelId(null);
+                      }}
+                      title="Edit label"
+                      className="p-0.5 text-cu-text-muted hover:text-cu-primary hover:bg-cu-bg rounded opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                    >
+                      <Pencil size={10} />
+                    </button>
+                  )}
+                  {onDeleteLabel && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDeletingLabelId(label.id);
+                        setEditingLabelId(null);
+                      }}
+                      title="Delete label"
+                      className="p-0.5 text-cu-text-muted hover:text-red-500 hover:bg-cu-bg rounded opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                    >
+                      <Trash2 size={10} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LabelControl(props: Pick<TaskRowProps, 'task' | 'availableLabels' | 'onToggleLabel' | 'onCreateLabel' | 'onUpdateLabel' | 'onDeleteLabel'>) {
+  const { task } = props;
   return (
     <StopPropagation>
       <DropdownMenu>
@@ -202,33 +511,10 @@ function LabelControl({ task, availableLabels, onToggleLabel }: Pick<TaskRowProp
           </span>
           <Plus size={12} className="shrink-0 text-cu-text-tertiary" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-h-64 min-w-[210px] overflow-y-auto">
-          <DropdownMenuLabel>Labels</DropdownMenuLabel>
-          {availableLabels.length === 0 ? (
-            <div className="px-2.5 py-2 text-[12px] text-cu-text-muted">No labels yet</div>
-          ) : (
-            availableLabels.map((label) => {
-              const attached = Boolean(task.labels?.some((item) => item.id === label.id));
-              return (
-                <DropdownMenuItem
-                  key={label.id}
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    onToggleLabel(task.id, label, !attached);
-                  }}
-                  className="min-h-9 justify-between text-[12px]"
-                >
-                  <span
-                    style={hexToLabelStyle(label.color ?? '#6366F1')}
-                    className="max-w-[150px] truncate rounded-full border border-black/5 px-2 py-0.5 text-[11px] font-semibold"
-                  >
-                    {label.name}
-                  </span>
-                  {attached && <Check size={13} className="text-cu-primary" />}
-                </DropdownMenuItem>
-              );
-            })
-          )}
+        <DropdownMenuContent align="start" className="p-0 border-0 shadow-none bg-transparent">
+          <div className="rounded-xl border border-cu-border bg-cu-bg shadow-cu-xl">
+            <LabelDropdownList {...props} />
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
     </StopPropagation>
@@ -621,7 +907,8 @@ function MobileAssigneeControl({ task, members, onAssigneesChange }: Pick<TaskRo
   );
 }
 
-function MobileLabelControl({ task, availableLabels, onToggleLabel }: Pick<TaskRowProps, 'task' | 'availableLabels' | 'onToggleLabel'>) {
+function MobileLabelControl(props: Pick<TaskRowProps, 'task' | 'availableLabels' | 'onToggleLabel' | 'onCreateLabel' | 'onUpdateLabel' | 'onDeleteLabel'>) {
+  const { task } = props;
   const firstLabel = task.labels?.[0];
   const labelCount = task.labels?.length ?? 0;
 
@@ -640,33 +927,10 @@ function MobileLabelControl({ task, availableLabels, onToggleLabel }: Pick<TaskR
             </span>
           )}
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="max-h-64 min-w-[210px] overflow-y-auto">
-          <DropdownMenuLabel>Labels</DropdownMenuLabel>
-          {availableLabels.length === 0 ? (
-            <div className="px-2.5 py-2 text-[12px] text-cu-text-muted">No labels yet</div>
-          ) : (
-            availableLabels.map((label) => {
-              const attached = Boolean(task.labels?.some((item) => item.id === label.id));
-              return (
-                <DropdownMenuItem
-                  key={label.id}
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    onToggleLabel(task.id, label, !attached);
-                  }}
-                  className="min-h-9 justify-between text-[12px]"
-                >
-                  <span
-                    style={hexToLabelStyle(label.color ?? '#6366F1')}
-                    className="max-w-[150px] truncate rounded-full border border-black/5 px-2 py-0.5 text-[11px] font-semibold"
-                  >
-                    {label.name}
-                  </span>
-                  {attached && <Check size={13} className="text-cu-primary" />}
-                </DropdownMenuItem>
-              );
-            })
-          )}
+        <DropdownMenuContent align="end" className="p-0 border-0 shadow-none bg-transparent">
+          <div className="rounded-xl border border-cu-border bg-cu-bg shadow-cu-xl">
+            <LabelDropdownList {...props} />
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
     </StopPropagation>

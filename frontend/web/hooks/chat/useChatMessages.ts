@@ -392,8 +392,6 @@ export function useChatMessages(projectId: string) {
       messageId: number,
       stompSend?: (dest: string, body: string) => void,
     ) => {
-      if (!window.confirm('Delete this message?')) return;
-
       if (stompSend) {
         stompSend(
           `/app/project/${projectId}/messages/${messageId}/delete`,

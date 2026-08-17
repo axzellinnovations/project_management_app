@@ -53,7 +53,7 @@ class GithubSyncServiceTest {
     }
 
     @Test
-    void scheduledSync_deactivatesIntegrationAndAbortsOn401() {
+    void scheduledSync_abortsOn401WithoutDeactivating() {
         GithubIntegration integration = new GithubIntegration();
         integration.setId(1L);
         integration.setRepositoryFullName("Suthankan1/Last-Web");
@@ -68,8 +68,7 @@ class GithubSyncServiceTest {
 
         githubSyncService.scheduledSync();
 
-        assertFalse(integration.isActive());
-        verify(integrationRepository).save(integration);
+        assertTrue(integration.isActive());
         verifyNoInteractions(commitService);
         verifyNoInteractions(issueService);
     }

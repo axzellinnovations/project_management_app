@@ -3,7 +3,7 @@
 import { useKanbanData } from './hooks/useKanbanData';
 import { useKanbanFilters } from './hooks/useKanbanFilters';
 import { useKanbanActions } from './hooks/useKanbanActions';
-import { createKanbanColumn, createProjectLabel } from './api';
+import { createKanbanColumn, createProjectLabel, updateProjectLabel, deleteProjectLabel } from './api';
 import { Label, KanbanColumnConfig } from './types';
 
 export { DEFAULT_COLUMN_CONFIGS } from './hooks/useKanbanData';
@@ -54,6 +54,54 @@ export function useKanbanBoard(projectId: string | null) {
     } catch (err) {
       console.error('Error creating label:', err);
       return null;
+    }
+  };
+
+  // Update an existing label
+  const handleUpdateLabel = async (id: number, name: string, color: string) => {
+    if (!name.trim()) return null;
+    try {
+      const updated = await updateProjectLabel(id, name.trim(), color);
+      data.setLabels((prev: Label[]) =>
+        prev.map((l) => (l.id === id ? updated : l))
+      );
+      data.setTasks((prev) =>
+        prev.map((t) => {
+          const hasLabel = t.labels?.some((l) => l.id === id) || t.labelId === id;
+          if (!hasLabel) return t;
+          return {
+            ...t,
+            labels: t.labels?.map((l) => (l.id === id ? updated : l)),
+          };
+        })
+      );
+      return updated;
+    } catch (err) {
+      console.error('Error updating label:', err);
+      return null;
+    }
+  };
+
+  // Delete an existing label
+  const handleDeleteLabel = async (id: number) => {
+    try {
+      await deleteProjectLabel(id);
+      data.setLabels((prev: Label[]) => prev.filter((l) => l.id !== id));
+      data.setTasks((prev) =>
+        prev.map((t) => {
+          const hasLabel = t.labels?.some((l) => l.id === id) || t.labelId === id;
+          if (!hasLabel) return t;
+          return {
+            ...t,
+            labelId: t.labelId === id ? undefined : t.labelId,
+            labels: t.labels?.filter((l) => l.id !== id),
+          };
+        })
+      );
+      return true;
+    } catch (err) {
+      console.error('Error deleting label:', err);
+      return false;
     }
   };
 
@@ -114,6 +162,8 @@ export function useKanbanBoard(projectId: string | null) {
     handleDeleteColumn: actions.handleDeleteColumn,
     handleAddColumn,
     handleCreateLabel,
+    handleUpdateLabel,
+    handleDeleteLabel,
     forceRefresh: data.forceRefresh,
   };
 }

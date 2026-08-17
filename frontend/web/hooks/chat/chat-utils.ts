@@ -49,7 +49,7 @@ export const mergeMessage = (list: ChatMessage[], incoming: ChatMessage): ChatMe
         !m.id && 
         m.content === incoming.content &&
         isSameIdentity(m.sender, incoming.sender) &&
-        m.roomId === incoming.roomId &&
+        Number(m.roomId || 0) === Number(incoming.roomId || 0) &&
         Math.abs((parseInstant(m.timestamp)?.getTime() ?? 0) - ts) < 3000
       );
       if (dup !== -1) {
@@ -66,7 +66,7 @@ export const mergeMessage = (list: ChatMessage[], incoming: ChatMessage): ChatMe
       isSameIdentity(item.sender, incoming.sender) &&
       item.content === incoming.content &&
       isSameIdentity(item.recipient, incoming.recipient) &&
-      item.roomId === incoming.roomId,
+      Number(item.roomId || 0) === Number(incoming.roomId || 0),
   );
   if (optimistic !== -1) {
     const next = [...list];

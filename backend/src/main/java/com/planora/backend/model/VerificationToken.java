@@ -11,9 +11,7 @@ import java.time.Instant;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@Table(name = "verification_tokens", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"user_id", "token_type"}, name = "uk_user_token_type")
-})
+@Table(name = "verification_tokens")
 public class VerificationToken {
 
     @Id

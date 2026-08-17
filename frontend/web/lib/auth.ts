@@ -472,6 +472,15 @@ async function requestRefreshAccessToken(_options: RefreshAccessTokenOptions = {
             throw new Error('Token refresh cancelled during logout');
         }
 
+        // Fast-path: Check if another tab or concurrent caller already refreshed and synced a valid token
+        const existingToken = getValidToken();
+        if (existingToken) {
+            const user = getUserFromToken();
+            if (user?.exp && (user.exp * 1000 - Date.now()) > 30_000) {
+                return existingToken;
+            }
+        }
+
         let res: Response;
         try {
             res = await fetch(`${getApiBaseUrl()}/api/auth/refresh`, {

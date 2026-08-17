@@ -364,6 +364,67 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
     void updateTask({ labelIds: nextLabelIds });
   };
 
+  const handleCreateLabel = async (name: string, color: string) => {
+    if (!taskData?.projectId || !name.trim()) return null;
+    try {
+      const created = await labelsApi.create({
+        projectId: taskData.projectId,
+        name: name.trim(),
+        color,
+      });
+      setProjectLabels((prev) => [...prev, created]);
+      return created;
+    } catch (err) {
+      toast(`Failed to create label: ${normalizeApiError(err, 'Unknown error')}`, 'error');
+      return null;
+    }
+  };
+
+  const handleUpdateLabel = async (id: number, name: string, color: string) => {
+    if (!name.trim()) return null;
+    try {
+      const updated = await labelsApi.update(id, { name: name.trim(), color });
+      setProjectLabels((prev) => prev.map((l) => (l.id === id ? updated : l)));
+      setTaskData((prev) => {
+        if (!prev) return prev;
+        const hasLabel = prev.labels?.some((l) => l.id === id);
+        if (!hasLabel) return prev;
+        return {
+          ...prev,
+          labels: prev.labels.map((l) => (l.id === id ? { id: updated.id, name: updated.name } : l)),
+        };
+      });
+      return updated;
+    } catch (err) {
+      toast(`Failed to update label: ${normalizeApiError(err, 'Unknown error')}`, 'error');
+      return null;
+    }
+  };
+
+  const handleDeleteLabel = async (id: number) => {
+    try {
+      await labelsApi.delete(id);
+      setProjectLabels((prev) => prev.filter((l) => l.id !== id));
+      setTaskData((prev) => {
+        if (!prev) return prev;
+        const hasLabel = prev.labels?.some((l) => l.id === id);
+        if (!hasLabel) return prev;
+        return {
+          ...prev,
+          labels: prev.labels.filter((l) => l.id !== id),
+        };
+      });
+      if (taskData?.labels?.some((l) => l.id === id)) {
+        const remainingIds = taskData.labels.filter((l) => l.id !== id).map((l) => l.id);
+        void updateTask({ labelIds: remainingIds });
+      }
+      return true;
+    } catch (err) {
+      toast(`Failed to delete label: ${normalizeApiError(err, 'Unknown error')}`, 'error');
+      return false;
+    }
+  };
+
   const projectGitHubRepo = taskData?.projectId ? getProjectGitHubRepo(taskData.projectId) : null;
 
   const handleGitHubIssueCreated = (issue: { number: number }) => {
@@ -541,6 +602,9 @@ export default function TaskCardModal({ taskId, onClose }: TaskCardModalProps) {
                   onUpdateReporter={(reporterId) => canChangeReporter && updateTask({ reporterId })}
                   onUpdateSprint={(sprintId) => canEdit && updateTask({ sprintId })}
                   onUpdateLabels={(labelIds) => canEdit && handleUpdateLabels(labelIds)}
+                  onCreateLabel={canEdit ? handleCreateLabel : undefined}
+                  onUpdateLabel={canEdit ? handleUpdateLabel : undefined}
+                  onDeleteLabel={canEdit ? handleDeleteLabel : undefined}
                   onCreateGitHubIssue={() => setShowGitHubIssueModal(true)}
                   onUnassign={async () => {
                     if (!canEdit) return;

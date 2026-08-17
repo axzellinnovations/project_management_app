@@ -70,7 +70,7 @@ function BacklogPageContent() {
         selectedIds, setSelectedIds,
         groupedTasks,
         handleMarkDone, handleDelete, handleAddTask,
-        handleStatusChange, handleAssigneeChange, handleBulkDelete, handleBulkDone,
+        handleStatusChange, handleAssigneeChange, handleAssignMultiple, handleBulkDelete, handleBulkDone,
         handleArchiveTask, handleUnarchiveTask,
         toggleSelect, loadTasks, handleDateChange
     } = useBacklogData(projectId, showArchived);
@@ -243,6 +243,7 @@ function BacklogPageContent() {
                                             onToggleSelect={toggleSelect}
                                             onDateChange={handleDateChange}
                                             onAssigneeChange={handleAssigneeChange}
+                                            onAssignMultiple={handleAssignMultiple}
                                             teamMembers={teamMembers}
                                         />
                                     ))}
@@ -349,6 +350,7 @@ function BacklogPageContent() {
                                     selected={false}
                                     onDateChange={handleDateChange}
                                     onAssigneeChange={handleAssigneeChange}
+                                    onAssignMultiple={handleAssignMultiple}
                                     teamMembers={teamMembers}
                                 />
                             ))}

@@ -274,6 +274,35 @@ class ProjectServiceTest {
         verify(projectRepository).delete(project);
     }
 
+    @Test
+    void updateProject_updatesFigmaUrlCorrectly() {
+        Project project = new Project();
+        project.setId(54L);
+        project.setName("Design System");
+        project.setProjectKey("DSN");
+        project.setType(ProjectType.KANBAN);
+        project.setOwner(owner);
+        project.setTeam(existingTeam);
+        project.setFigmaUrl("https://www.figma.com/file/old-url");
+
+        when(projectRepository.findById(54L)).thenReturn(Optional.of(project));
+        when(projectRepository.save(any(Project.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        com.planora.backend.dto.UpdateProjectDTO dto = new com.planora.backend.dto.UpdateProjectDTO();
+        dto.setFigmaUrl("https://www.figma.com/file/new-url");
+
+        com.planora.backend.dto.ProjectResponseDTO response = projectService.updateProject(54L, dto);
+
+        assertEquals("https://www.figma.com/file/new-url", response.getFigmaUrl());
+        assertEquals("https://www.figma.com/file/new-url", project.getFigmaUrl());
+
+        // Test clearing figmaUrl with blank string
+        dto.setFigmaUrl("   ");
+        response = projectService.updateProject(54L, dto);
+        org.junit.jupiter.api.Assertions.assertNull(response.getFigmaUrl());
+        org.junit.jupiter.api.Assertions.assertNull(project.getFigmaUrl());
+    }
+
     private void assertProjectDashboardEviction(Method method) {
         CacheEvict cacheEvict = method.getAnnotation(CacheEvict.class);
         assertArrayEquals(new String[]{"project-recent", "project-favorites"}, cacheEvict.cacheNames());

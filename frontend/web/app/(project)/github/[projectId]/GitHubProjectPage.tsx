@@ -151,7 +151,9 @@ function timeAgo(dateStr?: string | null): string {
 
 function prStatus(pr: GitHubPullRequest): { label: string; color: string; dot: string; glow: string } {
   if (pr.draft) return { label: 'Draft', color: 'text-slate-400 bg-slate-400/10 border-slate-400/20', dot: 'bg-slate-400', glow: '' };
-  if (pr.merged_at) return { label: 'Merged', color: 'text-purple-300 bg-purple-400/12 border-purple-400/25', dot: 'bg-purple-400', glow: 'shadow-[0_0_10px_rgba(168,85,247,0.35)]' };
+  const prState = (pr as unknown as { state?: string; rawState?: string }).state;
+  const isMerged = Boolean(pr.merged_at) || (pr as unknown as { rawState?: string }).rawState === 'merged' || prState === 'merged';
+  if (isMerged) return { label: 'Merged', color: 'text-purple-300 bg-purple-400/12 border-purple-400/25', dot: 'bg-purple-400', glow: 'shadow-[0_0_10px_rgba(168,85,247,0.35)]' };
   if (pr.state === 'closed') return { label: 'Closed', color: 'text-red-300 bg-red-400/12 border-red-400/25', dot: 'bg-red-400', glow: '' };
   return { label: 'Open', color: 'text-emerald-300 bg-emerald-400/12 border-emerald-400/25', dot: 'bg-emerald-400', glow: 'shadow-[0_0_10px_rgba(52,211,153,0.35)]' };
 }
@@ -428,10 +430,14 @@ function GitHubRouteErrorView({
 // ── PR Card ───────────────────────────────────────────────────────────────────
 function PRCard({ pr }: { pr: GitHubPullRequest }) {
   const status = prStatus(pr);
-  const avatarUrl = pr.user.avatar_url?.trim() || null;
+  const authorLogin = pr.user?.login || 'unknown';
+  const avatarUrl = pr.user?.avatar_url?.trim() || (authorLogin !== 'unknown' ? `https://github.com/${authorLogin}.png` : null);
+  const headRef = pr.head?.ref || 'head';
+  const baseRef = pr.base?.ref || 'main';
+
   return (
     <motion.a
-      href={pr.html_url}
+      href={pr.html_url || '#'}
       target="_blank"
       rel="noopener noreferrer"
       initial={{ opacity: 0, y: 8 }}
@@ -451,19 +457,19 @@ function PRCard({ pr }: { pr: GitHubPullRequest }) {
           {status.label}
         </span>
         <span className="ml-auto text-[11px] text-slate-600 font-outfit shrink-0">
-          {timeAgo(pr.updated_at)}
+          {timeAgo(pr.updated_at || pr.created_at)}
         </span>
       </div>
 
       <p className="text-sm font-outfit font-semibold text-cu-text-primary leading-snug line-clamp-2 group-hover:text-cu-primary transition-colors">
-        {pr.title}
+        {pr.title || 'Untitled PR'}
       </p>
 
       <div className="flex items-center gap-1.5 text-[11px] text-cu-text-muted font-outfit">
         <GitBranch size={11} />
-        <span className="font-semibold text-cu-text-secondary">{pr.head.ref}</span>
+        <span className="font-semibold text-cu-text-secondary">{headRef}</span>
         <span className="text-cu-text-muted">→</span>
-        <span className="text-cu-text-secondary">{pr.base.ref}</span>
+        <span className="text-cu-text-secondary">{baseRef}</span>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -471,7 +477,7 @@ function PRCard({ pr }: { pr: GitHubPullRequest }) {
           {avatarUrl ? (
             <Image
               src={avatarUrl}
-              alt={pr.user.login}
+              alt={authorLogin}
               width={18}
               height={18}
               className="h-[18px] w-[18px] rounded-full ring-1 ring-white/10"
@@ -485,9 +491,9 @@ function PRCard({ pr }: { pr: GitHubPullRequest }) {
               <User size={10} className="text-cu-text-tertiary" />
             </div>
           )}
-          <span className="text-[11px] text-cu-text-tertiary font-outfit">@{pr.user.login}</span>
+          <span className="text-[11px] text-cu-text-tertiary font-outfit">@{authorLogin}</span>
         </div>
-        {pr.labels.slice(0, 3).map(label => (
+        {(pr.labels || []).slice(0, 3).map(label => (
           <span
             key={label.id}
             className="px-1.5 py-0.5 rounded-full text-[10px] font-outfit font-semibold"
@@ -1233,26 +1239,30 @@ function IssuesPanel({
   const [stateFilter, setStateFilter] = useState<'all' | GitHubIssue['state']>('all');
   const [labelFilter, setLabelFilter] = useState('');
 
+  const repoIssues = useMemo(() => {
+    return (issues || []).filter(issue => !(issue as unknown as { pull_request?: unknown; pullRequest?: unknown }).pull_request && !(issue as unknown as { pull_request?: unknown; pullRequest?: unknown }).pullRequest);
+  }, [issues]);
+
   const availableLabels = useMemo(
     () => Array.from(new Set(
-      issues.flatMap(issue => issue.labels.map(label => label.name)).filter(Boolean),
+      repoIssues.flatMap(issue => issue.labels.map(label => label.name)).filter(Boolean),
     )).sort((first, second) => first.localeCompare(second)),
-    [issues],
+    [repoIssues],
   );
 
   const filteredIssues = useMemo(
-    () => issues.filter(issue =>
+    () => repoIssues.filter(issue =>
       (stateFilter === 'all' || issue.state === stateFilter)
       && (!labelFilter || issue.labels.some(label => label.name === labelFilter)),
     ),
-    [issues, labelFilter, stateFilter],
+    [repoIssues, labelFilter, stateFilter],
   );
 
   const filtersActive = stateFilter !== 'all' || labelFilter !== '';
 
   useEffect(() => {
-    onCountChange(issues.length);
-  }, [issues, onCountChange]);
+    onCountChange(repoIssues.length);
+  }, [repoIssues, onCountChange]);
 
   useEffect(() => {
     let active = true;
@@ -1520,6 +1530,19 @@ function ConnectedDashboard({
 
   const [prPage, setPRPage] = useState(1);
   const [commitPage, setCommitPage] = useState(1);
+  const [prFilter, setPrFilter] = useState<'all' | 'open' | 'merged' | 'closed'>('all');
+
+  const filteredPrs = useMemo(() => {
+    return prs.filter((pr) => {
+      if (prFilter === 'all') return true;
+      const prState = (pr as unknown as { state?: string; rawState?: string }).state;
+      const isMerged = Boolean(pr.merged_at) || (pr as unknown as { rawState?: string }).rawState === 'merged' || prState === 'merged';
+      if (prFilter === 'merged') return isMerged;
+      if (prFilter === 'open') return pr.state === 'open' && !isMerged;
+      if (prFilter === 'closed') return pr.state === 'closed' && !isMerged;
+      return true;
+    });
+  }, [prs, prFilter]);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full flex flex-col gap-5">
@@ -1688,22 +1711,45 @@ function ConnectedDashboard({
         {/* Pull Requests */}
         {activeTab === 'pullRequests' && (
           <div className="flex flex-col gap-3 min-w-0">
-            <div className="flex items-center gap-2">
-              <GitPullRequest size={15} className="text-cu-text-secondary shrink-0" />
-              <h2 className="text-sm font-outfit font-bold text-cu-text-primary">
-                Pull Requests
-                {!loading && !prError && (
-                  <span className="ml-1.5 text-slate-400 font-normal">({prs.length})</span>
-                )}
-              </h2>
-              <a
-                href={`https://github.com/${connection.repoFullName}/pulls`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-auto flex items-center gap-1 text-xs text-blue-500 font-outfit font-semibold hover:underline shrink-0"
-              >
-                GitHub <ExternalLink size={10} />
-              </a>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <GitPullRequest size={15} className="text-cu-text-secondary shrink-0" />
+                <h2 className="text-sm font-outfit font-bold text-cu-text-primary">
+                  Pull Requests
+                  {!loading && !prError && (
+                    <span className="ml-1.5 text-slate-400 font-normal">({filteredPrs.length})</span>
+                  )}
+                </h2>
+                <a
+                  href={`https://github.com/${connection.repoFullName}/pulls`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-blue-500 font-outfit font-semibold hover:underline shrink-0"
+                >
+                  GitHub <ExternalLink size={10} />
+                </a>
+              </div>
+
+              {/* State Filter Buttons */}
+              <div className="flex items-center gap-1 p-0.5 rounded-xl bg-white/[0.04] border border-white/[0.08]">
+                {(['all', 'open', 'merged', 'closed'] as const).map((filterKey) => (
+                  <button
+                    key={filterKey}
+                    type="button"
+                    onClick={() => {
+                      setPrFilter(filterKey);
+                      setPRPage(1);
+                    }}
+                    className={`px-2.5 py-1 text-xs font-outfit font-semibold rounded-lg capitalize transition-all ${
+                      prFilter === filterKey
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'text-cu-text-tertiary hover:text-cu-text-primary hover:bg-white/[0.05]'
+                    }`}
+                  >
+                    {filterKey}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {loading && <SkeletonList />}
@@ -1722,16 +1768,18 @@ function ConnectedDashboard({
               </div>
             )}
 
-            {!loading && !prError && prs.length === 0 && (
+            {!loading && !prError && filteredPrs.length === 0 && (
               <div className="flex flex-col items-center gap-2 py-10">
                 <GitPullRequest size={20} className="text-slate-300" />
-                <p className="text-xs text-slate-400 font-outfit">No pull requests found</p>
+                <p className="text-xs text-slate-400 font-outfit">
+                  {prFilter === 'all' ? 'No pull requests found' : `No ${prFilter} pull requests found`}
+                </p>
               </div>
             )}
 
-            {!loading && !prError && prs.length > 0 && (() => {
+            {!loading && !prError && filteredPrs.length > 0 && (() => {
               const start = (prPage - 1) * PAGE_SIZE;
-              const page = prs.slice(start, start + PAGE_SIZE);
+              const page = filteredPrs.slice(start, start + PAGE_SIZE);
               return (
                 <div className="flex flex-col gap-3">
                   {page.map((pr, i) => (
@@ -1741,9 +1789,9 @@ function ConnectedDashboard({
                   ))}
                   <PaginationBar
                     page={prPage}
-                    total={prs.length}
+                    total={filteredPrs.length}
                     onPrev={() => setPRPage(p => Math.max(1, p - 1))}
-                    onNext={() => setPRPage(p => Math.min(Math.ceil(prs.length / PAGE_SIZE), p + 1))}
+                    onNext={() => setPRPage(p => Math.min(Math.ceil(filteredPrs.length / PAGE_SIZE), p + 1))}
                   />
                 </div>
               );
@@ -1991,9 +2039,9 @@ export default function GitHubProjectPage({ projectId }: { projectId: string }) 
     }
 
     const [prResult, commitResult, issueResult, userResult] = await Promise.allSettled([
-      fetchProjectPullRequests(projectId),
-      fetchProjectCommits(projectId),
-      fetchProjectIssues(projectId),
+      fetchProjectPullRequests(projectId, _conn?.repoFullName),
+      fetchProjectCommits(projectId, _conn?.repoFullName),
+      fetchProjectIssues(projectId, _conn?.repoFullName),
       fetchGitHubUser(),
     ]);
 
@@ -2031,7 +2079,7 @@ export default function GitHubProjectPage({ projectId }: { projectId: string }) 
     }
 
     try {
-      const latestIssues = await fetchProjectIssues(projectId);
+      const latestIssues = await fetchProjectIssues(projectId, _conn?.repoFullName);
       setIssues(latestIssues);
       setIssueError(null);
     } catch (error) {
@@ -2162,6 +2210,12 @@ export default function GitHubProjectPage({ projectId }: { projectId: string }) 
   const handleSelectRepo = async (repo: GitHubRepository) => {
     setLoadingRepos(true);
     setRepoError(null);
+    setPRs([]);
+    setCommits([]);
+    setIssues([]);
+    setPRError(null);
+    setCommitError(null);
+    setIssueError(null);
 
     try {
       const persistedConnection = await persistProjectGitHubConnection(projectId, repo.full_name);

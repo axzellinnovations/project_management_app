@@ -9,7 +9,8 @@ import com.planora.backend.model.ChatReadState;
 public interface ChatReadStateRepository extends JpaRepository<ChatReadState, Long> {
 
     // Room cursor for unread room badge calculations.
-    Optional<ChatReadState> findByProjectIdAndUserUserIdAndRoomId(Long projectId, Long userId, Long roomId);
+    Optional<ChatReadState> findFirstByProjectIdAndUserUserIdAndRoomIdOrderByIdDesc(Long projectId, Long userId, Long roomId);
+    java.util.List<ChatReadState> findAllByProjectIdAndUserUserIdAndRoomId(Long projectId, Long userId, Long roomId);
 
     // Alias-based cursor for private/team contexts where roomId is null.
     Optional<ChatReadState> findFirstByProjectIdAndUserUserIdAndOtherParticipantIgnoreCase(Long projectId, Long userId, String otherParticipant);

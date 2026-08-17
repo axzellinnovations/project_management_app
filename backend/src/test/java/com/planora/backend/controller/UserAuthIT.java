@@ -58,6 +58,7 @@ class UserAuthIT extends PostgresIntegrationIT {
         seedVerifiedUser(email, rawPassword);
 
         MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:3000")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "email", email,
@@ -94,7 +95,7 @@ class UserAuthIT extends PostgresIntegrationIT {
     }
 
     @Test
-    void refresh_withNativeBodyToken_returnsRotatedTokenWithoutCookie() throws Exception {
+    void loginAndRefresh_withNativeBodyToken_returnsRotatedTokenWithoutCookie() throws Exception {
         String rawPassword = "Test@1234";
         String email = "native-refresh-" + UUID.randomUUID() + "@example.com";
         seedVerifiedUser(email, rawPassword);
@@ -103,13 +104,18 @@ class UserAuthIT extends PostgresIntegrationIT {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("email", email, "password", rawPassword))))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.token").isString())
+                .andExpect(jsonPath("$.refreshToken").isString())
+                .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE))
                 .andReturn();
-        Cookie refreshCookie = loginResult.getResponse().getCookie("planora_refresh_token");
-        assertNotNull(refreshCookie);
+
+        String nativeRefreshToken = objectMapper.readTree(loginResult.getResponse().getContentAsString()).get("refreshToken").asText();
+        assertNotNull(nativeRefreshToken);
 
         mockMvc.perform(post("/api/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("refreshToken", refreshCookie.getValue()))))
+                        .content(objectMapper.writeValueAsString(Map.of("refreshToken", nativeRefreshToken))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.token").isString())

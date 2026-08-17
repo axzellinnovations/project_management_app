@@ -102,7 +102,7 @@ class GithubDataControllerTest {
                 .githubPrNumber(17)
                 .title("Ship stable pages")
                 .build();
-        when(pullRequestService.getPullRequests(10L, "all", 1, 1))
+        when(pullRequestService.getPullRequests(10L, "all", 1, 1, 7L))
                 .thenReturn(new PageImpl<>(List.of(pr), PageRequest.of(1, 1), 3));
 
         mockMvc.perform(get("/api/github/project/10/pull-requests")
@@ -130,7 +130,7 @@ class GithubDataControllerTest {
                 .shortSha("abc1234")
                 .message("Fix serialization")
                 .build();
-        when(commitService.getCommits(10L, 0, 1))
+        when(commitService.getCommits(10L, 0, 1, 7L))
                 .thenReturn(new PageImpl<>(List.of(commit), PageRequest.of(0, 1), 1));
 
         mockMvc.perform(get("/api/github/project/10/commits")
@@ -158,7 +158,7 @@ class GithubDataControllerTest {
                 .title("Fix login")
                 .state("open")
                 .build();
-        when(issueService.getIssues(10L, "open", 0, 1))
+        when(issueService.getIssues(10L, "open", 0, 1, 7L))
                 .thenReturn(new PageImpl<>(List.of(issue), PageRequest.of(0, 1), 1));
 
         mockMvc.perform(get("/api/github/project/10/issues")

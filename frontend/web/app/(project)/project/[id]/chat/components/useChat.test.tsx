@@ -91,6 +91,11 @@ jest.mock('@/services/chat-service', () => ({
     });
     return res.json();
   },
+  fetchRooms: async (projectId: string) => {
+    const res = await fetch(`/api/projects/${projectId}/chat/rooms`);
+    if (!res.ok) return [];
+    return res.json();
+  },
 }));
 
 const fetchMock = jest.fn();
@@ -110,7 +115,7 @@ describe('useChat hook', () => {
   let consoleErrorSpy: jest.SpyInstance;
   let consoleWarnSpy: jest.SpyInstance;
 
-  jest.setTimeout(15000);
+  let mockRooms = [{ id: 1, name: 'engineering', projectId: 42, createdBy: 'alice' }];
 
   const defaultFetchImplementation = (input: RequestInfo | URL, options?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
@@ -128,7 +133,7 @@ describe('useChat hook', () => {
     }
 
     if (url.includes('/api/projects/42/chat/rooms')) {
-      return jsonResponse([{ id: 1, name: 'engineering', projectId: 42, createdBy: 'alice' }]);
+      return jsonResponse(mockRooms);
     }
 
     if (url.includes('/api/projects/42/chat/summaries')) {
@@ -228,6 +233,7 @@ describe('useChat hook', () => {
     Object.keys(mockSubscriptions).forEach((key) => delete mockSubscriptions[key]);
     mockRealtimeConnected = true;
     phaseDEnabled = true;
+    mockRooms = [{ id: 1, name: 'engineering', projectId: 42, createdBy: 'alice' }];
 
     fetchMock.mockImplementation(defaultFetchImplementation);
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -422,6 +428,36 @@ describe('useChat hook', () => {
     await waitFor(() => {
       expect(result.current.rooms.some((room) => room.id === 9)).toBe(false);
     });
+  });
+
+  it('persists newly created rooms across page refresh and session cache reload', async () => {
+    // 1. Initial page load
+    const firstRender = await renderInitializedHook();
+    expect(firstRender.result.current.rooms).toHaveLength(1);
+    expect(firstRender.result.current.rooms[0].name).toBe('engineering');
+
+    // 2. Receive a new room created in realtime (or created by user)
+    const newRoom = { id: 2, name: 'product-team', projectId: 42, createdBy: 'alice' };
+    mockRooms.push(newRoom);
+    publish('/topic/project/42/rooms', {
+      action: 'CREATED',
+      roomId: 2,
+      room: newRoom,
+    });
+
+    await waitFor(() => {
+      expect(firstRender.result.current.rooms).toHaveLength(2);
+      expect(firstRender.result.current.rooms.some((r) => r.id === 2)).toBe(true);
+    });
+
+    firstRender.unmount();
+
+    // 3. Simulate page refresh: render useChat again without clearing session cache
+    const secondRender = await renderInitializedHook();
+
+    // 4. Verify the newly created room is immediately restored from cache on reload
+    expect(secondRender.result.current.rooms.some((r) => r.id === 2)).toBe(true);
+    expect(secondRender.result.current.rooms).toHaveLength(2);
   });
 
   it('tracks mention counters when user is outside the mentioned context', async () => {

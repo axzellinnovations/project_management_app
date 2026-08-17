@@ -4,12 +4,13 @@
 import { useState, useEffect, useSyncExternalStore, Suspense, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { Menu, Plus, Settings, Github, Figma } from 'lucide-react';
+import { Menu, Plus, Settings, Github, Figma, ExternalLink, Copy, Check } from 'lucide-react';
 
 import { useNavigation } from '@/lib/navigation-context';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getUserFromToken, getValidToken, User, getUserIdFromToken } from '@/lib/auth';
 import * as projectsApi from '@/services/projects-service';
+import { normalizeExternalUrl, openSafeExternalUrl } from '@/lib/url-utils';
 
 import { NotificationBell } from './topbar/NotificationBell';
 import { TabBar } from './topbar/TabBar';
@@ -35,7 +36,7 @@ function TopBarContent() {
 
   const {
     projectId, projectName, projectType, isAgile, isFavorite, toggleFavorite, switchProject,
-    figmaUrl, projectOwnerId,
+    figmaUrl, projectOwnerId, setFigmaUrl, mutateProject,
   } = useProjectContext();
 
   const { tabs, activeTab, getTabHref, isProjectPage } = useProjectTabs(projectId, isAgile);
@@ -51,8 +52,8 @@ function TopBarContent() {
   const [figmaLinkInput, setFigmaLinkInput] = useState('');
   const [figmaLinkError, setFigmaLinkError] = useState('');
   const [isSavingFigma, setIsSavingFigma] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
-  // Derived: is the current user the project owner (can edit Figma link)
   const currentUserId = getUserIdFromToken();
   const isProjectOwner = Boolean(currentUserId && projectOwnerId && currentUserId === projectOwnerId);
 
@@ -93,31 +94,15 @@ function TopBarContent() {
     router.push(getTabHref(activeTab, String(proj.id)));
   };
 
-  const normalizeFigmaUrl = (value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-
-    const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-    try {
-      const url = new URL(withProtocol);
-      return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
-    } catch {
-      return null;
-    }
-  };
-
   const handleOpenFigma = () => {
     if (!projectId) return;
     if (figmaUrl) {
       router.push(getProjectFigmaPath(projectId));
     } else {
-      // No Figma link set yet — owner can set one via the edit modal, others see a hint
       if (isProjectOwner) {
         setFigmaLinkInput('');
         setFigmaLinkError('');
         setFigmaModalOpen(true);
-      } else {
-        // Show a brief visual cue that no link is configured (let the tooltip speak)
       }
     }
   };
@@ -128,20 +113,37 @@ function TopBarContent() {
     setFigmaModalOpen(true);
   };
 
+  const handleCopyFigmaLink = async () => {
+    if (!figmaUrl) return;
+    try {
+      await navigator.clipboard.writeText(figmaUrl);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      // Ignore clipboard error
+    }
+  };
+
   const handleSaveFigmaLink = async () => {
     if (!projectId) return;
-    const normalized = figmaLinkInput.trim() === '' ? '' : normalizeFigmaUrl(figmaLinkInput);
-    if (figmaLinkInput.trim() !== '' && !normalized) {
-      setFigmaLinkError('Enter a valid URL.');
+    const rawTrimmed = figmaLinkInput.trim();
+    const normalized = rawTrimmed === '' ? '' : normalizeExternalUrl(rawTrimmed);
+    if (rawTrimmed !== '' && !normalized) {
+      setFigmaLinkError('Enter a valid URL (e.g. https://www.figma.com/file/...).');
       return;
     }
     setIsSavingFigma(true);
     try {
-      await projectsApi.updateProjectDetails(Number(projectId), { figmaUrl: normalized || null });
-      setFigmaModalOpen(false);
-      if (normalized) router.push(getProjectFigmaPath(projectId));
-      // Force SWR revalidation by dispatching a storage event (useProjectContext will pick it up on next poll)
+      const savedUrl = normalized || null;
+      await projectsApi.updateProjectDetails(Number(projectId), { figmaUrl: savedUrl });
+      if (setFigmaUrl) setFigmaUrl(savedUrl);
+      if (mutateProject) void mutateProject();
+      window.dispatchEvent(new CustomEvent('planora:figma-updated', {
+        detail: { projectId: Number(projectId), figmaUrl: savedUrl },
+      }));
       window.dispatchEvent(new Event('storage'));
+      setFigmaModalOpen(false);
+      if (savedUrl) router.push(getProjectFigmaPath(projectId));
     } catch {
       setFigmaLinkError('Failed to save. Please try again.');
     } finally {
@@ -274,27 +276,26 @@ function TopBarContent() {
               >
                 <Github size={18} strokeWidth={pathname.startsWith('/github') ? 2.5 : 2} />
               </button>
-              {/* Figma button — open link for all, edit for owner */}
+              {/* Figma button — open link for all, edit accessible to project members */}
               <div className="flex items-center gap-0.5">
                 <button
                   onClick={handleOpenFigma}
                   className={`p-2 rounded-lg transition-all ${
                     figmaUrl
-                      ? 'text-[#F24E1E] hover:bg-[#F24E1E]/10'
+                      ? 'text-[#F24E1E] bg-[#F24E1E]/10 hover:bg-[#F24E1E]/20 ring-1 ring-[#F24E1E]/20'
                       : 'text-cu-text-muted hover:text-cu-text-secondary hover:bg-cu-hover'
                   }`}
                   title={figmaUrl ? 'Open Figma in Planora' : isProjectOwner ? 'Add Figma link' : 'No Figma link set'}
-                  aria-label="Figma"
+                  aria-label={figmaUrl ? 'Open Figma in Planora' : isProjectOwner ? 'Add Figma link' : 'No Figma link set'}
                 >
                   <Figma size={18} strokeWidth={figmaUrl ? 2.2 : 2} />
                 </button>
-                {/* Pencil edit button — owner only */}
                 {isProjectOwner && (
                   <button
                     onClick={handleEditFigmaLink}
                     className="p-1 rounded-md transition-all text-cu-text-muted hover:text-cu-text-secondary hover:bg-cu-hover"
-                    title="Edit Figma link"
-                    aria-label="Edit Figma link"
+                    title={figmaUrl ? 'Edit Figma link' : 'Add Figma link'}
+                    aria-label={figmaUrl ? 'Edit Figma link' : 'Add Figma link'}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -381,14 +382,38 @@ function TopBarContent() {
             void handleSaveFigmaLink();
           }}
         >
-          <div className="flex items-center gap-3 rounded-lg border border-cu-border bg-cu-bg-secondary px-3 py-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cu-bg text-[#F24E1E] ring-1 ring-cu-border">
-              <Figma size={20} strokeWidth={2.2} />
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-cu-border bg-cu-bg-secondary px-3.5 py-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cu-bg text-[#F24E1E] ring-1 ring-cu-border">
+                <Figma size={20} strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-cu-text-primary font-outfit">Project design link</p>
+                <p className="text-xs text-cu-text-secondary font-outfit">All project members can view and access this link.</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-cu-text-primary font-outfit">Project design link</p>
-              <p className="text-xs text-cu-text-secondary font-outfit">All project members can open this link.</p>
-            </div>
+            {figmaUrl && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleCopyFigmaLink}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-cu-border bg-cu-bg hover:bg-cu-hover text-xs font-semibold text-cu-text-secondary transition-colors font-outfit"
+                  title="Copy link"
+                >
+                  {copiedLink ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                  <span>{copiedLink ? 'Copied' : 'Copy'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openSafeExternalUrl(figmaUrl)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#F24E1E]/10 hover:bg-[#F24E1E]/20 text-[#F24E1E] text-xs font-semibold transition-colors font-outfit"
+                  title="Open Figma in new tab"
+                >
+                  <ExternalLink size={13} />
+                  <span>Open</span>
+                </button>
+              </div>
+            )}
           </div>
 
           <label className="mt-5 block text-xs font-bold uppercase tracking-[0.04em] text-cu-text-muted font-outfit">
@@ -401,7 +426,7 @@ function TopBarContent() {
               if (figmaLinkError) setFigmaLinkError('');
             }}
             autoFocus
-            placeholder="https://www.figma.com/file/..."
+            placeholder="https://www.figma.com/file/... or figma.com/design/..."
             className={`mt-2 h-11 w-full rounded-lg border bg-cu-bg px-3 text-sm font-medium text-cu-text-primary outline-none transition-all placeholder:text-cu-text-muted focus:ring-2 focus:ring-cu-primary/20 ${
               figmaLinkError ? 'border-red-400 focus:border-red-400' : 'border-cu-border focus:border-cu-primary'
             }`}
@@ -427,7 +452,7 @@ function TopBarContent() {
               className="h-10 rounded-lg bg-cu-primary px-4 text-sm font-bold text-white shadow-sm shadow-cu-primary/20 transition-colors hover:bg-cu-primary-hover font-outfit disabled:opacity-60 flex items-center gap-2"
             >
               {isSavingFigma && <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>}
-              {figmaLinkInput.trim() ? 'Save & Open' : 'Remove Link'}
+              {figmaLinkInput.trim() ? 'Save Link' : (figmaUrl ? 'Remove Link' : 'Save')}
             </button>
           </div>
         </form>

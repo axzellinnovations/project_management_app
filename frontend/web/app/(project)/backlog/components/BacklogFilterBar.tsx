@@ -5,6 +5,7 @@ import { Label, DateFilter } from '../../kanban/types';
 import { TeamMemberOption } from '../../kanban/api';
 import DateRangeFilter from '../../kanban/components/DateRangeFilter';
 import { Archive, ChevronDown, Search, X, Layers, Tag, User, Filter } from 'lucide-react';
+import AssigneeAvatar from '../../(agile)/sprint-backlog/components/AssigneeAvatar';
 
 const STATUS_OPTIONS = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
 
@@ -177,11 +178,24 @@ export default function BacklogFilterBar({
                                         onClick={() => setAssigneeFilterOpen(o => !o)}
                                         className="flex items-center justify-between w-full gap-1.5 px-2.5 py-1.5 text-[12px] border border-cu-border rounded-lg bg-cu-bg-secondary text-cu-text-primary hover:bg-cu-hover transition-colors"
                                     >
-                                        <span className="flex items-center gap-1.5">
-                                            <User size={12} className="text-cu-text-muted" />
-                                            {filterAssignee || 'All Assignees'}
+                                        <span className="flex items-center gap-1.5 truncate">
+                                            {filterAssignee ? (
+                                                <>
+                                                    <AssigneeAvatar
+                                                        name={filterAssignee}
+                                                        profilePicUrl={teamMembers.find(m => m.name === filterAssignee)?.photoUrl}
+                                                        size={16}
+                                                    />
+                                                    <span className="truncate">{filterAssignee}</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <User size={12} className="text-cu-text-muted" />
+                                                    <span>All Assignees</span>
+                                                </>
+                                            )}
                                         </span>
-                                        <ChevronDown size={12} className="text-cu-text-muted" />
+                                        <ChevronDown size={12} className="text-cu-text-muted shrink-0" />
                                     </button>
                                     {assigneeFilterOpen && (
                                         <div className="absolute top-full left-0 mt-1 bg-cu-bg border border-cu-border rounded-xl shadow-cu-lg z-[var(--cu-z-modal-popover)] min-w-full max-h-80 overflow-y-auto py-1">
@@ -195,8 +209,11 @@ export default function BacklogFilterBar({
                                                     key={m.id}
                                                     type="button"
                                                     onClick={() => { setFilterAssignee(m.name); setAssigneeFilterOpen(false); }}
-                                                    className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-cu-hover transition-colors ${filterAssignee === m.name ? 'font-semibold text-cu-primary' : 'text-cu-text-primary'}`}
-                                                >{m.name}</button>
+                                                    className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-cu-hover transition-colors flex items-center gap-2 ${filterAssignee === m.name ? 'font-semibold text-cu-primary bg-cu-primary/5' : 'text-cu-text-primary'}`}
+                                                >
+                                                    <AssigneeAvatar name={m.name} profilePicUrl={m.photoUrl} size={18} />
+                                                    <span className="truncate">{m.name}</span>
+                                                </button>
                                             ))}
                                         </div>
                                     )}
